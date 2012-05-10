@@ -73,7 +73,7 @@ def animateModelOutput(FVCOM, varPlot, startIdx, skipIdx, layerIdx, addVectors=F
     Specify the variable of interest as a string (e.g. 'DYE'). This is case
     sensitive. Specify a starting index, a skip index of n to skip n time steps
     in the animation. The layerIdx is either the sigma layer to plot or, if
-    negative, means the depth averaged value is calcualted. 
+    negative, means the depth averaged value is calcualted.
 
     Optionally add current vectors to the plot which will be colour coded by
     the magnitude.
@@ -196,7 +196,17 @@ def unstructuredGridVolume(FVCOM):
     return allVolumes
 
 
+def coefficientOfDetermination(obs, model):
+    """ Calculate the coefficient of determination for a modelled function """
 
+    obsBar = np.mean(obs)
+    modelBar = np.mean(model)
+
+    SStot = np.sum((obs - obsBar)**2)
+    SSreg = np.sum((model - obsBar)**2)
+    R2 = SSreg / SStot
+
+    return R2
 
 
 if __name__ == '__main__':
@@ -296,36 +306,6 @@ if __name__ == '__main__':
             print 'Time steps:\t%i (%.2f days) \nLayers:\t\t%i\nElements:\t%i' % (tt, (tt*dt)/86400.0, ll, xx)
         except KeyError:
             print 'Key \'DYE\' not found in FVCOM'
-
-    if True:
-        # This has been split off into CO2_budget.py to analyse multiple files
-        # at once. 
-
-        # Do total CO2 analysis
-        totalCO2inSystem = calculateTotalCO2(FVCOM, 'DYE', startIdx, layerIdx, leakIdx, dt, noisy)
-
-        # Calculate the total CO2 in the system using Riqui's algorithm
-        allVolumes = unstructuredGridVolume(FVCOM)
-        startDay = (5*24)
-        CO2, CO2Leak, maxCO2 = CO2LeakBudget(FVCOM, leakIdx, startDay)
-
-        if noisy:
-            print 'Input at cell %i:\t\t%.4f' % (leakIdx, FVCOM['DYE'][startIdx+1,0,leakIdx])
-            print 'Maximum CO2 in the system:\t%.2e' % maxCO2
-
-        # Get the concentration for the model
-        concZ = FVCOM['DYE']/allVolumes
-        # Get the total concentration at n=72 (i.e. 24 hours after DYE release)
-        dayConcZ = np.sum(concZ[np.r_[0:25]+startDay,:,:])
-        # Scale the DYE by the volumes
-        scaledZ = FVCOM['DYE']*allVolumes
-
-        sumZ = np.sum(scaledZ, axis=1)
-        totalZ = np.sum(sumZ, axis=1)
-        if noisy:
-            print 'Total DYE at day %i:\t\t%.2f' % (startDay, totalZ[startDay])
-        #plt.figure()
-        #plt.plot(FVCOM['time'], totalZ, '-x')
 
     # Animate some variable (ipython only)
     addVectors = False
