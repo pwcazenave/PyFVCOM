@@ -116,7 +116,7 @@ def CO2LeakBudget(FVCOM, leakIdx, startDay):
 def dataAverage(data, **args):
     """ Depth average a given FVCOM output data set along a specified axis """
 
-6Y    try:
+    try:
         import numpy as np
     except ImportError:
         print 'NumPy not found'
