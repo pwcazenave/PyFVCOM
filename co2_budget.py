@@ -10,20 +10,6 @@ import plot_unstruct_grid as gp
 from readFVCOM import readFVCOM
 from range_test_fit import calculateRegression
 
-def coefficientOfDetermination(obs, model):
-    """ Calculate the coefficient of determination for a modelled function """
-
-    obsBar = np.mean(obs)
-    modelBar = np.mean(model)
-
-    SStot = np.sum((obs - obsBar)**2)
-    SSreg = np.sum((model - obsBar)**2)
-    R2 = SSreg / SStot
-
-    return R2
-
-
-
 if __name__ == '__main__':
 
     # Be verbose?
@@ -44,7 +30,7 @@ if __name__ == '__main__':
     base = '/data/medusa/pica/models/FVCOM/runCO2_leak'
 
     # Get a list of files
-    fileNames = glob(base + '/output/rate_ranges/11days/co2_S5_*_run_0001.nc')
+    fileNames = glob(base + '/output/rate_ranges/11days/co2_S5_high_run_0001.nc')
 
     # Coarse grid
     in2 = base + '/input/configs/inputV5/co2_grd.dat'
