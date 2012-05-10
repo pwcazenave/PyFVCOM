@@ -24,6 +24,12 @@ def calculateTotalCO2(FVCOM, varPlot, startIdx, layerIdx, leakIdx, dt, noisy=Fal
 
     """
 
+    try:
+        import numpy as np
+    except ImportError:
+        print 'NumPy not found'
+
+
     Z = FVCOM[varPlot]
 
     TCO2 = np.zeros(FVCOM['time'].shape)
@@ -64,6 +70,49 @@ def calculateTotalCO2(FVCOM, varPlot, startIdx, layerIdx, leakIdx, dt, noisy=Fal
 
     return totalCO2inSystem
 
+def CO2LeakBudget(FVCOM, leakIdx, startDay):
+    """
+    Replicate Riqui's CO2leak_budget.m code.
+
+    Calculates the total CO2 input in the system over a 24 hour period. Code
+    automatically calculates output file timestep in hours to obtain a 24 hour
+    stretch.
+
+    Specify the first argument as the output of readFVCOM(), the second as the
+    leak point in the grid and the third argument as the leak start.
+
+    FIXME(pica) Not yet working (and probably doesn't match Riqui's code...)
+
+    """
+
+    try:
+        import numpy as np
+    except ImportError:
+        print 'NumPy not found'
+
+
+    # Get output file sampling in hours
+    dt = int(round(FVCOM['time'][1] - FVCOM['time'][0]) * 24, 1))
+    # Calculte number of steps required to get a day's worth of results
+    timeSteps = np.r_[0:(24/dt)+1]+startDay
+
+    # Preallocate the output arrays
+    CO2 = np.ones(len(timeSteps))*np.nan
+    CO2Leak = np.ones(np.shape(CO2))*np.nan
+
+    for i, tt in enumerate(timeSteps):
+        dump = FVCOM['h']+FVCOM['zeta'][tt,:]
+        dz = np.abs(np.diff(FVCOM['siglev'], axis=0))
+        data = FVCOM['DYE'][tt,:,:]*dz
+        data = np.sum(data, axis=0)
+        CO2[i] = np.sum(data*FVCOM['art1']*dump)
+        CO2Leak[i] = np.sum(data[leakIdx]*FVCOM['art1'][leakIdx])
+
+    maxCO2 = np.max(CO2)
+
+    return CO2, CO2Leak, maxCO2
+
+
 
 def animateModelOutput(FVCOM, varPlot, startIdx, skipIdx, layerIdx, addVectors=False, noisy=False):
     """
@@ -82,6 +131,17 @@ def animateModelOutput(FVCOM, varPlot, startIdx, skipIdx, layerIdx, addVectors=F
     relevant information to the console.
 
     """
+
+    try:
+        import numpy as np
+    except ImportError:
+        print 'NumPy not found'
+
+    try:
+        import matplotlib.pylot as plt
+    except ImportError:
+        print 'matplotlib not found'
+
 
     Z = FVCOM[varPlot]
 
@@ -148,39 +208,26 @@ def animateModelOutput(FVCOM, varPlot, startIdx, skipIdx, layerIdx, addVectors=F
 def dataAverage(data, **args):
     """ Depth average a given FVCOM output data set along a specified axis """
 
+6Y    try:
+        import numpy as np
+    except ImportError:
+        print 'NumPy not found'
+
+
     dataMask = np.ma.masked_array(data,np.isnan(data))
     dataMeaned = np.ma.filled(dataMask.mean(**args), fill_value=np.nan).squeeze()
 
     return dataMeaned
 
 
-def CO2LeakBudget(FVCOM, leakIdx, startDay):
-    """
-    Replicate Riqui's CO2leak_budget.m code.
-
-    FIXME(pica) Not yet working (and probably doesn't match Riqui's code...)
-
-    """
-
-    timeSteps = np.r_[0:25]+startDay
-    CO2 = np.ones(len(timeSteps))*np.nan
-    CO2Leak = np.ones(np.shape(CO2))*np.nan
-
-    for i, tt in enumerate(timeSteps):
-        dump = FVCOM['h']+FVCOM['zeta'][tt,:]
-        dz = np.abs(np.diff(FVCOM['siglev'], axis=0))
-        data = FVCOM['DYE'][tt,:,:]*dz
-        data = np.sum(data, axis=0)
-        CO2[i] = np.sum(data*FVCOM['art1']*dump)
-        CO2Leak[i] = np.sum(data[leakIdx]*FVCOM['art1'][leakIdx])
-
-    maxCO2 = np.max(CO2)
-
-    return CO2, CO2Leak, maxCO2
-
-
 def unstructuredGridVolume(FVCOM):
     """ Calculate the volume for every cell in the unstructured grid """
+    try:
+        import numpy as np
+    except ImportError:
+        print 'NumPy not found'
+
+
     elemAreas = FVCOM['art1']
     elemDepths = FVCOM['h']
     elemTides = FVCOM['zeta']
@@ -198,6 +245,11 @@ def unstructuredGridVolume(FVCOM):
 
 def coefficientOfDetermination(obs, model):
     """ Calculate the coefficient of determination for a modelled function """
+    try:
+        import numpy as np
+    except ImportError:
+        print 'NumPy not found'
+
 
     obsBar = np.mean(obs)
     modelBar = np.mean(model)
