@@ -92,7 +92,9 @@ if __name__ == '__main__':
             maxCO2[aa] = maxCO2Curr
             inputRate[aa] = inputRateCurr
 
-        print inputRate[aa], maxCO2[aa]
+        if noisy:
+            print 'Input at cell %i:\t\t%.4f' % (leakIdx, inputRate[aa])
+            print 'Maximum CO2 in the system:\t%.2e' % maxCO2[aa]
 
         # Get the concentration for the model
         concZ = FVCOM['DYE']/allVolumes
@@ -103,6 +105,9 @@ if __name__ == '__main__':
 
         sumZ = np.sum(scaledZ, axis=1)
         totalZ = np.sum(sumZ, axis=1)
+
+        if noisy:                                                                              
+            print 'Total DYE at day %i:\t\t%.2f' % (startDay, totalZ[startDay])
         #plt.figure()
         #plt.plot(FVCOM['time'], totalZ, '-x')
 
@@ -123,7 +128,7 @@ linX, linY, m, c, r = calculateRegression(sortedData[inputIdx,0],
 
 if np.isnan(r):
     # We don't have a correlation coefficient, so calculate one
-    r = np.sqrt(coefficientOfDetermination(sortedData[inputIdx,1], linY))
+    r = np.sqrt(rfvcom.coefficientOfDetermination(sortedData[inputIdx,1], linY))
 
 # What's the equation of the line?
 print 'y = %sx + %s, r = %s' % (m[0], c, r)
