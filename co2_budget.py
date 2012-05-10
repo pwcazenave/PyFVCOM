@@ -13,9 +13,9 @@ from range_test_fit import calculateRegression
 if __name__ == '__main__':
 
     # Be verbose?
-    noisy = False
+    noisy = True
 
-    getVars = ['x', 'y', 'xc', 'yc', 'zeta', 'art1', 'h', 'time', 'TCO2', 'PH', 'DYE',         'siglev']
+    getVars = ['x', 'y', 'xc', 'yc', 'zeta', 'art1', 'h', 'time', 'TCO2', 'PH', 'DYE', 'siglev']
 
     # Sigma layer
     layerIdx = 0
@@ -30,7 +30,7 @@ if __name__ == '__main__':
     base = '/data/medusa/pica/models/FVCOM/runCO2_leak'
 
     # Get a list of files
-    fileNames = glob(base + '/output/rate_ranges/11days/co2_S5_high_run_0001.nc')
+    fileNames = glob(base + '/output/rate_ranges/11days/co2_S5_*_run_0001.nc')
 
     # Coarse grid
     in2 = base + '/input/configs/inputV5/co2_grd.dat'
@@ -93,7 +93,7 @@ if __name__ == '__main__':
         totalZ = np.sum(sumZ, axis=1)
 
         if noisy:                                                                              
-            print 'Total DYE at day %i:\t\t%.2f' % (startDay, totalZ[startDay])
+            print 'Total DYE at day %i:\t\t%.2f' % (startIdx, totalZ[startIdx])
         #plt.figure()
         #plt.plot(FVCOM['time'], totalZ, '-x')
 
