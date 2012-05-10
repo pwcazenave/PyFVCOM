@@ -113,6 +113,61 @@ def CO2LeakBudget(FVCOM, leakIdx, startDay):
     return CO2, CO2Leak, maxCO2
 
 
+def dataAverage(data, **args):
+    """ Depth average a given FVCOM output data set along a specified axis """
+
+6Y    try:
+        import numpy as np
+    except ImportError:
+        print 'NumPy not found'
+
+
+    dataMask = np.ma.masked_array(data,np.isnan(data))
+    dataMeaned = np.ma.filled(dataMask.mean(**args), fill_value=np.nan).squeeze()
+
+    return dataMeaned
+
+
+def unstructuredGridVolume(FVCOM):
+    """ Calculate the volume for every cell in the unstructured grid """
+    try:
+        import numpy as np
+    except ImportError:
+        print 'NumPy not found'
+
+
+    elemAreas = FVCOM['art1']
+    elemDepths = FVCOM['h']
+    elemTides = FVCOM['zeta']
+    elemThickness = np.abs(np.diff(FVCOM['siglev'], axis=0))
+
+    # Get volumes for each cell at each time step to include tidal changes
+    Z = FVCOM['DYE']
+    (tt, ll, xx) = np.shape(Z) # time, layers, node
+    allVolumes = np.zeros([tt, ll, xx])*np.nan
+    for i in xrange(tt):
+        allVolumes[i,:,:] = ((elemDepths + elemTides[i,:]) * elemThickness) * elemAreas
+
+    return allVolumes
+
+
+def coefficientOfDetermination(obs, model):
+    """ Calculate the coefficient of determination for a modelled function """
+    try:
+        import numpy as np
+    except ImportError:
+        print 'NumPy not found'
+
+
+    obsBar = np.mean(obs)
+    modelBar = np.mean(model)
+
+    SStot = np.sum((obs - obsBar)**2)
+    SSreg = np.sum((model - obsBar)**2)
+    R2 = SSreg / SStot
+
+    return R2
+
 
 def animateModelOutput(FVCOM, varPlot, startIdx, skipIdx, layerIdx, addVectors=False, noisy=False):
     """
@@ -124,8 +179,8 @@ def animateModelOutput(FVCOM, varPlot, startIdx, skipIdx, layerIdx, addVectors=F
     in the animation. The layerIdx is either the sigma layer to plot or, if
     negative, means the depth averaged value is calcualted.
 
-    Optionally add current vectors to the plot which will be colour coded by
-    the magnitude.
+    Optionally add current vectors to the plot with addVectors=True which will
+    be colour coded by their magnitude.
 
     Noisy, if True, turns on printing of various bits of potentially
     relevant information to the console.
@@ -203,62 +258,6 @@ def animateModelOutput(FVCOM, varPlot, startIdx, skipIdx, layerIdx, addVectors=F
             print 'Min: %g Max: %g Range: %g Standard deviation: %g' % (plotZ.min(), plotZ.max(), plotZ.max()-plotZ.min(), plotZ.std())
         else:
             print
-
-
-def dataAverage(data, **args):
-    """ Depth average a given FVCOM output data set along a specified axis """
-
-6Y    try:
-        import numpy as np
-    except ImportError:
-        print 'NumPy not found'
-
-
-    dataMask = np.ma.masked_array(data,np.isnan(data))
-    dataMeaned = np.ma.filled(dataMask.mean(**args), fill_value=np.nan).squeeze()
-
-    return dataMeaned
-
-
-def unstructuredGridVolume(FVCOM):
-    """ Calculate the volume for every cell in the unstructured grid """
-    try:
-        import numpy as np
-    except ImportError:
-        print 'NumPy not found'
-
-
-    elemAreas = FVCOM['art1']
-    elemDepths = FVCOM['h']
-    elemTides = FVCOM['zeta']
-    elemThickness = np.abs(np.diff(FVCOM['siglev'], axis=0))
-
-    # Get volumes for each cell at each time step to include tidal changes
-    Z = FVCOM['DYE']
-    (tt, ll, xx) = np.shape(Z) # time, layers, node
-    allVolumes = np.zeros([tt, ll, xx])*np.nan
-    for i in xrange(tt):
-        allVolumes[i,:,:] = ((elemDepths + elemTides[i,:]) * elemThickness) * elemAreas
-
-    return allVolumes
-
-
-def coefficientOfDetermination(obs, model):
-    """ Calculate the coefficient of determination for a modelled function """
-    try:
-        import numpy as np
-    except ImportError:
-        print 'NumPy not found'
-
-
-    obsBar = np.mean(obs)
-    modelBar = np.mean(model)
-
-    SStot = np.sum((obs - obsBar)**2)
-    SSreg = np.sum((model - obsBar)**2)
-    R2 = SSreg / SStot
-
-    return R2
 
 
 if __name__ == '__main__':
