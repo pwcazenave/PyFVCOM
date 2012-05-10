@@ -1,0 +1,7 @@
+# Lines starting with '#' are considered comments.
+*.dat
+*.nc
+*.2dm
+*.swp
+*.swo
+.nfs*
