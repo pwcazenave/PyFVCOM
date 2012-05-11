@@ -28,10 +28,12 @@ def calculateRegression(x, y, type):
     # we hit numerical instabilities.
     xFactorFix, xFactor = False, 0
     yFactorFix, yFactor = False, 0
-    if min(x) < 2e-7:
+    minX = min(x)
+    minY = min(y)
+    if minX < 2e-7:
         print 'Scaling x-data to improve numerical stability'
         x, xFactor, xFactorFix = fixRange(x)
-    if min(y) < 2e-7:
+    if minY < 2e-7:
         print 'Scaling y-data to improve numerical stability'
         y, yFactor, yFactorFix = fixRange(y)
 
@@ -78,9 +80,11 @@ def calculatePolyfit(x, y):
     # we hit numerical instabilities.
     xFactorFix, xFactor = False, 0
     yFactorFix, yFactor = False, 0
-    if min(x) < 2e-7:
+    minX = min(x)
+    minY = min(y)
+    if minX < 2e-7:
         x, xFactor, xFactorFix = fixRange(x)
-    if min(y) < 2e-7:
+    if minY < 2e-7:
         y, yFactor, yFactorFix = fixRange(y)
 
 
