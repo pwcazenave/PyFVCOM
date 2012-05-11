@@ -30,7 +30,7 @@ if __name__ == '__main__':
     base = '/data/medusa/pica/models/FVCOM/runCO2_leak'
 
     # Get a list of files
-    fileNames = glob(base + '/output/rate_ranges/11days/co2_S5_*_run_0001.nc')
+    fileNames = glob(base + '/output/rate_ranges/11days/co2_S5_low_run_fvcom_noairsea_0001.nc')
 
     # Coarse grid
     in2 = base + '/input/configs/inputV5/co2_grd.dat'
@@ -105,28 +105,30 @@ order = resultsArray[:, 0].argsort()
 sortedData = np.take(resultsArray, order, 0)
 
 # Calculate a regression, omitting the largest synthetic inputs which
-# are the least reliable
-maxInput = 100
-inputIdx = sortedData[:,0] <= maxInput
-linX, linY, m, c, r = calculateRegression(sortedData[inputIdx,0],
-                                          sortedData[inputIdx,1],
-                                          'lin0')
+# are the least reliable, but only if we have more than one input file 
+# since a regression through one point is ridiculous.
+if len(fileNames) > 1:
+    maxInput = 100
+    inputIdx = sortedData[:,0] <= maxInput
+    linX, linY, m, c, r = calculateRegression(sortedData[inputIdx,0],
+                                              sortedData[inputIdx,1],
+                                              'lin0')
 
-if np.isnan(r):
-    # We don't have a correlation coefficient, so calculate one
-    r = np.sqrt(rfvcom.coefficientOfDetermination(sortedData[inputIdx,1], linY))
+    if np.isnan(r):
+        # We don't have a correlation coefficient, so calculate one
+        r = np.sqrt(rfvcom.coefficientOfDetermination(sortedData[inputIdx,1], linY))
 
-# What's the equation of the line?
-print 'y = %sx + %s, r = %s' % (m[0], c, r)
+    # What's the equation of the line?
+    print 'y = %sx + %s, r = %s' % (m[0], c, r)
 
 
     # Make a pretty picture
-plt.figure()
-plt.plot(sortedData[:,0], sortedData[:,1],'g-x', label='Data')
-plt.plot(linX, linY, 'r-+', label='Linear regression')
-plt.xlabel('Input rate')
-plt.ylabel('Total CO2 in domain')
-plt.legend(loc=2, frameon=False)
+    plt.figure()
+    plt.plot(sortedData[:,0], sortedData[:,1],'g-x', label='Data')
+    plt.plot(linX, linY, 'r-+', label='Linear regression')
+    plt.xlabel('Input rate')
+    plt.ylabel('Total CO2 in domain')
+    plt.legend(loc=2, frameon=False)
 
 
 
