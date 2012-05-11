@@ -99,9 +99,9 @@ def plotUnstructuredGrid(triangles, nodes, x, y, z, colourLabel, addText=False):
     if addText:
         for node in nodes:
             plt.text(x[node-1], y[node-1], str(nodes[node-1]),
-                horizontalalignment='center', verticalalignment='center', size=8)
+                horizontalalignment='center', verticalalignment='top', size=8)
     plt.axes().set_aspect('equal', 'datalim')
-    plt.clim(-1.5, 1.5)
+    #plt.clim(-1.5, 1.5)
     #plt.title('Triplot of user-specified triangulation')
     #plt.xlabel('x')
     #plt.ylabel('y')
@@ -120,5 +120,5 @@ if __name__ == '__main__':
         [triangles, nodes, x, y, z] = parseUnstructuredGridFVCOM(grid)
 
         # Let's have a look-see
-        plotUnstructuredGrid(triangles, nodes, x, y, z, 'Depth (m)')
+        plotUnstructuredGrid(triangles, nodes, x, y, z, 'Depth (m)', True)
 
