@@ -47,7 +47,7 @@ if __name__ == '__main__':
 
     base = '/data/medusa/pica/models/FVCOM/runCO2_leak'
     # Coarse
-    in1 = base + '/output/rate_ranges/11days/co2_S5_high_run_0001.nc'
+    in1 = base + '/output/rate_ranges/11days/co2_S5_low_run_0001.nc'
     # Coarse grid
     in2 = base + '/input/configs/inputV5/co2_grd.dat'
 
@@ -58,9 +58,7 @@ if __name__ == '__main__':
     # Number of subplots
     numPlots = 5
 
-    dt = (FVCOM['time'][1]-FVCOM['time'][0])*60*60*24
-
-    samplingIdx = [174, 259, 3] # start, end, skip
+    samplingIdx = [175, 259, 3] # start, end, skip
     positionIdx = np.arange(samplingIdx[0], samplingIdx[1], samplingIdx[2])
     skippedIdx = np.arange(samplingIdx[0], samplingIdx[1], samplingIdx[2] * numPlots)
 
@@ -75,10 +73,11 @@ if __name__ == '__main__':
 
     plt.figure(1)
     plt.clf()
-    for i in xrange(numPlots):
-        plt.subplot(numPlots,1,i)
-        colourIdx = int((i/float(numPlots))*255)
+    for i in xrange(numPlots+1):
+        plt.subplot(numPlots+1,1,i+1)
+        colourIdx = int((i/float(numPlots+1))*255)
         plt.plot(t, Z[:, skippedIdx[i]], '-x', label='Station 0', color=cm.rainbow(colourIdx))
+        #plt.text(1, 2, str(skippedIdx[i]))
         plt.axis('auto')
 
 
@@ -89,9 +88,10 @@ if __name__ == '__main__':
         plt.text(x[i], y[i], str(i),
             horizontalalignment='center', verticalalignment='center', size=8)
 
-    for i in skippedIdx:
+    for a, i in enumerate(skippedIdx):
+        colourIdx = int((a/float(numPlots+1))*255)
         plt.text(x[i], y[i], str(i),
-            horizontalalignment='center', verticalalignment='center', size=18)
+            horizontalalignment='center', verticalalignment='center', size=18, color=cm.rainbow(colourIdx))
         
 
 
