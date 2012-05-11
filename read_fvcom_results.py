@@ -92,7 +92,7 @@ def CO2LeakBudget(FVCOM, leakIdx, startDay):
 
 
     # Get output file sampling in hours
-    dt = int(round(FVCOM['time'][1] - FVCOM['time'][0]) * 24, 1))
+    dt = int(round((FVCOM['time'][1] - FVCOM['time'][0]) * 24, 1))
     # Calculte number of steps required to get a day's worth of results
     timeSteps = np.r_[0:(24/dt)+1]+startDay
 
@@ -193,7 +193,7 @@ def animateModelOutput(FVCOM, varPlot, startIdx, skipIdx, layerIdx, addVectors=F
         print 'NumPy not found'
 
     try:
-        import matplotlib.pylot as plt
+        import matplotlib.pyplot as plt
     except ImportError:
         print 'matplotlib not found'
 
@@ -303,7 +303,7 @@ if __name__ == '__main__':
 
     base = '/data/medusa/pica/models/FVCOM/runCO2_leak'
     # Coarse
-    in1 = base + '/output/rate_ranges/11days/co2_S5_high_run_0001.nc'
+    in1 = base + '/output/rate_ranges/11days/co2_S5_low_run_fvcom_noairsea_0001.nc'
     # Coarse grid
     in2 = base + '/input/configs/inputV5/co2_grd.dat'
     # Fine
