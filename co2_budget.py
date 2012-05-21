@@ -15,7 +15,7 @@ if __name__ == '__main__':
     # Be verbose?
     noisy = True
 
-    getVars = ['x', 'y', 'xc', 'yc', 'zeta', 'art1', 'h', 'time', 'TCO2', 'PH', 'DYE', 'siglev']
+    getVars = ['x', 'y', 'xc', 'yc', 'art1', 'h', 'zeta', 'siglev', 'time', 'PH', 'DYE']
 
     # Sigma layer
     layerIdx = 0
@@ -30,7 +30,8 @@ if __name__ == '__main__':
     base = '/data/medusa/pica/models/FVCOM/runCO2_leak'
 
     # Get a list of files
-    fileNames = glob(base + '/output/rate_ranges/11days/co2_S5_low_run_fvcom_noairsea_0001.nc')
+    fileNames = glob(base + '/output/rate_ranges/11days/co2_S7_high_run_0001.nc')
+    fileNames = glob(base + '/output/rate_ranges/co2_S1_0001.nc')
 
     # Coarse grid
     in2 = base + '/input/configs/inputV5/co2_grd.dat'
