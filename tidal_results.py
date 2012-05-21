@@ -40,71 +40,78 @@ if __name__ == '__main__':
 
 
     # Be verbose?
-    noisy = True
+    noisy = False
 
     getVars = ['x', 'y', 'xc', 'yc', 'zeta', 'art1', 'h', 'time', 'TCO2', 'PH', 'DYE', 'siglev']
 
 
     base = '/data/medusa/pica/models/FVCOM/runCO2_leak'
-    # Coarse
-    #in1 = base + '/output/rate_ranges/11days/co2_S5_low_run_0001.nc'
-    in1 = base + '/output/sponge_tests/co2_S5_high_spg_1_run_fvcom_0001.nc'
-    # Coarse grid
-    in2 = base + '/input/configs/inputV5/co2_grd.dat'
-
-    # Read in the NetCDF file and the unstructured grid file
-    FVCOM = readFVCOM(in1, getVars, noisy)
-    [triangles, nodes, x, y, z] = gp.parseUnstructuredGridFVCOM(in2)
-
-    # Number of subplots
-    numPlots = 5
-
-    # Nodes to sample
-    samplingIdx = [175, 259, 3] # start, end, skip
-    positionIdx = np.arange(samplingIdx[0], samplingIdx[1], samplingIdx[2])
-    skippedIdx = np.arange(samplingIdx[0], samplingIdx[1], samplingIdx[2] * numPlots)
-
-    try:
-        Z = FVCOM['zeta']
-    except:
-        print 'Did not find tidal elevation (zeta) in model output'
-
-    tidalHeights = extractTideElevation(Z, positionIdx)
-
-    t = FVCOM['time']-np.min(FVCOM['time']) # start time at zero
-
-    plt.figure()
-    plt.clf()
-    tidalRange = np.zeros(np.shape(skippedIdx)[0])
-    for i in xrange(numPlots+1):
-        plt.subplot(numPlots+1,1,i+1)
-        colourIdx = int((i/float(numPlots+1))*255)
-        plt.plot(t, Z[:, skippedIdx[i]], '-x', label='Station 0', color=cm.rainbow(colourIdx))
-        #plt.text(1, 2, str(skippedIdx[i]))
-        plt.axis('tight')
-        plt.ylim(-3, 3)
-        
-        # Get the tidal range
-        tidalRange[i] = np.max(Z[:, skippedIdx[i]]) - np.min(Z[:, skippedIdx[i]])
-        #if noisy:
-        #    print 'Tidal range: %.2f' % tidalRange[i]
-
-    if noisy:
-        print '\nMean tidal range: %.2f' % np.mean(tidalRange)
-
-
-
-    # Plot figure of the locations of the extracted points
-    gp.plotUnstructuredGrid(triangles, nodes, x, y, FVCOM['zeta'][-100,:], 'Tidal elevation (m)')
-    plt.plot(x[positionIdx], y[positionIdx], '.')
-    #for i in positionIdx:
-    #    plt.text(x[i], y[i], str(i),
-    #        horizontalalignment='center', verticalalignment='center', size=8)
-
-    for a, i in enumerate(skippedIdx):
-        colourIdx = int((a/float(numPlots+1))*255)
-        plt.text(x[i], y[i], str(i),
-            horizontalalignment='center', verticalalignment='center', size=18, color=cm.rainbow(colourIdx))
-        
-
-
+    for testMe in [str('%.7f' % 0.0000001), str('%.6f' % 0.000001), str('%.5f' % 0.00001), 0.0001, 0.001, 0.01, 0.1, 1]:
+        # Coarse
+        #in1 = base + '/output/rate_ranges/11days/co2_S5_low_run_0001.nc'
+        in1 = base + '/output/sponge_tests/co2_S5_high_spg_' + str(testMe) + '_run_fvcom_0001.nc'
+        print in1
+        # Coarse grid
+        in2 = base + '/input/configs/inputV5/co2_grd.dat'
+    
+        # Read in the NetCDF file and the unstructured grid file
+        FVCOM = readFVCOM(in1, getVars, noisy)
+        [triangles, nodes, x, y, z] = gp.parseUnstructuredGridFVCOM(in2)
+    
+        # Number of subplots
+        numPlots = 5
+    
+        # Nodes to sample
+        #samplingIdx = [175, 259, 3] # start, end, skip
+        samplingIdx = [220, 221, 1] # start, end, skip
+        positionIdx = np.arange(samplingIdx[0], samplingIdx[1], samplingIdx[2])
+        skippedIdx = np.arange(samplingIdx[0], samplingIdx[1], samplingIdx[2] * numPlots)
+    
+        print samplingIdx, positionIdx, skippedIdx
+    
+        try:
+            Z = FVCOM['zeta']
+        except:
+            print 'Did not find tidal elevation (zeta) in model output'
+    
+        tidalHeights = extractTideElevation(Z, positionIdx)
+    
+        t = FVCOM['time']-np.min(FVCOM['time']) # start time at zero
+    
+        plt.figure()
+        plt.clf()
+        tidalRange = np.zeros(np.shape(skippedIdx)[0])
+    #    for i in xrange(numPlots+1):
+    #        plt.subplot(numPlots+1,1,i+1)
+    #        colourIdx = int((i/float(numPlots+1))*255)
+    #        plt.plot(t, Z[:, skippedIdx[i]], '-x', label='Station 0', color=cm.rainbow(colourIdx))
+    #        #plt.text(1, 2, str(skippedIdx[i]))
+    #        plt.axis('tight')
+    #        plt.ylim(-3, 3)
+    #        
+    #        # Get the tidal range
+    #        tidalRange[i] = np.max(Z[:, skippedIdx[i]]) - np.min(Z[:, skippedIdx[i]])
+    #        #if noisy:
+    #        #    print 'Tidal range: %.2f' % tidalRange[i]
+    
+        if True:
+            print 'Mean tidal range: %.2f' % np.mean(tidalRange)
+            print 'Standard deviation (all): %.2f' % np.std(tidalHeights)
+            print 'Mean tidal range (all): %.2f' % np.mean(np.max(tidalHeights) - np.min(tidalHeights))
+    
+    
+    
+        # Plot figure of the locations of the extracted points
+        gp.plotUnstructuredGrid(triangles, nodes, x, y, FVCOM['zeta'][-10,:], 'Tidal elevation (m)')
+        plt.plot(x[positionIdx], y[positionIdx], '.')
+        #for i in positionIdx:
+        #    plt.text(x[i], y[i], str(i),
+        #        horizontalalignment='center', verticalalignment='center', size=8)
+    
+        for a, i in enumerate(skippedIdx):
+            colourIdx = int((a/float(numPlots+1))*255)
+            plt.text(x[i], y[i], str(i),
+                horizontalalignment='center', verticalalignment='center', size=18, color=cm.rainbow(colourIdx))
+            
+    
+    
