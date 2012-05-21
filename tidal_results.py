@@ -47,7 +47,8 @@ if __name__ == '__main__':
 
     base = '/data/medusa/pica/models/FVCOM/runCO2_leak'
     # Coarse
-    in1 = base + '/output/rate_ranges/11days/co2_S5_low_run_0001.nc'
+    #in1 = base + '/output/rate_ranges/11days/co2_S5_low_run_0001.nc'
+    in1 = base + '/output/sponge_tests/co2_S5_high_spg_1_run_fvcom_0001.nc'
     # Coarse grid
     in2 = base + '/input/configs/inputV5/co2_grd.dat'
 
@@ -58,6 +59,7 @@ if __name__ == '__main__':
     # Number of subplots
     numPlots = 5
 
+    # Nodes to sample
     samplingIdx = [175, 259, 3] # start, end, skip
     positionIdx = np.arange(samplingIdx[0], samplingIdx[1], samplingIdx[2])
     skippedIdx = np.arange(samplingIdx[0], samplingIdx[1], samplingIdx[2] * numPlots)
@@ -71,22 +73,33 @@ if __name__ == '__main__':
 
     t = FVCOM['time']-np.min(FVCOM['time']) # start time at zero
 
-    plt.figure(1)
+    plt.figure()
     plt.clf()
+    tidalRange = np.zeros(np.shape(skippedIdx)[0])
     for i in xrange(numPlots+1):
         plt.subplot(numPlots+1,1,i+1)
         colourIdx = int((i/float(numPlots+1))*255)
         plt.plot(t, Z[:, skippedIdx[i]], '-x', label='Station 0', color=cm.rainbow(colourIdx))
         #plt.text(1, 2, str(skippedIdx[i]))
-        plt.axis('auto')
+        plt.axis('tight')
+        plt.ylim(-3, 3)
+        
+        # Get the tidal range
+        tidalRange[i] = np.max(Z[:, skippedIdx[i]]) - np.min(Z[:, skippedIdx[i]])
+        #if noisy:
+        #    print 'Tidal range: %.2f' % tidalRange[i]
+
+    if noisy:
+        print '\nMean tidal range: %.2f' % np.mean(tidalRange)
+
 
 
     # Plot figure of the locations of the extracted points
-    gp.plotUnstructuredGrid(triangles, nodes, x, y, FVCOM['zeta'][-1,:], 'Tidal elevation (m)')
+    gp.plotUnstructuredGrid(triangles, nodes, x, y, FVCOM['zeta'][-100,:], 'Tidal elevation (m)')
     plt.plot(x[positionIdx], y[positionIdx], '.')
-    for i in positionIdx:
-        plt.text(x[i], y[i], str(i),
-            horizontalalignment='center', verticalalignment='center', size=8)
+    #for i in positionIdx:
+    #    plt.text(x[i], y[i], str(i),
+    #        horizontalalignment='center', verticalalignment='center', size=8)
 
     for a, i in enumerate(skippedIdx):
         colourIdx = int((a/float(numPlots+1))*255)
