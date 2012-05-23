@@ -42,14 +42,17 @@ if __name__ == '__main__':
     # Be verbose?
     noisy = False
 
-    getVars = ['x', 'y', 'xc', 'yc', 'zeta', 'art1', 'h', 'time', 'TCO2', 'PH', 'DYE', 'siglev']
+    getVars = ['x', 'y', 'xc', 'yc', 'zeta', 'art1', 'h', 'time', 'TCO2', 'PH', 'DYE', 'siglev', 'salinity']
 
 
     base = '/data/medusa/pica/models/FVCOM/runCO2_leak'
-    for testMe in [str('%.7f' % 0.0000001), str('%.6f' % 0.000001), str('%.5f' % 0.00001), 0.0001, 0.001, 0.01, 0.1, 1]:
+    #for testMe in [str('%.7f' % 0.0000001), str('%.6f' % 0.000001), str('%.5f' % 0.00001), 0.0001, 0.001, 0.01, 0.1, 1]:
+    for testMe in [str('%.7f' % 0.0000001), str('%.6f' % 0.000001), str('%.5f' % 0.00001), 0.0001, 0.001, 0.01]:
+    #for testMe in [str('%.5f' % 0.00001)]:
         # Coarse
         #in1 = base + '/output/rate_ranges/11days/co2_S5_low_run_0001.nc'
-        in1 = base + '/output/sponge_tests/co2_S5_high_spg_' + str(testMe) + '_run_fvcom_0001.nc'
+        in1 = base + '/output/sponge_tests/co2_S7_high_spg_' + str(testMe) + '_run_fvcom_0001.nc'
+        #in1 = base + '/output/sponge_tests/co2_S1_0001.nc'
         # Coarse grid
         in2 = base + '/input/configs/inputV5/co2_grd.dat'
     
@@ -76,6 +79,7 @@ if __name__ == '__main__':
         t = FVCOM['time']-np.min(FVCOM['time']) # start time at zero
     
         tidalRange = np.zeros(np.shape(skippedIdx)[0])
+        tailSkip = -24 # skip the last few points in the range calculations
         plt.figure()
         plt.clf()
         for i in xrange(numPlots+1):
@@ -84,17 +88,17 @@ if __name__ == '__main__':
             plt.plot(t, Z[:, skippedIdx[i]], '-x', label='Station 0', color=cm.rainbow(colourIdx))
             #plt.text(1, 2, str(skippedIdx[i]))
             plt.axis('tight')
-            plt.ylim(-3, 3)
+            plt.ylim(-3.5, 3.5)
             
             # Get the tidal range
-            tidalRange[i] = np.max(Z[:, skippedIdx[i]]) - np.min(Z[:, skippedIdx[i]])
+            tidalRange[i] = np.max(Z[0:tailSkip, skippedIdx[i]]) - np.min(Z[0:tailSkip, skippedIdx[i]])
             #if noisy:
             #    print 'Tidal range: %.2f' % tidalRange[i]
     
         if True:
             #print 'Mean tidal range: %.2f' % np.mean(tidalRange)
             #print 'Mean tidal range (all): %.2f' % np.mean(np.max(tidalHeights) - np.min(tidalHeights))
-            print '%.2f' % np.mean(np.max(tidalHeights) - np.min(tidalHeights))
+            print '%.2f' % np.mean(np.max(tidalHeights[0:tailSkip, :]) - np.min(tidalHeights[0:tailSkip, :]))
 
         plt.show()
     
