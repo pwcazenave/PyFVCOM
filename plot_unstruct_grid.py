@@ -78,14 +78,16 @@ def parseUnstructuredGridFVCOM(mesh):
 
     return(triangle, nodes, X, Y, Z)
 
-def plotUnstructuredGrid(triangles, nodes, x, y, z, colourLabel, addText=False):
+def plotUnstructuredGrid(triangles, nodes, x, y, z, colourLabel, addText=False, addMesh=False):
     """ 
     Takes the output of parseUnstructuredGridFVCOM() or 
     parseUnstructuredGridSMS() and readFVCOM() and plots it.
 
     Give triangles, nodes, x, y, z and a label for the colour scale. The first
     five arguments are the output of parseUnstructuredGridFVCOM() or 
-    parseUnstructuredGridSMS().
+    parseUnstructuredGridSMS(). Optionally append addText=True|False and 
+    addMesh=True|False to enable/disable node numbers and grid overlays, 
+    respectively.
     """
 
     plt.figure()
@@ -94,7 +96,9 @@ def plotUnstructuredGrid(triangles, nodes, x, y, z, colourLabel, addText=False):
         cb = plt.colorbar()
         cb.set_label(colourLabel)
 
-    #plt.triplot(x, y, triangles, '-', color=[0.6, 0.6, 0.6])
+    if addMesh:
+        plt.triplot(x, y, triangles, '-', color=[0.6, 0.6, 0.6])
+
     # Add the node numbers (this is slow)
     if addText:
         for node in nodes:
