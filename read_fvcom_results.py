@@ -169,7 +169,7 @@ def coefficientOfDetermination(obs, model):
     return R2
 
 
-def animateModelOutput(FVCOM, varPlot, startIdx, skipIdx, layerIdx, addVectors=False, noisy=False):
+def animateModelOutput(FVCOM, varPlot, startIdx, skipIdx, layerIdx, meshFile, addVectors=False, noisy=False):
     """
     Animated model output (for use in ipython).
 
@@ -177,7 +177,8 @@ def animateModelOutput(FVCOM, varPlot, startIdx, skipIdx, layerIdx, addVectors=F
     Specify the variable of interest as a string (e.g. 'DYE'). This is case
     sensitive. Specify a starting index, a skip index of n to skip n time steps
     in the animation. The layerIdx is either the sigma layer to plot or, if
-    negative, means the depth averaged value is calcualted.
+    negative, means the depth averaged value is calcualted. Supply an
+    unstructured grid file (FVCOM format).
 
     Optionally add current vectors to the plot with addVectors=True which will
     be colour coded by their magnitude.
@@ -197,6 +198,18 @@ def animateModelOutput(FVCOM, varPlot, startIdx, skipIdx, layerIdx, addVectors=F
     except ImportError:
         print 'matplotlib not found'
 
+    try:
+        from plot_unstruct_grid import parseUnstructuredGridFVCOM
+    except ImportError:
+        print 'plot_unstruct_grid not found'
+        
+    
+    try:
+        [triangles, nodes, x, y, z] = parseUnstructuredGridFVCOM(meshFile)
+    except:
+        print 'Couldn''t import unstructured grid. Check specified file is the correct format'
+
+    print np.shape(triangles)
 
     Z = FVCOM[varPlot]
 
