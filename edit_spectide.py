@@ -8,6 +8,8 @@ that sort of data, and so have different structures. Probably best to use the
 combination of ncdump and ncgen to edit the values as text and generate a new
 NetCDF file from that edited text.
 
+Lee's changeNC file should live in the SVN repository.
+
 """
 
 from changeNC import *
