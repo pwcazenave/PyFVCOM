@@ -107,8 +107,8 @@ def plotUnstructuredGrid(triangles, nodes, x, y, z, colourLabel, addText=False, 
     plt.axes().set_aspect('equal', 'datalim')
     #plt.clim(-1.5, 1.5)
     #plt.title('Triplot of user-specified triangulation')
-    #plt.xlabel('x')
-    #plt.ylabel('y')
+    plt.xlabel('Metres')
+    plt.ylabel('Metres')
 
     plt.show()
     #plt.close() # for 'looping' (slowly)
