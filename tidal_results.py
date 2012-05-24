@@ -47,15 +47,26 @@ if __name__ == '__main__':
 
     base = '/data/medusa/pica/models/FVCOM/runCO2_leak'
     #for testMe in [str('%.7f' % 0.0000001), str('%.6f' % 0.000001), str('%.5f' % 0.00001), 0.0001, 0.001, 0.01, 0.1, 1]:
-    for testMe in [str('%.7f' % 0.0000001), str('%.6f' % 0.000001), str('%.5f' % 0.00001), 0.0001, 0.001, 0.01]:
-    #for testMe in [str('%.5f' % 0.00001)]:
+    #for testMe in [str('%.7f' % 0.0000001), str('%.6f' % 0.000001), str('%.5f' % 0.00001), 0.0001, 0.001, 0.01]:
+    for testMe in [str('%.5f' % 0.00001)]:
         # Coarse
         #in1 = base + '/output/rate_ranges/11days/co2_S5_low_run_0001.nc'
-        in1 = base + '/output/sponge_tests/co2_S7_high_spg_' + str(testMe) + '_run_fvcom_0001.nc'
+        #in1 = base + '/output/sponge_tests/co2_S7_high_spg_' + str(testMe) + '_run_fvcom_0001.nc'
         #in1 = base + '/output/sponge_tests/co2_S1_0001.nc'
         # Coarse grid
-        in2 = base + '/input/configs/inputV5/co2_grd.dat'
-    
+        #in2 = base + '/input/configs/inputV5/co2_grd.dat'
+
+        # Fine grid
+        #in1 = base + '/output/scenarios/co2_S7_low_rate_full_tide_fvcom_0001.nc'
+        #in1 = base + '/output/rate_ranges/11days/co2_S7_high_run_0001.nc'
+        # Fine grid
+        #in2 = base + '/input/configs/inputV7/co2_grd.dat'
+
+        # Currently running
+        in1 = base + '/output/rate_ranges/co2_S1_0001.nc'
+        # Fine grid
+        in2 = base + '/input/configs/inputV7/co2_grd.dat'
+
         # Read in the NetCDF file and the unstructured grid file
         FVCOM = readFVCOM(in1, getVars, noisy)
         [triangles, nodes, x, y, z] = gp.parseUnstructuredGridFVCOM(in2)
