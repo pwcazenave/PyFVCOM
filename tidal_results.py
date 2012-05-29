@@ -50,13 +50,11 @@ if __name__ == '__main__':
     #for testMe in [str('%.7f' % 0.0000001), str('%.6f' % 0.000001), str('%.5f' % 0.00001), 0.0001, 0.001, 0.01, 0.1, 1]:
     #for testMe in [str('%.7f' % 0.0000001), str('%.6f' % 0.000001), str('%.5f' % 0.00001), 0.0001, 0.001, 0.01]:
     for testMe in [str('%.5f' % 0.00001)]:
-    #for in1 in glob(base + '/output/rate_ranges/20days/*nc'):
+    #for in1 in glob(base + '/output/rate_ranges/20days/*S7*1.nc'):
         # Coarse
         #in1 = base + '/output/rate_ranges/11days/co2_S5_low_run_0001.nc'
         #in1 = base + '/output/sponge_tests/co2_S7_high_spg_' + str(testMe) + '_run_fvcom_0001.nc'
         #in1 = base + '/output/sponge_tests/co2_S1_0001.nc'
-        # Coarse grid
-        #in2 = base + '/input/configs/inputV5/co2_grd.dat'
 
         # Fine grid
         #in1 = base + '/output/scenarios/co2_S7_low_rate_full_tide_fvcom_0001.nc'
@@ -64,13 +62,13 @@ if __name__ == '__main__':
         #in1 = base + '/output/rate_ranges/20days/co2_S7_high_run_fvcom_inputV7_high_flow.nc'
         #in1 = base + '/output/rate_ranges/20days/co2_S7_high_run_fvcom_inputV7_low_flow_0001.nc'
         #in1 = base + '/output/rate_ranges/20days/co2_S7_low_run_fvcom_inputV7_high_flow.nc'
-        # Fine grid
-        #in2 = base + '/input/configs/inputV7/co2_grd.dat'
+        #in1 = base + '/output/rate_ranges/20days/co2_S5_pipe_run_fvcom_inputV5_low_flow_0001.nc'
+        #in1 = base + '/output/rate_ranges/20days/co2_S7_low_run_fvcom_inputV7_high_flow_0002.nc'
+        #in1 = base + '/output/rate_ranges/20days/co2_S5_low_run_fvcom_inputV5_high_flow_0001.nc'
+        in1 = base + '/output/rate_ranges/20days/co2_S7_high_run_fvcom_inputV7_low_flow_0001.nc'
 
         # Currently running
-        in1 = base + '/output/rate_ranges/co2_S1_0001.nc'
-        # Fine grid
-        #in2 = base + '/input/configs/inputV7/co2_grd.dat'
+        #in1 = base + '/output/rate_ranges/co2_S1_0001.nc'
 
         # Check which file we're loading and set appropriate grid
         if 'V5' in in1:
@@ -82,7 +80,7 @@ if __name__ == '__main__':
         elif 'S7' in in1:
             in2 = base + '/input/configs/inputV7/co2_grd.dat'
         else:
-            print 'Unknown grid format. Guessing based on no information it''s fine...'
+            print 'Unknown grid format. Guessing based on no information it''s: fine...'
             # Guess
             in2 = base + '/input/configs/inputV7/co2_grd.dat'
 
@@ -108,10 +106,15 @@ if __name__ == '__main__':
         except:
             print 'Did not find tidal elevation (zeta) in model output'
 
-        # Check we have enough time steps in the current results
-        if np.shape(Z)[0] < np.max(samplingIdx):
-            print 'Not enough time steps for the specified indices. Skipping.'
+        # Check we have enough time steps in the current results. Need at least three
+        if np.shape(Z)[0] < 3:
+            if noisy:
+                print 'Not enough time steps for the specified indices. Skipping.'
+
             continue
+        else:
+            if True:
+                print 'Time steps: %i' % np.shape(Z)[0]
 
 
         tidalHeights = extractTideElevation(Z, positionIdx)
@@ -119,7 +122,7 @@ if __name__ == '__main__':
         t = FVCOM['time']-np.min(FVCOM['time']) # start time at zero
 
         tidalRange = np.zeros(np.shape(skippedIdx)[0])
-        tailSkip = -24 # skip the last few points in the range calculations
+        tailSkip = -1 # skip the last few points in the range calculations
         plt.figure()
         plt.clf()
         for i in xrange(numPlots+1):
