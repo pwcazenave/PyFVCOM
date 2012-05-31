@@ -116,10 +116,10 @@ def parseUnstructuredGridMIKE(mesh):
 
 
 def writeUnstructuredGridSMS(triangles, nodes, x, y, z, mesh):
-    """ 
+    """
     Takes appropriate triangle, node and coordinate data and writes out an SMS
-    formatted grid file. A lot of this is guessed from an existing file I 
-    have, so it may be incorrect for all uses. 
+    formatted grid file. A lot of this is guessed from an existing file I
+    have, so it may be incorrect for all uses.
 
     Input data is probably best obtained from one of:
 
@@ -129,8 +129,12 @@ def writeUnstructuredGridSMS(triangles, nodes, x, y, z, mesh):
 
     which read in the relevant grids and output the required information for
     this function.
+
+    TODO(pica): Check what the footer actually contains -- is it important or
+    necessary for the FVCOM modelling?
+
     """
-    
+
     # Get some information needed for the metadata side of things
     nodeNumber = max(nodes)+1
     elementNumber = max(triangles[:,0])
@@ -142,7 +146,7 @@ def writeUnstructuredGridSMS(triangles, nodes, x, y, z, mesh):
     # Write out the connectivity table (triangles)
     currentNode = 0
     for line in triangles:
-        
+
         # Bump the numbers by one to correct for Python indexing from zero
         line = line + 1
         strLine = []
@@ -165,12 +169,17 @@ def writeUnstructuredGridSMS(triangles, nodes, x, y, z, mesh):
         # Convert the numpy array to a string array
         strLine = str(line)
 
-        output = ['ND'] + [strLine] + [str(x[count])] + [str(y[count])] + [str(z[count])]
+        # Format output correctly
+        output = ['ND'] + \
+                [strLine] + \
+                ['{:.8e}'.format(x[count])] + \
+                ['{:.8e}'.format(y[count])] + \
+                ['{:.8e}'.format(z[count])]
         output = ' '.join(output)
 
         fileWrite.write(output + '\n')
 
-    # Add all the blurb at th end of the file. This is where I'm guessing at
+    # Add all the blurb at the end of the file. This is where I'm guessing at
     # what it does...
     footer = 'NS  1 2 3 4 5 6 7 8 9 10\n\
 NS  11 12 13 14 15 16 17 18 19 20\n\
@@ -207,14 +216,14 @@ END2DMBC\n'
 
 
 def plotUnstructuredGrid(triangles, nodes, x, y, z, colourLabel, addText=False, addMesh=False):
-    """ 
-    Takes the output of parseUnstructuredGridFVCOM() or 
+    """
+    Takes the output of parseUnstructuredGridFVCOM() or
     parseUnstructuredGridSMS() and readFVCOM() and plots it.
 
     Give triangles, nodes, x, y, z and a label for the colour scale. The first
-    five arguments are the output of parseUnstructuredGridFVCOM() or 
-    parseUnstructuredGridSMS(). Optionally append addText=True|False and 
-    addMesh=True|False to enable/disable node numbers and grid overlays, 
+    five arguments are the output of parseUnstructuredGridFVCOM() or
+    parseUnstructuredGridSMS(). Optionally append addText=True|False and
+    addMesh=True|False to enable/disable node numbers and grid overlays,
     respectively.
     """
 
@@ -235,7 +244,7 @@ def plotUnstructuredGrid(triangles, nodes, x, y, z, colourLabel, addText=False, 
     plt.axes().set_aspect('equal')
     plt.axes().autoscale(tight=True)
     #plt.axis('tight')
-    plt.clim(-50, 0)
+    #plt.clim(-500, 0)
     #plt.title('Triplot of user-specified triangulation')
     plt.xlabel('Metres')
     plt.ylabel('Metres')
@@ -243,21 +252,77 @@ def plotUnstructuredGrid(triangles, nodes, x, y, z, colourLabel, addText=False, 
     plt.show()
     #plt.close() # for 'looping' (slowly)
 
+def plotUnstructuredGridProjected(triangles, nodes, x, y, z, colourLabel, addText=False, addMesh=False, extents=False):
+    """
+    Takes the output of parseUnstructuredGridFVCOM() or
+    parseUnstructuredGridSMS() and readFVCOM() and plots it on a projected
+    map. Best used for lat-long data sets.
+
+    Give triangles, nodes, x, y, z and a label for the colour scale. The first
+    five arguments are the output of parseUnstructuredGridFVCOM() or
+    parseUnstructuredGridSMS(). Optionally append addText=True|False and
+    addMesh=True|False to enable/disable node numbers and grid overlays,
+    respectively. Finally, provide optional extents (W/E/S/N format).
+
+    WARNING: THIS DOESN'T WORK ON FEDORA 14. REQUIRES FEDORA 16 AT LEAST 
+    (I THINK -- DIFFICULT TO VERIFY WITHOUT ACCESS TO A NEWER VERSION OF 
+    FEDORA).
+
+    """
+
+    from mpl_toolkits.basemap import Basemap
+    from matplotlib import tri
+
+    if extents is False:
+        # We don't have a specific region defined, so use minmax of x and y.
+        extents = [ min(x), max(x), min(y), max(y) ]
+
+    # Create a triangulation object from the triagulated info read in from the
+    # grid files.
+    triang = tri.Triangulation(x, y, triangles)
+
+    # Create the basemap
+    fig = plt.figure()
+    ax = fig.add_axes([0.1,0.1,0.8,0.8])
+    m = Basemap(
+            llcrnrlat=extents[2],
+            urcrnrlat=extents[3],
+            llcrnrlon=extents[0],
+            urcrnrlon=extents[1],
+            projection='merc',
+            resolution='h',
+            lat_1=extents[2],
+            lat_2=extents[3],
+            lat_0=(extents[3]-extents[2])/2,
+            lon_0=extents[1],
+            ax=ax)
+    # Add the data
+    #m.tripcolor(triang,z) # version of matplotlib is too old on Fedora 14
+    # Add a coastline
+    #m.drawlsmask(land_color='grey', lakes=True, resolution='h')
+    # Can't add resolution here for some reason
+    #m.drawlsmask(land_color='grey')
+    m.drawcoastlines()
+    plt.show()
+
 if __name__ == '__main__':
-    
+
     from sys import argv
 
     # A MIKE grid
     #[triangles, nodes, x, y, z] = parseUnstructuredGridMIKE('../data/csm_culver_v7.mesh')
+    [triangles, nodes, x, y, z] = parseUnstructuredGridMIKE('../data/Low res.mesh')
     # An SMS grid
-    [triangles, nodes, x, y, z] = parseUnstructuredGridSMS('../data/tamar_co2V4.2dm')
+    #[triangles, nodes, x, y, z] = parseUnstructuredGridSMS('../data/tamar_co2V4.2dm')
     # An FVCOM grid
     #[triangles, nodes, x, y, z] = parseUnstructuredGridFVCOM('../data/co2_grd.dat')
 
-    writeUnstructuredGridSMS(triangles, nodes, x, y, z, '../data/test.dat')
+    # Spit out an SMS version fo whatever's been loaded above.
+    #writeUnstructuredGridSMS(triangles, nodes, x, y, z, '../data/test.dat')
 
     # Let's have a look-see
-    #plotUnstructuredGrid(triangles, nodes, x, y, z, 'Depth (m)')
+    plotUnstructuredGrid(triangles, nodes, x, y, z, 'Depth (m)')
+    #plotUnstructuredGridProjected(triangles, nodes, x, y, z, 'Depth (m)')
 
     # Multiple grids
     #for grid in argv[1:]:
