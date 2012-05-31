@@ -15,11 +15,13 @@ def parseUnstructuredGridSMS(mesh):
 
     triangles = []
     nodes = []
+    types = []
     x = []
     y = []
     z = []
 
     for line in lines:
+        line = line.strip()
         if line.startswith('E3T'):
             ttt = line.split()
             t1 = int(ttt[2])-1
@@ -32,15 +34,20 @@ def parseUnstructuredGridSMS(mesh):
             y.append(float(xy[3]))
             z.append(float(xy[4]))
             nodes.append(int(xy[1]))
+        elif line.startswith('NS '):
+            allTypes = line.split(' ')
+            for nodeID in allTypes[2:]:
+                types.append(int(nodeID))
 
     # Convert to numpy arrays.
     triangle = np.asarray(triangles)
     nodes = np.asarray(nodes)
+    types = np.asarray(types)
     X = np.asarray(x)
     Y = np.asarray(y)
     Z = np.asarray(z)
 
-    return(triangle, nodes, X, Y, Z)
+    return(triangle, nodes, X, Y, Z, types)
 
 def parseUnstructuredGridFVCOM(mesh):
     """ Reads in the FVCOM unstructured grid format. """
@@ -88,6 +95,7 @@ def parseUnstructuredGridMIKE(mesh):
 
     triangles = []
     nodes = []
+    types = []
     x = []
     y = []
     z = []
@@ -103,19 +111,21 @@ def parseUnstructuredGridMIKE(mesh):
             x.append(float(ttt[1]))
             y.append(float(ttt[2]))
             z.append(float(ttt[3]))
+            types.append(int(ttt[4]))
             nodes.append(int(ttt[0]))
 
     # Convert to numpy arrays.
     triangle = np.asarray(triangles)
     nodes = np.asarray(nodes)
+    types = np.asarray(types)
     X = np.asarray(x)
     Y = np.asarray(y)
     Z = np.asarray(z)
 
-    return(triangle, nodes, X, Y, Z)
+    return(triangle, nodes, X, Y, Z, types)
 
 
-def writeUnstructuredGridSMS(triangles, nodes, x, y, z, mesh):
+def writeUnstructuredGridSMS(triangles, nodes, x, y, z, types, mesh):
     """
     Takes appropriate triangle, node and coordinate data and writes out an SMS
     formatted grid file. A lot of this is guessed from an existing file I
@@ -130,7 +140,7 @@ def writeUnstructuredGridSMS(triangles, nodes, x, y, z, mesh):
     which read in the relevant grids and output the required information for
     this function.
 
-    The footer contains meta data and additional information. See page 18 in 
+    The footer contains meta data and additional information. See page 18 in
     http://smstutorials-11.0.aquaveo.com/SMS_Gen2DM.pdf.
 
     In essence, three bits are critical:
@@ -140,8 +150,8 @@ def writeUnstructuredGridSMS(triangles, nodes, x, y, z, mesh):
         3. ND prefix for the node information:
             (nodeID, x, y, z)
 
-    The only potentially important bit is the nodestring section (prefix NS), 
-    which seems to be about defining boundaries. As far as I can tell, the 
+    The only potentially important bit is the nodestring section (prefix NS),
+    which seems to be about defining boundaries. As far as I can tell, the
     footer is largely irrelevant for my purposes.
 
     """
@@ -176,7 +186,6 @@ def writeUnstructuredGridSMS(triangles, nodes, x, y, z, mesh):
     # Add the node information (nodes)
     for count, line in enumerate(nodes):
 
-        strLine = []
         # Convert the numpy array to a string array
         strLine = str(line)
 
@@ -190,9 +199,44 @@ def writeUnstructuredGridSMS(triangles, nodes, x, y, z, mesh):
 
         fileWrite.write(output + '\n')
 
-    # Add all the blurb at the end of the file. 
-    # 
-    # NS = nodestring
+    # Convert MIKE boundary types to nodestrings. The format requires a prefix
+    # NS, and then a maximum of 10 node IDs per line. The nodestring tail is
+    # indicated by a negative node ID.
+
+    # Iterate through the unique boundary types to get a new nodestring for
+    # each boundary type.
+    for boundaryType in np.unique(types[types>1]):
+
+        # Find the nodes for the boundary type which are greater than 1 (i.e.
+        # not 0 or 1).
+        nodeBoundaries = nodes[types==boundaryType]
+
+        nodestrings = 0
+        oldNode = types[0]
+        for counter, node in enumerate(nodeBoundaries):
+            if counter+1 == len(nodeBoundaries) and node > 0:
+                node = -node
+
+            nodestrings += 1
+            if nodestrings == 1:
+                output = 'NS  {:d} '.format(int(node))
+                fileWrite.write(output)
+            elif nodestrings != 0 and nodestrings < 10:
+                output = '{:d} '.format(int(node))
+                fileWrite.write(output)
+            elif nodestrings == 10:
+                output = '{:d} '.format(int(node))
+                fileWrite.write(output + '\n')
+                nodestrings = 0
+
+        # Add a new line at the end of each block. Not sure why the new line
+        # above doesn't work...
+        fileWrite.write('\n')
+
+
+
+    # Add all the blurb at the end of the file.
+    #
     # BEGPARAMDEF = Marks end of mesh data/beginning of mesh model definition
     # GM = Mesh name (enclosed in "")
     # SI = use SI units y/n = 1/0
@@ -206,16 +250,7 @@ def writeUnstructuredGridSMS(triangles, nodes, x, y, z, mesh):
     # BEG2DMBC = Beginning of the model assignments
     # MAT = Material assignment
     # END2DMBC = End of the model assignments
-    footer = 'NS  1 2 3 4 5 6 7 8 9 10\n\
-NS  11 12 13 14 15 16 17 18 19 20\n\
-NS  21 22 23 24 25 26 27 28 29 30\n\
-NS  31 32 33 34 35 36 37 38 39 40\n\
-NS  41 42 43 44 45 46 47 48 49 50\n\
-NS  51 52 53 54 55 56 57 58 59 60\n\
-NS  61 62 63 64 65 66 67 68 69 70\n\
-NS  71 72 73 74 75 76 77 78 79 80\n\
-NS  81 82 83 84 85 86 -87\n\
-BEGPARAMDEF\n\
+    footer = 'BEGPARAMDEF\n\
 GM  "Mesh"\n\
 SI  0\n\
 DY  0\n\
@@ -289,8 +324,8 @@ def plotUnstructuredGridProjected(triangles, nodes, x, y, z, colourLabel, addTex
     addMesh=True|False to enable/disable node numbers and grid overlays,
     respectively. Finally, provide optional extents (W/E/S/N format).
 
-    WARNING: THIS DOESN'T WORK ON FEDORA 14. REQUIRES FEDORA 16 AT LEAST 
-    (I THINK -- DIFFICULT TO VERIFY WITHOUT ACCESS TO A NEWER VERSION OF 
+    WARNING: THIS DOESN'T WORK ON FEDORA 14. REQUIRES FEDORA 16 AT LEAST
+    (I THINK -- DIFFICULT TO VERIFY WITHOUT ACCESS TO A NEWER VERSION OF
     FEDORA).
 
     """
@@ -335,15 +370,16 @@ if __name__ == '__main__':
     from sys import argv
 
     # A MIKE grid
-    #[triangles, nodes, x, y, z] = parseUnstructuredGridMIKE('../data/csm_culver_v7.mesh')
-    #[triangles, nodes, x, y, z] = parseUnstructuredGridMIKE('../data/Low res.mesh')
+    [triangles, nodes, x, y, z, types] = parseUnstructuredGridMIKE('../data/csm_culver_v7.mesh')
+    #[triangles, nodes, x, y, z, types] = parseUnstructuredGridMIKE('../data/Low res.mesh')
     # An SMS grid
-    [triangles, nodes, x, y, z] = parseUnstructuredGridSMS('../data/tamar_co2V4.2dm')
+    #[triangles, nodes, x, y, z, types] = parseUnstructuredGridSMS('../data/tamar_co2V4.2dm')
     # An FVCOM grid
     #[triangles, nodes, x, y, z] = parseUnstructuredGridFVCOM('../data/co2_grd.dat')
+    # types = [] # FVCOM doesn't record this information, I think.
 
     # Spit out an SMS version fo whatever's been loaded above.
-    writeUnstructuredGridSMS(triangles, nodes, x, y, z, '../data/test.dat')
+    writeUnstructuredGridSMS(triangles, nodes, x, y, z, types, '../data/test.dat')
 
     # Let's have a look-see
     #plotUnstructuredGrid(triangles, nodes, x, y, z, 'Depth (m)', addMesh=True)
