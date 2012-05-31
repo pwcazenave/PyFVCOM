@@ -130,8 +130,19 @@ def writeUnstructuredGridSMS(triangles, nodes, x, y, z, mesh):
     which read in the relevant grids and output the required information for
     this function.
 
-    TODO(pica): Check what the footer actually contains -- is it important or
-    necessary for the FVCOM modelling?
+    The footer contains meta data and additional information. See page 18 in 
+    http://smstutorials-11.0.aquaveo.com/SMS_Gen2DM.pdf.
+
+    In essence, three bits are critical:
+        1. The header/footer MESH2D/BEGPARAMDEF
+        2. E3T prefix for the connectivity:
+            (elementID, node1, node2, node3, material_type)
+        3. ND prefix for the node information:
+            (nodeID, x, y, z)
+
+    The only potentially important bit is the nodestring section (prefix NS), 
+    which seems to be about defining boundaries. As far as I can tell, the 
+    footer is largely irrelevant for my purposes.
 
     """
 
@@ -179,8 +190,22 @@ def writeUnstructuredGridSMS(triangles, nodes, x, y, z, mesh):
 
         fileWrite.write(output + '\n')
 
-    # Add all the blurb at the end of the file. This is where I'm guessing at
-    # what it does...
+    # Add all the blurb at the end of the file. 
+    # 
+    # NS = nodestring
+    # BEGPARAMDEF = Marks end of mesh data/beginning of mesh model definition
+    # GM = Mesh name (enclosed in "")
+    # SI = use SI units y/n = 1/0
+    # DY = Dynamic model y/n = 1/0
+    # TU = Time units
+    # TD = Dynamic time data (?)
+    # NUME = Number of entities available (nodes, nodestrings, elements)
+    # BGPGC = Boundary group parameter group correlation y/n = 1/0
+    # BEDISP/BEFONT = Format controls on display of boundary labels.
+    # ENDPARAMDEF = End of the mesh model definition
+    # BEG2DMBC = Beginning of the model assignments
+    # MAT = Material assignment
+    # END2DMBC = End of the model assignments
     footer = 'NS  1 2 3 4 5 6 7 8 9 10\n\
 NS  11 12 13 14 15 16 17 18 19 20\n\
 NS  21 22 23 24 25 26 27 28 29 30\n\
@@ -311,17 +336,17 @@ if __name__ == '__main__':
 
     # A MIKE grid
     #[triangles, nodes, x, y, z] = parseUnstructuredGridMIKE('../data/csm_culver_v7.mesh')
-    [triangles, nodes, x, y, z] = parseUnstructuredGridMIKE('../data/Low res.mesh')
+    #[triangles, nodes, x, y, z] = parseUnstructuredGridMIKE('../data/Low res.mesh')
     # An SMS grid
-    #[triangles, nodes, x, y, z] = parseUnstructuredGridSMS('../data/tamar_co2V4.2dm')
+    [triangles, nodes, x, y, z] = parseUnstructuredGridSMS('../data/tamar_co2V4.2dm')
     # An FVCOM grid
     #[triangles, nodes, x, y, z] = parseUnstructuredGridFVCOM('../data/co2_grd.dat')
 
     # Spit out an SMS version fo whatever's been loaded above.
-    #writeUnstructuredGridSMS(triangles, nodes, x, y, z, '../data/test.dat')
+    writeUnstructuredGridSMS(triangles, nodes, x, y, z, '../data/test.dat')
 
     # Let's have a look-see
-    plotUnstructuredGrid(triangles, nodes, x, y, z, 'Depth (m)')
+    #plotUnstructuredGrid(triangles, nodes, x, y, z, 'Depth (m)', addMesh=True)
     #plotUnstructuredGridProjected(triangles, nodes, x, y, z, 'Depth (m)')
 
     # Multiple grids
