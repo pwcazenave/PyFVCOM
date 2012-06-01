@@ -86,7 +86,12 @@ def parseUnstructuredGridFVCOM(mesh):
     return(triangle, nodes, X, Y, Z)
 
 def parseUnstructuredGridMIKE(mesh):
-    """ Reads in the MIKE unstructured grid format. """
+    """ 
+    Reads in the MIKE unstructured grid format. 
+
+    WARNING: Depth sign is flipped for FVCOM.
+
+    """
 
     fileRead = open(mesh, 'r')
     # Skip the file header (one line)
@@ -120,7 +125,7 @@ def parseUnstructuredGridMIKE(mesh):
     types = np.asarray(types)
     X = np.asarray(x)
     Y = np.asarray(y)
-    Z = np.asarray(z)
+    Z = -np.asarray(z) # Flip sign on depths for FVCOM
 
     return(triangle, nodes, X, Y, Z, types)
 
@@ -413,7 +418,7 @@ if __name__ == '__main__':
     #[triangles, nodes, x, y, z] = parseUnstructuredGridFVCOM('../data/co2_grd.dat')
     # types = [] # FVCOM doesn't record this information, I think.
 
-    # Spit out an SMS version fo whatever's been loaded above.
+    # Spit out an SMS version of whatever's been loaded above.
     writeUnstructuredGridSMS(triangles, nodes, x, y, z, types, '../data/csm_culver_v7.2dm')
     writeUnstructuredGridSMSBathy(triangles, nodes, z, '../data/csm_culver_v7.pts')
 
