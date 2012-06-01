@@ -127,9 +127,9 @@ def parseUnstructuredGridMIKE(mesh):
 
 def writeUnstructuredGridSMS(triangles, nodes, x, y, z, types, mesh):
     """
-    Takes appropriate triangle, node and coordinate data and writes out an SMS
-    formatted grid file. A lot of this is guessed from an existing file I
-    have, so it may be incorrect for all uses.
+    Takes appropriate triangle, node, boundary type and coordinate data and
+    writes out an SMS formatted grid file (mesh). The footer is largely static,
+    but the elements, nodes and nodestrings are parsed from the input data.
 
     Input data is probably best obtained from one of:
 
@@ -143,22 +143,17 @@ def writeUnstructuredGridSMS(triangles, nodes, x, y, z, types, mesh):
     The footer contains meta data and additional information. See page 18 in
     http://smstutorials-11.0.aquaveo.com/SMS_Gen2DM.pdf.
 
-    In essence, three bits are critical:
+    In essence, four bits are critical:
         1. The header/footer MESH2D/BEGPARAMDEF
         2. E3T prefix for the connectivity:
             (elementID, node1, node2, node3, material_type)
         3. ND prefix for the node information:
             (nodeID, x, y, z)
+        4. NS prefix for the node strings which indicate the open boundaries.
 
-    The only potentially important bit is the nodestring section (prefix NS),
-    which seems to be about defining boundaries. As far as I can tell, the
-    footer is largely irrelevant for my purposes.
+    As far as I can tell, the footer is largely irrelevant for my purposes.
 
     """
-
-    # Get some information needed for the metadata side of things
-    nodeNumber = max(nodes)+1
-    elementNumber = max(triangles[:,0])
 
     fileWrite = open(mesh, 'w')
     # Add a header
@@ -233,8 +228,6 @@ def writeUnstructuredGridSMS(triangles, nodes, x, y, z, types, mesh):
         # above doesn't work...
         fileWrite.write('\n')
 
-
-
     # Add all the blurb at the end of the file.
     #
     # BEGPARAMDEF = Marks end of mesh data/beginning of mesh model definition
@@ -273,6 +266,47 @@ END2DMBC\n'
 
     fileWrite.close()
 
+
+def writeUnstructuredGridSMSBathy(triangles, nodes, z, PTS):
+    """
+    Writes out the additional bathymetry file sometimes output by SMS. Not sure
+    why this is necessary as it's possible to put the depths in the other file,
+    but hey ho, it is obviously sometimes necessary. Input is:
+    
+        - triangles, nodes and z output by one of three parsing functions
+        parseUnstructuredGridSSMS(), parseUnstructuredGridFVCOM() and
+        parseUnstructuredGridMIKE(). Mainly for the number of nodes in the
+        points file header.
+        - a string of the output file name
+        
+    """
+
+    filePTS = open(PTS, 'w')
+
+    # Get some information needed for the metadata side of things
+    nodeNumber = len(nodes)
+    elementNumber = len(triangles[:,0])
+
+    # Header format (see http://wikis.aquaveo.com/xms/index.php?title=GMS:Data_Set_Files)
+    # DATASET = indicates data 
+    # OBJTYPE = type of object (i.e. mesh 3d, mesh 2d) data is associated with
+    # BEGSCL = Start of the scalar data set
+    # ND = Number of data values
+    # NC = Number of elements
+    # NAME = Freeform data set name
+    # TS = Time step of the data
+    header = 'DATASET\nOBJTYEP = "mesh2d"\nBEGSCL\nND  {:<6d}\nNC  {:<6d}\nNAME "Z_interp"\nTS 0 0\n'.format(int(nodeNumber), int(elementNumber))
+    filePTS.write(header)
+
+    # Now just iterate through all the z values. This process assumes the z
+    # values are in the same order as the nodes. If they're not, this will 
+    # make a mess of your data.
+    for depth in z:
+        filePTS.write('{:.5f}\n'.format(float(depth)))
+
+    # Close the file with the footer
+    filePTS.write('ENDDS\n')
+    filePTS.close()
 
 
 def plotUnstructuredGrid(triangles, nodes, x, y, z, colourLabel, addText=False, addMesh=False):
@@ -374,12 +408,15 @@ if __name__ == '__main__':
     #[triangles, nodes, x, y, z, types] = parseUnstructuredGridMIKE('../data/Low res.mesh')
     # An SMS grid
     #[triangles, nodes, x, y, z, types] = parseUnstructuredGridSMS('../data/tamar_co2V4.2dm')
+    #[triangles, nodes, x, y, z, types] = parseUnstructuredGridSMS('../data/Vigo_v11.2dm')
     # An FVCOM grid
     #[triangles, nodes, x, y, z] = parseUnstructuredGridFVCOM('../data/co2_grd.dat')
     # types = [] # FVCOM doesn't record this information, I think.
 
     # Spit out an SMS version fo whatever's been loaded above.
-    writeUnstructuredGridSMS(triangles, nodes, x, y, z, types, '../data/test.dat')
+    writeUnstructuredGridSMS(triangles, nodes, x, y, z, types, '../data/csm_culver_v7.2dm')
+    writeUnstructuredGridSMSBathy(triangles, nodes, z, '../data/csm_culver_v7.pts')
+
 
     # Let's have a look-see
     #plotUnstructuredGrid(triangles, nodes, x, y, z, 'Depth (m)', addMesh=True)
