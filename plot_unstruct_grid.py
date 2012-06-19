@@ -85,7 +85,7 @@ def parseUnstructuredGridFVCOM(mesh):
 
     return(triangle, nodes, X, Y, Z)
 
-def parseUnstructuredGridMIKE(mesh):
+def parseUnstructuredGridMIKE(mesh,flipZ=True):
     """ 
     Reads in the MIKE unstructured grid format. 
 
@@ -125,7 +125,11 @@ def parseUnstructuredGridMIKE(mesh):
     types = np.asarray(types)
     X = np.asarray(x)
     Y = np.asarray(y)
-    Z = -np.asarray(z) # Flip sign on depths for FVCOM
+    # N.B. Depths should be negative for FVCOM
+    if flipZ:
+        Z = -np.asarray(z)
+    else:
+        Z = np.asarray(z)
 
     return(triangle, nodes, X, Y, Z, types)
 
@@ -407,25 +411,38 @@ def plotUnstructuredGridProjected(triangles, nodes, x, y, z, colourLabel, addTex
 if __name__ == '__main__':
 
     from sys import argv
+    from os import path
 
     # A MIKE grid
-    [triangles, nodes, x, y, z, types] = parseUnstructuredGridMIKE('../data/csm_culver_v7.mesh')
-    #[triangles, nodes, x, y, z, types] = parseUnstructuredGridMIKE('../data/Low res.mesh')
+    #infile = '../data/Low res.mesh'
+    #infile = '../data/csm_culver_v7.mesh'
+    #infile = '../data/csm_culver_v9.mesh'
+    #infile = '../data/csm_culver_v7_seds_gradistat.mesh'
+    #infile = '../data/csm_culver_v9_seds_gradistat.mesh'
+    #infile = '../data/ukerc_shelf/ukerc_v1.mesh'
+    infile = '../data/ukerc_shelf/ukerc_v1_seds_gradistat.mesh'
+    [triangles, nodes, x, y, z, types] = parseUnstructuredGridMIKE(infile)
+
     # An SMS grid
-    #[triangles, nodes, x, y, z, types] = parseUnstructuredGridSMS('../data/tamar_co2V4.2dm')
-    #[triangles, nodes, x, y, z, types] = parseUnstructuredGridSMS('../data/Vigo_v11.2dm')
+    #infile = '../data/tamar_co2V4.2dm'
+    #infile = '../data/Vigo_v11.2dm'
+    #[triangles, nodes, x, y, z, types] = parseUnstructuredGridSMS(infile)
+
     # An FVCOM grid
-    #[triangles, nodes, x, y, z] = parseUnstructuredGridFVCOM('../data/co2_grd.dat')
+    #infile = '../data/co2_grd.dat'
+    #[triangles, nodes, x, y, z] = parseUnstructuredGridFVCOM(infile)
     # types = [] # FVCOM doesn't record this information, I think.
 
+    base, ext = path.splitext(infile)
+
     # Spit out an SMS version of whatever's been loaded above.
-    writeUnstructuredGridSMS(triangles, nodes, x, y, z, types, '../data/csm_culver_v7.2dm')
-    writeUnstructuredGridSMSBathy(triangles, nodes, z, '../data/csm_culver_v7.pts')
+    writeUnstructuredGridSMS(triangles, nodes, x, y, z, types, base + '.2dm')
+    writeUnstructuredGridSMSBathy(triangles, nodes, z, base + '.pts')
 
 
     # Let's have a look-see
     #plotUnstructuredGrid(triangles, nodes, x, y, z, 'Depth (m)', addMesh=True)
-    #plotUnstructuredGridProjected(triangles, nodes, x, y, z, 'Depth (m)')
+    plotUnstructuredGrid(triangles, nodes, x, y, z, 'Depth (m)')
 
     # Multiple grids
     #for grid in argv[1:]:
