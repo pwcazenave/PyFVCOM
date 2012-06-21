@@ -86,8 +86,8 @@ def parseUnstructuredGridFVCOM(mesh):
     return(triangle, nodes, X, Y, Z)
 
 def parseUnstructuredGridMIKE(mesh,flipZ=True):
-    """ 
-    Reads in the MIKE unstructured grid format. 
+    """
+    Reads in the MIKE unstructured grid format.
 
     WARNING: Depth sign is flipped for FVCOM.
 
@@ -281,13 +281,13 @@ def writeUnstructuredGridSMSBathy(triangles, nodes, z, PTS):
     Writes out the additional bathymetry file sometimes output by SMS. Not sure
     why this is necessary as it's possible to put the depths in the other file,
     but hey ho, it is obviously sometimes necessary. Input is:
-    
+
         - triangles, nodes and z output by one of three parsing functions
         parseUnstructuredGridSSMS(), parseUnstructuredGridFVCOM() and
         parseUnstructuredGridMIKE(). Mainly for the number of nodes in the
         points file header.
         - a string of the output file name
-        
+
     """
 
     filePTS = open(PTS, 'w')
@@ -297,7 +297,7 @@ def writeUnstructuredGridSMSBathy(triangles, nodes, z, PTS):
     elementNumber = len(triangles[:,0])
 
     # Header format (see http://wikis.aquaveo.com/xms/index.php?title=GMS:Data_Set_Files)
-    # DATASET = indicates data 
+    # DATASET = indicates data
     # OBJTYPE = type of object (i.e. mesh 3d, mesh 2d) data is associated with
     # BEGSCL = Start of the scalar data set
     # ND = Number of data values
@@ -308,7 +308,7 @@ def writeUnstructuredGridSMSBathy(triangles, nodes, z, PTS):
     filePTS.write(header)
 
     # Now just iterate through all the z values. This process assumes the z
-    # values are in the same order as the nodes. If they're not, this will 
+    # values are in the same order as the nodes. If they're not, this will
     # make a mess of your data.
     for depth in z:
         filePTS.write('{:.5f}\n'.format(float(depth)))
@@ -316,6 +316,57 @@ def writeUnstructuredGridSMSBathy(triangles, nodes, z, PTS):
     # Close the file with the footer
     filePTS.write('ENDDS\n')
     filePTS.close()
+
+def writeUnstructuredGridMIKE(triangles, nodes, x, y, z, types, mesh):
+    """
+    Write out a DHI MIKE mesh file from the supplied triangles, nodes and z
+    values.
+    """
+    fileWrite = open(mesh, 'w')
+    # Add a header
+    output = '{}  LONG/LAT'.format(int(len(nodes)))
+    fileWrite.write(output + '\n')
+
+    if len(types) == 0:
+        types = np.zeros(shape=(len(nodes),1))
+
+    # Write out the node information
+    for count, line in enumerate(nodes):
+
+        # Convert the numpy array to a string array
+        strLine = str(line)
+
+        output = \
+            [strLine] + \
+            ['{}'.format(x[count])] + \
+            ['{}'.format(y[count])] + \
+            ['{}'.format(z[count])] + \
+            ['{}'.format(int(types[count]))]
+        output = ' '.join(output)
+
+        fileWrite.write(output + '\n')
+
+    # Now for the connectivity
+    #output = '{} {} {}'.format(int(len(triangles)), int(len(np.unique(types))), '21')
+    output = '{} {} {}'.format(int(len(triangles)), '3', '21')
+    fileWrite.write(output + '\n')
+
+    for count, line in enumerate(triangles):
+
+        # Bump the numbers by one to correct for Python indexing from zero
+        line = line + 1
+        strLine = []
+        # Convert the numpy array to a string array
+        for value in line:
+            strLine.append(str(value))
+
+        # Build the output string for the connectivity table
+        output = [str(count+1)] + strLine
+        output = ' '.join(output)
+
+        fileWrite.write(output + '\n')
+
+    fileWrite.close()
 
 
 def plotUnstructuredGrid(triangles, nodes, x, y, z, colourLabel, addText=False, addMesh=False):
@@ -417,11 +468,15 @@ if __name__ == '__main__':
     #infile = '../data/Low res.mesh'
     #infile = '../data/csm_culver_v7.mesh'
     #infile = '../data/csm_culver_v9.mesh'
+    infile = '../data/ukerc_shelf/ukerc/ukerc_v1.mesh'
+    #infile = '../data/ukerc_shelf/ukerc/ukerc_v1_utm30n.mesh'
+    [triangles, nodes, x, y, z, types] = parseUnstructuredGridMIKE(infile)
+
+    # Sediments don't need the z value flipping
     #infile = '../data/csm_culver_v7_seds_gradistat.mesh'
     #infile = '../data/csm_culver_v9_seds_gradistat.mesh'
-    #infile = '../data/ukerc_shelf/ukerc_v1.mesh'
-    infile = '../data/ukerc_shelf/ukerc_v1_seds_gradistat.mesh'
-    [triangles, nodes, x, y, z, types] = parseUnstructuredGridMIKE(infile)
+    #infile = '../data/ukerc_shelf/ukerc/ukerc_v1_seds_gradistat.mesh'
+    #[triangles, nodes, x, y, z, types] = parseUnstructuredGridMIKE(infile,flipZ=False)
 
     # An SMS grid
     #infile = '../data/tamar_co2V4.2dm'
@@ -436,13 +491,16 @@ if __name__ == '__main__':
     base, ext = path.splitext(infile)
 
     # Spit out an SMS version of whatever's been loaded above.
-    writeUnstructuredGridSMS(triangles, nodes, x, y, z, types, base + '.2dm')
-    writeUnstructuredGridSMSBathy(triangles, nodes, z, base + '.pts')
+    #writeUnstructuredGridSMS(triangles, nodes, x, y, z, types, base + '.2dm')
+    #writeUnstructuredGridSMSBathy(triangles, nodes, z, base + '.pts')
+
+    # Write a MIKE grid
+    writeUnstructuredGridMIKE(triangles, nodes, x, y, z, types, base + '_test.mesh')
 
 
     # Let's have a look-see
     #plotUnstructuredGrid(triangles, nodes, x, y, z, 'Depth (m)', addMesh=True)
-    plotUnstructuredGrid(triangles, nodes, x, y, z, 'Depth (m)')
+    #plotUnstructuredGrid(triangles, nodes, x, y, z, 'Depth (m)')
 
     # Multiple grids
     #for grid in argv[1:]:
