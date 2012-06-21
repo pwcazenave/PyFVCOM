@@ -16,9 +16,17 @@ def parseUnstructuredGridSMS(mesh):
     triangles = []
     nodes = []
     types = []
+    nodeStrings = []
     x = []
     y = []
     z = []
+
+    # MIKE unstructured grids allocate their boundaries with a type ID flag.
+    # Although this function is not necessarily always the precursor to writing
+    # a MIKE unstructured grid, we can create IDs based on the number of node
+    # strings in the SMS grid. MIKE starts counting open boundaries from 2 (1
+    # and 0 are land and sea nodes, respectively).
+    typeCount = 2
 
     for line in lines:
         line = line.strip()
@@ -34,10 +42,25 @@ def parseUnstructuredGridSMS(mesh):
             y.append(float(xy[3]))
             z.append(float(xy[4]))
             nodes.append(int(xy[1]))
+            # Although MIKE keeps zero and one reserved for normal nodes and
+            # land nodes, SMS doesn't. This means it's not straightforward
+            # to determine this information from the SMS file alone. It woud
+            # require finding nodes which are edge nodes and assigning their
+            # ID to one. All other nodes would be zero until they were
+            # overwritten when examining the node strings below.
+            types.append(0)
         elif line.startswith('NS '):
             allTypes = line.split(' ')
+
             for nodeID in allTypes[2:]:
-                types.append(int(nodeID))
+                types[np.abs(int(nodeID))-1] = typeCount
+                nodeStrings.append(int(nodeID))
+
+                # Count the number of node strings, and output that to types.
+                # Nodes in the node strings are stored in nodeStrings.
+                if int(nodeID) < 0:
+                    typeCount+=1
+
 
     # Convert to numpy arrays.
     triangle = np.asarray(triangles)
@@ -138,7 +161,7 @@ def writeUnstructuredGridSMS(triangles, nodes, x, y, z, types, mesh):
     """
     Takes appropriate triangle, node, boundary type and coordinate data and
     writes out an SMS formatted grid file (mesh). The footer is largely static,
-    but the elements, nodes and nodestrings are parsed from the input data.
+    but the elements, nodes and node strings are parsed from the input data.
 
     Input data is probably best obtained from one of:
 
@@ -203,35 +226,36 @@ def writeUnstructuredGridSMS(triangles, nodes, x, y, z, types, mesh):
 
         fileWrite.write(output + '\n')
 
-    # Convert MIKE boundary types to nodestrings. The format requires a prefix
-    # NS, and then a maximum of 10 node IDs per line. The nodestring tail is
+    # Convert MIKE boundary types to node strings. The format requires a prefix
+    # NS, and then a maximum of 10 node IDs per line. The node string tail is
     # indicated by a negative node ID.
 
-    # Iterate through the unique boundary types to get a new nodestring for
-    # each boundary type.
+    # Iterate through the unique boundary types to get a new node string for
+    # each boundary type (ignore types of less than 2 which are not open
+    # boundaries in MIKE).
     for boundaryType in np.unique(types[types>1]):
 
         # Find the nodes for the boundary type which are greater than 1 (i.e.
         # not 0 or 1).
         nodeBoundaries = nodes[types==boundaryType]
 
-        nodestrings = 0
+        nodeStrings = 0
         oldNode = types[0]
         for counter, node in enumerate(nodeBoundaries):
             if counter+1 == len(nodeBoundaries) and node > 0:
                 node = -node
 
-            nodestrings += 1
-            if nodestrings == 1:
+            nodeStrings += 1
+            if nodeStrings == 1:
                 output = 'NS  {:d} '.format(int(node))
                 fileWrite.write(output)
-            elif nodestrings != 0 and nodestrings < 10:
+            elif nodeStrings != 0 and nodeStrings < 10:
                 output = '{:d} '.format(int(node))
                 fileWrite.write(output)
-            elif nodestrings == 10:
+            elif nodeStrings == 10:
                 output = '{:d} '.format(int(node))
                 fileWrite.write(output + '\n')
-                nodestrings = 0
+                nodeStrings = 0
 
         # Add a new line at the end of each block. Not sure why the new line
         # above doesn't work...
@@ -245,7 +269,7 @@ def writeUnstructuredGridSMS(triangles, nodes, x, y, z, types, mesh):
     # DY = Dynamic model y/n = 1/0
     # TU = Time units
     # TD = Dynamic time data (?)
-    # NUME = Number of entities available (nodes, nodestrings, elements)
+    # NUME = Number of entities available (nodes, node strings, elements)
     # BGPGC = Boundary group parameter group correlation y/n = 1/0
     # BEDISP/BEFONT = Format controls on display of boundary labels.
     # ENDPARAMDEF = End of the mesh model definition
@@ -469,7 +493,6 @@ if __name__ == '__main__':
     #infile = '../data/csm_culver_v7.mesh'
     #infile = '../data/csm_culver_v9.mesh'
     infile = '../data/ukerc_shelf/ukerc/ukerc_v1.mesh'
-    #infile = '../data/ukerc_shelf/ukerc/ukerc_v1_utm30n.mesh'
     [triangles, nodes, x, y, z, types] = parseUnstructuredGridMIKE(infile)
 
     # Sediments don't need the z value flipping
@@ -481,6 +504,7 @@ if __name__ == '__main__':
     # An SMS grid
     #infile = '../data/tamar_co2V4.2dm'
     #infile = '../data/Vigo_v11.2dm'
+    #infile = '../data/ukerc_shelf/ukerc/ukerc_v1.2dm'
     #[triangles, nodes, x, y, z, types] = parseUnstructuredGridSMS(infile)
 
     # An FVCOM grid
@@ -491,11 +515,11 @@ if __name__ == '__main__':
     base, ext = path.splitext(infile)
 
     # Spit out an SMS version of whatever's been loaded above.
-    #writeUnstructuredGridSMS(triangles, nodes, x, y, z, types, base + '.2dm')
+    writeUnstructuredGridSMS(triangles, nodes, x, y, z, types, base + '.2dm')
     #writeUnstructuredGridSMSBathy(triangles, nodes, z, base + '.pts')
 
     # Write a MIKE grid
-    writeUnstructuredGridMIKE(triangles, nodes, x, y, z, types, base + '_test.mesh')
+    #writeUnstructuredGridMIKE(triangles, nodes, x, y, z, types, base + '_test.mesh')
 
 
     # Let's have a look-see
