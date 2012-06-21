@@ -7,7 +7,11 @@ import numpy as np
 import math
 
 def parseUnstructuredGridSMS(mesh):
-    """ Reads in the SMS unstructured grid format. """
+    """
+    Reads in the SMS unstructured grid format. Also creates IDs for output to
+    MIKE unstructured grid format.
+
+    """
 
     fileRead = open(mesh, 'r')
     lines = fileRead.readlines()
@@ -112,7 +116,8 @@ def parseUnstructuredGridMIKE(mesh,flipZ=True):
     """
     Reads in the MIKE unstructured grid format.
 
-    WARNING: Depth sign is flipped for FVCOM.
+    Depth sign is typically reversed (i.e. z*-1) but can be disabled by
+    passing flipZ=False.
 
     """
 
@@ -183,7 +188,7 @@ def writeUnstructuredGridSMS(triangles, nodes, x, y, z, types, mesh):
             (nodeID, x, y, z)
         4. NS prefix for the node strings which indicate the open boundaries.
 
-    As far as I can tell, the footer is largely irrelevant for my purposes.
+    As far as I can tell, the footer is largely irrelevant for FVCOM purposes.
 
     """
 
@@ -343,8 +348,10 @@ def writeUnstructuredGridSMSBathy(triangles, nodes, z, PTS):
 
 def writeUnstructuredGridMIKE(triangles, nodes, x, y, z, types, mesh):
     """
-    Write out a DHI MIKE mesh file from the supplied triangles, nodes and z
-    values.
+    Write out a DHI MIKE mesh file from the supplied triangles, nodes, x, y, z
+    and types values. If types is empty, then zeros will be written out for all
+    nodes.
+
     """
     fileWrite = open(mesh, 'w')
     # Add a header
@@ -371,6 +378,8 @@ def writeUnstructuredGridMIKE(triangles, nodes, x, y, z, types, mesh):
         fileWrite.write(output + '\n')
 
     # Now for the connectivity
+
+    # Little header. No idea what the 3 and 21 are all about (version perhaps?)
     #output = '{} {} {}'.format(int(len(triangles)), int(len(np.unique(types))), '21')
     output = '{} {} {}'.format(int(len(triangles)), '3', '21')
     fileWrite.write(output + '\n')
@@ -403,6 +412,7 @@ def plotUnstructuredGrid(triangles, nodes, x, y, z, colourLabel, addText=False, 
     parseUnstructuredGridSMS(). Optionally append addText=True|False and
     addMesh=True|False to enable/disable node numbers and grid overlays,
     respectively.
+
     """
 
     plt.figure()
