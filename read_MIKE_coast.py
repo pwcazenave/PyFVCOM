@@ -1,6 +1,4 @@
 
-
-
 def readArcMIKE(file, fileOut):
     """ 
     Read in a set of MIKE arc files and export to CST format compatible with 
@@ -71,7 +69,8 @@ if __name__ == '__main__':
     from os import path
 
     infile = '../data/test.xyz'
-    infile = '../data/ukerc_shelf/ukerc/shelf_coast.xyz'
+    infile = '../data/ukerc_shelf/ukerc/mike/shelf_coast.xyz'
+    infile = '../data/ukerc_shelf/ukerc/mike/shelf_coast_utm.xyz'
     base, ext = path.splitext(infile)
 
     readArcMIKE(infile, base + '.cst')

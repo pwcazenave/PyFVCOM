@@ -502,7 +502,8 @@ if __name__ == '__main__':
     #infile = '../data/Low res.mesh'
     #infile = '../data/csm_culver_v7.mesh'
     #infile = '../data/csm_culver_v9.mesh'
-    infile = '../data/ukerc_shelf/ukerc/ukerc_v1.mesh'
+    #infile = '../data/ukerc_shelf/ukerc/ukerc_v1.mesh'
+    infile = '../data/ukerc_shelf/ukerc/ukerc_v2_grid.mesh'
     [triangles, nodes, x, y, z, types] = parseUnstructuredGridMIKE(infile)
 
     # Sediments don't need the z value flipping
@@ -526,14 +527,14 @@ if __name__ == '__main__':
 
     # Spit out an SMS version of whatever's been loaded above.
     writeUnstructuredGridSMS(triangles, nodes, x, y, z, types, base + '.2dm')
-    #writeUnstructuredGridSMSBathy(triangles, nodes, z, base + '.pts')
+    writeUnstructuredGridSMSBathy(triangles, nodes, z, base + '.pts')
 
     # Write a MIKE grid
     #writeUnstructuredGridMIKE(triangles, nodes, x, y, z, types, base + '_test.mesh')
 
 
     # Let's have a look-see
-    #plotUnstructuredGrid(triangles, nodes, x, y, z, 'Depth (m)', addMesh=True)
+    plotUnstructuredGrid(triangles, nodes, x, y, z, 'Depth (m)', addMesh=True)
     #plotUnstructuredGrid(triangles, nodes, x, y, z, 'Depth (m)')
 
     # Multiple grids
