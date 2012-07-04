@@ -70,6 +70,7 @@ def calculateTotalCO2(FVCOM, varPlot, startIdx, layerIdx, leakIdx, dt, noisy=Fal
 
     return totalCO2inSystem
 
+
 def CO2LeakBudget(FVCOM, leakIdx, startDay):
     """
     Replicate Riqui's CO2leak_budget.m code.
@@ -209,8 +210,6 @@ def animateModelOutput(FVCOM, varPlot, startIdx, skipIdx, layerIdx, meshFile, ad
     except:
         print 'Couldn''t import unstructured grid. Check specified file is the correct format'
 
-    print np.shape(triangles)
-
     Z = FVCOM[varPlot]
 
     if layerIdx < 0:
@@ -229,7 +228,7 @@ def animateModelOutput(FVCOM, varPlot, startIdx, skipIdx, layerIdx, meshFile, ad
         shading='interp')
     plt.axes().set_aspect('equal', 'datalim')
     plt.colorbar()
-    #plt.clim(6, 8)
+    #plt.clim(-10, 10)
     plt.draw()
 
     # len(FVCOM['time'])+1 so range goes upto the length so that when i-1 is
@@ -252,7 +251,7 @@ def animateModelOutput(FVCOM, varPlot, startIdx, skipIdx, layerIdx, meshFile, ad
         plt.clf()
         plt.tripcolor(FVCOM['x'], FVCOM['y'], triangles, plotZ, shading='interp')
         plt.colorbar()
-        #plt.clim(-1.5, 1.5)
+        plt.clim(-4, 4)
         # Add the vectors
         plt.hold('on')
         if addVectors:
@@ -273,12 +272,50 @@ def animateModelOutput(FVCOM, varPlot, startIdx, skipIdx, layerIdx, meshFile, ad
             print
 
 
+def findNearestPoint(FVCOM, x, y)
+    """
+    Given some point(s), find the nearest grid node. Don't care about
+    coordinate transformations or anything here: you need to provide values
+    in the same system as are in FVCOM.
+
+    Returns the nearest coordinate(s), distance(s) from the point(s) and the
+    index in the respective array(s).
+
+    """
+
+    if np.ndim(x) != np.ndim(y):
+        raise Exception('Number of points in X and Y do not match')
+
+    try:
+        X, Y = FVCOM['lon'], FVCOM['lat']
+    except:
+        X, Y = FVCOM['x'], FVCOM['y']
+    else:
+        raise Exception('No lat/long or x/y values in FVCOM')
+
+    nearestX = np.empty(np.shape(x))
+    nearestY = np.empty(np.shape(x))
+    index = np.empty(np.shape(x))
+    distance = np.empty(np.shape(x))
+
+    for cnt, pointXY in enumerate(zip(x, y)):
+        findX, findY = X - pointXY[0], Y - pointXY[1]
+        vectorDistances = np.sqrt(np.power(findX,2) + np.power(findY,2))
+        distance[cnt] = np.min(vectorDistances)
+        index[cnt] = vectorDistances.argmin()
+        nearestX[cnt] = X[index[cnt]]
+        nearestY[cnt] = Y[index[cnt]]
+
+    return nearestX, nearestY, distance, index
+
+
+
 if __name__ == '__main__':
 
     # Be verbose?
     noisy = True
 
-    getVars = ['x', 'y', 'xc', 'yc', 'zeta', 'art1', 'h', 'time', 'TCO2', 'PH', 'DYE', 'siglev']
+    getVars = ['x', 'y', 'lat','lon', 'xc', 'yc', 'zeta', 'art1', 'h', 'time', 'siglev']
 
     # If running as a script:
     #in1 = argv[1]
@@ -314,11 +351,11 @@ if __name__ == '__main__':
     # Coarse grid
     #in2 = base + '/input/configs/inputV5/co2_grd.dat'
 
-    base = '/data/medusa/pica/models/FVCOM/runCO2_leak'
+    #base = '/data/medusa/pica/models/FVCOM/runCO2_leak'
     # Coarse
-    in1 = base + '/output/rate_ranges/11days/co2_S5_low_run_fvcom_noairsea_0001.nc'
+    #in1 = base + '/output/rate_ranges/11days/co2_S5_low_run_fvcom_noairsea_0001.nc'
     # Coarse grid
-    in2 = base + '/input/configs/inputV5/co2_grd.dat'
+    #in2 = base + '/input/configs/inputV5/co2_grd.dat'
     # Fine
     #in1 = base + '/output/rate_ranges/11days/co2_S7_0.000001_run_0001.nc'
     # Fine grid
