@@ -203,8 +203,8 @@ def animateModelOutput(FVCOM, varPlot, startIdx, skipIdx, layerIdx, meshFile, ad
         from plot_unstruct_grid import parseUnstructuredGridFVCOM
     except ImportError:
         print 'plot_unstruct_grid not found'
-        
-    
+
+
     try:
         [triangles, nodes, x, y, z] = parseUnstructuredGridFVCOM(meshFile)
     except:
@@ -251,7 +251,7 @@ def animateModelOutput(FVCOM, varPlot, startIdx, skipIdx, layerIdx, meshFile, ad
         plt.clf()
         plt.tripcolor(FVCOM['x'], FVCOM['y'], triangles, plotZ, shading='interp')
         plt.colorbar()
-        plt.clim(-4, 4)
+        plt.clim(-2, 2)
         # Add the vectors
         plt.hold('on')
         if addVectors:
@@ -272,11 +272,10 @@ def animateModelOutput(FVCOM, varPlot, startIdx, skipIdx, layerIdx, meshFile, ad
             print
 
 
-def findNearestPoint(FVCOM, x, y)
+def findNearestPoint(FX, FY, x, y, coordType='ll'):
     """
-    Given some point(s), find the nearest grid node. Don't care about
-    coordinate transformations or anything here: you need to provide values
-    in the same system as are in FVCOM.
+    Given some point(s) x and y, find the nearest grid node in the x and y
+    values in FVCOM.
 
     Returns the nearest coordinate(s), distance(s) from the point(s) and the
     index in the respective array(s).
@@ -286,25 +285,18 @@ def findNearestPoint(FVCOM, x, y)
     if np.ndim(x) != np.ndim(y):
         raise Exception('Number of points in X and Y do not match')
 
-    try:
-        X, Y = FVCOM['lon'], FVCOM['lat']
-    except:
-        X, Y = FVCOM['x'], FVCOM['y']
-    else:
-        raise Exception('No lat/long or x/y values in FVCOM')
-
     nearestX = np.empty(np.shape(x))
     nearestY = np.empty(np.shape(x))
     index = np.empty(np.shape(x))
     distance = np.empty(np.shape(x))
 
     for cnt, pointXY in enumerate(zip(x, y)):
-        findX, findY = X - pointXY[0], Y - pointXY[1]
+        findX, findY = FX - pointXY[0], FY - pointXY[1]
         vectorDistances = np.sqrt(np.power(findX,2) + np.power(findY,2))
         distance[cnt] = np.min(vectorDistances)
         index[cnt] = vectorDistances.argmin()
-        nearestX[cnt] = X[index[cnt]]
-        nearestY[cnt] = Y[index[cnt]]
+        nearestX[cnt] = FX[index[cnt]]
+        nearestY[cnt] = FY[index[cnt]]
 
     return nearestX, nearestY, distance, index
 
