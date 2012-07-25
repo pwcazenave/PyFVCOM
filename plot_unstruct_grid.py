@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+
 
 # Plot an unstructured grid.
 
@@ -112,7 +112,7 @@ def parseUnstructuredGridFVCOM(mesh):
 
     return(triangle, nodes, X, Y, Z)
 
-def parseUnstructuredGridMIKE(mesh,flipZ=True):
+def parseUnstructuredGridMIKE(mesh, flipZ=True):
     """
     Reads in the MIKE unstructured grid format.
 
@@ -429,13 +429,13 @@ def plotUnstructuredGrid(triangles, nodes, x, y, z, colourLabel, addText=False, 
         for node in nodes:
             plt.text(x[node-1], y[node-1], str(nodes[node-1]),
                 horizontalalignment='center', verticalalignment='top', size=8)
-    plt.axes().set_aspect('equal')
+    #plt.axes().set_aspect('equal')
     plt.axes().autoscale(tight=True)
     #plt.axis('tight')
     #plt.clim(-500, 0)
     #plt.title('Triplot of user-specified triangulation')
-    plt.xlabel('Metres')
-    plt.ylabel('Metres')
+    #plt.xlabel('Metres')
+    #plt.ylabel('Metres')
 
     plt.show()
     #plt.close() # for 'looping' (slowly)
