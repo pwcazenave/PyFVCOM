@@ -5,7 +5,8 @@ functions.
 """
 
 def calculateRegression(x, y, type):
-    """ Calculate three types of regression:
+    """
+    Calculate three types of regression:
         1. Linear (lin)
         2. Log (log)
         3. Exponential (exp)
