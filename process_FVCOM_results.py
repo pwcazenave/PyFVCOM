@@ -3,8 +3,11 @@
 import numpy as np
 import plot_unstruct_grid as gp
 import matplotlib.pyplot as plt
-from readFVCOM import readFVCOM
+
 from sys import argv
+
+from read_FVCOM_netcdf import readFVCOM
+from stat_tools import coefficientOfDetermination
 
 
 def calculateTotalCO2(FVCOM, varPlot, startIdx, layerIdx, leakIdx, dt, noisy=False):
@@ -152,24 +155,6 @@ def unstructuredGridVolume(FVCOM):
     return allVolumes
 
 
-def coefficientOfDetermination(obs, model):
-    """ Calculate the coefficient of determination for a modelled function """
-    try:
-        import numpy as np
-    except ImportError:
-        print 'NumPy not found'
-
-
-    obsBar = np.mean(obs)
-    modelBar = np.mean(model)
-
-    SStot = np.sum((obs - obsBar)**2)
-    SSreg = np.sum((model - obsBar)**2)
-    R2 = SSreg / SStot
-
-    return R2
-
-
 def animateModelOutput(FVCOM, varPlot, startIdx, skipIdx, layerIdx, meshFile, addVectors=False, noisy=False):
     """
     Animated model output (for use in ipython).
@@ -270,36 +255,6 @@ def animateModelOutput(FVCOM, varPlot, startIdx, skipIdx, layerIdx, meshFile, ad
             print 'Min: %g Max: %g Range: %g Standard deviation: %g' % (plotZ.min(), plotZ.max(), plotZ.max()-plotZ.min(), plotZ.std())
         else:
             print
-
-
-def findNearestPoint(FX, FY, x, y, coordType='ll'):
-    """
-    Given some point(s) x and y, find the nearest grid node in the x and y
-    values in FVCOM.
-
-    Returns the nearest coordinate(s), distance(s) from the point(s) and the
-    index in the respective array(s).
-
-    """
-
-    if np.ndim(x) != np.ndim(y):
-        raise Exception('Number of points in X and Y do not match')
-
-    nearestX = np.empty(np.shape(x))
-    nearestY = np.empty(np.shape(x))
-    index = np.empty(np.shape(x))
-    distance = np.empty(np.shape(x))
-
-    for cnt, pointXY in enumerate(zip(x, y)):
-        findX, findY = FX - pointXY[0], FY - pointXY[1]
-        vectorDistances = np.sqrt(np.power(findX,2) + np.power(findY,2))
-        distance[cnt] = np.min(vectorDistances)
-        index[cnt] = vectorDistances.argmin()
-        nearestX[cnt] = FX[index[cnt]]
-        nearestY[cnt] = FY[index[cnt]]
-
-    return nearestX, nearestY, distance, index
-
 
 
 if __name__ == '__main__':
