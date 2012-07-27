@@ -1,17 +1,8 @@
-#!/usr/bin/env python
+"""
+Some tools I've built which might be useful in the future as separate
+functions.
 
-def fixRange(data):
-    """ Reduces the minimum so that the calculations are numerically stable """
-    
-    from numpy import log10, min, max, abs
-
-    dataFactor = abs(log10(min(data)))
-    scaled = data * 10**dataFactor
-
-    fixed = True
-
-    return scaled, dataFactor, fixed
-
+"""
 
 def calculateRegression(x, y, type):
     """ Calculate three types of regression:
@@ -69,8 +60,8 @@ def calculateRegression(x, y, type):
 def calculatePolyfit(x, y):
     """ Calculate a linear regression using polyfit instead """
 
-    # FIXME(pica) This doesn't work for large ranges (tens of orders of 
-    # magnitude). No idea why as the fixRange() function above should make 
+    # FIXME(pica) This doesn't work for large ranges (tens of orders of
+    # magnitude). No idea why as the fixRange() function above should make
     # all values greater than one. The trouble mainly seems to happen when
     # log10(min(x)) negative.
 
@@ -100,32 +91,19 @@ def calculatePolyfit(x, y):
     return xf, yf
 
 
-if __name__ == '__main__':
-
-    import numpy as np
-    import matplotlib.pyplot as plt
-    from scipy import randn
-
-    n = 50
-    x = np.logspace(-50, 30, n)
-    y = np.logspace(-30, 50, n)
-
-    linX, linY = calculateRegression(x, y, 'lin')
-    #linX2, linY2 = calculatePolyfit(x, y)
-    logX, logY = calculateRegression(x, y, 'log')
-    expX, expY = calculateRegression(x, y, 'exp')
-
-    plt.figure()
-    plt.loglog(x, y, 'b-s', label = 'data')
-    plt.loglog(linX, linY, 'g-x', label = 'linear')
-    #plt.loglog(linX2, linY2, 'y-+', label = 'linear2')
-    #plt.loglog(logX, logY, 'r', label = 'log')
-    #plt.loglog(expX, expY, 'k-+', label = 'exponential')
-    plt.legend(loc=2)
-
-    plt.show()
+def coefficientOfDetermination(obs, model):
+    """ Calculate the coefficient of determination for a modelled function """
+    try:
+        import numpy as np
+    except ImportError:
+        print 'NumPy not found'
 
 
+    obsBar = np.mean(obs)
+    modelBar = np.mean(model)
 
+    SStot = np.sum((obs - obsBar)**2)
+    SSreg = np.sum((model - obsBar)**2)
+    R2 = SSreg / SStot
 
-
+    return R2
