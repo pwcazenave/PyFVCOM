@@ -1,6 +1,4 @@
-
-
-# Plot an unstructured grid.
+# Tools for manipulating and converting unstructured grids in a range of formats.
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -76,6 +74,7 @@ def parseUnstructuredGridSMS(mesh):
 
     return(triangle, nodes, X, Y, Z, types)
 
+
 def parseUnstructuredGridFVCOM(mesh):
     """ Reads in the FVCOM unstructured grid format. """
 
@@ -111,6 +110,7 @@ def parseUnstructuredGridFVCOM(mesh):
     Z = np.asarray(z)
 
     return(triangle, nodes, X, Y, Z)
+
 
 def parseUnstructuredGridMIKE(mesh, flipZ=True):
     """
@@ -346,6 +346,7 @@ def writeUnstructuredGridSMSBathy(triangles, nodes, z, PTS):
     filePTS.write('ENDDS\n')
     filePTS.close()
 
+
 def writeUnstructuredGridMIKE(triangles, nodes, x, y, z, types, mesh):
     """
     Write out a DHI MIKE mesh file from the supplied triangles, nodes, x, y, z
@@ -440,6 +441,7 @@ def plotUnstructuredGrid(triangles, nodes, x, y, z, colourLabel, addText=False, 
     plt.show()
     #plt.close() # for 'looping' (slowly)
 
+
 def plotUnstructuredGridProjected(triangles, nodes, x, y, z, colourLabel, addText=False, addMesh=False, extents=False):
     """
     Takes the output of parseUnstructuredGridFVCOM() or
@@ -492,6 +494,36 @@ def plotUnstructuredGridProjected(triangles, nodes, x, y, z, colourLabel, addTex
     #m.drawlsmask(land_color='grey')
     m.drawcoastlines()
     plt.show()
+
+
+def findNearestPoint(FX, FY, x, y, coordType='ll'):
+    """
+    Given some point(s) x and y, find the nearest grid node in the x and y
+    values in FVCOM.
+
+    Returns the nearest coordinate(s), distance(s) from the point(s) and the
+    index in the respective array(s).
+
+    """
+
+    if np.ndim(x) != np.ndim(y):
+        raise Exception('Number of points in X and Y do not match')
+
+    nearestX = np.empty(np.shape(x))
+    nearestY = np.empty(np.shape(x))
+    index = np.empty(np.shape(x))
+    distance = np.empty(np.shape(x))
+
+    for cnt, pointXY in enumerate(zip(x, y)):
+        findX, findY = FX - pointXY[0], FY - pointXY[1]
+        vectorDistances = np.sqrt(np.power(findX,2) + np.power(findY,2))
+        distance[cnt] = np.min(vectorDistances)
+        index[cnt] = vectorDistances.argmin()
+        nearestX[cnt] = FX[index[cnt]]
+        nearestY[cnt] = FY[index[cnt]]
+
+    return nearestX, nearestY, distance, index
+
 
 if __name__ == '__main__':
 
