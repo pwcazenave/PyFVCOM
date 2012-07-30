@@ -4,6 +4,11 @@ strewn all over the place.
 
 """
 
+try:
+    import sqlite3
+except ImportError:
+    sys.exit('Importing SQLite3 module failed')
+
 def addHarmonicResults(db, stationName, constituentName, phase, amplitude, speed, inferred, noisy=False):
     """
     Add data to an SQLite database.
@@ -36,11 +41,6 @@ def addHarmonicResults(db, stationName, constituentName, phase, amplitude, speed
         Amplitude.shortName is 'ILF';
 
     """
-
-    try:
-        import sqlite3
-    except ImportError:
-        sys.exit('Importing SQLite3 module failed')
 
     conn = sqlite3.connect(db)
     c = conn.cursor()
@@ -84,40 +84,74 @@ def getObservedData(db, table, startYear=False, endYear=False, noisy=False):
 
     """
 
-    import sqlite3 as sql
-
     if noisy:
         print 'Getting data for %s from the database.' % table
 
     try:
-        con = sql.connect(db)
+        con = sqlite3.connect(db)
 
         with con:
-            cur = con.cursor()
+            c = con.cursor()
             if startYear and endYear:
                 # We've been given a range of data
                 if startYear == endYear:
                     # We have the same start and end dates, so just do a
                     # simpler version
-                    cur.execute("SELECT * FROM " + table + " WHERE " + \
-                    table + ".year == " + str(startYear))
+                    c.execute('SELECT * FROM ' + table + ' WHERE ' + \
+                    table + '.year == ' + str(startYear))
                 else:
                     # We have a date range
-                    cur.execute("SELECT * FROM " + table + " WHERE " + \
-                    table + ".year > " + str(startYear) + \
-                    " AND " + table + ".year < " + str(endYear))
+                    c.execute('SELECT * FROM ' + table + ' WHERE ' + \
+                    table + '.year > ' + str(startYear) + \
+                    ' AND ' + table + '.year < ' + str(endYear))
             else:
                 # Return all data
-                cur.execute("SELECT * FROM " + table)
+                c.execute('SELECT * FROM ' + table)
             # Now get the data in a format we might actually want to use
-            data = cur.fetchall()
+            data = c.fetchall()
 
         con.close()
 
-    except sql.Error, e:
+    except sqlite3.Error, e:
         if con:
             con.close()
-            print "Error %s:" % e.args[0]
+            print 'Error %s:' % e.args[0]
             data = [False]
 
     return data
+
+def getObservedMetadata(db, originator=False):
+    """
+    Extracts the meta data from the tidal elevations database. If the supplied
+    originator is False (default), then information from all stations is
+    returned.
+
+    """
+
+    try:
+        con = sqlite3.connect(db)
+
+        c = con.cursor()
+
+        if originator is not False:
+            out = c.execute('SELECT * from Stations where originatorName is ? or originatorLongName is ?',\
+                [originator, originator])
+        else:
+            out = c.execute('SELECT * from Stations')
+
+        # Convert it to a set of better formatted values.
+        metadata = out.fetchall()
+        lat = [float(m[0]) for m in metadata]
+        lon = [float(m[1]) for m in metadata]
+        site = [str(m[2]) for m in metadata]
+        longName = [str(m[3]) for m in metadata]
+
+    except sqlite3.Error, e:
+        if con:
+            con.close()
+            print 'Error %s:' % e.args[0]
+            lat, lon, site, longName = [False, False, False, False]
+
+    return lat, lon, site, longName
+
+
