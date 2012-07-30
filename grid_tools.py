@@ -496,13 +496,20 @@ def plotUnstructuredGridProjected(triangles, nodes, x, y, z, colourLabel, addTex
     plt.show()
 
 
-def findNearestPoint(FX, FY, x, y, coordType='ll'):
+def findNearestPoint(FX, FY, x, y, maxDistance=0.0):
     """
-    Given some point(s) x and y, find the nearest grid node in the x and y
+    Given some point(s) x and y, find the nearest grid node in the FX and FY
     values in FVCOM.
 
     Returns the nearest coordinate(s), distance(s) from the point(s) and the
     index in the respective array(s).
+
+    Optionally specify a maximum distance (in the same units as the input) to
+    only return grid positions which are within that distance. This means if
+    your point lies outside the grid, for example, you can use maxDistance to
+    filter it out. Positions and indices which cannot be found within
+    maxDistance are returned as False; distance is always returned, even if the
+    maxDistance threshold has been exceeded.
 
     """
 
@@ -517,10 +524,14 @@ def findNearestPoint(FX, FY, x, y, coordType='ll'):
     for cnt, pointXY in enumerate(zip(x, y)):
         findX, findY = FX - pointXY[0], FY - pointXY[1]
         vectorDistances = np.sqrt(np.power(findX,2) + np.power(findY,2))
-        distance[cnt] = np.min(vectorDistances)
-        index[cnt] = vectorDistances.argmin()
-        nearestX[cnt] = FX[index[cnt]]
-        nearestY[cnt] = FY[index[cnt]]
+        if np.min(vectorDistances) > maxDistance:
+            distance[cnt] = np.min(vectorDistances)
+            index[cnt], nearestX[cnt], nearestY[cnt] = False, False, False
+        else:
+            distance[cnt] = np.min(vectorDistances)
+            index[cnt] = vectorDistances.argmin()
+            nearestX[cnt] = FX[index[cnt]]
+            nearestY[cnt] = FY[index[cnt]]
 
     return nearestX, nearestY, distance, index
 
