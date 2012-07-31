@@ -5,10 +5,9 @@ def readFVCOM(file, varList, noisy=False):
     each of the variables.
     """
 
-    from netCDF4 import Dataset, MFDataset
+    from netCDF4 import Dataset
 
     rootgrp = Dataset(file, 'r')
-    mfdata = MFDataset(file)
 
     if noisy:
         print "File format: " + rootgrp.file_format
@@ -21,7 +20,7 @@ def readFVCOM(file, varList, noisy=False):
         if key in varList:
             if noisy:
                 print '(extracted)'
-            FVCOM[key] = mfdata.variables[key][:]
+            FVCOM[key] = rootgrp.variables[key][:]
         else:
             if noisy:
                 print
