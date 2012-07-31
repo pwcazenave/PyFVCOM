@@ -496,7 +496,7 @@ def plotUnstructuredGridProjected(triangles, nodes, x, y, z, colourLabel, addTex
     plt.show()
 
 
-def findNearestPoint(FX, FY, x, y, maxDistance=True):
+def findNearestPoint(FX, FY, x, y, maxDistance=np.inf):
     """
     Given some point(s) x and y, find the nearest grid node in the FX and FY
     values in FVCOM.
