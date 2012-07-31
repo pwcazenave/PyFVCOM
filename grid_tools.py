@@ -508,7 +508,7 @@ def findNearestPoint(FX, FY, x, y, maxDistance=True):
     only return grid positions which are within that distance. This means if
     your point lies outside the grid, for example, you can use maxDistance to
     filter it out. Positions and indices which cannot be found within
-    maxDistance are returned as False; distance is always returned, even if the
+    maxDistance are returned as NaN; distance is always returned, even if the
     maxDistance threshold has been exceeded.
 
     """
@@ -521,12 +521,19 @@ def findNearestPoint(FX, FY, x, y, maxDistance=True):
     index = np.empty(np.shape(x))
     distance = np.empty(np.shape(x))
 
+    # Make all values NaN
+    nearestX[:] = np.NaN
+    nearestY[:] = np.NaN
+    index[:] = np.NaN
+    distance[:] = np.NaN
+
     for cnt, pointXY in enumerate(zip(x, y)):
         findX, findY = FX - pointXY[0], FY - pointXY[1]
         vectorDistances = np.sqrt(np.power(findX,2) + np.power(findY,2))
         if np.min(vectorDistances) > maxDistance:
             distance[cnt] = np.min(vectorDistances)
-            index[cnt], nearestX[cnt], nearestY[cnt] = False, False, False
+            # Should be NaN already, but no harm in being thorough
+            index[cnt], nearestX[cnt], nearestY[cnt] = np.NaN, np.NaN, np.NaN
         else:
             distance[cnt] = np.min(vectorDistances)
             index[cnt] = vectorDistances.argmin()
