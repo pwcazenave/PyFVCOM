@@ -66,7 +66,6 @@ def addHarmonicResults(db, stationName, constituentName, phase, amplitude, speed
 
     conn.close()
 
-
 def getObservedData(db, table, startYear=False, endYear=False, noisy=False):
     """
     Extract the tidal data from the SQLite database for a given station.
@@ -153,5 +152,46 @@ def getObservedMetadata(db, originator=False):
             lat, lon, site, longName = [False, False, False, False]
 
     return lat, lon, site, longName
+
+def parseTAPPyXML(file):
+    """
+    Extract values from an XML file created by TAPPy.
+
+    TODO: Allow a list of constituents to be specified when calling
+    parseTAPPyXML.
+
+    """
+
+    from lxml import etree
+
+    tree = etree.parse(open(file, 'r'))
+
+    constituentName = []
+    constituentSpeed = []
+    constituentInference = []
+    constituentPhase = []
+    constituentAmplitude = []
+
+    for harmonic in tree.iter('Harmonic'):
+
+        # Still not pretty
+        for item in harmonic.iter('name'):
+            constituentName.append(item.text)
+
+        for item in harmonic.iter('speed'):
+            constituentSpeed.append(item.text)
+
+        for item in harmonic.iter('inferred'):
+            constituentInference.append(item.text)
+
+        for item in harmonic.iter('phaseAngle'):
+            constituentPhase.append(item.text)
+
+        for item in harmonic.iter('amplitude'):
+            constituentAmplitude.append(item.text)
+
+    return constituentName, constituentSpeed, constituentPhase, constituentAmplitude, constituentInference
+
+
 
 
