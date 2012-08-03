@@ -46,7 +46,7 @@ def addHarmonicResults(db, stationName, constituentName, phase, amplitude, speed
         print 'amplitude, phase and speed.',
     for item in xrange(len(inferred)):
         c.execute('INSERT INTO TidalConstituents VALUES (?,?,?,?,?,?,?,?,?)',\
-                  (stationName, amplitude[item], phase[item], speed[item], constituentName[item], 'metres', 'degrees', 'degrees per mean solar hour', inferred[item]))
+            (stationName, amplitude[item], phase[item], speed[item], constituentName[item], 'metres', 'degrees', 'degrees per mean solar hour', inferred[item]))
 
     conn.commit()
 
@@ -141,6 +141,61 @@ def getObservedMetadata(db, originator=False):
             lat, lon, site, longName = [False, False, False, False]
 
     return lat, lon, site, longName
+
+def runTAPPy(data, sparsedef=False, noisy=False, keepFile=False):
+    """
+    A simple wrapper to perform a harmonic analysis on the supplied data.
+
+    TAPPy is called as follows:
+
+        tappy.py analysis --def_filename=sparse.def --outputxml=tempfile.xml --quiet tempinput.txt
+
+    The output XML file is parsed with parseTAPPyXML to return a series of
+    variables containing the analysis output. The input file tempinput.txt is
+    destroyed once the analysis is complete, unless keepFile is set to True, in
+    which case it is left where it is. To find it, pass noisy=True to be given
+    more verbose output.
+
+    """
+
+    try:
+        import subprocess                                                                                        except ImportError:
+        raise ImportError('Failed to import the subprocess module')
+
+    try:
+        import tempfile
+    except ImportError:
+        raise ImportError('Failed to import the tempfile module')
+
+    try:
+        import numpy as np
+    except:
+        raise ImportError('Failed to import NumPy')
+
+    if sparsedef is False:
+        sparsedef = '/users/modellers/pica/Data/proc/tides/sparse.def'
+
+    if keepFile:
+        tFile = tempfile.NamedTemporaryFile()
+        if noisy:
+            print 'Temporary input data file: {}'.format(tFile.name)
+
+    if noisy:
+        print 'Saving to temporary file',
+
+    np.savetxt(tFile.name, modelData, fmt='%4i/%02i/%02i %02i:%02i:%02i %.3f')
+
+    if noisy:
+        print 'done.'
+        print 'Running TAPPy on the current station...',
+
+    xFile = tempfile.NamedTemporaryFile()
+    subprocess.call(['/usr/bin/tappy.py', 'analysis', '--def_filename=' + formatFile, '--outputxml=' + xFile.name, '--quiet', tFile.name])
+
+    [cName, cSpeed, cPhase, cAmplitude, cInference] = parseTAPPyXML(xFile.name)
+
+    if noisy:
+        print 'done.'
 
 def parseTAPPyXML(file):
     """
