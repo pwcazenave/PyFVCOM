@@ -43,6 +43,7 @@ def getSurfaceElevation(Z, idx):
 
     surfaceElevation = np.empty([nt,np.shape(idx)[0]])
     for cnt, i in enumerate(idx):
-        surfaceElevation[:,cnt] = Z[:,i]
+        if not np.isnan(i):
+            surfaceElevation[:,cnt] = Z[:,i]
 
     return surfaceElevation
