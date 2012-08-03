@@ -242,7 +242,7 @@ def animateModelOutput(FVCOM, varPlot, startIdx, skipIdx, layerIdx, meshFile, ad
         if addVectors:
             UU = np.squeeze(FVCOM['u'][i,layerIdx,:])
             VV = np.squeeze(FVCOM['v'][i,layerIdx,:])
-            CC = np.sqrt(np.power(UU,2)+np.power(VV,2))
+            CC = np.sqrt(UU**2 + VV**2)
             Q = plt.quiver(FVCOM['xc'], FVCOM['yc'], UU, VV, CC, scale=10)
             plt.quiverkey(Q, 0.5, 0.92, 1, r'$1 ms^{-1}$', labelpos='W')
         plt.axes().set_aspect('equal', 'datalim')

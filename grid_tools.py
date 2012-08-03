@@ -529,7 +529,7 @@ def findNearestPoint(FX, FY, x, y, maxDistance=np.inf):
 
     for cnt, pointXY in enumerate(zip(x, y)):
         findX, findY = FX - pointXY[0], FY - pointXY[1]
-        vectorDistances = np.sqrt(np.power(findX,2) + np.power(findY,2))
+        vectorDistances = np.sqrt(findX**2 + findY**2)
         if np.min(vectorDistances) > maxDistance:
             distance[cnt] = np.min(vectorDistances)
             # Should be NaN already, but no harm in being thorough
