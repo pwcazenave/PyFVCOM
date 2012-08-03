@@ -23,23 +23,6 @@ def addHarmonicResults(db, stationName, constituentName, phase, amplitude, speed
 
     Optionally specify noisy=True to turn on verbose output.
 
-    For reference, to extract the M2 amplitude, phase and speed for Ilfracombe,
-    the SQL statment would be:
-
-    SELECT
-        Amplitude.value,
-        Phase.value,
-        Speed.value
-    FROM
-        Amplitude join Phase join Speed
-    WHERE
-        Phase.constituentName is 'm2' and
-        Speed.constituentName is 'm2' and
-        Amplitude.constituentName is 'm2' and
-        Phase.shortName is 'ILF' and
-        Speed.shortName is 'ILF' and
-        Amplitude.shortName is 'ILF';
-
     """
 
     conn = sqlite3.connect(db)
@@ -47,20 +30,23 @@ def addHarmonicResults(db, stationName, constituentName, phase, amplitude, speed
 
 
     # Create the necessary tables if they don't exist already
-    c.execute('CREATE TABLE IF NOT EXISTS StationName (latDD FLOAT(10), lonDD FLOAT(10), shortName TEXT COLLATE nocase, longName TEXT COLLATE nocase)')
-    c.execute('CREATE TABLE IF NOT EXISTS Amplitude (shortName TEXT COLLATE nocase, value FLOAT(10), constituentName TEXT COLLATE nocase, valueUnits TEXT COLLATE nocase, inferredConstituent TEXT COLLATE nocase)')
-    c.execute('CREATE TABLE IF NOT EXISTS Phase (shortName TEXT COLLATE nocase, value FLOAT(10), constituentName TEXT COLLATE nocase, valueUnits TEXT COLLATE nocase, inferredConstituent TEXT COLLATE nocase)')
-    c.execute('CREATE TABLE IF NOT EXISTS Speed (shortName TEXT COLLATE nocase, value FLOAT(10), constituentName TEXT COLLATE nocase, valueUnits TEXT COLLATE nocase, inferredConstituent TEXT COLLATE nocase)')
+    c.execute('CREATE TABLE IF NOT EXISTS TidalConstituents (\
+        shortName TEXT COLLATE nocase,\
+        amplitude FLOAT(10),\
+        phase FLOAT(10),\
+        speed FLOAT(10),\
+        constituentName TEXT COLLATE nocase,\
+        amplitudeUnits TEXT COLLATE nocase,\
+        phaseUnits TEXT COLLATE nocase,\
+        speedUnits TEXT COLLATE nocase,\
+        inferredConstituent TEXT COLLATE nocase\
+        )')
 
     if noisy:
         print 'amplitude, phase and speed.',
     for item in xrange(len(inferred)):
-        c.execute('INSERT INTO Amplitude VALUES (?,?,?,?,?)',\
-                  (stationName, amplitude[item], constituentName[item], 'metres', inferred[item]))
-        c.execute('INSERT INTO Phase VALUES (?,?,?,?,?)',\
-                  (stationName, phase[item], constituentName[item], 'degrees', inferred[item]))
-        c.execute('INSERT INTO Speed VALUES (?,?,?,?,?)',\
-                  (stationName, speed[item], constituentName[item], 'degrees per mean solar hour', inferred[item]))
+        c.execute('INSERT INTO TidalConstituents VALUES (?,?,?,?,?,?,?,?,?)',\
+                  (stationName, amplitude[item], phase[item], speed[item], constituentName[item], 'metres', 'degrees', 'degrees per mean solar hour', inferred[item]))
 
     conn.commit()
 
@@ -97,15 +83,18 @@ def getObservedData(db, table, startYear=False, endYear=False, noisy=False):
                     # We have the same start and end dates, so just do a
                     # simpler version
                     c.execute('SELECT * FROM ' + table + ' WHERE ' + \
-                    table + '.year == ' + str(startYear))
+                    table + '.year == ' + str(startYear) + \
+                    ' ORDER BY year, month, day, hour, minute, second')
                 else:
                     # We have a date range
                     c.execute('SELECT * FROM ' + table + ' WHERE ' + \
                     table + '.year > ' + str(startYear) + \
-                    ' AND ' + table + '.year < ' + str(endYear))
+                    ' AND ' + table + '.year < ' + str(endYear) + \
+                    ' ORDER BY year, month, day, hour, minute, second')
             else:
                 # Return all data
-                c.execute('SELECT * FROM ' + table)
+                c.execute('SELECT * FROM ' + table + \
+                    ' ORDER BY year, month, day, hour, minute, second')
             # Now get the data in a format we might actually want to use
             data = c.fetchall()
 
