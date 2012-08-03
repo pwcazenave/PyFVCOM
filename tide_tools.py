@@ -142,9 +142,10 @@ def getObservedMetadata(db, originator=False):
 
     return lat, lon, site, longName
 
-def runTAPPy(data, sparsedef=False, noisy=False, keepFile=False):
+def runTAPPy(data, sparseDef=False, noisy=False, deleteFile=True):
     """
     A simple wrapper to perform a harmonic analysis on the supplied data.
+    Input data format is YYYY, MM, DD, hh, mm, ss, ZZ as a numpy array.
 
     TAPPy is called as follows:
 
@@ -152,14 +153,21 @@ def runTAPPy(data, sparsedef=False, noisy=False, keepFile=False):
 
     The output XML file is parsed with parseTAPPyXML to return a series of
     variables containing the analysis output. The input file tempinput.txt is
-    destroyed once the analysis is complete, unless keepFile is set to True, in
-    which case it is left where it is. To find it, pass noisy=True to be given
-    more verbose output.
+    deleted once the analysis is complete, unless deleteFile is set to False,
+    in which case it is left where it is. To find it, pass noisy=True to be
+    given more verbose output.
+
+    The default sparse definition file is:
+
+        /users/modellers/pica/Data/proc/tides/sparse.def
+
+    Pass an alternate value to sparseDef to use a different one.
 
     """
 
     try:
-        import subprocess                                                                                        except ImportError:
+        import subprocess
+    except ImportError:
         raise ImportError('Failed to import the subprocess module')
 
     try:
@@ -172,30 +180,32 @@ def runTAPPy(data, sparsedef=False, noisy=False, keepFile=False):
     except:
         raise ImportError('Failed to import NumPy')
 
-    if sparsedef is False:
-        sparsedef = '/users/modellers/pica/Data/proc/tides/sparse.def'
+    if sparseDef is False:
+        sparseDef = '/users/modellers/pica/Data/proc/tides/sparse.def'
 
-    if keepFile:
-        tFile = tempfile.NamedTemporaryFile()
-        if noisy:
-            print 'Temporary input data file: {}'.format(tFile.name)
-
+    tFile = tempfile.NamedTemporaryFile(delete=deleteFile)
     if noisy:
-        print 'Saving to temporary file',
+        if deleteFile is False:
+            print 'Saving to temporary file {}...'.format(tFile.name)
+        else:
+            print 'Saving to temporary file...',
 
-    np.savetxt(tFile.name, modelData, fmt='%4i/%02i/%02i %02i:%02i:%02i %.3f')
+
+    np.savetxt(tFile.name, data, fmt='%4i/%02i/%02i %02i:%02i:%02i %.3f')
 
     if noisy:
         print 'done.'
         print 'Running TAPPy on the current station...',
 
     xFile = tempfile.NamedTemporaryFile()
-    subprocess.call(['/usr/bin/tappy.py', 'analysis', '--def_filename=' + formatFile, '--outputxml=' + xFile.name, '--quiet', tFile.name])
+    subprocess.call(['/usr/bin/tappy.py', 'analysis', '--def_filename=' + sparseDef, '--outputxml=' + xFile.name, '--quiet', tFile.name])
 
     [cName, cSpeed, cPhase, cAmplitude, cInference] = parseTAPPyXML(xFile.name)
 
     if noisy:
         print 'done.'
+
+    return cName, cSpeed, cPhase, cAmplitude, cInference
 
 def parseTAPPyXML(file):
     """
