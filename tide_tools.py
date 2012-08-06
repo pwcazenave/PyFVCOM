@@ -30,6 +30,11 @@ def julianDay(gregorianDateTime, mjd=False):
         nc = np.shape(gregorianDateTime)
         nr = 1
 
+    # Just make sure we have floats in the input data. If the values are ints,
+    # we get ints in the output, which is useless because they we have only one
+    # value per day.
+    gregorianDateTime = gregorianDateTime.astype(np.float32)
+
     if nc < 6:
         # We're missing some aspect of the time. Let's assume it's the least
         # significant value (i.e. seconds first, then minutes, then hours).
