@@ -4,54 +4,6 @@ strewn all over the place.
 
 """
 
-try:
-    import sqlite3
-except ImportError:
-    sys.exit('Importing SQLite3 module failed')
-
-def addHarmonicResults(db, stationName, constituentName, phase, amplitude, speed, inferred, noisy=False):
-    """
-    Add data to an SQLite database.
-
-    - db specifies an SQLite databse. If it doesn't exist, it will be created.
-    - stationName is the short name (i.e. AVO not Avonmouth)
-    - constituent Name is M2, S2 etc.
-    - phase is in degrees
-    - amplitude is in metres
-    - speed is in degrees/hour
-    - inferred is 'true' or 'false' (as strings, not python special values)
-
-    Optionally specify noisy=True to turn on verbose output.
-
-    """
-
-    conn = sqlite3.connect(db)
-    c = conn.cursor()
-
-
-    # Create the necessary tables if they don't exist already
-    c.execute('CREATE TABLE IF NOT EXISTS TidalConstituents (\
-        shortName TEXT COLLATE nocase,\
-        amplitude FLOAT(10),\
-        phase FLOAT(10),\
-        speed FLOAT(10),\
-        constituentName TEXT COLLATE nocase,\
-        amplitudeUnits TEXT COLLATE nocase,\
-        phaseUnits TEXT COLLATE nocase,\
-        speedUnits TEXT COLLATE nocase,\
-        inferredConstituent TEXT COLLATE nocase\
-        )')
-
-    if noisy:
-        print 'amplitude, phase and speed.',
-    for item in xrange(len(inferred)):
-        c.execute('INSERT INTO TidalConstituents VALUES (?,?,?,?,?,?,?,?,?)',\
-            (stationName, amplitude[item], phase[item], speed[item], constituentName[item], 'metres', 'degrees', 'degrees per mean solar hour', inferred[item]))
-
-    conn.commit()
-
-    conn.close()
-
 def julianDay(gregorianDateTime, mjd=False):
     """
     For a given gregorian date format (YYYY,MM,DD,hh,mm,ss) get the Julian Day.
@@ -67,8 +19,10 @@ def julianDay(gregorianDateTime, mjd=False):
 
     """
 
-    import time
-    import numpy as np
+    try:
+        import numpy as np
+    except ImportError:
+        raise ImportError('Failed to import NumPy')
 
     try:
         nr, nc = np.shape(gregorianDateTime)
@@ -114,6 +68,54 @@ def julianDay(gregorianDateTime, mjd=False):
     else:
         return jd
 
+def addHarmonicResults(db, stationName, constituentName, phase, amplitude, speed, inferred, noisy=False):
+    """
+    Add data to an SQLite database.
+
+    - db specifies an SQLite databse. If it doesn't exist, it will be created.
+    - stationName is the short name (i.e. AVO not Avonmouth)
+    - constituent Name is M2, S2 etc.
+    - phase is in degrees
+    - amplitude is in metres
+    - speed is in degrees/hour
+    - inferred is 'true' or 'false' (as strings, not python special values)
+
+    Optionally specify noisy=True to turn on verbose output.
+
+    """
+
+    try:
+        import sqlite3
+    except ImportError:
+        raise ImportError('Failed to import the SQLite3 module')
+
+    conn = sqlite3.connect(db)
+    c = conn.cursor()
+
+
+    # Create the necessary tables if they don't exist already
+    c.execute('CREATE TABLE IF NOT EXISTS TidalConstituents (\
+        shortName TEXT COLLATE nocase,\
+        amplitude FLOAT(10),\
+        phase FLOAT(10),\
+        speed FLOAT(10),\
+        constituentName TEXT COLLATE nocase,\
+        amplitudeUnits TEXT COLLATE nocase,\
+        phaseUnits TEXT COLLATE nocase,\
+        speedUnits TEXT COLLATE nocase,\
+        inferredConstituent TEXT COLLATE nocase\
+        )')
+
+    if noisy:
+        print 'amplitude, phase and speed.',
+    for item in xrange(len(inferred)):
+        c.execute('INSERT INTO TidalConstituents VALUES (?,?,?,?,?,?,?,?,?)',\
+            (stationName, amplitude[item], phase[item], speed[item], constituentName[item], 'metres', 'degrees', 'degrees per mean solar hour', inferred[item]))
+
+    conn.commit()
+
+    conn.close()
+
 def getObservedData(db, table, startYear=False, endYear=False, noisy=False):
     """
     Extract the tidal data from the SQLite database for a given station.
@@ -130,6 +132,11 @@ def getObservedData(db, table, startYear=False, endYear=False, noisy=False):
     Add noisy=True to turn on verbose output.
 
     """
+
+    try:
+        import sqlite3
+    except ImportError:
+        raise ImportError('Failed to import the SQLite3 module')
 
     if noisy:
         print 'Getting data for %s from the database.' % table
@@ -177,6 +184,11 @@ def getObservedMetadata(db, originator=False):
     returned.
 
     """
+
+    try:
+        import sqlite3
+    except ImportError:
+        raise ImportError('Failed to import the SQLite3 module')
 
     try:
         con = sqlite3.connect(db)
