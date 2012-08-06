@@ -1,4 +1,8 @@
-#!/usr/bin/env python
+"""
+Series of tools to calculate various parameters from an FVCOM model output
+NetCDF file.
+
+"""
 
 import numpy as np
 import plot_unstruct_grid as gp

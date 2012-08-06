@@ -1,4 +1,7 @@
-# Tools for manipulating and converting unstructured grids in a range of formats.
+"""
+Tools for manipulating and converting unstructured grids in a range of formats.
+
+"""
 
 import matplotlib.pyplot as plt
 import numpy as np

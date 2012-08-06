@@ -1,6 +1,11 @@
 """
-Aggregate the tidal database tools into a single file instead of having them
-strewn all over the place.
+A series of tools with which tidal data can be extracted from FVCOM NetCDF
+model results. Also provides a number of tools to interrogate the SQLite
+database of tidal data collated from a range of sources across the north-west
+European continental shelf.
+
+Some of the tidal analysis functions require TAPPy to be installed and in
+/usr/bin/ as tappy.py. Alter the path if your version of TAPPy lives elsewhere.
 
 """
 
