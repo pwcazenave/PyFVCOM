@@ -52,6 +52,68 @@ def addHarmonicResults(db, stationName, constituentName, phase, amplitude, speed
 
     conn.close()
 
+def julianDay(gregorianDateTime, mjd=False):
+    """
+    For a given gregorian date format (YYYY,MM,DD,hh,mm,ss) get the Julian Day.
+    hh,mm,ss are optional, and zero if omitted (i.e. midnight).
+
+    Julian Day epoch: 12:00 January 1, 4713 BC, Monday
+    Modified Julain Day epoch: 00:00 November 17, 1858, Wednesday
+
+    mjd=True applies the offset from Julian Day to Modified Julian Day.
+
+    Modified after code at http://paste.lisp.org/display/73536 and
+    http://home.online.no/~pjacklam/matlab/software/util/timeutil/date2jd.m
+
+    """
+
+    import time
+    import numpy as np
+
+    try:
+        nr, nc = np.shape(gregorianDateTime)
+    except:
+        nc = np.shape(gregorianDateTime)
+        nr = 1
+
+    if nc < 6:
+        # We're missing some aspect of the time. Let's assume it's the least
+        # significant value (i.e. seconds first, then minutes, then hours).
+        # Set missing values to zero.
+        numMissing = 6 - nc
+        if numMissing > 0:
+            extraCols = np.zeros([nr,numMissing])
+            gregorianDateTime = np.hstack([gregorianDateTime, extraCols])
+
+    if nr > 1:
+        year = gregorianDateTime[:,0]
+        month = gregorianDateTime[:,1]
+        day = gregorianDateTime[:,2]
+        hour = gregorianDateTime[:,3]
+        minute = gregorianDateTime[:,4]
+        second = gregorianDateTime[:,5]
+    else:
+        year = gregorianDateTime[0]
+        month = gregorianDateTime[1]
+        day = gregorianDateTime[2]
+        hour = gregorianDateTime[3]
+        minute = gregorianDateTime[4]
+        second = gregorianDateTime[5]
+
+    a = (14 - month) // 12
+    y = year + 4800 - a
+    m = month + (12 * a) - 3
+    # Updated the day fraction based on MATLAB function:
+    #   http://home.online.no/~pjacklam/matlab/software/util/timeutil/date2jd.m
+    jd = day + (( 153 * m + 2) // 5) \
+        + y * 365 + (y // 4) - (y // 100) + (y // 400) - 32045 \
+        + (second + 60 * minute + 3600 * (hour - 12)) / 86400
+
+    if mjd:
+        return jd - 2400000.5
+    else:
+        return jd
+
 def getObservedData(db, table, startYear=False, endYear=False, noisy=False):
     """
     Extract the tidal data from the SQLite database for a given station.
@@ -141,6 +203,46 @@ def getObservedMetadata(db, originator=False):
             lat, lon, site, longName = [False, False, False, False]
 
     return lat, lon, site, longName
+
+def cleanObservedData(data):
+    """
+    Take the output of getObservedData and identify NaNs (with a mask). Also
+    convert times into Modified Julian Date.
+
+    Tidal elevations also have the mean tidal elevation for the time series
+    removed from all values. This is a sort of poor man's correction to mean
+    sea level.
+
+    """
+
+    try:
+        import numpy as np
+    except:
+        raise ImportError('Failed to import NumPy')
+
+    npObsData = []
+    npFlagData = []
+    for row in data:
+        npObsData.append(row[0:-1]) # eliminate the flag from the numeric data
+        npFlagData.append(row[-1]) # save the flag separately
+
+    # For the tidal data, convert the numbers to floats to avoid issues
+    # with truncation.
+    npObsData = np.asarray(npObsData, dtype=float)
+    npFlagData = np.asarray(npFlagData)
+
+    # Extract the time and tide data
+    allObsTideData = np.asarray(npObsData[:,6])
+    allDateTimes = np.asarray(npObsData[:,0:6])
+
+    dateMJD = julianDay(allDateTimes, mjd=True)
+
+    # Apply a correction (of sorts) from LAT to MSL by calculating the
+    # mean (excluding nodata values (-99 for NTSLF, -9999 for SHOM))
+    # and removing that from the elevation.
+    tideDataMSL = allObsTideData - np.mean(allObsTideData[allObsTideData>-99])
+
+    return dateMJD, tideDataMSL, npFlagData
 
 def runTAPPy(data, sparseDef=False, noisy=False, deleteFile=True):
     """
