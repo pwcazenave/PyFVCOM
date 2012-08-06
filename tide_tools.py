@@ -9,6 +9,9 @@ def julianDay(gregorianDateTime, mjd=False):
     For a given gregorian date format (YYYY,MM,DD,hh,mm,ss) get the Julian Day.
     hh,mm,ss are optional, and zero if omitted (i.e. midnight).
 
+    Output array precision is the same as input precision, so if you want
+    sub-day precision, make sure your input data are floats.
+
     Julian Day epoch: 12:00 January 1, 4713 BC, Monday
     Modified Julain Day epoch: 00:00 November 17, 1858, Wednesday
 
