@@ -233,6 +233,8 @@ def cleanObservedData(data):
     removed from all values. This is a sort of poor man's correction to mean
     sea level.
 
+    Returns dateMJD, surfaceElevation, qualityFlags and a YMDHMS date array.
+
     """
 
     try:
@@ -253,7 +255,7 @@ def cleanObservedData(data):
 
     # Extract the time and tide data
     allObsTideData = np.asarray(npObsData[:,6])
-    allDateTimes = np.asarray(npObsData[:,0:6])
+    allDateTimes = np.asarray(npObsData[:,0:6], dtype=float)
 
     dateMJD = julianDay(allDateTimes, mjd=True)
 
@@ -262,7 +264,7 @@ def cleanObservedData(data):
     # and removing that from the elevation.
     tideDataMSL = allObsTideData - np.mean(allObsTideData[allObsTideData>-99])
 
-    return dateMJD, tideDataMSL, npFlagData
+    return dateMJD, tideDataMSL, npFlagData, allDateTimes
 
 def runTAPPy(data, sparseDef=False, noisy=False, deleteFile=True):
     """
