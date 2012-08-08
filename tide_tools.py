@@ -340,7 +340,10 @@ def parseTAPPyXML(file):
 
     """
 
-    from lxml import etree
+    try:
+        from lxml import etree
+    except ImportError:
+        raise ImportError('Failed to load the lxml library')
 
     tree = etree.parse(open(file, 'r'))
 

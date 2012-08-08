@@ -5,7 +5,10 @@ def readFVCOM(file, varList, noisy=False):
     each of the variables.
     """
 
-    from netCDF4 import Dataset
+    try:
+        from netCDF4 import Dataset
+    except ImportError:
+        raise ImportError('Failed to load the NetCDF4 library')
 
     rootgrp = Dataset(file, 'r')
 
@@ -36,8 +39,10 @@ def getSurfaceElevation(Z, idx):
     NetCDF file.
 
     """
-
-    import numpy as np
+    try:
+        import numpy as np
+    except ImportError:
+        raise ImportError('NumPy not found')
 
     nt, nx = np.shape(Z)
 

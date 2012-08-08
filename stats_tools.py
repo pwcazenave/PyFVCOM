@@ -13,8 +13,15 @@ def calculateRegression(x, y, type):
         4. Linear through zero (lin0)
     """
 
-    import numpy as np
-    from scipy import stats
+    try:
+        import numpy as np
+    except ImportError:
+        raise ImportError('NumPy not found')
+
+    try:
+        from scipy import stats
+    except ImportError:
+        raise ImportError('SciPy not found')
 
     # Check the smallest value in x or y isn't below ~1x10-7 otherwise
     # we hit numerical instabilities.
@@ -66,7 +73,10 @@ def calculatePolyfit(x, y):
     # all values greater than one. The trouble mainly seems to happen when
     # log10(min(x)) negative.
 
-    from scipy import polyfit, polyval
+    try:
+        from scipy import polyfit, polyval
+    except ImportError:
+        raise ImportError('SciPy not found')
 
     # Check the smallest value in x or y isn't below 2x10-7 otherwise
     # we hit numerical instabilities.
@@ -97,8 +107,7 @@ def coefficientOfDetermination(obs, model):
     try:
         import numpy as np
     except ImportError:
-        print 'NumPy not found'
-
+        raise ImportError('NumPy not found')
 
     obsBar = np.mean(obs)
     modelBar = np.mean(model)
