@@ -5,13 +5,14 @@ NetCDF file.
 """
 
 import numpy as np
-import plot_unstruct_grid as gp
 import matplotlib.pyplot as plt
 
 from sys import argv
 
-from read_FVCOM_netcdf import readFVCOM
-from stat_tools import coefficientOfDetermination
+import grid_tools as gp
+
+from read_FVCOM_results import readFVCOM
+from stats_tools import coefficientOfDetermination
 
 
 def calculateTotalCO2(FVCOM, varPlot, startIdx, layerIdx, leakIdx, dt, noisy=False):
@@ -34,7 +35,7 @@ def calculateTotalCO2(FVCOM, varPlot, startIdx, layerIdx, leakIdx, dt, noisy=Fal
     try:
         import numpy as np
     except ImportError:
-        print 'NumPy not found'
+        raise ImportError('NumPy not found')
 
 
     Z = FVCOM[varPlot]
@@ -96,7 +97,7 @@ def CO2LeakBudget(FVCOM, leakIdx, startDay):
     try:
         import numpy as np
     except ImportError:
-        print 'NumPy not found'
+        raise ImportError('NumPy not found')
 
 
     # Get output file sampling in hours
@@ -127,7 +128,7 @@ def dataAverage(data, **args):
     try:
         import numpy as np
     except ImportError:
-        print 'NumPy not found'
+        raise ImportError('NumPy not found')
 
 
     dataMask = np.ma.masked_array(data,np.isnan(data))
@@ -141,7 +142,7 @@ def unstructuredGridVolume(FVCOM):
     try:
         import numpy as np
     except ImportError:
-        print 'NumPy not found'
+        raise ImportError('NumPy not found')
 
 
     elemAreas = FVCOM['art1']
@@ -181,17 +182,17 @@ def animateModelOutput(FVCOM, varPlot, startIdx, skipIdx, layerIdx, meshFile, ad
     try:
         import numpy as np
     except ImportError:
-        print 'NumPy not found'
+        raise ImportError('NumPy not found')
 
     try:
         import matplotlib.pyplot as plt
     except ImportError:
-        print 'matplotlib not found'
+        raise ImportError('matplotlib not found')
 
     try:
-        from plot_unstruct_grid import parseUnstructuredGridFVCOM
+        from grid_tools import parseUnstructuredGridFVCOM
     except ImportError:
-        print 'plot_unstruct_grid not found'
+        raise ImportError('plot_unstruct_grid not found')
 
 
     try:
