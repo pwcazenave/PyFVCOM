@@ -241,7 +241,7 @@ def animateModelOutput(FVCOM, varPlot, startIdx, skipIdx, layerIdx, meshFile, ad
         plt.clf()
         plt.tripcolor(FVCOM['x'], FVCOM['y'], triangles, plotZ, shading='interp')
         plt.colorbar()
-        plt.clim(-2, 2)
+        #plt.clim(-2, 2)
         # Add the vectors
         plt.hold('on')
         if addVectors:
