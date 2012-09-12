@@ -546,7 +546,7 @@ def findNearestPoint(FX, FY, x, y, maxDistance=np.inf):
     return nearestX, nearestY, distance, index
 
 
-def getElementSideLengths(triangles, x, y):
+def elementSideLengths(triangles, x, y):
     """
     Given a list of triangle nodes, calculate the length of each side of each
     triangle and return as an array of lengths. Units are in the original input
