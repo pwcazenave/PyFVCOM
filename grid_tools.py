@@ -552,6 +552,10 @@ def getElementSideLengths(triangles, x, y):
     triangle and return as an array of lengths. Units are in the original input
     units (no conversion from lat/long to metres, for example).
 
+    The arrays triangles, x and y can be created by running
+    parseUnstructuredGridSMS(), parseUnstructuredGridFVCOM() or
+    parseUnstructuredGridMIKE() on a given SMS, FVCOM or MIKE grid file.
+
     """
 
     elemSides = np.zeros([np.shape(triangles)[0], 3])
