@@ -546,6 +546,24 @@ def findNearestPoint(FX, FY, x, y, maxDistance=np.inf):
     return nearestX, nearestY, distance, index
 
 
+def getElementSideLengths(triangles, x, y):
+    """
+    Given a list of triangle nodes, calculate the length of each side of each
+    triangle and return as an array of lengths. Units are in the original input
+    units (no conversion from lat/long to metres, for example).
+
+    """
+
+    elemSides = np.zeros([np.shape(triangles)[0], 3])
+    for it, tri in enumerate(triangles):
+        pos1x, pos2x, pos3x = x[tri]
+        pos1y, pos2y, pos3y = y[tri]
+
+        elemSides[it,0] = sqrt((pos1x - pos2x)**2 + (pos1y - pos2y)**2)
+        elemSides[it,1] = sqrt((pos2x - pos3x)**2 + (pos2y - pos3y)**2)
+        elemSides[it,2] = sqrt((pos3x - pos1x)**2 + (pos3y - pos1y)**2)
+
+
 if __name__ == '__main__':
 
     from sys import argv
