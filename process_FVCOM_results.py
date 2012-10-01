@@ -262,7 +262,105 @@ def animateModelOutput(FVCOM, varPlot, startIdx, skipIdx, layerIdx, meshFile, ad
             print
 
 
-if __name__ == '__main__':
+def residualFlow(FVCOM, idxRange=False, checkPlot=False):
+    """
+    Calculate the residual flow. By default, the calculation will take place
+    over the entire duration of FVCOM['Times']. To limit the calculation to a
+    specific range, give the index range as idxRange = [0, 100], for the first
+    to 101st time step.  Alternatively, specify idxRange as 'daily' or
+    'spring-neap' for daily and spring neap cycle residuals.
+
+    Returns resDir, resMag, uRes and vRes, which are the residual direction and
+    magnitude, as well as the raw u and v vector arrays.
+
+    Supply checkPlot=True to check the results with the 100th element and the
+    first layer of the u and v arrays in FVCOM.
+
+    Based on my MATLAB do_residual.m function.
+
+    """
+
+    toSecFactor = 24 * 60 * 60
+    pi = 3.141592653589793
+
+    # Get the output interval (in days)
+    dt = FVCOM['time'][2] - FVCOM['time'][1]
+
+    # Some tidal assumptions. This will need to change in areas in which the
+    # diurnal tide dominates over the semidiurnal.
+    tideCycle =  (12.0 + (25.0 / 60)) / 24.0
+    # The number of values in the output file which covers a tidal cycle
+    tideWindow = np.ceil(tideCycle / dt)
+
+    # Get the number of output time steps which cover the selected period (in
+    # idxRange). If it's spring-neap, use 14.4861 days; daily is one day,
+    # obviously.
+
+    startIdx = np.ceil(3 / dt) # start at the third day to skip the warm up period
+
+    if idxRange == 'spring-neap':
+        endIdx = startIdx + tideWindow + np.ceil(14.4861 / dt) # to the end of the spring-neap cycle
+    elif idxRange == 'daily':
+        endIdx = startIdx + tideWindow + np.ceil(1 / dt)
+    else:
+        startIdx = idxRange[0]
+        endIdx = idxRange[1]
+
+    nTimeSteps, nLayers, nElements = np.shape(FVCOM['u'][startIdx:endIdx, :, :])
+
+    tideDuration = ((dt * nTimeSteps) - tideCycle) * toSecFactor
+
+    # Preallocate outputs.
+    uRes = np.zeros([nTimeSteps, nLayers, nElements])
+    vRes = np.zeros([nTimeSteps, nLayers, nElements])
+    uSum = np.empty([nTimeSteps, nLayers, nElements])
+    vSum = np.empty([nTimeSteps, nLayers, nElements])
+    uStart = np.empty([nLayers, nElements])
+    vStart = np.empty([nLayers, nElements])
+    uEnd = np.empty([nLayers, nElements])
+    vEnd = np.empty([nLayers, nElements])
+
+    for hh in xrange(nLayers):
+        uSum[:, hh, :] = np.cumsum(np.squeeze(FVCOM['u'][startIdx:endIdx, hh, :]), axis=0)
+        vSum[:, hh, :] = np.cumsum(np.squeeze(FVCOM['v'][startIdx:endIdx, hh, :]), axis=0)
+        for ii in xrange(nTimeSteps):
+            # Create progressive vectors for all time steps in the current layer
+            uRes[ii, hh, :] = uRes[ii, hh, :] + (uSum[ii, hh, :] * (dt * toSecFactor))
+            vRes[ii, hh, :] = vRes[ii, hh, :] + (vSum[ii, hh, :] * (dt * toSecFactor))
+
+        uStart[hh, :] = np.mean(np.squeeze(uRes[0:tideWindow, hh, :]), axis=0)
+        vStart[hh, :] = np.mean(np.squeeze(vRes[0:tideWindow, hh, :]), axis=0)
+        uEnd[hh, :] = np.mean(np.squeeze(uRes[-tideWindow:, hh, :]), axis=0)
+        vEnd[hh, :] = np.mean(np.squeeze(vRes[-tideWindow:, hh, :]), axis=0)
+
+    uDiff = uEnd - uStart
+    vDiff = vEnd - vStart
+
+    # Calculate direction and magnitude.
+    rDir = np.arctan2(uDiff, vDiff) * (180 / pi); # in degrees.
+    rMag = np.sqrt(uDiff**2 + vDiff**2) / tideDuration; # in units/s.
+
+    # Plot the check everything's OK
+    if checkPlot:
+        elmt = 100
+        lyr = 0
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+        ax.plot(uRes[:, lyr, elmt], vRes[:, lyr, elmt])
+        ax.plot(uRes[0:tideWindow, lyr, elmt], vRes[0:tideWindow, lyr, elmt], 'gx')
+        ax.plot(uRes[-tideWindow:, lyr, elmt], vRes[-tideWindow:, lyr, elmt], 'rx')
+        ax.plot(uStart[lyr, elmt], vStart[lyr, elmt], 'go')
+        ax.plot(uEnd[lyr, elmt], vEnd[lyr, elmt], 'ro')
+        ax.plot([uStart[lyr, elmt], uEnd[lyr, elmt]], [vStart[lyr, elmt], vEnd[lyr, elmt]], 'k')
+        ax.set_xlabel('Displacement west-east')
+        ax.set_ylabel('Displacement north-south')
+        ax.set_aspect('equal')
+        ax.autoscale(tight=True)
+
+    return uRes, vRes, rDir, rMag
+
+
+if __name__ ==  '__main__':
 
     # Be verbose?
     noisy = True
