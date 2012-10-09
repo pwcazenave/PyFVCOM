@@ -568,6 +568,43 @@ def elementSideLengths(triangles, x, y):
         elemSides[it,2] = sqrt((pos3x - pos1x)**2 + (pos3y - pos1y)**2)
 
 
+def fixCoordinates(FVCOM, UTMZone):
+    """
+    Use the UTMtoLL function to convert the grid from UTM to Lat/Long. Returns
+    longitude and latitude in the range -180 to 180.
+
+    """
+
+    try:
+        from ll2utm import UTMtoLL
+    except ImportError:
+        print('Failed to import ll2utm (available from http://robotics.ai.uiuc.edu/~hyoon24/LatLongUTMconversion.py')
+
+    try:
+        Y = np.zeros(np.shape(FVCOM['x'])) * np.nan
+        X = np.zeros(np.shape(FVCOM['y'])) * np.nan
+    except IOError:
+        print 'Couldn''t find the x or y variables in the supplied FVCOM dict. Check you loaded them and try again.'
+
+    for count, posXY in enumerate(zip(FVCOM['x'], FVCOM['y'])):
+
+        posX = posXY[0]
+        posY = posXY[1]
+
+        # 23 is the WGS84 ellipsoid
+        tmpLat, tmpLon = UTMtoLL(23, posY, posX, UTMZone)
+
+        Y[count] = tmpLat
+        X[count] = tmpLon
+
+    # Make the range -180 to 180 rather than 0 to 360.
+    if np.min(X) >= 0:
+        X[X > 180] = X[X > 180] - 360
+
+    return X, Y
+
+
+
 if __name__ == '__main__':
 
     from sys import argv
