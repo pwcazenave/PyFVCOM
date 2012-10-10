@@ -399,7 +399,7 @@ def getHarmonics(db, stationName, noisy=True):
         raise ImportError('Failed to import NumPy')
 
     if noisy:
-        print 'Getting harmonics data for site {}... '.format(station)
+        print 'Getting harmonics data for site {}... '.format(stationName)
 
     try:
         con = sqlite3.connect(db)
