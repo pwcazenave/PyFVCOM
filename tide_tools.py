@@ -147,7 +147,7 @@ def getObservedData(db, table, startYear=False, endYear=False, noisy=False):
         raise ImportError('Failed to import the SQLite3 module')
 
     if noisy:
-        print 'Getting data for {} from the database.'.format(table),
+        print 'Getting data for {} from the database.'.format(table)
 
     try:
         con = sqlite3.connect(db)
@@ -402,7 +402,7 @@ def getHarmonics(db, stationName, noisy=True):
         raise ImportError('Failed to import NumPy')
 
     if noisy:
-        print 'Getting harmonics data for site {}... '.format(stationName),
+        print 'Getting harmonics data for site {}...'.format(stationName),
 
     try:
         con = sqlite3.connect(db)
