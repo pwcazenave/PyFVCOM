@@ -393,6 +393,10 @@ def getHarmonics(db, stationName, noisy=True):
     except ImportError:
         raise ImportError('Failed to import the SQLite3 module')
 
+    try:
+        import numpy as np
+    except:
+        raise ImportError('Failed to import NumPy')
 
     try:
         con = sqlite3.connect(db)
