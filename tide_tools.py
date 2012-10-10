@@ -373,6 +373,65 @@ def parseTAPPyXML(file):
 
     return constituentName, constituentSpeed, constituentPhase, constituentAmplitude, constituentInference
 
+def getHarmonics(db, stationName, noisy=True):
+    """
+    Use the harmonics database to extract the results of the harmonic analysis
+    for a given station (stationName).
 
+    Returns tidal constituent data for that station:
+        - stationName
+        - amplitude (m)
+        - phase (degrees)
+        - speed (degrees per mean solar hour)
+        - constituent name
+        - inferredConstituent (true|false)
+
+    """
+
+    try:
+        import sqlite3
+    except ImportError:
+        raise ImportError('Failed to import the SQLite3 module')
+
+
+    try:
+        con = sqlite3.connect(db)
+
+        with con:
+            c = con.cursor()
+            c.execute('SELECT * FROM TidalConstituents WHERE shortName = \'' + stationName + '\'')
+            data = c.fetchall()
+
+        con.close()
+    except sqlite3.Error, e:
+        if con:
+            con.close()
+            print 'Error %s:' % e.args[0]
+            data = [False]
+
+    # Convert data to a dict of value pairs
+    dictNames = ['amplitude', 'phase', 'speed', 'constituentName', 'inferredConstituent']
+    siteHarmonics = {}
+    tAmp = np.empty(np.shape(data)[0])
+    tPhase = np.empty(np.shape(data)[0])
+    tSpeed = np.empty(np.shape(data)[0])
+    tConst = np.empty(np.shape(data)[0], dtype="|S7")
+    tInfer = np.empty(np.shape(data)[0], dtype=bool)
+    for i, constituent in enumerate(data):
+        tAmp[i] = constituent[1]
+        tPhase[i] = constituent[2]
+        tSpeed[i] = constituent[3]
+        tConst[i] = str(constituent[4])
+        if str(constituent[-1]) == 'false':
+            tInfer[i] = False
+        else:
+            tInfer[i] = True
+    siteHarmonics['amplitude'] = tAmp
+    siteHarmonics['phase'] = tPhase
+    siteHarmonics['speed'] = tSpeed
+    siteHarmonics['constituentName'] = tConst
+    siteHarmonics['inferredConstituent'] = tInfer
+
+    return siteHarmonics
 
 
