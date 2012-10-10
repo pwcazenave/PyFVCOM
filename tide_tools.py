@@ -177,8 +177,8 @@ def getObservedData(db, table, startYear=False, endYear=False, noisy=False):
 
         con.close()
 
-    if noisy:
-        print 'done.'
+        if noisy:
+            print 'done.'
 
     except sqlite3.Error, e:
         if con:
