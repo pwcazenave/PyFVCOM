@@ -398,6 +398,9 @@ def getHarmonics(db, stationName, noisy=True):
     except:
         raise ImportError('Failed to import NumPy')
 
+    if noisy:
+        print 'Getting harmonics data for site {}... '.format(station)
+
     try:
         con = sqlite3.connect(db)
 
@@ -412,6 +415,9 @@ def getHarmonics(db, stationName, noisy=True):
             con.close()
             print 'Error %s:' % e.args[0]
             data = [False]
+
+        if noisy:
+            print 'extraction failed.'
 
     # Convert data to a dict of value pairs
     dictNames = ['amplitude', 'phase', 'speed', 'constituentName', 'inferredConstituent']
@@ -435,6 +441,9 @@ def getHarmonics(db, stationName, noisy=True):
     siteHarmonics['speed'] = tSpeed
     siteHarmonics['constituentName'] = tConst
     siteHarmonics['inferredConstituent'] = tInfer
+
+    if noisy:
+        print 'done.'
 
     return siteHarmonics
 
