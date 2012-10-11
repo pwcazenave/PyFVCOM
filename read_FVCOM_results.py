@@ -20,6 +20,9 @@ def readFVCOM(file, varList, clipTime=False, noisy=False):
     if noisy:
         print "File format: " + rootgrp.file_format
 
+        if clipTime is not False:
+            print 'Clipping time from index {:.0f} to {:.0f}'.format(clipTime[0], clipTime[1])
+
     FVCOM = {}
     for key, var in rootgrp.variables.items():
         if noisy:
@@ -27,7 +30,7 @@ def readFVCOM(file, varList, clipTime=False, noisy=False):
 
         if key in varList:
             if noisy:
-                print '(extracted)',
+                print '(extracted)'
 
             # Default to any variable not having a time dimension.
             hasTime = False
@@ -38,15 +41,7 @@ def readFVCOM(file, varList, clipTime=False, noisy=False):
 
                 for dim in rootgrp.variables[key].dimensions:
                     if str(dim) == 'time':
-                        if noisy:
-                            print '(extracting time from index {:.0f} to {:.0f})'.format(clipTime[0], clipTime[1]),
                         hasTime = True
-                    else:
-                        if noisy:
-                            print
-            else:
-                if noisy:
-                    print
 
             if hasTime:
                 # Since time is an unlimited dimension, it will be listed
@@ -55,7 +50,7 @@ def readFVCOM(file, varList, clipTime=False, noisy=False):
                 # clipped, the others will be output in their entirety.
                 FVCOM[key] = rootgrp.variables[key][clipTime[0]:clipTime[1]]
             else:
-                FVCOM[key] = rootgrp.variables[key]
+                FVCOM[key] = rootgrp.variables[key][:]
         else:
             if noisy:
                 print
