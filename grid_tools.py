@@ -604,6 +604,50 @@ def fixCoordinates(FVCOM, UTMZone):
     return X, Y
 
 
+def plotCoast(coastline):
+    """
+    Take an ESRI shapefile and output the paths required by matplotlib.patches.
+    This is until I get the new version of matplotlib which does Basemap with
+    unstructured grids.
+
+    Lifted from:
+    http://ondrejintheair.blogspot.co.uk/2011/11/plot-polygon-shapefiles-using-ogr-and.html
+
+    """
+
+    import numpy as np
+    import matplotlib.path as mpath
+    from osgeo import ogr
+
+    # Load in a coastline shape file
+    ds = ogr.Open(coastline)
+    lyr = ds.GetLayer(0)
+    ext = lyr.GetExtent()
+
+    paths = []
+    lyr.ResetReading()
+
+    # Read all features in layer and store as paths
+    for feat in lyr:
+        geom = feat.GetGeometryRef()
+        # check if geom is polygon
+        if geom.GetGeometryType() == ogr.wkbPolygon:
+            codes = []
+            all_x = []
+            all_y = []
+            for i in range(geom.GetGeometryCount()):
+                # Read ring geometry and create path
+                r = geom.GetGeometryRef(i)
+                x = [r.GetX(j) for j in range(r.GetPointCount())]
+                y = [r.GetY(j) for j in range(r.GetPointCount())]
+                # skip boundary between individual rings
+                codes += [mpath.Path.MOVETO] + (len(x)-1)*[mpath.Path.LINETO]
+                all_x += x
+                all_y += y
+            path = mpath.Path(np.column_stack((all_x,all_y)), codes)
+            paths.append(path)
+
+    return paths
 
 if __name__ == '__main__':
 
