@@ -635,7 +635,7 @@ def plotCoast(coastline):
             codes = []
             all_x = []
             all_y = []
-            for i in range(geom.GetGeometryCount()):
+            for i in xrange(geom.GetGeometryCount()):
                 # Read ring geometry and create path
                 r = geom.GetGeometryRef(i)
                 x = [r.GetX(j) for j in range(r.GetPointCount())]
