@@ -451,3 +451,101 @@ def getHarmonics(db, stationName, noisy=True):
     return siteHarmonics
 
 
+def getHarmonicsPOLPRED(harmonics, constituents, lon, lat, stations, noisy=True):
+    """
+    Function to extract the given constituents (as an array) at the positions
+    defined by lon and lat from a given POLPRED text file.
+
+    The nearest POLPRED grid point to each in lon and lat will be calculated
+    using findNearestPoint in grid_tools.
+
+    Supply a list of names for the stations. This will be used to generate a
+    dict whose structure matches that I've used in the plot_harmonics.py
+    script.
+
+    Returns a dict whose keys are the station names. Within each of those dicts
+    is another dict whose keys are 'amplitude', 'phase' and 'constituentName'.
+    The length of the arrays within each of the secondary dicts is dependent on
+    the number of constituents requested.
+
+    Optionally specify noisy=True to turn on verbose output.
+
+    """
+
+    import numpy as np
+
+    from grid_tools import findNearestPoint
+
+    # Open the harmonics file
+    f = open(harmonics, 'r')
+    polpred = f.readlines()
+    f.close()
+
+    # Read the header into a dict.
+    readingHeader = True
+    header = {}
+    values = []
+
+    if noisy:
+        print 'Parsing POLPRED raw data...',
+
+    for line in polpred:
+        if readingHeader:
+            if not line.strip():
+                # Blank line, which means the end of the header
+                readingHeader = False
+            else:
+                key, parameters = line.split(':')
+                header[key.strip()] = parameters.strip()
+        else:
+            # Remove duplicate whitespaces and split on the resulting
+            # single spaces.
+            line = line.strip()
+            line = ' '.join(line.split())
+            values.append(line.split(' '))
+
+    # Make the values into a numpy array
+    values = np.asarray(values, dtype=float)
+
+    if noisy:
+        print 'done.'
+
+    # Cut out the latitude and longitude from the values, and throw away
+    # the flag.
+    latlong = values[:, [0, 1]]
+    values = values[:, 3:]
+
+    # Find the nearest points in the POLCOMS grid to the locations
+    # requested.
+    nearestX, nearestY, distance, index = findNearestPoint(latlong[:, 1], latlong[:, 0], lon, lat, maxDistance=0.01)
+
+    # Get a list of the indices from the header for the constituents we're
+    # extracting.
+    ci = np.empty([np.shape(constituents)[0], 2], dtype=int)
+    for i, con in enumerate(constituents):
+        tmp = header['Harmonics'].split(' ').index(con)
+        # Fix because of the 6 columns per constituent
+        ci[i, :] = [tmp * 6, (tmp * 6) + 1]
+
+    # Make a dict of dicts for each station supplied.
+    out = {}
+
+    # Find the relevant data for the current site.
+    for c, key in enumerate(stations):
+        if noisy:
+            print 'Extracting site {}...'.format(key),
+
+        data = {}
+        if np.isnan(index[c]):
+            if noisy:
+                print 'skipping (outside domain).'
+        else:
+            data['amplitude'] = values[index[c], ci[:, 0]]
+            data['phase'] = values[index[c], ci[:, 1]]
+            data['constituentName'] = constituents
+            out[key] = data
+
+            if noisy:
+                print 'done.'
+
+    return out
