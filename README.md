@@ -21,11 +21,11 @@ Prerequisites
 
 * netCDF4, version 0.9.9.
 
-* shapefile, a tool to parse ESRI Shapefiles, available from http://sourceforge.net/projects/pyshape/.
+* shapefile, a tool to parse ESRI Shapefiles, available from <http://sourceforge.net/projects/pyshape/>.
 
-* OSGeo, another tool to read ESRI Shapefiles, available from http://wiki.osgeo.org/wiki/OSGeo_Python_Library.
+* OSGeo, another tool to read ESRI Shapefiles, available from <http://wiki.osgeo.org/wiki/OSGeo_Python_Library>.
 
-* TAPPy, a harmonic analysis tool for surface elevation time series, available from http://sourceforge.net/projects/tappy/.
+* TAPPy, a harmonic analysis tool for surface elevation time series, available from <http://sourceforge.net/projects/tappy/>.
 
 Optionally:
 
@@ -53,7 +53,7 @@ Provides
     - fixCoordinates
     - plotCoast
 
-* ll2utm - available from http://robotics.ai.uiuc.edu/~hyoon24/LatLongUTMconversion.py.
+* ll2utm - available from <http://robotics.ai.uiuc.edu/~hyoon24/LatLongUTMconversion.py>.
 
 * process_FVCOM_results - perform some analyses on FVCOM data read in using read_FVCOM_results.
     - calculateTotalCO2
@@ -96,4 +96,4 @@ At the moment, there isn't a particularly effective way of installing besides do
 Running
 -------
 
-Easiest to see a few examples of my scripts at http://github.com/pwcazenave/pml-irish-sea/python.
+Easiest to see a few examples of my scripts at <http://github.com/pwcazenave/pml-irish-sea/python>.
