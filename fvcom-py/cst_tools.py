@@ -107,28 +107,3 @@ def readArcMIKE(file, fileOut):
     fileWrite.close()
 
 
-if __name__ == '__main__':
-
-    from os import path
-    from sys import argv
-
-    if len(argv[1:]) == 0:
-        # We don't have a supplied file
-        #infile = '../data/test.xyz'
-        #infile = '../data/ukerc_shelf/ukerc/mike/shelf_coast.xyz'
-        #infile = '../data/ukerc_shelf/ukerc/mike/shelf_coast_utm.xyz'
-        infile = '../../data/GSHHS/modelling/gshhs_shelf_utm30n.xyz'
-        #infile = '../../../Remote/Mike/desktop/mesh/data/coast/synthetic/kinked_boundary_0.001_utm30n.xyz'
-        base, ext = path.splitext(infile)
-
-        readArcMIKE(infile, base + '.cst')
-
-    else:
-        # Run through the files supplied on the command line
-        for file in argv[1:]:
-            infile = file
-            base, ext = path.splitext(infile)
-
-            readArcMIKE(infile, base + '.cst')
-
-
