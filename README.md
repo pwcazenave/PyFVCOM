@@ -82,8 +82,7 @@ Provides
     - getObservedMetadata
     - cleanObservedData
     - runTAPPy
-
-* parseTAPPyXML - when running TAPPy on
+    - parseTAPPyXML
     - getHarmonics
     - getHarmonicsPOLPRED
 
@@ -91,9 +90,9 @@ Provides
 Installing
 ----------
 
-At the moment, there isn't a particularly effective way of installing besides downloading the files and putting them in a directory which then needs to be added to your PYTHONPATH variable.
+In principle, python setup.py should install fvcom-py, though it is untested. Alternatively, download the fvcom-py directory, and add its contents to your PYTHONPATH.
 
 Running
 -------
 
-Easiest to see a few examples of my scripts at <https://github.com/pwcazenave/pml-irish-sea/tree/master/python>.
+See some examples at <https://github.com/pwcazenave/pml-irish-sea/tree/master/python>.
