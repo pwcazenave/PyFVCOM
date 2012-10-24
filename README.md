@@ -96,4 +96,4 @@ At the moment, there isn't a particularly effective way of installing besides do
 Running
 -------
 
-Easiest to see a few examples of my scripts at <http://github.com/pwcazenave/pml-irish-sea/python>.
+Easiest to see a few examples of my scripts at <https://github.com/pwcazenave/pml-irish-sea/tree/master/python>.
