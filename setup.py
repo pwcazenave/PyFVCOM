@@ -20,7 +20,7 @@ setup(
     name = "fvcom-py",
     version = "0.1",
     author = "Pierre Cazenave",
-    author_email = "pica@pml.ac.uk",
+    author_email = "pwcazenave@gmail.com",
     description = ("fvcom-py is a collection of various tools and utilities which can be used to extract, analyse and plot input and output files from FVCOM."),
     license = "GPL",
     keywords = "fvcom",
