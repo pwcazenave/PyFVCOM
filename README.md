@@ -67,9 +67,6 @@ Provides
     - readFVCOM
     - getSurfaceElevation
 
-* read_MIKE_coast - read in DHI MIKE coastline arcs.
-    - readArcMIKE
-
 * stats_tools - some basic statistics tools.
     - calculateRegression
     - calculatePolyfit
