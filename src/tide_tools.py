@@ -451,7 +451,7 @@ def getHarmonics(db, stationName, noisy=True):
     return siteHarmonics
 
 
-def getHarmonicsPOLPRED(harmonics, constituents, lon, lat, stations, noisy=True):
+def getHarmonicsPOLPRED(harmonics, constituents, lon, lat, stations, noisy=True, distTresh=0.5):
     """
     Function to extract the given constituents (as an array) at the positions
     defined by lon and lat from a given POLPRED text file.
@@ -467,6 +467,8 @@ def getHarmonicsPOLPRED(harmonics, constituents, lon, lat, stations, noisy=True)
     is another dict whose keys are 'amplitude', 'phase' and 'constituentName'.
     The length of the arrays within each of the secondary dicts is dependent on
     the number of constituents requested.
+
+    A distance threshold is required for findNearestPoint. If omitted, it is 0.5.
 
     Optionally specify noisy=True to turn on verbose output.
 
@@ -510,22 +512,20 @@ def getHarmonicsPOLPRED(harmonics, constituents, lon, lat, stations, noisy=True)
     if noisy:
         print 'done.'
 
-    # Cut out the latitude and longitude from the values, and throw away
-    # the flag.
-    latlong = values[:, [0, 1]]
-    values = values[:, 3:]
-
     # Find the nearest points in the POLCOMS grid to the locations
     # requested.
-    nearestX, nearestY, distance, index = findNearestPoint(latlong[:, 1], latlong[:, 0], lon, lat, maxDistance=0.01)
+    nearestX, nearestY, distance, index = findNearestPoint(values[:, 1], values[:, 0], lon, lat, maxDistance=distTresh)
 
     # Get a list of the indices from the header for the constituents we're
     # extracting.
     ci = np.empty([np.shape(constituents)[0], 2], dtype=int)
     for i, con in enumerate(constituents):
         tmp = header['Harmonics'].split(' ').index(con)
-        # Fix because of the 6 columns per constituent
+        # Times 6 because of the columns per constituent
         ci[i, :] = [tmp * 6, (tmp * 6) + 1]
+
+    # Plus 3 because of the lat, long and flag columns.
+    ci = ci + 3
 
     # Make a dict of dicts for each station supplied.
     out = {}
