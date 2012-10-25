@@ -2,6 +2,8 @@
 Replicate the tidal ellipse example file from Zhigang Xu's tidal_ellipse MATLAB
 toolbox.
 
+Pierre Cazenave (Plymouth Marine Laboratory), October 2012.
+
 """
 
 import matplotlib.pyplot as plt
@@ -23,14 +25,17 @@ plt.clf()
 rAu, rPhi_u, rAv, rPhi_v, rw = ep2ap(SEMA, ECC, INC, PHA, [2, 3, 1])
 
 # Check if ep2ap has recovered Au, Phi_u, Av, Phi_v
-print np.max(np.max(np.max(np.abs(rAu-Au))))               #  = 9.9920e-16
-print np.max(np.max(np.max(np.abs(rAv-Av))))               #  = 6.6613e-16
-print np.max(np.max(np.max(np.abs(rPhi_u-Phi_u))))         #  = 4.4764e-13
-print np.max(np.max(np.max(np.abs(rPhi_v-Phi_v))))         #  = 1.1369e-13
-print np.max(np.max(np.max(np.max(np.abs(w-rw)))))            #  = 1.3710e-15
-# for the random realization I had, the differences are listed on the right
-# hand of the above column. What are yours?
+print np.max(np.abs(rAu-Au).flatten())        #  = 9.9920e-16, = 2.22044604925e-16
+print np.max(np.abs(rAv-Av).flatten())        #  = 6.6613e-16, = 7.77156117238e-16
+print np.max(np.abs(rPhi_u-Phi_u).flatten())  #  = 4.4764e-13, = 1.70530256582e-13
+print np.max(np.abs(rPhi_v-Phi_v).flatten())  #  = 1.1369e-13, = 2.27373675443e-13
+print np.max(np.max(np.abs(w-rw).flatten()))  #  = 1.3710e-15, = 1.1322097734e-15
+# For the random realization I (Zhigang Xu) had, the differences are listed on
+# the right hand of the above column. I (Pierre Cazenave) got the second column
+# with the Python version. What are yours?
 
 # Zhigang Xu
 # Nov. 12, 2000
+# Pierre Cazenave
+# October, 2012
 
