@@ -3,7 +3,7 @@ Python translation of Zhigang Xu's tidal_ellipse MATLAB tools, available at
 http://woodshole.er.usgs.gov/operations/sea-mat/tidal_ellipse-html/ap2ep.html
 
 Converted to Python by Pierre Cazenave (Plymouth Marine Laboratory), October
-2012.
+2012. Email: pica@pml.ac.uk
 
 Authorship Copyright:
 
