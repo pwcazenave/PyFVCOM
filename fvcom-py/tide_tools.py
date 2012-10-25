@@ -450,7 +450,6 @@ def getHarmonics(db, stationName, noisy=True):
 
     return siteHarmonics
 
-
 def getHarmonicsPOLPRED(harmonics, constituents, lon, lat, stations, noisy=True, distTresh=0.5):
     """
     Function to extract the given constituents (as an array) at the positions
@@ -465,8 +464,10 @@ def getHarmonicsPOLPRED(harmonics, constituents, lon, lat, stations, noisy=True,
 
     Returns a dict whose keys are the station names. Within each of those dicts
     is another dict whose keys are 'amplitude', 'phase' and 'constituentName'.
-    The length of the arrays within each of the secondary dicts is dependent on
-    the number of constituents requested.
+    In addition to the elevation amplitude and phases, the u and v amplitudes
+    and phases are also extract into the dict, with the keys 'uH', 'vH', 'uG'
+    and 'vG'. The length of the arrays within each of the secondary dicts is
+    dependent on the number of constituents requested.
 
     A distance threshold is required for findNearestPoint. If omitted, it is 0.5.
 
@@ -518,11 +519,14 @@ def getHarmonicsPOLPRED(harmonics, constituents, lon, lat, stations, noisy=True,
 
     # Get a list of the indices from the header for the constituents we're
     # extracting.
-    ci = np.empty([np.shape(constituents)[0], 2], dtype=int)
+    ci = np.empty([np.shape(constituents)[0], 6], dtype=int)
     for i, con in enumerate(constituents):
         tmp = header['Harmonics'].split(' ').index(con)
         # Times 6 because of the columns per constituent
-        ci[i, :] = [tmp * 6, (tmp * 6) + 1]
+        ci[i, :] = np.repeat(tmp * 6, 6)
+        # Add the offsets for the six harmonic components (amplitude and phase
+        # of z, u and v).
+        ci[i, :] = ci[i, :] + np.arange(6)
 
     # Plus 3 because of the lat, long and flag columns.
     ci = ci + 3
@@ -540,9 +544,12 @@ def getHarmonicsPOLPRED(harmonics, constituents, lon, lat, stations, noisy=True,
             if noisy:
                 print 'skipping (outside domain).'
         else:
-            data['amplitude'] = values[index[c], ci[:, 0]]
-            data['phase'] = values[index[c], ci[:, 1]]
+            keys = ['amplitude', 'phase', 'uH', 'ug', 'vH', 'vg']
+            for n, val in enumerate(keys):
+                data[val] = values[index[c], ci[:, n]]
+
             data['constituentName'] = constituents
+
             out[key] = data
 
             if noisy:
