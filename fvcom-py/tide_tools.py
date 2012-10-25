@@ -466,8 +466,9 @@ def getHarmonicsPOLPRED(harmonics, constituents, lon, lat, stations, noisy=True,
     is another dict whose keys are 'amplitude', 'phase' and 'constituentName'.
     In addition to the elevation amplitude and phases, the u and v amplitudes
     and phases are also extract into the dict, with the keys 'uH', 'vH', 'uG'
-    and 'vG'. The length of the arrays within each of the secondary dicts is
-    dependent on the number of constituents requested.
+    and 'vG'. Finally, the positions from the POLPRED data is stored with the
+    keys 'latitude' and 'longitude'. The length of the arrays within each of
+    the secondary dicts is dependent on the number of constituents requested.
 
     A distance threshold is required for findNearestPoint. If omitted, it is 0.5.
 
@@ -549,6 +550,8 @@ def getHarmonicsPOLPRED(harmonics, constituents, lon, lat, stations, noisy=True,
                 data[val] = values[index[c], ci[:, n]]
 
             data['constituentName'] = constituents
+            data['latitude'] = values[index[c], 0]
+            data['longitude'] = values[index[c], 1]
 
             out[key] = data
 
