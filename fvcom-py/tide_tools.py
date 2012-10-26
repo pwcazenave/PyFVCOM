@@ -496,7 +496,7 @@ def readPOLPRED(harmonics, noisy=False):
 
     return header, values
 
-def getHarmonicsPOLPRED(harmonics, constituents, lon, lat, stations, noisy=True, distTresh=0.5):
+def getHarmonicsPOLPRED(harmonics, constituents, lon, lat, stations, noisy=True, distThresh=0.5):
     """
     Function to extract the given constituents (as an array) at the positions
     defined by lon and lat from a given POLPRED text file. Uses readPOLPRED to
@@ -531,7 +531,7 @@ def getHarmonicsPOLPRED(harmonics, constituents, lon, lat, stations, noisy=True,
 
     # Find the nearest points in the POLCOMS grid to the locations
     # requested.
-    nearestX, nearestY, distance, index = findNearestPoint(values[:, 1], values[:, 0], lon, lat, maxDistance=distTresh)
+    nearestX, nearestY, distance, index = findNearestPoint(values[:, 1], values[:, 0], lon, lat, maxDistance=distThresh)
 
     # Get a list of the indices from the header for the constituents we're
     # extracting.
