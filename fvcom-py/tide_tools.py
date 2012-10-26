@@ -494,7 +494,7 @@ def readPOLPRED(harmonics, noisy=False):
     if noisy:
         print 'done.'
 
-    return values, header
+    return header, values
 
 def getHarmonicsPOLPRED(harmonics, constituents, lon, lat, stations, noisy=True, distTresh=0.5):
     """
@@ -527,7 +527,7 @@ def getHarmonicsPOLPRED(harmonics, constituents, lon, lat, stations, noisy=True,
 
     from grid_tools import findNearestPoint
 
-    values, header = readPOLPRED(harmonics, noisy=noisy)
+    header, values = readPOLPRED(harmonics, noisy=noisy)
 
     # Find the nearest points in the POLCOMS grid to the locations
     # requested.
