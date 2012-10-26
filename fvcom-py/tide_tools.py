@@ -450,35 +450,15 @@ def getHarmonics(db, stationName, noisy=True):
 
     return siteHarmonics
 
-def getHarmonicsPOLPRED(harmonics, constituents, lon, lat, stations, noisy=True, distTresh=0.5):
+def readPOLPRED(harmonics, noisy=False):
     """
-    Function to extract the given constituents (as an array) at the positions
-    defined by lon and lat from a given POLPRED text file.
-
-    The nearest POLPRED grid point to each in lon and lat will be calculated
-    using findNearestPoint in grid_tools.
-
-    Supply a list of names for the stations. This will be used to generate a
-    dict whose structure matches that I've used in the plot_harmonics.py
-    script.
-
-    Returns a dict whose keys are the station names. Within each of those dicts
-    is another dict whose keys are 'amplitude', 'phase' and 'constituentName'.
-    In addition to the elevation amplitude and phases, the u and v amplitudes
-    and phases are also extract into the dict, with the keys 'uH', 'vH', 'uG'
-    and 'vG'. Finally, the positions from the POLPRED data is stored with the
-    keys 'latitude' and 'longitude'. The length of the arrays within each of
-    the secondary dicts is dependent on the number of constituents requested.
-
-    A distance threshold is required for findNearestPoint. If omitted, it is 0.5.
-
-    Optionally specify noisy=True to turn on verbose output.
+    Load a POLPRED data file into a NumPy array. This can then be used by
+    getHarmonicsPOLPRED to extract the harmonics at a given loaction, or
+    otherwise can be used to simply extract the positions of the POLCOMS grid.
 
     """
 
     import numpy as np
-
-    from grid_tools import findNearestPoint
 
     # Open the harmonics file
     f = open(harmonics, 'r')
@@ -513,6 +493,41 @@ def getHarmonicsPOLPRED(harmonics, constituents, lon, lat, stations, noisy=True,
 
     if noisy:
         print 'done.'
+
+    return values, header
+
+def getHarmonicsPOLPRED(harmonics, constituents, lon, lat, stations, noisy=True, distTresh=0.5):
+    """
+    Function to extract the given constituents (as an array) at the positions
+    defined by lon and lat from a given POLPRED text file. Uses readPOLPRED to
+    read in the specified text file.
+
+    The nearest POLPRED grid point to each in lon and lat will be calculated
+    using findNearestPoint in grid_tools.
+
+    Supply a list of names for the stations. This will be used to generate a
+    dict whose structure matches that I've used in the plot_harmonics.py
+    script.
+
+    Returns a dict whose keys are the station names. Within each of those dicts
+    is another dict whose keys are 'amplitude', 'phase' and 'constituentName'.
+    In addition to the elevation amplitude and phases, the u and v amplitudes
+    and phases are also extract into the dict, with the keys 'uH', 'vH', 'uG'
+    and 'vG'. Finally, the positions from the POLPRED data is stored with the
+    keys 'latitude' and 'longitude'. The length of the arrays within each of
+    the secondary dicts is dependent on the number of constituents requested.
+
+    A distance threshold is required for findNearestPoint. If omitted, it is 0.5.
+
+    Optionally specify noisy=True to turn on verbose output.
+
+    """
+
+    import numpy as np
+
+    from grid_tools import findNearestPoint
+
+    values, header = readPOLPRED(harmonics, noisy=noisy)
 
     # Find the nearest points in the POLCOMS grid to the locations
     # requested.
