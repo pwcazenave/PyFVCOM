@@ -269,7 +269,7 @@ def cleanObservedData(data):
 
     return dateMJD, tideDataMSL, npFlagData, allDateTimes
 
-def runTAPPy(data, sparseDef=False, noisy=False, deleteFile=True):
+def runTAPPy(data, sparseDef=False, noisy=False, deleteFile=True, tappy='/usr/bin/tappy.py'):
     """
     A simple wrapper to perform a harmonic analysis on the supplied data.
     Input data format is YYYY, MM, DD, hh, mm, ss, ZZ as a numpy array.
@@ -283,6 +283,9 @@ def runTAPPy(data, sparseDef=False, noisy=False, deleteFile=True):
     deleted once the analysis is complete, unless deleteFile is set to False,
     in which case it is left where it is. To find it, pass noisy=True to be
     given more verbose output.
+
+    By default, tappy.py is expected in /usr/bin. If yours lives elsewhere,
+    pass tappy=/path/to/tappy.py.
 
     The default sparse definition file is:
 
@@ -325,7 +328,7 @@ def runTAPPy(data, sparseDef=False, noisy=False, deleteFile=True):
         print 'Running TAPPy on the current station...',
 
     xFile = tempfile.NamedTemporaryFile()
-    subprocess.call(['/usr/bin/tappy.py', 'analysis', '--def_filename=' + sparseDef, '--outputxml=' + xFile.name, '--quiet', tFile.name])
+    subprocess.call([tappy, 'analysis', '--def_filename=' + sparseDef, '--outputxml=' + xFile.name, '--quiet', tFile.name])
 
     [cName, cSpeed, cPhase, cAmplitude, cInference] = parseTAPPyXML(xFile.name)
 
