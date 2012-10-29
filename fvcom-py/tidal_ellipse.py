@@ -490,8 +490,8 @@ def do_the_plot(SEMA, ECC, INC, PHA):
     dot = np.pi / 36
     ot = np.arange(0, 2 * np.pi, dot)
     a = wp * np.exp(i * ot)
-    b = wm*np.exp(-i*ot)
-    w = a+b
+    b = wm * np.exp(-i * ot)
+    w = a + b
 
     wmax = SEMA * np.exp(i * INC)
     wmin = SEMI * np.exp(i * (INC + np.pi / 2))
