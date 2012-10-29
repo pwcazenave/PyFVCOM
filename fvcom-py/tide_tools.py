@@ -285,7 +285,7 @@ def runTAPPy(data, sparseDef=False, noisy=False, deleteFile=True, tappy='/usr/bi
     given more verbose output.
 
     By default, tappy.py is expected in /usr/bin. If yours lives elsewhere,
-    pass tappy=/path/to/tappy.py.
+    pass tappy='/path/to/tappy.py'.
 
     The default sparse definition file is:
 
