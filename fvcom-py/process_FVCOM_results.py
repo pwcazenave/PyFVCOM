@@ -281,7 +281,6 @@ def residualFlow(FVCOM, idxRange=False, checkPlot=False):
     """
 
     toSecFactor = 24 * 60 * 60
-    pi = 3.141592653589793
 
     # Get the output interval (in days)
     dt = FVCOM['time'][2] - FVCOM['time'][1]
@@ -337,10 +336,10 @@ def residualFlow(FVCOM, idxRange=False, checkPlot=False):
     vDiff = vEnd - vStart
 
     # Calculate direction and magnitude.
-    rDir = np.arctan2(uDiff, vDiff) * (180 / pi); # in degrees.
+    rDir = np.arctan2(uDiff, vDiff) * (180 / np.pi); # in degrees.
     rMag = np.sqrt(uDiff**2 + vDiff**2) / tideDuration; # in units/s.
 
-    # Plot the check everything's OK
+    # Plot to check everything's OK
     if checkPlot:
         elmt = 100
         lyr = 0
@@ -356,6 +355,7 @@ def residualFlow(FVCOM, idxRange=False, checkPlot=False):
         ax.set_ylabel('Displacement north-south')
         ax.set_aspect('equal')
         ax.autoscale(tight=True)
+        fig.show()
 
     return uRes, vRes, rDir, rMag
 
