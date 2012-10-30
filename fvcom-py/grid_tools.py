@@ -568,10 +568,15 @@ def elementSideLengths(triangles, x, y):
         elemSides[it,2] = sqrt((pos3x - pos1x)**2 + (pos3y - pos1y)**2)
 
 
-def fixCoordinates(FVCOM, UTMZone):
+def fixCoordinates(FVCOM, UTMZone, inVars=['x', 'y']):
     """
     Use the UTMtoLL function to convert the grid from UTM to Lat/Long. Returns
     longitude and latitude in the range -180 to 180.
+
+    By default, the variables which will be converted from UTM to Lat/Long are
+    'x' and 'y'. To specify a different pair, give inVars=['xc', 'yc'], for
+    example, to convert the 'xc' and 'yc' variables instead. Their order should
+    be x-direction followed by y-direction.
 
     """
 
@@ -581,12 +586,12 @@ def fixCoordinates(FVCOM, UTMZone):
         print('Failed to import ll2utm (available from http://robotics.ai.uiuc.edu/~hyoon24/LatLongUTMconversion.py')
 
     try:
-        Y = np.zeros(np.shape(FVCOM['x'])) * np.nan
-        X = np.zeros(np.shape(FVCOM['y'])) * np.nan
+        Y = np.zeros(np.shape(FVCOM[inVars[1]])) * np.nan
+        X = np.zeros(np.shape(FVCOM[inVars[0]])) * np.nan
     except IOError:
         print 'Couldn''t find the x or y variables in the supplied FVCOM dict. Check you loaded them and try again.'
 
-    for count, posXY in enumerate(zip(FVCOM['x'], FVCOM['y'])):
+    for count, posXY in enumerate(zip(FVCOM[inVars[0]], FVCOM[inVars[1]])):
 
         posX = posXY[0]
         posY = posXY[1]
