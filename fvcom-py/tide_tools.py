@@ -379,7 +379,7 @@ def parseTAPPyXML(file):
 
     return constituentName, constituentSpeed, constituentPhase, constituentAmplitude, constituentInference
 
-def getHarmonics(db, stationName, noisy=True):
+def getHarmonics(db, stationName, noisy=False):
     """
     Use the harmonics database to extract the results of the harmonic analysis
     for a given station (stationName).
@@ -498,6 +498,64 @@ def readPOLPRED(harmonics, noisy=False):
         print 'done.'
 
     return header, values
+
+def gridPOLPRED(values, noisy=False):
+    """
+    The POLPRED data are stored as a 2D array, with a single row for each
+    location. As such, the lat and long positions are stored in two 1D arrays.
+    For the purposes of subsampling, it is much more convenient to have a
+    rectangular grid. However, since the POLCOMS model domain is not
+    rectangular, it is not possible to simply reshape the POLPRED grid.
+
+    To create a rectangular grid, this function builds a lookup table which
+    maps locations in the 1D arrays to the equivalent in the 2D array. This is
+    achieved as follows:
+
+    1. Create a vector of the unique x and y positions.
+    2. Use those positions to search through the 1D array to find the index of
+    that position.
+    3. Save the 1D index and the 2D indices in a lookup table.
+    4. Create a rectangular array whose dimensions match the extent of the
+    POLPRED data.
+    5. Populate that array with the data, creating a 3D array (x by y by z,
+    where z is the number of harmonics).
+    6. Use meshgrid to create a rectangular position array (for use with
+    pcolor, for example).
+
+    This approach means the grid can be more readily subsampled without the
+    need for interpolation (which would change the harmonic constituents).
+
+    Where no data exist (i.e. outside the POLPRED domain), set all values as
+    -999.9 (as per POLPRED's land value).
+
+    As input, give the output of readPOLPRED (values).
+
+    Returns three rectangular arrays (PX, PY and PZ), of which the last is 3D.
+
+    """
+
+    import numpy as np
+
+    # Create rectangular arrays of the coordinates in the POLCOMS domain.
+    px = np.unique(values[:,1])
+    py = np.unique(values[:,0])
+    PX, PY = np.meshgrid(px, py)
+
+    # I think appending to a list is faster than a NumPy array.
+    arridx = []
+    for i, (xx, yy) in enumerate(values[:, [1, 0]]):
+        if noisy:
+            if np.mod(i, 999) == 0 or i == 0:
+                print '{} of {}'.format(i + 1, np.shape(values)[0])
+        arridx.append([i, px.tolist().index(xx), py.tolist().index(yy)])
+
+    # Now use the lookup table to get the values out of values and into PZ.
+    PZ = np.ones([np.shape(py)[0], np.shape(px)[0], np.shape(values)[-1]]) * -999.9
+    for idx, xidx, yidx in arridx:
+        # Order is the other way around in arridx.
+        PZ[yidx, xidx, :] = values[idx, :]
+
+    return PX, PY, PZ
 
 def getHarmonicsPOLPRED(harmonics, constituents, lon, lat, stations, noisy=True, distThresh=0.5):
     """
