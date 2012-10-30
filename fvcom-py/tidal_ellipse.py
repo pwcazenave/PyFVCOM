@@ -523,6 +523,47 @@ def do_the_plot(SEMA, ECC, INC, PHA):
     plt.hold('off')
     plt.show()
 
+def prep_plot(SEMA, ECC, INC, PHA):
+    """
+    Take the output of ap2ep (SEMA, ECC, INC, and PHA) and prepare it for
+    plotting.
 
+    This is extracted from do_the_plot above, but allows quicker access when
+    all that is required is a plot of an ellipse, for which only w is really
+    required.
+
+    Returns w, wmin and wmax (w is used for plotting the ellipse, see
+    plot_ell).
+
+    """
+
+    i = 1j
+
+    SEMI = SEMA * ECC
+    Wp = (1 + ECC) / 2 * SEMA
+    Wm = (1 - ECC) / 2 * SEMA
+    THETAp = INC - PHA
+    THETAm = INC + PHA
+
+    # Convert degrees into radians
+    THETAp = THETAp / 180 * np.pi
+    THETAm = THETAm / 180 * np.pi
+    INC = INC / 180 * np.pi
+    PHA = PHA / 180 * np.pi
+
+    # Calculate wp and wm.
+    wp = Wp * np.exp(i * THETAp)
+    wm = Wm * np.exp(i * THETAm)
+
+    dot = np.pi / 36
+    ot = np.arange(0, 2 * np.pi, dot)
+    a = wp * np.exp(i * ot)
+    b = wm * np.exp(-i * ot)
+    w = a + b
+
+    wmax = SEMA * np.exp(i * INC)
+    wmin = SEMI * np.exp(i * (INC + np.pi / 2))
+
+    return w, wmin, wmax
 
 
