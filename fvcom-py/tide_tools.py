@@ -557,7 +557,7 @@ def gridPOLPRED(values, noisy=False):
 
     return PX, PY, PZ
 
-def getHarmonicsPOLPRED(harmonics, constituents, lon, lat, stations, noisy=True, distThresh=0.5):
+def getHarmonicsPOLPRED(harmonics, constituents, lon, lat, stations, noisy=False, distThresh=0.5):
     """
     Function to extract the given constituents (as an array) at the positions
     defined by lon and lat from a given POLPRED text file. Uses readPOLPRED to
