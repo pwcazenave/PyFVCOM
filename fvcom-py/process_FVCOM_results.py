@@ -262,7 +262,7 @@ def animateModelOutput(FVCOM, varPlot, startIdx, skipIdx, layerIdx, meshFile, ad
             print
 
 
-def residualFlow(FVCOM, idxRange=False, checkPlot=False):
+def residualFlow(FVCOM, idxRange=False, checkPlot=False, noisy=False):
     """
     Calculate the residual flow. By default, the calculation will take place
     over the entire duration of FVCOM['Times']. To limit the calculation to a
@@ -273,8 +273,10 @@ def residualFlow(FVCOM, idxRange=False, checkPlot=False):
     Returns resDir, resMag, uRes and vRes, which are the residual direction and
     magnitude, as well as the raw u and v vector arrays.
 
-    Supply checkPlot=True to check the results with the 100th element and the
-    first layer of the u and v arrays in FVCOM.
+    Supply checkPlot=101 to check the results with the 100th element and the
+    first layer of the u and v arrays in FVCOM (Python counts from zero).
+
+    noisy=False by default, give noisy=True to turn on verbose messages.
 
     Based on my MATLAB do_residual.m function.
 
@@ -301,6 +303,9 @@ def residualFlow(FVCOM, idxRange=False, checkPlot=False):
         endIdx = startIdx + tideWindow + np.ceil(14.4861 / dt) # to the end of the spring-neap cycle
     elif idxRange == 'daily':
         endIdx = startIdx + tideWindow + np.ceil(1 / dt)
+    elif idxRange is False:
+        startIdx = 0
+        endIdx = -1
     else:
         startIdx = idxRange[0]
         endIdx = idxRange[1]
@@ -320,10 +325,16 @@ def residualFlow(FVCOM, idxRange=False, checkPlot=False):
     vEnd = np.empty([nLayers, nElements])
 
     for hh in xrange(nLayers):
+        if noisy:
+            print 'Layer {} of {}'.format(hh + 1, nLayers)
+
         uSum[:, hh, :] = np.cumsum(np.squeeze(FVCOM['u'][startIdx:endIdx, hh, :]), axis=0)
         vSum[:, hh, :] = np.cumsum(np.squeeze(FVCOM['v'][startIdx:endIdx, hh, :]), axis=0)
         for ii in xrange(nTimeSteps):
             # Create progressive vectors for all time steps in the current layer
+            if noisy and np.mod(ii, 100) == 0:
+                print 'Create PVD at time step {} of {}'.format(ii +1, nTimeSteps)
+
             uRes[ii, hh, :] = uRes[ii, hh, :] + (uSum[ii, hh, :] * (dt * toSecFactor))
             vRes[ii, hh, :] = vRes[ii, hh, :] + (vSum[ii, hh, :] * (dt * toSecFactor))
 
@@ -341,7 +352,10 @@ def residualFlow(FVCOM, idxRange=False, checkPlot=False):
 
     # Plot to check everything's OK
     if checkPlot:
-        elmt = 100
+        if noisy:
+            print 'Plotting element {}'.format(checkPlot - 1)
+
+        elmt = checkPlot - 1
         lyr = 0
         fig = plt.figure()
         ax = fig.add_subplot(111)
