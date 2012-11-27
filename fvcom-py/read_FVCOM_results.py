@@ -1,12 +1,24 @@
 
-def readFVCOM(file, varList, clipTime=False, noisy=False):
+def readFVCOM(file, varList, clipDims=False, noisy=False):
     """
     Read in the FVCOM results file and spit out numpy arrays for
     each of the variables specified in the varList list.
 
-    Optionally specify a timeRange which will extract only the range of times
-    of interest. Specify as indices and not Modified Julian Date or Gregorian
-    date. Give a start and end index as a list (e.g. [0, 200]).
+    Optionally specify a dict which keys whose names match the dimensions in
+    the NetCDF file and whose values are strings specifying alternative ranges
+    or lists of indices. For example, to extract the first hundred time steps,
+    supply clipDims as:
+
+        clipDims = {'time':'0:99'}
+
+    To extract the first, 400th and 10,000th values of any array with nodes:
+
+        clipDims = {'node':['0, 399, 9999']}
+
+    To improve performance, sort the nodes in the dict otherwise lookups from
+    the NetCDF file will be slow.
+
+    Any dimension not given in clipDims will be extracted in full.
 
     """
 
@@ -17,40 +29,45 @@ def readFVCOM(file, varList, clipTime=False, noisy=False):
 
     rootgrp = Dataset(file, 'r')
 
+    # Create a dict of the dimension names and their current sizes
+    dims = {}
+    for key, var in rootgrp.dimensions.iteritems():
+        # Make the dimensions ranges so we can use them to extract all the
+        # values.
+        dims[key] = '0:' + str(len(var)-1)
+
+    # Compare the dimensions in the NetCDF file with those provided. If we've
+    # been given a dict of dimensions which differs from those in the NetCDF
+    # file, then use those.
+    if clipDims is not False:
+        commonKeys = set(dims).intersection(clipDims.keys())
+        for k in commonKeys:
+            dims[k] = clipDims[k]
+
     if noisy:
         print "File format: " + rootgrp.file_format
 
-        if clipTime is not False:
-            print 'Clipping time from index {:.0f} to {:.0f}'.format(clipTime[0], clipTime[1])
-
     FVCOM = {}
-    for key, var in rootgrp.variables.items():
+    for key, var in rootgrp.variables.iteritems():
         if noisy:
             print 'Found ' + key,
 
         if key in varList:
+            vDims = rootgrp.variables[key].dimensions
+
+            toExtract = []
+            [toExtract.append(dims[d]) for d in vDims]
+
+            # I know, I know, eval() is evil.
+            getData = 'rootgrp.variables[\'{}\']{}'.format(key,str(toExtract).replace('\'', ''))
+            FVCOM[key] = eval(getData)
+
             if noisy:
-                print '(extracted)'
+                if len(str(toExtract)) < 60:
+                    print '(extracted {})'.format(str(toExtract).replace('\'', ''))
+                else:
+                    print '(extracted given nodes)'
 
-            # Default to any variable not having a time dimension.
-            hasTime = False
-
-            if clipTime is not False:
-                # Check the current variable dimensions to see if it has a time
-                # dimension.
-
-                for dim in rootgrp.variables[key].dimensions:
-                    if str(dim) == 'time':
-                        hasTime = True
-
-            if hasTime:
-                # Since time is an unlimited dimension, it will be listed
-                # first. That means if we specify a range for a
-                # multidimensional variable, only the first variable will be
-                # clipped, the others will be output in their entirety.
-                FVCOM[key] = rootgrp.variables[key][clipTime[0]:clipTime[1]]
-            else:
-                FVCOM[key] = rootgrp.variables[key][:]
         else:
             if noisy:
                 print
