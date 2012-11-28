@@ -34,7 +34,7 @@ def readFVCOM(file, varList, clipDims=False, noisy=False):
     for key, var in rootgrp.dimensions.iteritems():
         # Make the dimensions ranges so we can use them to extract all the
         # values.
-        dims[key] = '0:' + str(len(var)-1)
+        dims[key] = '0:' + str(len(var))
 
     # Compare the dimensions in the NetCDF file with those provided. If we've
     # been given a dict of dimensions which differs from those in the NetCDF
