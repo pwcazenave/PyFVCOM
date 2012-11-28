@@ -4,19 +4,20 @@ def readFVCOM(file, varList, clipDims=False, noisy=False):
     Read in the FVCOM results file and spit out numpy arrays for
     each of the variables specified in the varList list.
 
-    Optionally specify a dict which keys whose names match the dimensions in
-    the NetCDF file and whose values are strings specifying alternative ranges
-    or lists of indices. For example, to extract the first hundred time steps,
-    supply clipDims as:
+    Optionally specify a dict with keys whose names match the dimension names
+    in the NetCDF file and whose values are strings specifying alternative
+    ranges or lists of indices. For example, to extract the first hundred time
+    steps, supply clipDims as:
 
-        clipDims = {'time':'0:99'}
+        clipDims = {'time':'0:100'}
 
     To extract the first, 400th and 10,000th values of any array with nodes:
 
-        clipDims = {'node':['0, 399, 9999']}
+        clipDims = {'node':['0, 400, 10000']}
 
     To improve performance, sort the nodes in the dict otherwise lookups from
-    the NetCDF file will be slow.
+    the NetCDF file will be slow. Extracting sigma layers and levels is
+    expensive when clipping to specific nodes, so try to avoid if possible.
 
     Any dimension not given in clipDims will be extracted in full.
 
