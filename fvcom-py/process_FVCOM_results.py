@@ -310,7 +310,13 @@ def residualFlow(FVCOM, idxRange=False, checkPlot=False, noisy=False):
         startIdx = idxRange[0]
         endIdx = idxRange[1]
 
-    nTimeSteps, nLayers, nElements = np.shape(FVCOM['u'][startIdx:endIdx, :, :])
+    try:
+        # 3D input
+        nTimeSteps, nLayers, nElements = np.shape(FVCOM['u'][startIdx:endIdx, :, :])
+    except:
+        # 2D input
+        nTimeSteps, nElements = np.shape(FVCOM['u'][startIdx:endIdx, :])
+        nLayers = 1
 
     tideDuration = ((dt * nTimeSteps) - tideCycle) * toSecFactor
 
@@ -328,8 +334,15 @@ def residualFlow(FVCOM, idxRange=False, checkPlot=False, noisy=False):
         if noisy:
             print 'Layer {} of {}'.format(hh + 1, nLayers)
 
-        uSum[:, hh, :] = np.cumsum(np.squeeze(FVCOM['u'][startIdx:endIdx, hh, :]), axis=0)
-        vSum[:, hh, :] = np.cumsum(np.squeeze(FVCOM['v'][startIdx:endIdx, hh, :]), axis=0)
+        try:
+            # 3D
+            uSum[:, hh, :] = np.cumsum(np.squeeze(FVCOM['u'][startIdx:endIdx, hh, :]), axis=0)
+            vSum[:, hh, :] = np.cumsum(np.squeeze(FVCOM['v'][startIdx:endIdx, hh, :]), axis=0)
+        except:
+            # 2D
+            uSum[:, hh, :] = np.cumsum(np.squeeze(FVCOM['u'][startIdx:endIdx, :]), axis=0)
+            vSum[:, hh, :] = np.cumsum(np.squeeze(FVCOM['v'][startIdx:endIdx, :]), axis=0)
+
         for ii in xrange(nTimeSteps):
             # Create progressive vectors for all time steps in the current layer
             if noisy and np.mod(ii, 100) == 0:
