@@ -499,7 +499,7 @@ def plotUnstructuredGridProjected(triangles, nodes, x, y, z, colourLabel, addTex
     plt.show()
 
 
-def findNearestPoint(FX, FY, x, y, maxDistance=np.inf):
+def findNearestPoint(FX, FY, x, y, maxDistance=np.inf, noisy=False):
     """
     Given some point(s) x and y, find the nearest grid node in FX and FY.
 
@@ -530,6 +530,9 @@ def findNearestPoint(FX, FY, x, y, maxDistance=np.inf):
     distance[:] = np.NaN
 
     for cnt, pointXY in enumerate(zip(x, y)):
+        if noisy:
+            print 'Point {} of {}'.format(cnt + 1, np.shape(x)[0])
+
         findX, findY = FX - pointXY[0], FY - pointXY[1]
         vectorDistances = np.sqrt(findX**2 + findY**2)
         if np.min(vectorDistances) > maxDistance:
