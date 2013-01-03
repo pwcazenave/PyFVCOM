@@ -11,16 +11,35 @@ Some of the tidal analysis functions require TAPPy to be installed and in
 
 def julianDay(gregorianDateTime, mjd=False):
     """
-    For a given gregorian date format (YYYY,MM,DD,hh,mm,ss) get the Julian Day.
-    hh,mm,ss are optional, and zero if omitted (i.e. midnight).
+    For a given gregorian date format (YYYY,MM,DD,hh,mm,ss) get the
+    Julian Day.
 
-    Output array precision is the same as input precision, so if you want
-    sub-day precision, make sure your input data are floats.
+    Output array precision is the same as input precision, so if you
+    want sub-day precision, make sure your input data are floats.
+
+    Parameters
+    ----------
+
+    gregorianDateTime : ndarray
+        Array of Gregorian dates formatted as [[YYYY, MM, DD, hh, mm,
+        ss],...,[YYYY, MM, DD, hh, mm, ss]]. If hh, mm, ss are missing
+        they are assumed to be zero (i.e. midnight).
+    mjd : bool
+        Set to True to convert output from Julian Day to Modified Julian
+        Day.
+
+    Returns
+    -------
+
+    jd : ndarray
+        Modified Julian Day or Julian Day (depending on the value of
+        mjd).
+
+    Notes
+    -----
 
     Julian Day epoch: 12:00 January 1, 4713 BC, Monday
     Modified Julain Day epoch: 00:00 November 17, 1858, Wednesday
-
-    mjd=True applies the offset from Julian Day to Modified Julian Day.
 
     Modified after code at http://paste.lisp.org/display/73536 and
     http://home.online.no/~pjacklam/matlab/software/util/timeutil/date2jd.m
@@ -80,15 +99,27 @@ def addHarmonicResults(db, stationName, constituentName, phase, amplitude, speed
     """
     Add data to an SQLite database.
 
-    - db specifies an SQLite databse. If it doesn't exist, it will be created.
-    - stationName is the short name (i.e. AVO not Avonmouth)
-    - constituent Name is M2, S2 etc.
-    - phase is in degrees
-    - amplitude is in metres
-    - speed is in degrees/hour
-    - inferred is 'true' or 'false' (as strings, not python special values)
+    Parameters
+    ----------
 
-    Optionally specify noisy=True to turn on verbose output.
+    db : str
+        Full path to an SQLite database. If absent, it will be created.
+    stationName : str
+        Short name for the current station. This is the table name.
+    constituentName : str
+        Name of the current tidal constituent being added.
+    phase : float
+        Tidal constituent phase (in degrees).
+    amplitude : float
+        Tidal constituent amplitude (in metres).
+    speed : float
+        Tidal constituent speed (in degrees per hour).
+    inferred : str
+        'true' or 'false' indicating whether the values are inferred
+        (i.e. the time series is too short to perform a robust harmonic
+        analysis).
+    noisy : bool
+        Set to True to enable verbose output.
 
     """
 
@@ -134,10 +165,30 @@ def getObservedData(db, table, startYear=False, endYear=False, noisy=False):
     that year) to limit the returned data. If no data exists for that station,
     the output is returned as False.
 
+    Parameters
+    ----------
+
+    db : str
+        Full path to the tide data SQLite database.
+    table : str
+        Name of the table to be extracted (e.g. 'AVO').
+    startYear : bool, optional
+        Year from which to start extracting data (inclusive).
+    endYear : bool, optional
+        Year at which to end data extraction (inclusive).
+    noisy : bool, optional
+        Set to True to enable verbose output.
+
+    See Also
+    --------
+
+    tide_tools.getObservedMetadata : extract metadata for a tide station.
+
+    Notes
+    -----
+
     Search is not fuzzy, so "NorthShields" is not the same as "North Shields".
     Search is case insensitive, however.
-
-    Add noisy=True to turn on verbose output.
 
     """
 
@@ -190,9 +241,30 @@ def getObservedData(db, table, startYear=False, endYear=False, noisy=False):
 
 def getObservedMetadata(db, originator=False):
     """
-    Extracts the meta data from the tidal elevations database. If the supplied
-    originator is False (default), then information from all stations is
-    returned.
+    Extracts the meta data from the tidal elevations database. If the
+    supplied originator is False (default), then information from all
+    stations is returned.
+
+    Parameters
+    ----------
+
+    db : str
+        Full path to the tide data SQLite database.
+    originator : str, optional
+        Specify an originator (e.g. 'NTSLF', 'NSTD', 'REFMAR') to
+        extract only that data. Defaults to all data.
+
+    Returns
+    -------
+
+    lon : list
+        Longitude of the requested station(s).
+    lat : list
+        Latitude of the requested station(s).
+    site : list
+        Short names (e.g. 'AVO' for 'Avonmouth') of the tide stations.
+    longName : list
+        Long names of the tide stations (e.g. 'Avonmouth').
 
     """
 
@@ -229,14 +301,30 @@ def getObservedMetadata(db, originator=False):
 
 def cleanObservedData(data):
     """
-    Take the output of getObservedData and identify NaNs (with a mask). Also
-    convert times into Modified Julian Date.
+    Process the observed raw data to a more sensible format by setting a
+    mask for flagged and NaN values. Also convert from Gregorian dates
+    to Modified Julian Day (to match FVCOM model output times).
 
-    Tidal elevations also have the mean tidal elevation for the time series
-    removed from all values. This is a sort of poor man's correction to mean
-    sea level.
+    Parameters
+    ----------
 
-    Returns dateMJD, surfaceElevation, qualityFlags and a YMDHMS date array.
+    data : ndarray
+        Array of [YYYY, MM, DD, hh, mm, ss, zeta, flag] data output by
+        getObservedData().
+
+    Returns
+    -------
+
+    dateMJD : ndarray
+        Modified Julian Days of the input data.
+    tideDataMSL : ndarray
+        Time series of surface elevations from which the mean surface
+        elevation has been subtracted.
+    npFlagsData : ndarray
+        Flag values from the SQLite database (usually -9999, or P, N
+        etc. if BODC data).
+    allDateTimes : ndarray
+        Original date data in [YYYY, MM, DD, hh, mm, ss] format.
 
     """
 
@@ -293,6 +381,37 @@ def runTAPPy(data, sparseDef=False, noisy=False, deleteFile=True, tappy='/usr/bi
 
     Pass an alternate value to sparseDef to use a different one.
 
+    Parameters
+    ----------
+
+    data : ndarray
+        Array of [YYYY, MM, DD, hh, mm, ss, ZZ], where ZZ is surface elevation.
+    sparseDef : str, optional
+        Path to a TAPPy definition file. The default is
+        /users/modellers/pica/Data/proc/tides/sparse.def.
+    noisy : bool, optional
+        Set to True to enable verbose output.
+    deleteFile : bool, optional
+        By default the output file created by TAPPy is deleted
+        automatically. Set to False to keep the file.
+    tappy : str, optional
+        Specify an alternate path to the TAPPy script.
+
+    Returns
+    -------
+
+    cName : list
+        Tidal constituent names.
+    cSpeed : list
+        Tidal constituent speeds (in degrees per hour).
+    cPhase : list
+        Tidal constituent phases (in degrees).
+    cAmplitude : list
+        Tidal constituent amplitudes (in metres).
+    cInference : list
+        Flag of whether the tidal constituent was inferred due to a
+        short time series for the given constituent.
+
     """
 
     try:
@@ -344,6 +463,27 @@ def parseTAPPyXML(file):
     TODO: Allow a list of constituents to be specified when calling
     parseTAPPyXML.
 
+    Parameters
+    ----------
+
+    file : str
+        Full path to a TAPPy output XML file.
+
+    Returns
+    -------
+
+    constituentName : list
+        Tidal constituent names.
+    constituentSpeed : list
+        Tidal constituent speeds (in degrees per hour).
+    constituentPhase : list
+        Tidal constituent phases (in degrees).
+    constituentAmplitude : list
+        Tidal constituent amplitudes (in metres).
+    constituentInference : list
+        Flag of whether the tidal constituent was inferred due to a
+        short time series for the given constituent.
+
     """
 
     try:
@@ -384,13 +524,27 @@ def getHarmonics(db, stationName, noisy=False):
     Use the harmonics database to extract the results of the harmonic analysis
     for a given station (stationName).
 
-    Returns tidal constituent data for that station:
-        - stationName
-        - amplitude (m)
-        - phase (degrees)
-        - speed (degrees per mean solar hour)
-        - constituent name
-        - inferredConstituent (true|false)
+    Parameters
+    ----------
+
+    db : str
+        Full path to the tidal harmonics SQLite database.
+    stationName : str
+        Station short name (i.e. table name).
+    noisy : bool, optional
+        Set to True to enable verbose output.
+
+    Returns
+    -------
+
+    siteHarmonics : dict
+        Contains all the harmonics data for the given tide station. Keys and units are:
+            - 'stationName' (e.g. 'AVO')
+            - 'amplitude' (m)
+            - 'phase' (degrees)
+            - 'speed' (degrees per mean solar hour)
+            - 'constituentName' (e.g. 'M2')
+            - 'inferredConstituent' ('true'|'false')
 
     """
 
@@ -459,6 +613,33 @@ def readPOLPRED(harmonics, noisy=False):
     getHarmonicsPOLPRED to extract the harmonics at a given loaction, or
     otherwise can be used to simply extract the positions of the POLCOMS grid.
 
+    Parameters
+    ----------
+
+    harmonics : str
+        Full path to the POLPRED ASCII data file.
+    noisy : bool, optional
+        Set to True to enable verbose output.
+
+    Returns
+    -------
+
+    header : dict
+        Contains the header data from the POLPRED ASCII file.
+    values : ndarray
+        Harmonic constituent data formatted as [x, y, nConst * [zZ, zG,
+        uZ, uG, vZ, vG]], where nConst is the number of constituents in
+        the POLPRED data (15) and z, u and v refer to surface elevation,
+        u-vector and v-vector components, respectively. The suffixes Z
+        and G refer to amplitude and phase of the z, u and v data.
+
+    See Also
+    --------
+
+    tide_tools.grid_polpred : Converts the POLPRED data into a
+        rectangular gridded data set with values of -999.9 outside the
+        POLPRED domain.
+
     """
 
     import numpy as np
@@ -505,7 +686,7 @@ def gridPOLPRED(values, noisy=False):
     location. As such, the lat and long positions are stored in two 1D arrays.
     For the purposes of subsampling, it is much more convenient to have a
     rectangular grid. However, since the POLCOMS model domain is not
-    rectangular, it is not possible to simply reshape the POLPRED grid.
+    rectangular, it is not possible to simply reshape the POLPRED data.
 
     To create a rectangular grid, this function builds a lookup table which
     maps locations in the 1D arrays to the equivalent in the 2D array. This is
@@ -528,9 +709,34 @@ def gridPOLPRED(values, noisy=False):
     Where no data exist (i.e. outside the POLPRED domain), set all values as
     -999.9 (as per POLPRED's land value).
 
-    As input, give the output of readPOLPRED (values).
+    Parameters
+    ----------
 
-    Returns three rectangular arrays (PX, PY and PZ), of which the last is 3D.
+    values : ndarray
+        Output from readPOLPRED(). See `tide_tools.readPOLPRED'.
+    noisy : bool, optional
+        Set to True to enable verbose output.
+
+    Returns
+    -------
+
+    PX : ndarray
+        X values created using np.meshgrid.
+    PY : ndarray
+        Y values created using np.meshgrid.
+    PZ : ndarray
+        3D array of harmonic constituent values for the 15 harmonics in
+        the POLPRED data at each location in PX and PY. The first two
+        dimensions are x and y values (in latitude and longitdue) and
+        the third dimension is the amplitude and phases for each of the
+        15 constituents for z, u and v data.
+
+    See Also
+    --------
+
+    tide_tools.readPOLPRED : Reads in the POLPRED ASCII data.
+    tide_tools.getHarmonicsPOLPRED : Extract tidal harmonics within a
+        threshold distance of a supplied coordinate.
 
     """
 
@@ -559,28 +765,57 @@ def gridPOLPRED(values, noisy=False):
 
 def getHarmonicsPOLPRED(harmonics, constituents, lon, lat, stations, noisy=False, distThresh=0.5):
     """
-    Function to extract the given constituents (as an array) at the positions
-    defined by lon and lat from a given POLPRED text file. Uses readPOLPRED to
-    read in the specified text file.
+    Function to extract the given constituents at the positions defined
+    by lon and lat from a given POLPRED text file.
 
-    The nearest POLPRED grid point to each in lon and lat will be calculated
-    using findNearestPoint in grid_tools.
-
-    Supply a list of names for the stations. This will be used to generate a
+    The supplied list of names for the stations will be used to generate a
     dict whose structure matches that I've used in the plot_harmonics.py
     script.
 
-    Returns a dict whose keys are the station names. Within each of those dicts
-    is another dict whose keys are 'amplitude', 'phase' and 'constituentName'.
-    In addition to the elevation amplitude and phases, the u and v amplitudes
-    and phases are also extract into the dict, with the keys 'uH', 'vH', 'uG'
-    and 'vG'. Finally, the positions from the POLPRED data is stored with the
-    keys 'latitude' and 'longitude'. The length of the arrays within each of
-    the secondary dicts is dependent on the number of constituents requested.
+    Parameters
+    ----------
 
-    A distance threshold is required for findNearestPoint. If omitted, it is 0.5.
+    harmonics : str
+        Full path to the POLPRED ASCII harmonics data.
+    constituents : list
+        List of tidal constituent names to extract (e.g. ['M2', 'S2']).
+    lon, lat : ndarray
+        Longitude and latitude positions to find the closest POLPRED
+        data point. Uses grid_tools.findNearestPoint to identify the
+        closest point. See distThresh below.
+    stations : list
+        List of tide station names (or coordinates) which are used as
+        the keys in the output dict.
+    noisy : bool, optional
+        Set to True to enable verbose output.
+    distThresh : float, optional
+        Give a value (in the units of lon and lat) which limits the
+        distance to which POLPRED points are returned. Essentially gives
+        an upper threshold distance beyond which a point is considered
+        not close enough.
 
-    Optionally specify noisy=True to turn on verbose output.
+    Returns
+    -------
+
+    out : dict
+        A dict whose keys are the station names. Within each of those
+        dicts is another dict whose keys are 'amplitude', 'phase' and
+        'constituentName'.
+        In addition to the elevation amplitude and phases, the u and v
+        amplitudes and phases are also extract into the dict, with the
+        keys 'uH', 'vH', 'uG' and 'vG'.
+        Finally, the positions from the POLPRED data is stored with the
+        keys 'latitude' and 'longitude'. The length of the arrays within
+        each of the secondary dicts is dependent on the number of
+        constituents requested.
+
+    See Also
+    --------
+
+    tide_tools.readPOLPRED : Read in the POLPRED data to split the ASCII
+        file into a header dict and an ndarray of values.
+    grid_tools.findNearestPoint : Find the closest point in one set of
+        coordinates to a specified point or set of points.
 
     """
 
