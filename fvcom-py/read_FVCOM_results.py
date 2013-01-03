@@ -21,6 +21,25 @@ def readFVCOM(file, varList, clipDims=False, noisy=False):
 
     Any dimension not given in clipDims will be extracted in full.
 
+    Parameters
+    ----------
+
+    file : str
+        Full path to an FVCOM NetCDF output file.
+    varList : list
+        List of variable names to be extracted.
+    clipDims : dict, optional
+        Dict whose keys are dimensions and whose values are a string of either a range (e.g. {'time':'0:100'}) or a list of individual indices (e.g. {'time':'[0, 1, 80, 100]'}).
+    noisy : bool
+        Set to True to enable verbose output.
+
+    Returns
+    -------
+
+    FVCOM : dict
+        Dict of data extracted from the NetCDF file. Keys are those
+        given in varList and the data are stored as ndarrays.
+
     """
 
     try:
@@ -82,6 +101,22 @@ def getSurfaceElevation(Z, idx):
 
     Z is usually extracted from the dict created when using readFVCOM() on a
     NetCDF file.
+
+    Parameters
+    ----------
+
+    Z : ndarray
+        Unstructured array of surface elevations with time.
+    idx : list
+        List of indices from which to extract time series of surface
+        elevations.
+
+    Returns
+    -------
+
+    surfaceElevation : ndarray
+        Time series of surface elevations at the indices supplied in
+        idx.
 
     """
     try:
