@@ -20,7 +20,18 @@ the end.
 
 
 def readESRIShapeFile(file, fileOut):
-    """ Convert ESRI ShapeFiles to SMS-compatible CST files. """
+    """
+    Convert ESRI ShapeFiles to SMS-compatible CST files.
+
+    Parameters
+    ----------
+
+    file : str
+        Full path to the ESRI ShapeFile to convert.
+    fileOut : str
+        Full path to the output file.
+
+    """
 
     try:
         import shapefile
@@ -50,7 +61,6 @@ def readESRIShapeFile(file, fileOut):
     fileWrite.close()
 
 
-
 def readArcMIKE(file, fileOut):
     """
     Read in a set of MIKE arc files and export to CST format compatible with
@@ -65,6 +75,14 @@ def readArcMIKE(file, fileOut):
     In the CST format, the depth is typically zero, but we'll read it from the
     MIKE z value and add it to the output file nevertheless. For the
     conversion, we don't need the ID, so we can ignore that.
+
+    Parameters
+    ----------
+
+    file : str
+        Full path to the DHI MIKE21 arc files.
+    fileOut : str
+        Full path to the output file.
 
     """
     fileRead = open(file, 'r')
