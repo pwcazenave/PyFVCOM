@@ -270,15 +270,42 @@ def residualFlow(FVCOM, idxRange=False, checkPlot=False, noisy=False):
     to 101st time step.  Alternatively, specify idxRange as 'daily' or
     'spring-neap' for daily and spring neap cycle residuals.
 
-    Returns resDir, resMag, uRes and vRes, which are the residual direction and
-    magnitude, as well as the raw u and v vector arrays.
+    Parameters
+    ----------
 
-    Supply checkPlot=101 to check the results with the 100th element and the
-    first layer of the u and v arrays in FVCOM (Python counts from zero).
+    FVCOM : dict
+        Contains the FVCOM model results.
+    idxRange : list or str, optional
+        If a list, the start and end index for the time series analysis.
+        If a string, then must be one of 'daily' or 'spring-neap' to
+        clip the time series to a day or a spring-neap cycle.
+    checkPlot : int
+        Plot a PVD at element checkPlot of the first vertical layer to
+        check the code is working properly.
+    noisy : bool
+        Set to True to enable verbose output.
 
-    noisy=False by default, give noisy=True to turn on verbose messages.
+    Returns
+    -------
+
+    uRes : ndarray
+        Raw summed velocity u-direction vector component. Useful for PVD
+        plots.
+    vRes : ndarray
+        Raw summed velocity v-direction vector component. Useful for PVD
+        plots.
+    rDir : ndarray
+        Residual direction array for each element centre in the
+        unstructured grid.
+    rMag : ndarray
+        Residual magnitude array for each element centre in the
+        unstructured grid.
+
+    Notes
+    -----
 
     Based on my MATLAB do_residual.m function.
+
 
     """
 
@@ -345,7 +372,7 @@ def residualFlow(FVCOM, idxRange=False, checkPlot=False, noisy=False):
 
         for ii in xrange(nTimeSteps):
             # Create progressive vectors for all time steps in the current layer
-            if noisy and np.mod(ii, 100) == 0:
+            if noisy and np.mod(ii, 99 == 0):
                 print 'Create PVD at time step {} of {}'.format(ii +1, nTimeSteps)
 
             uRes[ii, hh, :] = uRes[ii, hh, :] + (uSum[ii, hh, :] * (dt * toSecFactor))
