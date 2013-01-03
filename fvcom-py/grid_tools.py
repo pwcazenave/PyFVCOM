@@ -12,6 +12,30 @@ def parseUnstructuredGridSMS(mesh):
     Reads in the SMS unstructured grid format. Also creates IDs for output to
     MIKE unstructured grid format.
 
+    Parameters
+    ----------
+
+    mesh : str
+        Full path to an SMS unstructured grid (.2dm) file.
+
+    Returns
+    -------
+
+    triangle : ndarray
+        Integer array of shape (ntri, 3). Each triangle is composed of
+        three points and this contains the three node numbers (stored in
+        nodes) which refer to the coordinates in X and Y (see below).
+    nodes : ndarray
+        Integer number assigned to each node.
+    X, Y, Z : ndarray
+        Coordinates of each grid node and any associated Z value.
+    types : ndarray
+        Classification for each node string based on the number of node
+        strings + 2. This is mainly for use if converting from SMS .2dm
+        grid format to DHI MIKE21 .mesh format since the latter requires
+        unique IDs for each boundary (with 0 and 1 reserved for land and
+        sea nodes).
+
     """
 
     fileRead = open(mesh, 'r')
@@ -75,11 +99,32 @@ def parseUnstructuredGridSMS(mesh):
     Y = np.asarray(y)
     Z = np.asarray(z)
 
-    return(triangle, nodes, X, Y, Z, types)
+    return triangle, nodes, X, Y, Z, types
 
 
 def parseUnstructuredGridFVCOM(mesh):
-    """ Reads in the FVCOM unstructured grid format. """
+    """
+    Reads in the FVCOM unstructured grid format.
+
+    Parameters
+    ----------
+
+    mesh : str
+        Full path to the FVCOM unstructured grid file (.dat usually).
+
+    Returns
+    -------
+
+    triangle : ndarray
+        Integer array of shape (ntri, 3). Each triangle is composed of
+        three points and this contains the three node numbers (stored in
+        nodes) which refer to the coordinates in X and Y (see below).
+    nodes : ndarray
+        Integer number assigned to each node.
+    X, Y, Z : ndarray
+        Coordinates of each grid node and any associated Z value.
+
+    """
 
     fileRead = open(mesh, 'r')
     # Skip the file header (two lines)
@@ -112,7 +157,7 @@ def parseUnstructuredGridFVCOM(mesh):
     Y = np.asarray(y)
     Z = np.asarray(z)
 
-    return(triangle, nodes, X, Y, Z)
+    return triangle, nodes, X, Y, Z
 
 
 def parseUnstructuredGridMIKE(mesh, flipZ=True):
@@ -121,6 +166,32 @@ def parseUnstructuredGridMIKE(mesh, flipZ=True):
 
     Depth sign is typically reversed (i.e. z*-1) but can be disabled by
     passing flipZ=False.
+
+    Parameters
+    ----------
+
+    mesh : str
+        Full path to the DHI MIKE21 unstructured grid file (.mesh usually).
+    flipZ : bool, optional
+        DHI MIKE21 unstructured grids store the z value as positive down
+        whereas FVCOM wants negative down. The conversion is
+        automatically applied unless flipZ is set to False.
+
+    Returns
+    -------
+
+    triangle : ndarray
+        Integer array of shape (ntri, 3). Each triangle is composed of
+        three points and this contains the three node numbers (stored in
+        nodes) which refer to the coordinates in X and Y (see below).
+    nodes : ndarray
+        Integer number assigned to each node.
+    X, Y, Z : ndarray
+        Coordinates of each grid node and any associated Z value.
+    types : ndarray
+        Classification for each open boundary. DHI MIKE21 .mesh format
+        requires unique IDs for each open boundary (with 0 and 1
+        reserved for land and sea nodes).
 
     """
 
@@ -162,7 +233,7 @@ def parseUnstructuredGridMIKE(mesh, flipZ=True):
     else:
         Z = np.asarray(z)
 
-    return(triangle, nodes, X, Y, Z, types)
+    return triangle, nodes, X, Y, Z, types
 
 
 def writeUnstructuredGridSMS(triangles, nodes, x, y, z, types, mesh):
@@ -173,9 +244,9 @@ def writeUnstructuredGridSMS(triangles, nodes, x, y, z, types, mesh):
 
     Input data is probably best obtained from one of:
 
-        parseUnstructuredGridSMS()
-        parseUnstructuredGridFVCOM()
-        parseUnstructuredGridMIKE()
+        grid_tools.parseUnstructuredGridSMS()
+        grid_tools.parseUnstructuredGridFVCOM()
+        grid_tools.parseUnstructuredGridMIKE()
 
     which read in the relevant grids and output the required information for
     this function.
@@ -192,6 +263,25 @@ def writeUnstructuredGridSMS(triangles, nodes, x, y, z, types, mesh):
         4. NS prefix for the node strings which indicate the open boundaries.
 
     As far as I can tell, the footer is largely irrelevant for FVCOM purposes.
+
+    Parameters
+    ----------
+
+    triangles : ndarray
+        Integer array of shape (ntri, 3). Each triangle is composed of
+        three points and this contains the three node numbers (stored in
+        nodes) which refer to the coordinates in X and Y (see below).
+    nodes : ndarray
+        Integer number assigned to each node.
+    x, y, z : ndarray
+        Coordinates of each grid node and any associated Z value.
+    types : ndarray
+        Classification for each open boundary. DHI MIKE21 .mesh format
+        requires unique IDs for each open boundary (with 0 and 1
+        reserved for land and sea nodes). Similar values can be used in
+        SMS grid files too.
+    mesh : str
+        Full path to the output file name.
 
     """
 
@@ -312,13 +402,21 @@ def writeUnstructuredGridSMSBathy(triangles, nodes, z, PTS):
     """
     Writes out the additional bathymetry file sometimes output by SMS. Not sure
     why this is necessary as it's possible to put the depths in the other file,
-    but hey ho, it is obviously sometimes necessary. Input is:
+    but hey ho, it is obviously sometimes necessary.
 
-        - triangles, nodes and z output by one of three parsing functions
-        parseUnstructuredGridSSMS(), parseUnstructuredGridFVCOM() and
-        parseUnstructuredGridMIKE(). Mainly for the number of nodes in the
-        points file header.
-        - a string of the output file name
+    Parameters
+    ----------
+
+    triangle : ndarray
+        Integer array of shape (ntri, 3). Each triangle is composed of
+        three points and this contains the three node numbers (stored in
+        nodes) which refer to the coordinates in X and Y (see below).
+    nodes : ndarray
+        Integer number assigned to each node.
+    z : ndarray
+        Z values at each node location.
+    PTS : str
+        Full path of the output file name.
 
     """
 
@@ -352,9 +450,30 @@ def writeUnstructuredGridSMSBathy(triangles, nodes, z, PTS):
 
 def writeUnstructuredGridMIKE(triangles, nodes, x, y, z, types, mesh):
     """
-    Write out a DHI MIKE mesh file from the supplied triangles, nodes, x, y, z
-    and types values. If types is empty, then zeros will be written out for all
-    nodes.
+    Write out a DHI MIKE unstructured grid (mesh) format file. This
+    assumes the input coordinates are in longitude and latitude. If they
+    are not, the header will need to be modified with the appropriate
+    string (which is complicated and of which I don't have a full list).
+
+    If types is empty, then zeros will be written out for all nodes.
+
+    Parameters
+    ----------
+
+    triangles : ndarray
+        Integer array of shape (ntri, 3). Each triangle is composed of
+        three points and this contains the three node numbers (stored in
+        nodes) which refer to the coordinates in X and Y (see below).
+    nodes : ndarray
+        Integer number assigned to each node.
+    x, y, z : ndarray
+        Coordinates of each grid node and any associated Z value.
+    types : ndarray
+        Classification for each open boundary. DHI MIKE21 .mesh format
+        requires unique IDs for each open boundary (with 0 and 1
+        reserved for land and sea nodes).
+    mesh : str
+        Full path to the output mesh file.
 
     """
     fileWrite = open(mesh, 'w')
@@ -411,11 +530,23 @@ def plotUnstructuredGrid(triangles, nodes, x, y, z, colourLabel, addText=False, 
     Takes the output of parseUnstructuredGridFVCOM() or
     parseUnstructuredGridSMS() and readFVCOM() and plots it.
 
-    Give triangles, nodes, x, y, z and a label for the colour scale. The first
-    five arguments are the output of parseUnstructuredGridFVCOM() or
-    parseUnstructuredGridSMS(). Optionally append addText=True|False and
-    addMesh=True|False to enable/disable node numbers and grid overlays,
-    respectively.
+    Parameters
+    ----------
+
+    triangles : ndarray
+        Integer array of shape (ntri, 3). Each triangle is composed of
+        three points and this contains the three node numbers (stored in
+        nodes) which refer to the coordinates in X and Y (see below).
+    nodes : ndarray
+        Integer number assigned to each node.
+    x, y, z : ndarray
+        Coordinates of each grid node and any associated Z value.
+    colourLabel : str
+        String to add to the colour bar label.
+    addText : bool, optional
+        If True, add each node number to the plot.
+    addMesh : bool, optional
+        If True, overlay the grid mesh on the plot.
 
     """
 
@@ -501,17 +632,48 @@ def plotUnstructuredGridProjected(triangles, nodes, x, y, z, colourLabel, addTex
 
 def findNearestPoint(FX, FY, x, y, maxDistance=np.inf, noisy=False):
     """
-    Given some point(s) x and y, find the nearest grid node in FX and FY.
+    Given some point(s) x and y, find the nearest grid node in FX and
+    FY.
 
-    Returns the nearest coordinate(s), distance(s) from the point(s) and the
-    index in the respective array(s).
+    Returns the nearest coordinate(s), distance(s) from the point(s) and
+    the index in the respective array(s).
 
-    Optionally specify a maximum distance (in the same units as the input) to
-    only return grid positions which are within that distance. This means if
-    your point lies outside the grid, for example, you can use maxDistance to
-    filter it out. Positions and indices which cannot be found within
-    maxDistance are returned as NaN; distance is always returned, even if the
-    maxDistance threshold has been exceeded.
+    Optionally specify a maximum distance (in the same units as the
+    input) to only return grid positions which are within that distance.
+    This means if your point lies outside the grid, for example, you can
+    use maxDistance to filter it out. Positions and indices which cannot
+    be found within maxDistance are returned as NaN; distance is always
+    returned, even if the maxDistance threshold has been exceeded.
+
+    Parameters
+    ----------
+
+    FX, FY : ndarray
+        Coordinates within which to search for the nearest point given
+        in x and y.
+    x, y : ndarray
+        List of coordinates to find the closest value in FX and FY.
+        Upper threshold of distance is given by maxDistance (see below).
+    maxDistance : float, optional
+        Unless given, there is no upper limit on the distance away from
+        the source for which a result is deemed valid. Any other value
+        specified here limits the upper threshold.
+    noisy : bool, optional
+        Set to True to enable verbose output.
+
+    Returns
+    -------
+
+    nearestX, nearestY : ndarray
+        Coordinates from FX and FY which are within maxDistance (if
+        given) and closest to the corresponding point in x and y.
+    distance : ndarray
+        Distance between each point in x and y and the closest value in
+        FX and FY. Even if maxDistance is given (and exceeded), the
+        distance is reported here.
+    index : ndarray
+        List of indices of FX and FY for the closest positions to those
+        given in x, y.
 
     """
 
@@ -558,6 +720,22 @@ def elementSideLengths(triangles, x, y):
     parseUnstructuredGridSMS(), parseUnstructuredGridFVCOM() or
     parseUnstructuredGridMIKE() on a given SMS, FVCOM or MIKE grid file.
 
+    Parameters
+    ----------
+
+    triangles : ndarray
+        Integer array of shape (ntri, 3). Each triangle is composed of
+        three points and this contains the three node numbers (stored in
+        nodes) which refer to the coordinates in X and Y (see below).
+    x, y : ndarray
+        Coordinates of each grid node.
+
+    Returns
+    -------
+
+    elemSides : ndarray
+        Length of each element described by triangles and x, y.
+
     """
 
     elemSides = np.zeros([np.shape(triangles)[0], 3])
@@ -569,16 +747,38 @@ def elementSideLengths(triangles, x, y):
         elemSides[it,1] = sqrt((pos2x - pos3x)**2 + (pos2y - pos3y)**2)
         elemSides[it,2] = sqrt((pos3x - pos1x)**2 + (pos3y - pos1y)**2)
 
+    return elemSides
+
 
 def fixCoordinates(FVCOM, UTMZone, inVars=['x', 'y']):
     """
-    Use the UTMtoLL function to convert the grid from UTM to Lat/Long. Returns
-    longitude and latitude in the range -180 to 180.
+    Use the UTMtoLL function to convert the grid from UTM to Lat/Long.
+    Returns longitude and latitude in the range -180 to 180.
 
-    By default, the variables which will be converted from UTM to Lat/Long are
-    'x' and 'y'. To specify a different pair, give inVars=['xc', 'yc'], for
-    example, to convert the 'xc' and 'yc' variables instead. Their order should
-    be x-direction followed by y-direction.
+    By default, the variables which will be converted from UTM to
+    Lat/Long are 'x' and 'y'. To specify a different pair, give
+    inVars=['xc', 'yc'], for example, to convert the 'xc' and 'yc'
+    variables instead. Their order should be x-direction followed by
+    y-direction.
+
+    Parameters
+    ----------
+
+    FVCOM : dict
+        Dict of the FVCOM model results (see
+        read_FVCOM_results.readFVCOM).
+    UTMZone : str
+        UTM Zone (e.g. '30N').
+    inVars : list, optional
+        List of strings specifying the keys for FVCOM to be used as
+        input. Defaults to ['x', 'y'] but if you wanted to convert
+        element centres, change to ['xc, 'yc'] instead.
+
+    Returns
+    -------
+
+    X, Y : ndarray
+        Converted coordinates in longitude and latitude.
 
     """
 
@@ -591,7 +791,7 @@ def fixCoordinates(FVCOM, UTMZone, inVars=['x', 'y']):
         Y = np.zeros(np.shape(FVCOM[inVars[1]])) * np.nan
         X = np.zeros(np.shape(FVCOM[inVars[0]])) * np.nan
     except IOError:
-        print 'Couldn''t find the x or y variables in the supplied FVCOM dict. Check you loaded them and try again.'
+        print 'Couldn''t find the {} or {} variables in the supplied FVCOM dict. Check you loaded them and try again.'.format(inVars[0], inVars[1])
 
     for count, posXY in enumerate(zip(FVCOM[inVars[0]], FVCOM[inVars[1]])):
 
@@ -613,9 +813,25 @@ def fixCoordinates(FVCOM, UTMZone, inVars=['x', 'y']):
 
 def plotCoast(coastline):
     """
-    Take an ESRI shapefile and output the paths required by matplotlib.patches.
-    This is until I get the new version of matplotlib which does Basemap with
-    unstructured grids.
+    Take an ESRI shapefile and output the paths required by
+    matplotlib.patches.  This is until I get the new version of
+    matplotlib which does Basemap with unstructured grids.
+
+    Parameters
+    ----------
+
+    coastline : str
+        Full path to an ESRI ShapeFile of a coastline.
+
+    Returns
+    -------
+
+    paths : list
+        List of matplotlib.path.Paths which can be used with
+        matplotlib.patches.PathPatch to plot the ShapeFile.
+
+    Notes
+    -----
 
     Lifted from:
     http://ondrejintheair.blogspot.co.uk/2011/11/plot-polygon-shapefiles-using-ogr-and.html
