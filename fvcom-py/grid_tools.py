@@ -686,14 +686,22 @@ def findNearestPoint(FX, FY, x, y, maxDistance=np.inf, noisy=False):
     distance = np.empty(np.shape(x))
 
     # Make all values NaN
-    nearestX[:] = np.NaN
-    nearestY[:] = np.NaN
-    index[:] = np.NaN
-    distance[:] = np.NaN
+    nearestX = nearestX.ravel() * np.NaN
+    nearestY = nearestY.ravel() * np.NaN
+    index = index.ravel() * np.NaN
+    distance = distance.ravel() * np.NaN
 
-    for cnt, pointXY in enumerate(zip(x, y)):
+    if np.ndim(x) == 0:
+        todo = np.column_stack([x, y])
+    else:
+        todo = zip(x, y)
+
+    for cnt, pointXY in enumerate(todo):
         if noisy:
-            print 'Point {} of {}'.format(cnt + 1, np.shape(x)[0])
+            if np.ndim(x) == 0:
+                print 'Point {} of {}'.format(cnt + 1, 1)
+            else:
+                print 'Point {} of {}'.format(cnt + 1, np.shape(x)[0])
 
         findX, findY = FX - pointXY[0], FY - pointXY[1]
         vectorDistances = np.sqrt(findX**2 + findY**2)
