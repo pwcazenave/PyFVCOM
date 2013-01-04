@@ -299,11 +299,11 @@ def getObservedMetadata(db, originator=False):
 
     return lat, lon, site, longName
 
-def cleanObservedData(data):
+def cleanObservedData(data, removeResidual=False):
     """
-    Process the observed raw data to a more sensible format by setting a
-    mask for flagged and NaN values. Also convert from Gregorian dates
-    to Modified Julian Day (to match FVCOM model output times).
+    Process the observed raw data to a more sensible format. Also
+    convert from Gregorian dates to Modified Julian Day (to match FVCOM
+    model output times).
 
     Parameters
     ----------
@@ -311,6 +311,9 @@ def cleanObservedData(data):
     data : ndarray
         Array of [YYYY, MM, DD, hh, mm, ss, zeta, flag] data output by
         getObservedData().
+    removeResidual : bool, optional
+        If True, remove any residual values. Where such data are absent
+        (marked by values of -9999 or -99.0), no removal is performed.
 
     Returns
     -------
@@ -319,7 +322,9 @@ def cleanObservedData(data):
         Modified Julian Days of the input data.
     tideDataMSL : ndarray
         Time series of surface elevations from which the mean surface
-        elevation has been subtracted.
+        elevation has been subtracted. If removeResidual is True, these
+        values will omit the atmospheric effects, leaving a harmonic
+        signal only.
     npFlagsData : ndarray
         Flag values from the SQLite database (usually -9999, or P, N
         etc. if BODC data).
@@ -346,6 +351,7 @@ def cleanObservedData(data):
 
     # Extract the time and tide data
     allObsTideData = np.asarray(npObsData[:,6])
+    allObsTideResidual = np.asarray(npObsData[:, 7])
     allDateTimes = np.asarray(npObsData[:,0:6], dtype=float)
 
     dateMJD = julianDay(allDateTimes, mjd=True)
@@ -354,6 +360,12 @@ def cleanObservedData(data):
     # mean (excluding nodata values (-99 for NTSLF, -9999 for SHOM))
     # and removing that from the elevation.
     tideDataMSL = allObsTideData - np.mean(allObsTideData[allObsTideData>-99])
+
+    if removeResidual:
+        tideDataMSL = tideDataMSL[allObsTideResidual > -99] - allObsTideResidual[allObsTideResidual > -99]
+        dateMJD = dateMJD[allObsTideResidual > -99]
+        npFlagData = npFlagData[allObsTideResidual > -99]
+        allDateTimes = allDateTimes[allObsTideResidual > -99]
 
     return dateMJD, tideDataMSL, npFlagData, allDateTimes
 
