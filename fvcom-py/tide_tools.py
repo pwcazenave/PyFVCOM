@@ -362,10 +362,11 @@ def cleanObservedData(data, removeResidual=False):
     tideDataMSL = allObsTideData - np.mean(allObsTideData[allObsTideData>-99])
 
     if removeResidual:
-        tideDataMSL = tideDataMSL[allObsTideResidual > -99] - allObsTideResidual[allObsTideResidual > -99]
-        dateMJD = dateMJD[allObsTideResidual > -99]
-        npFlagData = npFlagData[allObsTideResidual > -99]
-        allDateTimes = allDateTimes[allObsTideResidual > -99]
+        # Replace the residuals to remove with zeros where they're -99
+        # or -9999 since the net effect at those times is "we don't have
+        # a residual, so just leave the original value alone".
+        allObsTideResidual[allObsTideResidual <= -99] = 0
+        tideDataMSL = tideDataMSL - allObsTideResidual
 
     return dateMJD, tideDataMSL, npFlagData, allDateTimes
 
