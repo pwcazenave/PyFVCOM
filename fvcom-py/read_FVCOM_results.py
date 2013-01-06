@@ -94,6 +94,73 @@ def readFVCOM(file, varList, clipDims=False, noisy=False):
 
     return FVCOM
 
+
+def elems2nodes(elems, tri, nvert, noisy=False):
+    """
+    Calculate a nodal value based on the average value for the elements
+    of which it a part. This necessarily involves an average, so the
+    conversion from nodes2elems and elems2nodes is not necessarily
+    reversible.
+
+    Parameters
+    ----------
+
+    elems : ndarray
+        Array of unstructured grid element values to move to the element
+        nodes.
+    tri : ndarray
+        Array of shape (nelem, 3) comprising the list of connectivity
+        for each element.
+    nvert : int
+        Number of nodes (vertices) in the unstructured grid.
+
+    Returns
+    -------
+
+    nodes : ndarray
+        Array of values at the grid nodes.
+
+    """
+
+    try:
+        import numpy as np
+    except ImportError:
+        raise ImportError('NumPy not found')
+
+    count = np.zeros(nvert, dtype=int)
+
+    # Deal with 1D and 2D element arrays separatey
+    if np.ndim(elems) == 1:
+        nodes = np.zeros(nvert)
+        for i, indices in enumerate(tri):
+            n0, n1, n2 = indices
+            nodes[n0] = nodes[n0] + elems[i]
+            nodes[n1] = nodes[n1] + elems[i]
+            nodes[n2] = nodes[n2] + elems[i]
+            count[n0] = count[n0] + 1
+            count[n1] = count[n1] + 1
+            count[n2] = count[n2] + 1
+
+    elif np.ndim(elems) == 2:
+        nodes = np.zeros((np.shape(elems)[0], nvert))
+        for i, indices in enumerate(tri):
+            n0, n1, n2 = indices
+            nodes[:, n0] = nodes[:, n0] + elems[:, i]
+            nodes[:, n1] = nodes[:, n1] + elems[:, i]
+            nodes[:, n2] = nodes[:, n2] + elems[:, i]
+            count[n0] = count[n0] + 1
+            count[n1] = count[n1] + 1
+            count[n2] = count[n2] + 1
+    else:
+        raise 'Too many dimensions (maximum of two)'
+
+    # Now calculate the average for each node based on the number of
+    # elements of which it is a part.
+    nodes = nodes / count
+
+    return nodes
+
+
 def getSurfaceElevation(Z, idx):
     """
     Extract the surface elevation from Z at index ind. If ind is multiple
