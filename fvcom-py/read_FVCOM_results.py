@@ -129,7 +129,7 @@ def elems2nodes(elems, tri, nvert, noisy=False):
 
     count = np.zeros(nvert, dtype=int)
 
-    # Deal with 1D and 2D element arrays separatey
+    # Deal with 1D and 2D element arrays separately
     if np.ndim(elems) == 1:
         nodes = np.zeros(nvert)
         for i, indices in enumerate(tri):
