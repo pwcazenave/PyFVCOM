@@ -161,6 +161,46 @@ def elems2nodes(elems, tri, nvert, noisy=False):
     return nodes
 
 
+def nodes2elems(nodes, tri, noisy=False):
+    """
+    Calculate a element centre value based on the average value for the
+    nodes from which it is formed.  This necessarily involves an
+    average, so the conversion from nodes2elems and elems2nodes is not
+    necessarily reversible.
+
+    Parameters
+    ----------
+
+    nodes : ndarray
+        Array of unstructured grid node values to move to the element
+        centres.
+    tri : ndarray
+        Array of shape (nelem, 3) comprising the list of connectivity
+        for each element.
+
+    Returns
+    -------
+
+    elems : ndarray
+        Array of values at the grid nodes.
+
+    """
+
+    nvert = np.shape(tri)[0]
+
+    if np.ndim(elems) == 1:
+        elems = np.zeros(nvert)
+        for i, indices in enumerate(tri):
+            elems[i] = np.mean(nodes[indices])
+
+    elif np.ndim(elems) == 2:
+        elems = np.zeros((np.shape(nodes)[0], nvert))
+        for i, indices in enumerate(tri):
+            elems[:, i] = np.mean(nodes[:, indices])
+    else:
+        raise 'Too many dimensions (maximum of two)'
+
+
 def getSurfaceElevation(Z, idx):
     """
     Extract the surface elevation from Z at index ind. If ind is multiple
