@@ -164,8 +164,8 @@ def elems2nodes(elems, tri, nvert, noisy=False):
 def nodes2elems(nodes, tri, noisy=False):
     """
     Calculate a element centre value based on the average value for the
-    nodes from which it is formed.  This necessarily involves an
-    average, so the conversion from nodes2elems and elems2nodes is not
+    nodes from which it is formed. This necessarily involves an average,
+    so the conversion from nodes2elems and elems2nodes is not
     necessarily reversible.
 
     Parameters
