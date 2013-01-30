@@ -780,7 +780,7 @@ def fixCoordinates(FVCOM, UTMZone, inVars=['x', 'y']):
     inVars : list, optional
         List of strings specifying the keys for FVCOM to be used as
         input. Defaults to ['x', 'y'] but if you wanted to convert
-        element centres, change to ['xc, 'yc'] instead.
+        element centres, change to ['xc', 'yc'] instead.
 
     Returns
     -------
@@ -880,3 +880,59 @@ def plotCoast(coastline):
 
     return paths
 
+
+def clipTri(MODEL, sideLength, keys=['xc', 'yc']):
+    """
+    Make a new triangulation of the element centres and clip according
+    to a maximum length.
+
+    Parameters
+    ----------
+
+    MODEL : dict
+        Contains the MODEL model results. Keys are those specified in
+        getVars.
+    sideLength : float
+        Maximum length of an element before it is clipped.
+    keys : list, optional
+        List of two keys to use as the x and y coordinates for the
+        triangulation. Defaults to ['xc', 'yc'].
+
+    Returns
+    -------
+
+    triClip : ndarray
+        Triangulation (indices of the coordinates which make up an
+        element) of the new clipped elements. This can be used with the
+        input coordinates in MODEL to plot the new unstructured grid.
+
+    """
+
+    import matplotlib.delaunay as triang
+
+    cens, edg, tri, neig = triang.delaunay(MODEL[keys[0]], MODEL[keys[1]])
+
+    # Get the length of all element edges
+    xx, yy = MODEL[keys[0]][tri], MODEL[keys[1]][tri]
+    dx = np.empty(np.shape(xx))
+    dy = np.empty(np.shape(yy))
+    sxy = np.empty(np.shape(xx))
+    dx[:,0] = xx[:,0] - xx[:,1]
+    dx[:,1] = xx[:,1] - xx[:,2]
+    dx[:,2] = xx[:,2] - xx[:,0]
+    dy[:,0] = yy[:,0] - yy[:,1]
+    dy[:,1] = yy[:,1] - yy[:,2]
+    dy[:,2] = yy[:,2] - yy[:,0]
+    sxy[:,0] = np.sqrt(dx[:,0]**2 + dy[:,1]**2)
+    sxy[:,1] = np.sqrt(dx[:,1]**2 + dy[:,2]**2)
+    sxy[:,2] = np.sqrt(dx[:,2]**2 + dy[:,0]**2)
+
+    triClip = []
+    for i, t in enumerate(sxy):
+        if max(t) <= sideLength:
+            # Keep this element
+            triClip.append(tri[i])
+
+    triClip = np.asarray(triClip)
+
+    return triClip
