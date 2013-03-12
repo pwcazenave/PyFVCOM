@@ -338,7 +338,6 @@ def writeUnstructuredGridSMS(triangles, nodes, x, y, z, types, mesh):
         nodeBoundaries = nodes[types==boundaryType]
 
         nodeStrings = 0
-        oldNode = types[0]
         for counter, node in enumerate(nodeBoundaries):
             if counter+1 == len(nodeBoundaries) and node > 0:
                 node = -node
