@@ -1642,341 +1642,343 @@ class tappy(Util):
     def print_node_factor_table(self):
         pass
 
-@baker.command()
-def writeconfig(iniconffile = sys.argv[0] + '.ini'):
-    """OVERWRITES an ini style config file that holds all of default the command line options.
+if __name__ == '__main__':
 
-    :param iniconffile: the file name of the ini file, defaults to 'script.ini'.
-    """
+    @baker.command()
+    def writeconfig(iniconffile = sys.argv[0] + '.ini'):
+        """OVERWRITES an ini style config file that holds all of default the command line options.
 
-    baker.writeconfig(iniconffile = iniconffile)
+        :param iniconffile: the file name of the ini file, defaults to 'script.ini'.
+        """
 
-@baker.command()
-def prediction(
-        xml_filename,
-        start_date,
-        end_date,
-        interval,
-        include_inferred=True,
-        fname='-'):
-    '''Prediction based upon earlier constituent analysis saved in IHOTC XML transfer format.
+        baker.writeconfig(iniconffile = iniconffile)
 
-       :param xml_filename: The tidal constituents in IHOTC XML transfer format.
-       :param start_date: The start date as a ISO 8601 string. '2010-01-01T00:00:00'
-       :param end_date: The end date as a ISO 8601 string. '2011-01-01T00:00:00:00'
-       :param interval: The interval as the number of minutes.
-       :param include_inferred: Include the inferred constituents.
-       :param fname: Output filename, default is '-' to print to screen.
-    '''
-    import xml.etree.ElementTree as et
-    tree = et.parse(xml_filename)
-    root = tree.getroot()
-    rin = {}
-    phasein = {}
-    skey_list = []
-    for constituent in root.getiterator('Harmonic'):
-        inf = constituent.findtext('inferred')
-        if (not include_inferred) and (inf.lower() == 'true'):
-            continue
-        nam = constituent.findtext('name')
-        amp = constituent.findtext('amplitude')
-        pha = constituent.findtext('phaseAngle')
-        rin[nam] = float(amp)
-        phasein[nam] = float(pha)
-        skey_list.append(nam)
+    @baker.command()
+    def prediction(
+            xml_filename,
+            start_date,
+            end_date,
+            interval,
+            include_inferred=True,
+            fname='-'):
+        '''Prediction based upon earlier constituent analysis saved in IHOTC XML transfer format.
 
-    u = Util(rin, phasein)
-    u.dates = [datetime.datetime.strptime(start_date, '%Y-%m-%dT%H:%M:%S')]
-    delta = datetime.timedelta(minutes = int(interval))
-    nextdate = u.dates[0] + delta
-    end_date = datetime.datetime.strptime(end_date, '%Y-%m-%dT%H:%M:%S') + datetime.timedelta(minutes = 1)
-    while nextdate < end_date:
-        u.dates.append(nextdate)
-        nextdate = u.dates[-1] + delta
+           :param xml_filename: The tidal constituents in IHOTC XML transfer format.
+           :param start_date: The start date as a ISO 8601 string. '2010-01-01T00:00:00'
+           :param end_date: The end date as a ISO 8601 string. '2011-01-01T00:00:00:00'
+           :param interval: The interval as the number of minutes.
+           :param include_inferred: Include the inferred constituents.
+           :param fname: Output filename, default is '-' to print to screen.
+        '''
+        import xml.etree.ElementTree as et
+        tree = et.parse(xml_filename)
+        root = tree.getroot()
+        rin = {}
+        phasein = {}
+        skey_list = []
+        for constituent in root.getiterator('Harmonic'):
+            inf = constituent.findtext('inferred')
+            if (not include_inferred) and (inf.lower() == 'true'):
+                continue
+            nam = constituent.findtext('name')
+            amp = constituent.findtext('amplitude')
+            pha = constituent.findtext('phaseAngle')
+            rin[nam] = float(amp)
+            phasein[nam] = float(pha)
+            skey_list.append(nam)
 
-    package = u.astronomic(u.dates)
-    (zeta, nu, nup, nupp, kap_p, ii, R, Q, T, u.jd, s, h, Nv, p, p1) = package
+        u = Util(rin, phasein)
+        u.dates = [datetime.datetime.strptime(start_date, '%Y-%m-%dT%H:%M:%S')]
+        delta = datetime.timedelta(minutes = int(interval))
+        nextdate = u.dates[0] + delta
+        end_date = datetime.datetime.strptime(end_date, '%Y-%m-%dT%H:%M:%S') + datetime.timedelta(minutes = 1)
+        while nextdate < end_date:
+            u.dates.append(nextdate)
+            nextdate = u.dates[-1] + delta
 
-    # Should change this - runs ONLY to get tidal_dict filled in...
-    (speed_dict, key_list) = u.which_constituents(len(u.dates), package)
+        package = u.astronomic(u.dates)
+        (zeta, nu, nup, nupp, kap_p, ii, R, Q, T, u.jd, s, h, Nv, p, p1) = package
 
-    prediction = 0.0
-    try:
-        prediction = rin['Z0']
-    except KeyError:
-        pass
+        # Should change this - runs ONLY to get tidal_dict filled in...
+        (speed_dict, key_list) = u.which_constituents(len(u.dates), package)
 
-    try:
-        skey_list.remove('Z0')
-    except ValueError:
-        pass
-    prediction = prediction + u.sum_signals(skey_list, u.dates, u.tidal_dict)
+        prediction = 0.0
+        try:
+            prediction = rin['Z0']
+        except KeyError:
+            pass
 
-    u.write_file(u.dates, prediction, fname=fname)
+        try:
+            skey_list.remove('Z0')
+        except ValueError:
+            pass
+        prediction = prediction + u.sum_signals(skey_list, u.dates, u.tidal_dict)
+
+        u.write_file(u.dates, prediction, fname=fname)
 
 
-#=============================
-@baker.command(default=True)
-def analysis(
-        data_filename,
-        def_filename=None,
-        config=None,
-        quiet=False,
-        debug=False,
-        outputts=False,
-        outputxml='',
-        ephemeris=False,
-        rayleigh=1.0,
-        print_vau_table=False,
-        missing_data='ignore',
-        linear_trend=False,
-        remove_extreme=False,
-        zero_ts=None,
-        filter=None,
-        pad_filters=None,
-        include_inferred=True,
-        xmlname='A port in a storm',
-        xmlcountry='A man without a country',
-        xmllatitude=0.0,
-        xmllongitude=0.0,
-        xmltimezone='0000',
-        xmlcomments='No comment',
-        xmlunits='m',
-        xmldecimalplaces=None,
-        ):
-    '''Traditional analysis with separately calculated nodal factors.
-        Constituent amplitude units are the same as the input heights.
-        Constituent phases are based in the same time zone as the dates.
+    #=============================
+    @baker.command(default=True)
+    def analysis(
+            data_filename,
+            def_filename=None,
+            config=None,
+            quiet=False,
+            debug=False,
+            outputts=False,
+            outputxml='',
+            ephemeris=False,
+            rayleigh=1.0,
+            print_vau_table=False,
+            missing_data='ignore',
+            linear_trend=False,
+            remove_extreme=False,
+            zero_ts=None,
+            filter=None,
+            pad_filters=None,
+            include_inferred=True,
+            xmlname='A port in a storm',
+            xmlcountry='A man without a country',
+            xmllatitude=0.0,
+            xmllongitude=0.0,
+            xmltimezone='0000',
+            xmlcomments='No comment',
+            xmlunits='m',
+            xmldecimalplaces=None,
+            ):
+        '''Traditional analysis with separately calculated nodal factors.
+            Constituent amplitude units are the same as the input heights.
+            Constituent phases are based in the same time zone as the dates.
 
-       :param data_filename: The time-series of elevations to be analyzed.
-       :param def_filename: Containes the definition string to parse the input data.
-       :param config: Read command line options from config file, override config file entries on the command line.
-       :param quiet: Print nothing to the screen.
-       :param debug: Print debug messages.
-       :param outputts: Output time series for each constituent.
-       :param ephemeris: Print out ephemeris tables.
-       :param rayleigh: The Rayleigh coefficient is used to compare against to determine time series length to differentiate between two frequencies. [default: default]
-       :param missing_data: What should be done if there is missing data.  One of: fail, ignore, or fill. [default: default]
-       :param linear_trend: Include a linear trend in the least squares fit.
-       :param remove_extreme: Remove values outside of 2 standard deviations before analysis.
-       :param zero_ts: Zero the input time series before constituent analysis by subtracting filtered data. One of: transform,usgs,doodson,boxcar
-       :param filter:  Filter input data set with tide elimination filters. The -o outputts option is implied. Any mix separated by commas and no spaces: transform,usgs,doodson,boxcar
-       :param pad_filters: Pad input data set with values to return same size after filtering.  Realize edge effects are unavoidable.  One of ["tide", "minimum", "maximum", "mean", "median", "reflect", "wrap"]
-       :param include_inferred: Do not incorporate any inferred constituents into the least squares fit.
-       :param print_vau_table: For debugging - will print a table of V and u values to compare against Schureman.
-       :param outputxml: File name to output constituents as IHOTC XML format.
-       :param xmlname: Not used in analysis. Used ONLY to complete the XML file. Name of the station supplying the observations. Defaults to 'A port in a storm'.
-       :param xmlcountry: Not used in analysis. Used ONLY to complete the XML file. Name of the country containing the station. Defaults to 'A man without a country'.
-       :param xmllatitude: Not used in analysis. Used ONLY to complete the XML file. Latitude of the station. Defaults to 0.0.
-       :param xmllongitude: Not used in analysis. Used ONLY to complete the XML file. Longitude of the station. Defaults to 0.0.
-       :param xmltimezone: Not used in analysis. Used ONLY to complete the XML file. Time zone of the station. Defaults to '0000'.
-       :param xmlcomments: Not used in analysis. Used ONLY to complete the XML file. Station comments. Defaults to 'No comment'.
-       :param xmlunits: Not used in analysis. Used ONLY to complete the XML file. Units of the observed water level. Defaults to 'm'.
-       :param xmldecimalplaces: Not used in analysis. Used ONLY to complete the XML file. Format of the observed amplitude and phase. Default depends on length of analysis record.
-    '''
+           :param data_filename: The time-series of elevations to be analyzed.
+           :param def_filename: Containes the definition string to parse the input data.
+           :param config: Read command line options from config file, override config file entries on the command line.
+           :param quiet: Print nothing to the screen.
+           :param debug: Print debug messages.
+           :param outputts: Output time series for each constituent.
+           :param ephemeris: Print out ephemeris tables.
+           :param rayleigh: The Rayleigh coefficient is used to compare against to determine time series length to differentiate between two frequencies. [default: default]
+           :param missing_data: What should be done if there is missing data.  One of: fail, ignore, or fill. [default: default]
+           :param linear_trend: Include a linear trend in the least squares fit.
+           :param remove_extreme: Remove values outside of 2 standard deviations before analysis.
+           :param zero_ts: Zero the input time series before constituent analysis by subtracting filtered data. One of: transform,usgs,doodson,boxcar
+           :param filter:  Filter input data set with tide elimination filters. The -o outputts option is implied. Any mix separated by commas and no spaces: transform,usgs,doodson,boxcar
+           :param pad_filters: Pad input data set with values to return same size after filtering.  Realize edge effects are unavoidable.  One of ["tide", "minimum", "maximum", "mean", "median", "reflect", "wrap"]
+           :param include_inferred: Do not incorporate any inferred constituents into the least squares fit.
+           :param print_vau_table: For debugging - will print a table of V and u values to compare against Schureman.
+           :param outputxml: File name to output constituents as IHOTC XML format.
+           :param xmlname: Not used in analysis. Used ONLY to complete the XML file. Name of the station supplying the observations. Defaults to 'A port in a storm'.
+           :param xmlcountry: Not used in analysis. Used ONLY to complete the XML file. Name of the country containing the station. Defaults to 'A man without a country'.
+           :param xmllatitude: Not used in analysis. Used ONLY to complete the XML file. Latitude of the station. Defaults to 0.0.
+           :param xmllongitude: Not used in analysis. Used ONLY to complete the XML file. Longitude of the station. Defaults to 0.0.
+           :param xmltimezone: Not used in analysis. Used ONLY to complete the XML file. Time zone of the station. Defaults to '0000'.
+           :param xmlcomments: Not used in analysis. Used ONLY to complete the XML file. Station comments. Defaults to 'No comment'.
+           :param xmlunits: Not used in analysis. Used ONLY to complete the XML file. Units of the observed water level. Defaults to 'm'.
+           :param xmldecimalplaces: Not used in analysis. Used ONLY to complete the XML file. Format of the observed amplitude and phase. Default depends on length of analysis record.
+        '''
 
-    if config:
-        baker.readconfig(config)
+        if config:
+            baker.readconfig(config)
 
-    x = tappy(
-        outputts = outputts,
-        outputxml = outputxml,
-        quiet=quiet,
-        debug=debug,
-        ephemeris=ephemeris,
-        rayleigh=rayleigh,
-        print_vau_table=print_vau_table,
-        missing_data=missing_data,
-        linear_trend=linear_trend,
-        remove_extreme=remove_extreme,
-        zero_ts=zero_ts,
-        filter=filter,
-        pad_filters=pad_filters,
-        include_inferred=include_inferred,
-        )
+        x = tappy(
+            outputts = outputts,
+            outputxml = outputxml,
+            quiet=quiet,
+            debug=debug,
+            ephemeris=ephemeris,
+            rayleigh=rayleigh,
+            print_vau_table=print_vau_table,
+            missing_data=missing_data,
+            linear_trend=linear_trend,
+            remove_extreme=remove_extreme,
+            zero_ts=zero_ts,
+            filter=filter,
+            pad_filters=pad_filters,
+            include_inferred=include_inferred,
+            )
 
-    if ephemeris:
-        x.print_ephemeris_table()
-    if print_vau_table:
-        x.print_v_u_table()
+        if ephemeris:
+            x.print_ephemeris_table()
+        if print_vau_table:
+            x.print_v_u_table()
 
-    x.open(data_filename, def_filename = def_filename)
+        x.open(data_filename, def_filename = def_filename)
 
-    if x.missing_data == 'fail':
-        x.dates_filled, x.elevation_filled = x.missing(x.missing_data,
-                                                       x.dates,
-                                                       x.elevation)
+        if x.missing_data == 'fail':
+            x.dates_filled, x.elevation_filled = x.missing(x.missing_data,
+                                                           x.dates,
+                                                           x.elevation)
 
-    if x.remove_extreme:
-        x.remove_extreme_values()
+        if x.remove_extreme:
+            x.remove_extreme_values()
 
-    package = x.astronomic(x.dates)
-    (x.zeta, x.nu, x.nup, x.nupp, x.kap_p, x.ii, x.R, x.Q, x.T, x.jd, x.s, x.h, x.N, x.p, x.p1) = package
-
-    if rayleigh:
-        ray = float(rayleigh)
-    else:
-        ray = 1.0
-    (x.speed_dict, x.key_list) = x.which_constituents(len(x.dates),
-                                                      package,
-                                                      rayleigh_comp = ray)
-    if x.zero_ts:
-        # FIX - have to run the constituents package here in order to have
-        # filters available , and then run AGAIN later on.
-        x.constituents()
-        print len(x.dates), len(x.elevation)
-        x.dates_filled, x.elevation_filled = x.missing('fill', x.dates, x.elevation)
-        print len(x.dates_filled), len(x.elevation_filled)
-        x.dates, filtered = x.filters(zero_ts,
-                                      x.dates_filled,
-                                      x.elevation_filled)
-        print len(x.dates), len(filtered)
-        x.elevation = x.elevation_filled - filtered
         package = x.astronomic(x.dates)
         (x.zeta, x.nu, x.nup, x.nupp, x.kap_p, x.ii, x.R, x.Q, x.T, x.jd, x.s, x.h, x.N, x.p, x.p1) = package
-        (x.speed_dict, x.key_list) = x.which_constituents(len(x.dates),
-                                                          package,
-                                                          rayleigh_comp = ray)
 
-    x.constituents()
-
-    if x.missing_data == 'fill':
-        x.dates_filled, x.elevation_filled = x.missing(x.missing_data, x.dates, x.elevation)
-        x.write_file( x.dates_filled,
-                        x.elevation_filled,
-                        fname='outts_filled.dat')
-
-    if x.filter:
-        for item in x.filter.split(','):
-            if item in ['mstha', 'wavelet', 'cd', 'boxcar', 'usgs', 'doodson', 'lecolazet1', 'kalman', 'transform']:# 'lecolazet', 'godin', 'sfa']:
-                filtered_dates, result = x.filters(item, x.dates, x.elevation)
-                x.write_file(filtered_dates, result, fname='outts_filtered_%s.dat' % (item,))
-        (x.speed_dict, x.key_list) = x.which_constituents(len(x.dates),
-                                                          package,
-                                                          rayleigh_comp = ray)
-
-    if not x.quiet:
-        x.print_con()
-
-    if x.outputts:
-        for key in x.key_list:
-            x.write_file(x.dates,
-                         x.sum_signals([key], x.dates, x.speed_dict),
-                         fname="outts_%s.dat" % (key,))
-            x.write_file(x.dates,
-                         x.speed_dict[key]['FF'],
-                         fname="outts_ff_%s.dat" % (key,))
-        x.write_file(x.dates,
-                     x.sum_signals(x.key_list, x.dates, x.tidal_dict),
-                     fname="outts_total_tidal_components.dat")
-        x.write_file(x.dates,
-                     x.elevation,
-                     fname="outts_original.dat")
-
-    if x.outputxml:
-        import xml.etree.ElementTree as et
-
-        def indent(elem, level=0):
-            i = "\n" + level*"  "
-            if len(elem):
-                if not elem.text or not elem.text.strip():
-                    elem.text = i + "  "
-                if not elem.tail or not elem.tail.strip():
-                    elem.tail = i
-                for elem in elem:
-                    indent(elem, level+1)
-                if not elem.tail or not elem.tail.strip():
-                    elem.tail = i
-            else:
-                if level and (not elem.tail or not elem.tail.strip()):
-                    elem.tail = i
-
-        transfer = et.Element('Transfer', attrib={'ns0:noNamespaceSchemaLocation':'HC_Schema_V1.xsd', 'xmlns:ns0':'http://www.w3.org/2001/XMLSchema-instance'})
-
-        port = et.SubElement(transfer, 'Port')
-
-        name = et.SubElement(port, 'name')
-        name.text = xmlname
-
-        country = et.SubElement(port, 'country')
-        country.text = xmlcountry
-
-        position = et.SubElement(port, 'position')
-
-        latitude = et.SubElement(position, 'latitude')
-        latitude.text = str(xmllatitude)
-
-        longitude = et.SubElement(position, 'longitude')
-        longitude.text = str(xmllongitude)
-
-        timezone = et.SubElement(port, 'timeZone')
-        timezone.text = str(xmltimezone)
-
-        units = et.SubElement(port, 'units')
-        units.text = str(xmlunits)
-
-        observationstart = et.SubElement(port, 'observationStart')
-        observationstart.text = x.dates[0].isoformat()
-
-        comments = et.SubElement(port, 'comments')
-        comments.text = xmlcomments
-
-        observationend = et.SubElement(port, 'observationEnd')
-        observationend.text = x.dates[-1].isoformat()
-
-        ndict = {'Z0':0.0}
-        for k in x.key_list + x.inferred_key_list:
-            ndict[k] = x.tidal_dict[k]['speed']
-        klist = [i[0] for i in x.sortbyvalue(ndict)]
-
-        if xmldecimalplaces:
-            ampformatstr = '0:.' + xmldecimalplaces + 'f}'
-            phaformatstr = ampformatstr
+        if rayleigh:
+            ray = float(rayleigh)
         else:
-            ampformatstr = '{0:.3f}'
-            phaformatstr = '{0:.1f}'
-            daterange = x.dates[-1] - x.dates[0]
-            if daterange < datetime.timedelta(days = 90):
-                ampformatstr = '{0:.2f}'
-                phaformatstr = '{0:.0f}'
+            ray = 1.0
+        (x.speed_dict, x.key_list) = x.which_constituents(len(x.dates),
+                                                          package,
+                                                          rayleigh_comp = ray)
+        if x.zero_ts:
+            # FIX - have to run the constituents package here in order to have
+            # filters available , and then run AGAIN later on.
+            x.constituents()
+            print len(x.dates), len(x.elevation)
+            x.dates_filled, x.elevation_filled = x.missing('fill', x.dates, x.elevation)
+            print len(x.dates_filled), len(x.elevation_filled)
+            x.dates, filtered = x.filters(zero_ts,
+                                          x.dates_filled,
+                                          x.elevation_filled)
+            print len(x.dates), len(filtered)
+            x.elevation = x.elevation_filled - filtered
+            package = x.astronomic(x.dates)
+            (x.zeta, x.nu, x.nup, x.nupp, x.kap_p, x.ii, x.R, x.Q, x.T, x.jd, x.s, x.h, x.N, x.p, x.p1) = package
+            (x.speed_dict, x.key_list) = x.which_constituents(len(x.dates),
+                                                              package,
+                                                              rayleigh_comp = ray)
 
-        for key in klist:
-            if key in x.key_list:
-                if float(ampformatstr.format(x.r[key])) == 0.0:
-                    continue
-            elif key in x.inferred_key_list:
-                if float(ampformatstr.format(x.inferred_r[key])) == 0.0:
-                    continue
+        x.constituents()
 
-            tmp = et.SubElement(port, 'Harmonic')
+        if x.missing_data == 'fill':
+            x.dates_filled, x.elevation_filled = x.missing(x.missing_data, x.dates, x.elevation)
+            x.write_file( x.dates_filled,
+                            x.elevation_filled,
+                            fname='outts_filled.dat')
 
-            hname = et.SubElement(tmp, 'name')
-            hname.text = key
+        if x.filter:
+            for item in x.filter.split(','):
+                if item in ['mstha', 'wavelet', 'cd', 'boxcar', 'usgs', 'doodson', 'lecolazet1', 'kalman', 'transform']:# 'lecolazet', 'godin', 'sfa']:
+                    filtered_dates, result = x.filters(item, x.dates, x.elevation)
+                    x.write_file(filtered_dates, result, fname='outts_filtered_%s.dat' % (item,))
+            (x.speed_dict, x.key_list) = x.which_constituents(len(x.dates),
+                                                              package,
+                                                              rayleigh_comp = ray)
 
-            speed = et.SubElement(tmp, 'speed')
-            inferred = et.SubElement(tmp, 'inferred')
-            phaseangle = et.SubElement(tmp, 'phaseAngle')
-            amplitude = et.SubElement(tmp, 'amplitude')
+        if not x.quiet:
+            x.print_con()
 
-            if key in x.key_list:
-                inferred.text = 'false'
-                amplitude.text = ampformatstr.format(x.r[key])
-                phaseangle.text = phaformatstr.format(x.phase[key])
-                speed.text = str(x.tidal_dict[key]['speed']*rad2deg)
-            elif key in x.inferred_key_list:
-                inferred.text = 'true'
-                amplitude.text = ampformatstr.format(x.inferred_r[key])
-                phaseangle.text = phaformatstr.format(x.inferred_phase[key])
-                speed.text = str(x.tidal_dict[key]['speed']*rad2deg)
-            elif key == 'Z0':
-                inferred.text = 'false'
-                amplitude.text = ampformatstr.format(x.fitted_average)
-                phaseangle.text = phaformatstr.format(0.0)
-                speed.text = '0.0'
+        if x.outputts:
+            for key in x.key_list:
+                x.write_file(x.dates,
+                             x.sum_signals([key], x.dates, x.speed_dict),
+                             fname="outts_%s.dat" % (key,))
+                x.write_file(x.dates,
+                             x.speed_dict[key]['FF'],
+                             fname="outts_ff_%s.dat" % (key,))
+            x.write_file(x.dates,
+                         x.sum_signals(x.key_list, x.dates, x.tidal_dict),
+                         fname="outts_total_tidal_components.dat")
+            x.write_file(x.dates,
+                         x.elevation,
+                         fname="outts_original.dat")
 
-        indent(transfer)
-        tree = et.ElementTree(transfer)
-        tree.write(x.outputxml)
+        if x.outputxml:
+            import xml.etree.ElementTree as et
+
+            def indent(elem, level=0):
+                i = "\n" + level*"  "
+                if len(elem):
+                    if not elem.text or not elem.text.strip():
+                        elem.text = i + "  "
+                    if not elem.tail or not elem.tail.strip():
+                        elem.tail = i
+                    for elem in elem:
+                        indent(elem, level+1)
+                    if not elem.tail or not elem.tail.strip():
+                        elem.tail = i
+                else:
+                    if level and (not elem.tail or not elem.tail.strip()):
+                        elem.tail = i
+
+            transfer = et.Element('Transfer', attrib={'ns0:noNamespaceSchemaLocation':'HC_Schema_V1.xsd', 'xmlns:ns0':'http://www.w3.org/2001/XMLSchema-instance'})
+
+            port = et.SubElement(transfer, 'Port')
+
+            name = et.SubElement(port, 'name')
+            name.text = xmlname
+
+            country = et.SubElement(port, 'country')
+            country.text = xmlcountry
+
+            position = et.SubElement(port, 'position')
+
+            latitude = et.SubElement(position, 'latitude')
+            latitude.text = str(xmllatitude)
+
+            longitude = et.SubElement(position, 'longitude')
+            longitude.text = str(xmllongitude)
+
+            timezone = et.SubElement(port, 'timeZone')
+            timezone.text = str(xmltimezone)
+
+            units = et.SubElement(port, 'units')
+            units.text = str(xmlunits)
+
+            observationstart = et.SubElement(port, 'observationStart')
+            observationstart.text = x.dates[0].isoformat()
+
+            comments = et.SubElement(port, 'comments')
+            comments.text = xmlcomments
+
+            observationend = et.SubElement(port, 'observationEnd')
+            observationend.text = x.dates[-1].isoformat()
+
+            ndict = {'Z0':0.0}
+            for k in x.key_list + x.inferred_key_list:
+                ndict[k] = x.tidal_dict[k]['speed']
+            klist = [i[0] for i in x.sortbyvalue(ndict)]
+
+            if xmldecimalplaces:
+                ampformatstr = '0:.' + xmldecimalplaces + 'f}'
+                phaformatstr = ampformatstr
+            else:
+                ampformatstr = '{0:.3f}'
+                phaformatstr = '{0:.1f}'
+                daterange = x.dates[-1] - x.dates[0]
+                if daterange < datetime.timedelta(days = 90):
+                    ampformatstr = '{0:.2f}'
+                    phaformatstr = '{0:.0f}'
+
+            for key in klist:
+                if key in x.key_list:
+                    if float(ampformatstr.format(x.r[key])) == 0.0:
+                        continue
+                elif key in x.inferred_key_list:
+                    if float(ampformatstr.format(x.inferred_r[key])) == 0.0:
+                        continue
+
+                tmp = et.SubElement(port, 'Harmonic')
+
+                hname = et.SubElement(tmp, 'name')
+                hname.text = key
+
+                speed = et.SubElement(tmp, 'speed')
+                inferred = et.SubElement(tmp, 'inferred')
+                phaseangle = et.SubElement(tmp, 'phaseAngle')
+                amplitude = et.SubElement(tmp, 'amplitude')
+
+                if key in x.key_list:
+                    inferred.text = 'false'
+                    amplitude.text = ampformatstr.format(x.r[key])
+                    phaseangle.text = phaformatstr.format(x.phase[key])
+                    speed.text = str(x.tidal_dict[key]['speed']*rad2deg)
+                elif key in x.inferred_key_list:
+                    inferred.text = 'true'
+                    amplitude.text = ampformatstr.format(x.inferred_r[key])
+                    phaseangle.text = phaformatstr.format(x.inferred_phase[key])
+                    speed.text = str(x.tidal_dict[key]['speed']*rad2deg)
+                elif key == 'Z0':
+                    inferred.text = 'false'
+                    amplitude.text = ampformatstr.format(x.fitted_average)
+                    phaseangle.text = phaformatstr.format(0.0)
+                    speed.text = '0.0'
+
+            indent(transfer)
+            tree = et.ElementTree(transfer)
+            tree.write(x.outputxml)
 
 
-baker.run()
+    baker.run()
