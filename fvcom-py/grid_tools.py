@@ -935,3 +935,45 @@ def clipTri(MODEL, sideLength, keys=['xc', 'yc']):
     triClip = np.asarray(triClip)
 
     return triClip
+
+
+def getRiverNodes(fileName, noisy=False):
+    """
+    Parse the rivers namelist to extract river names and nodes. Returns a dict
+    of the parameters with the associated values for all the rivers defined in
+    the namelist.
+
+    Parameters
+    ----------
+
+    fileName : str
+        Full path to an FVCOM Rivers name list.
+    noisy : bool, optional
+        Set to True to enable verbose output. Defaults to False.
+
+    Returns
+    -------
+
+    rivers : dict
+        Dict of the parameters for each river defind in the name list.
+        Dictionary keys are the name list parameter names (e.g. RIVER_NAME).
+
+    """
+
+    f = open(fileName)
+    lines = f.readlines()
+    rivers = {}
+    for line in lines:
+        line = line.strip()
+
+        if not line.startswith('&') and not line.startswith('/'):
+            param, value = [i.strip(",' ") for i in line.split('=')]
+            if param in rivers:
+                rivers[param].append(value)
+            else:
+                rivers[param] = [value]
+
+    f.close()
+
+    return rivers
+
