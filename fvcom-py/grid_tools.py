@@ -937,11 +937,11 @@ def clipTri(MODEL, sideLength, keys=['xc', 'yc']):
     return triClip
 
 
-def getRiverNodes(fileName, noisy=False):
+def getRiverConfig(fileName, noisy=False):
     """
-    Parse the rivers namelist to extract river names and nodes. Returns a dict
-    of the parameters with the associated values for all the rivers defined in
-    the namelist.
+    Parse the rivers namelist to extract the parameters and their values.
+    Returns a dict of the parameters with the associated values for all the
+    rivers defined in the namelist.
 
     Parameters
     ----------
