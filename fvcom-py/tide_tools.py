@@ -54,7 +54,7 @@ def julianDay(gregorianDateTime, mjd=False):
     try:
         nr, nc = np.shape(gregorianDateTime)
     except:
-        nc = np.shape(gregorianDateTime)
+        nc = np.shape(gregorianDateTime)[0]
         nr = 1
 
     if nc < 6:
@@ -63,32 +63,30 @@ def julianDay(gregorianDateTime, mjd=False):
         # Set missing values to zero.
         numMissing = 6 - nc
         if numMissing > 0:
-            extraCols = np.zeros([nr,numMissing])
+            extraCols = np.zeros([nr, numMissing])
             gregorianDateTime = np.hstack([gregorianDateTime, extraCols])
 
     if nr > 1:
-        year = gregorianDateTime[:,0]
-        month = gregorianDateTime[:,1]
-        day = gregorianDateTime[:,2]
-        hour = gregorianDateTime[:,3]
-        minute = gregorianDateTime[:,4]
-        second = gregorianDateTime[:,5]
+        year   = gregorianDateTime[:, 0]
+        month  = gregorianDateTime[:, 1]
+        day    = gregorianDateTime[:, 2]
+        hour   = gregorianDateTime[:, 3]
+        minute = gregorianDateTime[:, 4]
+        second = gregorianDateTime[:, 5]
     else:
-        year = gregorianDateTime[0]
-        month = gregorianDateTime[1]
-        day = gregorianDateTime[2]
-        hour = gregorianDateTime[3]
+        year   = gregorianDateTime[0]
+        month  = gregorianDateTime[1]
+        day    = gregorianDateTime[2]
+        hour   = gregorianDateTime[3]
         minute = gregorianDateTime[4]
         second = gregorianDateTime[5]
 
-    a = (14 - month) // 12
-    y = year + 4800 - a
-    m = month + (12 * a) - 3
-    # Updated the day fraction based on MATLAB function:
-    #   http://home.online.no/~pjacklam/matlab/software/util/timeutil/date2jd.m
-    jd = day + (( 153 * m + 2) // 5) \
-        + y * 365 + (y // 4) - (y // 100) + (y // 400) - 32045 \
-        + (second + 60 * minute + 3600 * (hour - 12)) / 86400
+    timeut = hour + (minute / 60.0) + (second / 3600.0)
+
+    # For common era (CE), anno domini (AD). From the MATLAB function greg2julian.
+    jd = (367.0 * year) - np.floor(7.0 * (year + np.floor((month + 9.0) / 12.0)) / 4.0) - \
+                      np.floor(3.0 * (np.floor((year + (month - 9.0) / 7.0) / 100.0) + 1.0) / 4.0) + \
+                      np.floor((275.0 * month) / 9.0) + day + 1721028.5 + (timeut / 24.0)
 
     if mjd:
         return jd - 2400000.5
