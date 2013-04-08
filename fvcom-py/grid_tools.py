@@ -977,3 +977,60 @@ def getRiverConfig(fileName, noisy=False):
 
     return rivers
 
+def getRivers(discharge, positions, noisy=False):
+    """
+    Extract the modified POLCOMS positions and the discharge data.
+
+    Parameters
+    ----------
+
+    discharge : list
+        Full path to the POLCOMS flw discharge ASCII file(s) for a given year. Number of rows is time, number of columns is number of rivers. The order of the locations in the positions file must match the order of the
+
+    positions : str
+        Full path to an ASCII file of the (modified) positions of the POLCOMS
+        rivers as lon, lat, name.
+
+    Returns
+    -------
+
+    rivers : dict
+        Dictionary of the time series for each location in the positions file.
+        For multiple discharge files, the data are appended in time. Dictionary
+        keys are the river names in the positions file. N.B. The concatenation
+        assumes the files are given in chronological order.
+
+    locations : ndarray
+        Array of lon, lat, name for each of the rivers in the positions file.
+
+    """
+
+    locations = np.genfromtxt(positions,
+            skip_header = 1,
+            delimiter=',',
+            dtype=[('lon', 'f8'),('lat', 'f8'),('name', 'S80')])
+
+    rivers = {}
+
+    for c, file in enumerate(discharge):
+        if noisy:
+            print 'Reading in river discharge from file {}... '.format(file),
+
+        # Just dump the file with np.genfromtxt.
+        if c == 0:
+            flux = np.genfromtxt(file)
+        else:
+            flux = np.vstack((rflux, np.genfromtxt(file)))
+
+        if noisy:
+            print 'done.'
+
+    if flux.shape[-1] != np.shape(locations)[0]:
+        raise Exception('Inconsistent number of rivers and discharge profiles')
+
+    # Now we need to iterate through the names and create the dict with the
+    # relevant data.
+    for n, station in enumerate(locations):
+        rivers[station[-1]] = flux[:, n]
+
+    return rivers, locations
