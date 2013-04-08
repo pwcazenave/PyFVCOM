@@ -47,6 +47,8 @@ def readFVCOM(file, varList, clipDims=False, noisy=False):
     except ImportError:
         raise ImportError('Failed to load the NetCDF4 library')
 
+    import sys
+
     rootgrp = Dataset(file, 'r')
 
     # Create a dict of the dimension names and their current sizes
@@ -71,6 +73,7 @@ def readFVCOM(file, varList, clipDims=False, noisy=False):
     for key, var in rootgrp.variables.iteritems():
         if noisy:
             print 'Found ' + key,
+            sys.stdout.flush()
 
         if key in varList:
             vDims = rootgrp.variables[key].dimensions
