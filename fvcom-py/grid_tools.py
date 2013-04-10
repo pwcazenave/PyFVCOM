@@ -1000,15 +1000,22 @@ def getRivers(discharge, positions, noisy=False):
         keys are the river names in the positions file. N.B. The concatenation
         assumes the files are given in chronological order.
 
-    locations : ndarray
-        Array of lon, lat, name for each of the rivers in the positions file.
+    locations : dict
+        Dictionary of longitudes and latitudes for each of the rivers in the
+        positions file. Keys are the river names.
 
     """
 
-    locations = np.genfromtxt(positions,
-            skip_header = 1,
-            delimiter=',',
-            dtype=[('lon', 'f8'),('lat', 'f8'),('name', 'S80')])
+    f = open(positions, 'r')
+    lines = f.readlines()
+    locations = {}
+    for c, line in enumerate(lines):
+        if c > 0:
+            line = line.strip()
+            lon, lat, name = line.split(',')
+            locations[name.strip()] = [float(lon), float(lat)]
+    f.close()
+
 
     rivers = {}
 
