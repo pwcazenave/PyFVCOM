@@ -172,7 +172,7 @@ def ap2ep(Au, PHIu, Av, PHIv, plot_demo=False):
     THETAp = THETAp / np.pi*180
     THETAm = THETAm / np.pi*180
 
-    #map the resultant angles to the range of [0, 360].
+    # map the resultant angles to the range of [0, 360].
     PHA = np.mod(PHA + 360, 360)
     INC = np.mod(INC + 360, 360)
 
