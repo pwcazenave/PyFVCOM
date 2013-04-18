@@ -1009,11 +1009,24 @@ def getRivers(discharge, positions, noisy=False):
     f = open(positions, 'r')
     lines = f.readlines()
     locations = {}
+    order = 0
     for c, line in enumerate(lines):
         if c > 0:
             line = line.strip()
             lon, lat, name = line.split(',')
-            locations[name.strip()] = [float(lon), float(lat)]
+            if locations.has_key(name.strip()):
+                # Key already exists... just append a 1 to the key name.
+                if noisy:
+                    print 'Duplicate key {}. Renaming to {}_1'.format(name.strip(), name.strip())
+
+                locations[name.strip() + '_1'] = [float(lon), float(lat), order]
+            else:
+                locations[name.strip()] = [float(lon), float(lat), order]
+
+            # Keep a track of the order we're putting the data into the dict
+            # for the extraction to the flux array.
+            order += 1
+
     f.close()
 
 
@@ -1027,17 +1040,20 @@ def getRivers(discharge, positions, noisy=False):
         if c == 0:
             flux = np.genfromtxt(file)
         else:
-            flux = np.vstack((rflux, np.genfromtxt(file)))
+            flux = np.vstack((flux, np.genfromtxt(file)))
 
         if noisy:
             print 'done.'
 
-    if flux.shape[-1] != np.shape(locations)[0]:
+    if flux.shape[-1] != len(locations.keys()):
         raise Exception('Inconsistent number of rivers and discharge profiles')
 
     # Now we need to iterate through the names and create the dict with the
     # relevant data.
-    for n, station in enumerate(locations):
-        rivers[station[-1]] = flux[:, n]
+    for station in locations:
+        # Get the order index from the locations dict.
+        n = locations[station][-1]
+        # Extract the data from the flux array.
+        rivers[station] = flux[:, n]
 
     return rivers, locations
