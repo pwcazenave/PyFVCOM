@@ -6,6 +6,7 @@ Tools for manipulating and converting unstructured grids in a range of formats.
 import matplotlib.pyplot as plt
 import numpy as np
 import math
+import sys
 
 def parseUnstructuredGridSMS(mesh):
     """
@@ -977,6 +978,7 @@ def getRiverConfig(fileName, noisy=False):
 
     return rivers
 
+
 def getRivers(discharge, positions, noisy=False):
     """
     Extract the modified POLCOMS positions and the discharge data.
@@ -985,8 +987,10 @@ def getRivers(discharge, positions, noisy=False):
     ----------
 
     discharge : list
-        Full path to the POLCOMS flw discharge ASCII file(s) for a given year. Number of rows is time, number of columns is number of rivers. The order of the locations in the positions file must match the order of the
-
+        Full path to the POLCOMS flw discharge ASCII file(s) for a given year.
+        Number of rows is time, number of columns is number of rivers. The
+        order of the locations in the positions file must match the order of
+        the
     positions : str
         Full path to an ASCII file of the (modified) positions of the POLCOMS
         rivers as lon, lat, name.
@@ -999,7 +1003,6 @@ def getRivers(discharge, positions, noisy=False):
         For multiple discharge files, the data are appended in time. Dictionary
         keys are the river names in the positions file. N.B. The concatenation
         assumes the files are given in chronological order.
-
     locations : dict
         Dictionary of longitudes and latitudes for each of the rivers in the
         positions file. Keys are the river names.
@@ -1057,3 +1060,82 @@ def getRivers(discharge, positions, noisy=False):
         rivers[station] = flux[:, n]
 
     return rivers, locations
+
+
+def mesh2grid(meshX, meshY, meshZ, nx, ny, thresh=None, noisy=False):
+    """
+    Resample the unstructured grid in meshX and meshY onto a regular grid whose
+    size in nx by ny. Optionally specify dist to control the proximity of
+    a value considered valid.
+
+    Parameters
+    ----------
+
+    meshX, meshY : ndarray
+        Arrays of the unstructured grid (mesh) node positions.
+    meshZ : ndarray
+        Array of values to be resampled onto the regular grid. The shape of the
+        array should have the nodes as the first dimension. All subsequent
+        dimensions will be propagated automatically.
+    nx, ny : int
+        Number of samples in x and y onto which to sample the unstructured
+        grid.
+    thresh : float, optional
+        Distance beyond which a sample is considered too far from the current
+        node to be included.
+    noisy : bool, optional
+        Set to True to enable verbose messages.
+
+    Returns
+    -------
+
+    xx, yy : ndarray
+        New position arrays (1D). Can be used with numpy.meshgrid to plot the
+        resampled variables with matplotlib.pyplot.pcolor.
+    zz : ndarray
+        Array of the resampled data from meshZ. The first dimension from the
+        input is now replaced with two dimensions (x, y). All other input
+        dimensions follow.
+
+    """
+
+    # Get the extents of the input data.
+    xmin, xmax, ymin, ymax = meshX.min(), meshX.max(), meshY.min(), meshY.max()
+
+    xx = np.linspace(xmin, xmax, nx)
+    yy = np.linspace(ymin, ymax, ny)
+
+    # We need to check the input we're resampling for its number of dimensions
+    # so we can create an output array of the right shape. We can just take the
+    # shape of the input, omitting the first value (the nodes). That should
+    # leave us with the right shape. This even works for 1D inputs (i.e. a
+    # single value at each unstructured grid location).
+    zz = np.empty((nx, ny) + meshZ.shape[1:])
+    if noisy:
+        print 'Resampling the unstructured grid onto a regular grid ({} by {}). Be patient...'.format(nx, ny),
+        sys.stdout.flush()
+
+    for xi, xpos in enumerate(xx):
+        for yi, ypos in enumerate(yy):
+            # Find the nearest node in the unstructured grid data and grab its
+            # u and v valuev. If it's beyond some threshold distance, set the
+            # z value to NaN.
+            dist = np.sqrt((meshX - xpos)**2 + (meshY - ypos)**2)
+
+            # Get the index of the minimum and extract the values only if the
+            # nearest point is within the threshold distance (thresh).
+            if dist.min() < thresh:
+                idx = dist.argmin()
+
+                # The ... means "and all the other dimensions". Since we've
+                # asked for our input array to have the nodes as the first
+                # dimension, this means we can just get all the others when
+                # using the node index.
+                zz[xi, yi, ...] = meshZ[idx, ...]
+
+    if noisy:
+        print 'done.'
+
+    return xx, yy, zz
+
+
