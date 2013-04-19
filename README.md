@@ -13,11 +13,11 @@ Prerequisites
 
 * Python. This has been written against Python 2.7, so in principle anything newer than that (in the 2.x series) should be OK.
 
-* numpy, again, this has been written with numpy version 1.4.1, so consider that a minimum.
+* numpy, again, this has been tested with numpy versions 1.4.1 and 1.6.2.
 
-* scipy, version 0.7.2.
+* scipy, versions 0.7.2 and 0.10.1.
 
-* matplotlib, version 1.0.1.
+* matplotlib, versions 1.0.1 and 1.2.1.
 
 * netCDF4, version 0.9.9.
 
@@ -29,7 +29,7 @@ Prerequisites
 
 Optionally:
 
-* ipython, version 0.10.2. This makes for a good development environment, particularly when invocated with the -pylab argument, which automatically imports matplotlib.pylab and numpy.
+* iPython, version 0.10.2. This makes for a good development environment, particularly when invoked with the -pylab argument, which automatically imports matplotlib.pylab and numpy.
 
 
 Provides
@@ -39,7 +39,7 @@ Provides
     - readESRIShapeFile
     - readArcMIKE
 
-* grid_tools - tools to parse SMS, DHI MIKE and FVCOM unstructured grids.
+* grid_tools - tools to parse SMS, DHI MIKE and FVCOM unstructured grids. Also provides functionality to add coasts and clip triangulations to a given domain. Functions to parse SMS river files are also included, as is a function to resample an unstructured grid onto a regular grid (without interpolation, simply finding the nearest point within a threshold distance).
     - parseUnstructuredGridSMS
     - parseUnstructuredGridFVCOM
     - parseUnstructuredGridMIKE
@@ -52,8 +52,14 @@ Provides
     - elementSideLengths
     - fixCoordinates
     - plotCoast
+    - clipTri
+    - getRiverConfig
+    - getRivers
+    - mesh2grid
 
-* ll2utm - available from <http://robotics.ai.uiuc.edu/~hyoon24/LatLongUTMconversion.py>.
+* ll2utm - convert from spherical to cartesian UTM coordinates and back. Available from <http://robotics.ai.uiuc.edu/~hyoon24/LatLongUTMconversion.py>.
+    - LLtoUTM
+    - UTMtoLL
 
 * process_FVCOM_results - perform some analyses on FVCOM data read in using read_FVCOM_results.
     - calculateTotalCO2
@@ -65,6 +71,8 @@ Provides
 
 * read_FVCOM_results - parse the NetCDF model output and extract a subset of the variables.
     - readFVCOM
+    - elems2nodes
+    - nodes2elems
     - getSurfaceElevation
 
 * stats_tools - some basic statistics tools.
@@ -72,15 +80,28 @@ Provides
     - calculatePolyfit
     - coefficientOfDetermination
 
+* tidal_ellipse - Python version of the Tidal Ellipse MATLAB toolbox <http://woodshole.er.usgs.gov/operations/sea-mat/tidal_ellipse-html/index.html>.
+    - ap2ep
+    - ep2ap
+    - cBEpm
+    - get_BE
+    - sub2ind
+    - plot_ell
+    - do_the_plot
+    - prep_plot
+
 * tide_tools - tools to use and abuse tidal data from an SQLite database of tidal time series.
     - julianDay
     - addHarmonicResults
     - getObservedData
     - getObservedMetadata
     - cleanObservedData
+    - TAPPy
     - runTAPPy
     - parseTAPPyXML
     - getHarmonics
+    - readPOLPRED
+    - gridPOLPRED
     - getHarmonicsPOLPRED
 
 
@@ -89,7 +110,4 @@ Installing
 
 In principle, python setup.py should install fvcom-py, though it is untested. Alternatively, download the fvcom-py directory, and add its contents to your PYTHONPATH.
 
-Running
--------
 
-See some examples at <https://github.com/pwcazenave/pml-irish-sea/tree/master/python>.
