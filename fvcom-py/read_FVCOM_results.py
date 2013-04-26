@@ -78,8 +78,7 @@ def readFVCOM(file, varList, clipDims=False, noisy=False):
         if key in varList:
             vDims = rootgrp.variables[key].dimensions
 
-            toExtract = []
-            [toExtract.append(dims[d]) for d in vDims]
+            toExtract = [dims[d] for d in vDims]
 
             # I know, I know, eval() is evil.
             getData = 'rootgrp.variables[\'{}\']{}'.format(key,str(toExtract).replace('\'', ''))
@@ -91,8 +90,7 @@ def readFVCOM(file, varList, clipDims=False, noisy=False):
                 else:
                     print '(extracted given nodes)'
 
-        else:
-            if noisy:
+        elif noisy:
                 print
 
     return FVCOM
