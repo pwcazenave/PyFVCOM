@@ -658,8 +658,9 @@ def findNearestPoint(FX, FY, x, y, maxDistance=np.inf, noisy=False):
         Unless given, there is no upper limit on the distance away from
         the source for which a result is deemed valid. Any other value
         specified here limits the upper threshold.
-    noisy : bool, optional
-        Set to True to enable verbose output.
+    noisy : bool or int, optional
+        Set to True to enable verbose output. If int, outputs every nth
+        iteration.
 
     Returns
     -------
@@ -693,27 +694,29 @@ def findNearestPoint(FX, FY, x, y, maxDistance=np.inf, noisy=False):
 
     if np.ndim(x) == 0:
         todo = np.column_stack([x, y])
+        n = 1
     else:
         todo = zip(x, y)
+        n = np.shape(x)[0]
 
-    for cnt, pointXY in enumerate(todo):
-        if noisy:
-            if np.ndim(x) == 0:
-                print 'Point {} of {}'.format(cnt + 1, 1)
-            else:
-                print 'Point {} of {}'.format(cnt + 1, np.shape(x)[0])
+    for c, pointXY in enumerate(todo):
+        if type(noisy) == int:
+            if c == 0 or (c + 1) % noisy == 0:
+                print 'Point {} of {}'.format(c + 1, n)
+        elif noisy:
+            print 'Point {} of {}'.format(c + 1, n)
 
         findX, findY = FX - pointXY[0], FY - pointXY[1]
         vectorDistances = np.sqrt(findX**2 + findY**2)
-        if np.min(vectorDistances) > maxDistance:
-            distance[cnt] = np.min(vectorDistances)
+        if vectorDistances.min() > maxDistance:
+            distance[c] = np.min(vectorDistances)
             # Should be NaN already, but no harm in being thorough
-            index[cnt], nearestX[cnt], nearestY[cnt] = np.NaN, np.NaN, np.NaN
+            index[c], nearestX[c], nearestY[c] = np.NaN, np.NaN, np.NaN
         else:
-            distance[cnt] = np.min(vectorDistances)
-            index[cnt] = vectorDistances.argmin()
-            nearestX[cnt] = FX[index[cnt]]
-            nearestY[cnt] = FY[index[cnt]]
+            distance[c] = vectorDistances.min()
+            index[c] = vectorDistances.argmin()
+            nearestX[c] = FX[index[c]]
+            nearestY[c] = FY[index[c]]
 
     return nearestX, nearestY, distance, index
 
@@ -890,8 +893,8 @@ def clipTri(MODEL, sideLength, keys=['xc', 'yc']):
     ----------
 
     MODEL : dict
-        Contains the MODEL model results. Keys are those specified in
-        getVars.
+        Contains the MODEL model results. Keys are assumed to be ['xc', 'yc']
+        unless the optional argument `keys' is specified (see below).
     sideLength : float
         Maximum length of an element before it is clipped.
     keys : list, optional
@@ -1110,12 +1113,13 @@ def mesh2grid(meshX, meshY, meshZ, nx, ny, thresh=None, noisy=False):
     # shape of the input, omitting the first value (the nodes). That should
     # leave us with the right shape. This even works for 1D inputs (i.e. a
     # single value at each unstructured grid location).
-    zz = np.empty((nx, ny) + meshZ.shape[1:])
+    zz = np.empty((nx, ny) + meshZ.shape[1:]) * np.nan
     if noisy:
         print 'Resampling the unstructured grid onto a regular grid ({} by {}). Be patient...'.format(nx, ny),
         sys.stdout.flush()
 
     for xi, xpos in enumerate(xx):
+        # Do all the y-positions with findNearestPoint
         for yi, ypos in enumerate(yy):
             # Find the nearest node in the unstructured grid data and grab its
             # u and v valuev. If it's beyond some threshold distance, set the
@@ -1138,4 +1142,199 @@ def mesh2grid(meshX, meshY, meshZ, nx, ny, thresh=None, noisy=False):
 
     return xx, yy, zz
 
+def lineSample(x, y, start, end, num=0, noisy=False, debug=False):
+    """
+    Function to take an unstructured grid of positions x and y and find the
+    points which fall closest to a line defined by the coordinate pairs start
+    and end.
 
+    If num=0 (default), then the line will be sampled at each nearest node; if
+    num is greater than 1, then the line will be subdivided into num segments
+    (at num + 1 points), and the closest point to that line used as the sample.
+
+    Returns a list of array indices.
+
+    N.B. Most of the calculations assume we're using cartesian coordinates.
+    Things might get a bit funky if you're using spherical coordinates. Might
+    be easier to convert before using this.
+
+    Parameters
+    ----------
+
+    x, y : ndarray
+        Position arrays for the unstructured grid.
+    start, end : list
+        Lists of the line start and end coordinates (xpos, ypos). Units must
+        match those in (x, y).
+    num : int, optional
+        Optionally specify a number of points to sample along the line
+        described by (start, end). If no number is given, then the sampling of
+        the line is based on the closest nodes to that line.
+    noisy : bool, optional
+        Set to True to enable verbose output.
+
+    Returns
+    -------
+
+    idx : list
+        List of indices for the nodes used in the line sample.
+    line : ndarray
+        List of positions which fall along the line described by (start, end).
+        These are the projected positions of the nodes which fall closest to
+        the line (not the positions of the nodes themselves).
+
+    """
+
+    if type(num) is not int:
+        raise TypeError('num must be an int')
+
+    if len(start) != 2 or len(end) != 2:
+        raise ValueError('start or end are incorrectly defined (too few values: need (x, y))')
+
+    try:
+        from grid_tools import findNearestPoint
+    except ImportError:
+        raise ImportError('Failed to import findNearestPoint from grid_tools')
+    else:
+        raise Exception('Unknown error occurred')
+
+    lx = float(end[0] - start[0])
+    ly = float(end[1] - start[1])
+    length = np.sqrt(lx**2 + ly**2)
+    dcn = np.degrees(np.arctan2(lx, ly))
+
+    if num > 1:
+        # This is easy: decimate the line between the start and end and find
+        # the grid nodes which fall closest to each point in the line.
+
+        # Create the line segments
+        inc = length / num
+        xx = start[0] + (np.cumsum(np.hstack((0, np.repeat(inc, num)))) * np.sin(np.radians(dcn)))
+        yy = start[1] + (np.cumsum(np.hstack((0, np.repeat(inc, num)))) * np.cos(np.radians(dcn)))
+        line = np.asarray([xx, yy])
+
+        # For each positions in the line array, find the nearest indices in the
+        # supplied unstructured grid. We'll use our existing function
+        # findNearestPoint for this.
+        nx, ny, dist, idx = findNearestPoint(x, y, xx, yy, noisy=noisy)
+
+        # Check the maths
+        plt.figure();
+        plt.plot(start[0], start[1], 'go')
+        plt.plot(end[0], end[1], 'ro')
+        plt.plot([start[0], end[0]], [start[1], end[1]], 'k')
+        plt.plot(xx, yy, '.')
+        plt.plot(x, y, '.', markerfacecolor=[0.75, 0.75, 0.75], markeredgecolor=[0.75, 0.75, 0.75], zorder=0)
+        plt.plot(x[idx.astype(int)], y[idx.astype(int)], 'r.')
+        plt.axis('equal')
+
+    else:
+        # So really, this shouldn't be that difficult, all we're doing is
+        # finding the intersection of two lines which are orthogonal to one
+        # another. We basically need to find the equations of both lines and
+        # the solve for the intersection.
+
+        # First things first, clip the coordinates to a rectangle defined by
+        # the start and end coordinates.
+        ss = np.where((x > start[0]) * (x < end[0]) * (y > start[1]) * (y < end[1]))[0]
+        xs = x[ss]
+        ys = y[ss]
+
+        # Sampling line equation.
+        m1 = ly / lx # sample line gradient
+        c1 = start[1] - (m1 * start[0]) # sample line intercept
+
+        # Find the equation of the line through all nodes in the domain
+        # normal to the original line (gradient = -1 / m).
+        m2 = -1 / m1
+        c2 = ys - (m2 * xs)
+
+        # Now find the intersection of the sample line and the all the lines
+        # which go through the nodes.
+        #   1a. y1 = (m1 * x1) + c1 # sample line
+        #   2a. y2 = (m2 * x2) + c2 # line normal to it
+        # Rearrange 1a for x.
+        #   1b. x1 = (y1 - c1) / m1
+
+        # Substitute equation 1a (y1) into 2a and solve for x.
+        xx = (c2 - c1) / (m1 - m2)
+        # Substitue xx into 2a to solve for y.
+        yy = (m2 * xx) + c2
+
+        # Find the distance from the original nodes to their corresponding
+        # projected node.
+        pdist = np.sqrt((xx - xs)**2 + (yy - ys)**2)
+
+        # Now we need to start our loop until we approach the end of the line
+        # (as defined by the distance from the end).
+        line = []
+        sidx = []
+
+        keepGoing = True
+        i = 0
+        beg = start # seed the position with the start of the line.
+
+        while keepGoing:
+
+            if noisy:
+                if i == 0:
+                    print 'Found {} node'.format(i),
+                else:
+                    print 'Found {} nodes'.format(i),
+
+            # Now, find the nearest point to the start which hasn't already
+            # been used (if this is the first iteration, we need to use all the
+            # values).
+            sx = np.ma.array(xs, mask=False)
+            sy = np.ma.array(ys, mask=False)
+            sx.mask[sidx] = True
+            sy.mask[sidx] = True
+            ndist = np.sqrt((sx - beg[0])**2 + (sy - beg[1])**2)
+
+            # Create an array summing the distance from the current node with
+            # the distance of all nodes to the line.
+            sdist = ndist + pdist
+
+            # Add the closest index to the list of indices.
+            tidx = sdist.argmin().astype(int)
+            sidx.append(tidx)
+
+            # Save the coordinates ready to return them to the calling function.
+            line.append([xx, yy])
+
+            # If the coordinates we've found are those at the end of the line,
+            # then we need to stop. Not sure how to deal with this at the
+            # moment besides doing a distance check and having some threshold.
+            tdist = np.sqrt((end[0] - xx[tidx])**2 + (end[1] - yy[tidx])**2).min()
+            if noisy:
+                print '{} away'.format(tdist)
+
+            if tdist < 1000:
+                keepGoing = False
+
+            # Reset the beginning point for the next iteration.
+            beg = [xx[tidx], yy[tidx]]
+
+            i += 1
+
+        if noisy:
+            print 'done.'
+
+
+        # Return the indices in the context of the original input arrays so we
+        # can more easily extract them from the main data arrays.
+        idx = ss[sidx]
+
+        if debug:
+            plt.figure()
+            plt.plot(x, y, '.', markerfacecolor=[0.75, 0.75, 0.75], markeredgecolor=[0.75, 0.75, 0.75], zorder=0)
+            plt.plot(xs, ys, 'g.', zorder=1)
+            plt.plot([start[0], end[0]], [start[1], end[1]], 'k', zorder=100)
+            plt.plot(start[0], start[1], 'ro', zorder=100)
+            plt.plot(end[0], end[1], 'ro', zorder=100)
+            #plt.plot(xx, yy, 'co') # intersections
+            plt.plot(xx[sidx], yy[sidx], 'ko') # selected intersections
+            plt.plot(xs[sidx], ys[sidx], 'co') # selected nodes
+            plt.axis('equal')
+
+    return idx, line
