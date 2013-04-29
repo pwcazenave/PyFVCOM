@@ -1209,29 +1209,6 @@ def lineSample(x, y, start, end, num=0, noisy=False, debug=False):
     length = np.sqrt(lx**2 + ly**2)
     dcn = np.degrees(np.arctan2(lx, ly))
 
-    def do_fig(ii, tight=False):
-        if ii == 1:
-            plt.figure()
-
-        plt.clf()
-
-        plt.plot(x, y, '.', markerfacecolor=[0.75, 0.75, 0.75], markeredgecolor=[0.75, 0.75, 0.75], zorder=0)
-        plt.plot(xs, ys, 'g.', zorder=1)
-        plt.plot([start[0], end[0]], [start[1], end[1]], 'k', zorder=100)
-        plt.plot(start[0], start[1], 'ro', zorder=100)
-        plt.plot(end[0], end[1], 'ro', zorder=100)
-        #plt.plot(xx, yy, 'co') # intersections
-        plt.plot(xx[sidx[:-1]], yy[sidx[:-1]], 'o', markerfacecolor=[0.25, 0.25, 0.25], markeredgecolor=[0.25, 0.25, 0.25]) # selected intersections
-        plt.plot(xs[sidx[:-1]], ys[sidx[:-1]], 'o', markerfacecolor=[0.25, 0.25, 0.25], markeredgecolor=[0.25, 0.25, 0.25]) # selected nodes
-        plt.plot(xx[sidx[-1]], yy[sidx[-1]], 'k^', zorder=200) # selected intersections (last)
-        plt.plot(xs[sidx[-1]], ys[sidx[-1]], 'c^', zorder=200) # selected nodes (last)
-        plt.axis('equal')
-        if tight:
-            plt.xlim(xs[sidx[-1]] - 10000, xs[sidx[-1]] + 10000)
-            plt.ylim(ys[sidx[-1]] - 10000, ys[sidx[-1]] + 10000)
-
-
-
     if num > 1:
         # This is easy: decimate the line between the start and end and find
         # the grid nodes which fall closest to each point in the line.
@@ -1310,8 +1287,8 @@ def lineSample(x, y, start, end, num=0, noisy=False, debug=False):
 
         while True:
 
-            # Now, find the nearest point to the start which hasn't already
-            # been used (if this is the first iteration, we need to use all the
+            # Find the nearest point to the start which hasn't already been
+            # used (if this is the first iteration, we need to use all the
             # values).
             sx = np.ma.array(xs, mask=False)
             sy = np.ma.array(ys, mask=False)
