@@ -1316,7 +1316,6 @@ def lineSample(x, y, start, end, num=0, noisy=False, debug=False):
 
                     while True:
                         tidx = sdistidx[c]
-                        #tidx = sdist.argmin().astype(int)
                         tdist = np.sqrt((end[0] - xx[tidx])**2 + (end[1] - yy[tidx])**2).min()
                         c += 1
 
