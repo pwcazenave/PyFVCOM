@@ -1198,10 +1198,39 @@ def lineSample(x, y, start, end, num=0, noisy=False, debug=False):
     else:
         raise Exception('Unknown error occurred')
 
+    # Put the start and end the 'right way around'.
+    flip = False # right way
+    if start > end:
+        end, start = start, end
+        flip = True
+
     lx = float(end[0] - start[0])
     ly = float(end[1] - start[1])
     length = np.sqrt(lx**2 + ly**2)
     dcn = np.degrees(np.arctan2(lx, ly))
+
+    def do_fig(ii, tight=False):
+        if ii == 1:
+            plt.figure()
+
+        plt.clf()
+
+        plt.plot(x, y, '.', markerfacecolor=[0.75, 0.75, 0.75], markeredgecolor=[0.75, 0.75, 0.75], zorder=0)
+        plt.plot(xs, ys, 'g.', zorder=1)
+        plt.plot([start[0], end[0]], [start[1], end[1]], 'k', zorder=100)
+        plt.plot(start[0], start[1], 'ro', zorder=100)
+        plt.plot(end[0], end[1], 'ro', zorder=100)
+        #plt.plot(xx, yy, 'co') # intersections
+        plt.plot(xx[sidx[:-1]], yy[sidx[:-1]], 'o', markerfacecolor=[0.25, 0.25, 0.25], markeredgecolor=[0.25, 0.25, 0.25]) # selected intersections
+        plt.plot(xs[sidx[:-1]], ys[sidx[:-1]], 'o', markerfacecolor=[0.25, 0.25, 0.25], markeredgecolor=[0.25, 0.25, 0.25]) # selected nodes
+        plt.plot(xx[sidx[-1]], yy[sidx[-1]], 'k^', zorder=200) # selected intersections (last)
+        plt.plot(xs[sidx[-1]], ys[sidx[-1]], 'c^', zorder=200) # selected nodes (last)
+        plt.axis('equal')
+        if tight:
+            plt.xlim(xs[sidx[-1]] - 10000, xs[sidx[-1]] + 10000)
+            plt.ylim(ys[sidx[-1]] - 10000, ys[sidx[-1]] + 10000)
+
+
 
     if num > 1:
         # This is easy: decimate the line between the start and end and find
@@ -1235,8 +1264,16 @@ def lineSample(x, y, start, end, num=0, noisy=False, debug=False):
         # the solve for the intersection.
 
         # First things first, clip the coordinates to a rectangle defined by
-        # the start and end coordinates.
-        ss = np.where((x > start[0]) * (x < end[0]) * (y > start[1]) * (y < end[1]))[0]
+        # the start and end coordinates. We'll use a buffer based on the size
+        # of the elements which surround the first and last nodes. The ensures
+        # we'll get relatively sensible results if the profile is relatively
+        # flat or vertical. Use the six closest nodes as the definition of
+        # surrounding elements.
+        bstart = np.mean(np.sort(np.sqrt((x - start[0])**2 + (y - start[1])**2))[:6])
+        bend = np.mean(np.sort(np.sqrt((x - end[0])**2 + (y - end[1])**2))[:6])
+        # Use the larger of the two lengths to be on the safe side.
+        bb = np.max((bstart, bend))
+        ss = np.where((x > (start[0] - bb)) * (x < (end[0] + bb)) * (y > (start[1] - bb)) * (y < (end[1] + bb)))[0]
         xs = x[ss]
         ys = y[ss]
 
@@ -1265,22 +1302,13 @@ def lineSample(x, y, start, end, num=0, noisy=False, debug=False):
         # projected node.
         pdist = np.sqrt((xx - xs)**2 + (yy - ys)**2)
 
-        # Now we need to start our loop until we approach the end of the line
-        # (as defined by the distance from the end).
-        line = []
-        sidx = []
-
-        keepGoing = True
+        # Now we need to start our loop until we get beyond the end of the
+        # line.
+        line, sidx = [], []
         i = 0
         beg = start # seed the position with the start of the line.
 
-        while keepGoing:
-
-            if noisy:
-                if i == 0:
-                    print 'Found {} node'.format(i),
-                else:
-                    print 'Found {} nodes'.format(i),
+        while True:
 
             # Now, find the nearest point to the start which hasn't already
             # been used (if this is the first iteration, we need to use all the
@@ -1295,27 +1323,48 @@ def lineSample(x, y, start, end, num=0, noisy=False, debug=False):
             # the distance of all nodes to the line.
             sdist = ndist + pdist
 
-            # Add the closest index to the list of indices.
+            # Add the closest index to the list of indices. In some unusual
+            # circumstances, the algorithm ends up going back along the line.
+            # As such, add a check for the remaining distance to the end, and
+            # if we're going backwards, find the next best point and use that.
             tidx = sdist.argmin().astype(int)
+            if len(sidx) > 1:
+
+                oldtdist = np.sqrt((end[0] - xx[sidx[-1]])**2 + (end[1] - yy[sidx[-1]])**2).min()
+                tdist = np.sqrt((end[0] - xx[tidx])**2 + (end[1] - yy[tidx])**2).min()
+
+                if tdist > oldtdist:
+                    c = 0
+                    sdistidx = np.argsort(sdist)
+
+                    while True:
+                        tidx = sdistidx[c]
+                        #tidx = sdist.argmin().astype(int)
+                        tdist = np.sqrt((end[0] - xx[tidx])**2 + (end[1] - yy[tidx])**2).min()
+                        c += 1
+
+                        if tdist < oldtdist:
+                            break
+
             sidx.append(tidx)
 
-            # Save the coordinates ready to return them to the calling function.
-            line.append([xx, yy])
+            line.append([xx[tidx], yy[tidx]])
 
-            # If the coordinates we've found are those at the end of the line,
-            # then we need to stop. Not sure how to deal with this at the
-            # moment besides doing a distance check and having some threshold.
-            tdist = np.sqrt((end[0] - xx[tidx])**2 + (end[1] - yy[tidx])**2).min()
             if noisy:
-                print '{} away'.format(tdist)
+                if len(sidx) == 1:
+                    print 'Found {} node ({} away from the end point)'.format(i + 1, tdist),
+                else:
+                    print 'Found {} nodes ({} away from the end point)'.format(i + 1, tdist),
 
-            if tdist < 1000:
-                keepGoing = False
-
-            # Reset the beginning point for the next iteration.
-            beg = [xx[tidx], yy[tidx]]
-
-            i += 1
+            # Check the current point is inside the extent of the line we've
+            # been given, otherwise break out of the loop.
+            inbox = xx[tidx] > start[0] and xx[tidx] < end[0] and yy[tidx] > start[1] and yy[tidx] < end[1]
+            if beg == start or inbox:
+                # Reset the beginning point for the next iteration if we're at
+                # the start or within the line extent.
+                beg = [xx[tidx], yy[tidx]]
+            else:
+                break
 
         if noisy:
             print 'done.'
@@ -1324,6 +1373,11 @@ def lineSample(x, y, start, end, num=0, noisy=False, debug=False):
         # Return the indices in the context of the original input arrays so we
         # can more easily extract them from the main data arrays.
         idx = ss[sidx]
+
+        # Flip the order of the lists if we flipped the start and end points.
+        if flip:
+            idx = idx[::-1]
+            line = line[::-1]
 
         if debug:
             plt.figure()
