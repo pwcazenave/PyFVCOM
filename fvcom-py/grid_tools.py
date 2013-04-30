@@ -1308,7 +1308,7 @@ def lineSample(x, y, positions, num=0, noisy=False, debug=False):
                 # Convert the list to an array before we leave.
                 line = np.asarray(line)
                 if noisy:
-                    print 'Reached the end of the sample line'
+                    print 'Reached the end of the line segment'
 
                 break
 
