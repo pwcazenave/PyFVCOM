@@ -1321,9 +1321,7 @@ def lineSample(x, y, positions, num=0, noisy=False, debug=False):
     nlocations = len(positions)
 
     idx = []
-    if num < 1:
-        # We append to a list if we're doing the node sampling.
-        line = []
+    line = []
 
     for xy in xrange(1, nlocations):
         # Make the first segment.
@@ -1358,7 +1356,7 @@ def lineSample(x, y, positions, num=0, noisy=False, debug=False):
             # supplied unstructured grid. We'll use our existing function
             # findNearestPoint for this.
             nx, ny, dist, tidx = findNearestPoint(x, y, xx, yy, noisy=noisy)
-            idx.append(tidx)
+            [idx.append(i) for i in tidx.tolist()]
 
         else:
             # So really, this shouldn't be that difficult, all we're doing is
