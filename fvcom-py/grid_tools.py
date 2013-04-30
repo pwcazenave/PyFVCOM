@@ -1307,8 +1307,6 @@ def lineSample(x, y, start, end, num=0, noisy=False, debug=False):
                 # Haven't found any points yet.
                 oldtdist = tdist
 
-            print 'old: {}, new: {}'.format(oldtdist, tdist)
-
             if fdist > length:
                 # We've gone beyond the end of the line, so don't bother
                 # trying to find another node.
