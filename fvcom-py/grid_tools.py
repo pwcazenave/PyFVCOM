@@ -1251,25 +1251,36 @@ def lineSample(x, y, start, end, num=0, noisy=False, debug=False):
         ys = y[ss]
 
         # Sampling line equation.
-        m1 = ly / lx # sample line gradient
-        c1 = start[1] - (m1 * start[0]) # sample line intercept
+        if lx == 0:
+            # Vertical line.
+            yy = ys
+            xx = np.repeat(start[0], len(yy))
 
-        # Find the equation of the line through all nodes in the domain
-        # normal to the original line (gradient = -1 / m).
-        m2 = -1 / m1
-        c2 = ys - (m2 * xs)
+        elif ly == 0:
+            # Horizontal line.
+            xx = xs
+            yy = np.repeat(start[1], len(xx))
 
-        # Now find the intersection of the sample line and the all the lines
-        # which go through the nodes.
-        #   1a. y1 = (m1 * x1) + c1 # sample line
-        #   2a. y2 = (m2 * x2) + c2 # line normal to it
-        # Rearrange 1a for x.
-        #   1b. x1 = (y1 - c1) / m1
+        else:
+            m1 = ly / lx # sample line gradient
+            c1 = start[1] - (m1 * start[0]) # sample line intercept
 
-        # Substitute equation 1a (y1) into 2a and solve for x.
-        xx = (c2 - c1) / (m1 - m2)
-        # Substitue xx into 2a to solve for y.
-        yy = (m2 * xx) + c2
+            # Find the equation of the line through all nodes in the domain
+            # normal to the original line (gradient = -1 / m).
+            m2 = -1 / m1
+            c2 = ys - (m2 * xs)
+
+            # Now find the intersection of the sample line and the all the lines
+            # which go through the nodes.
+            #   1a. y1 = (m1 * x1) + c1 # sample line
+            #   2a. y2 = (m2 * x2) + c2 # line normal to it
+            # Rearrange 1a for x.
+            #   1b. x1 = (y1 - c1) / m1
+
+            # Substitute equation 1a (y1) into 2a and solve for x.
+            xx = (c2 - c1) / (m1 - m2)
+            # Substitue xx into 2a to solve for y.
+            yy = (m2 * xx) + c2
 
         # Find the distance from the original nodes to their corresponding
         # projected node.
@@ -1316,7 +1327,11 @@ def lineSample(x, y, start, end, num=0, noisy=False, debug=False):
             if fdist > length:
                 # We've gone beyond the end of the line, so don't bother
                 # trying to find another node.
+                if noisy:
+                    print 'Reached the end of the sample line'
+
                 break
+
             elif tdist > oldtdist:
                 # We're moving away from the end point. Find the closest point
                 # in the direction of the end point.
@@ -1351,10 +1366,6 @@ def lineSample(x, y, start, end, num=0, noisy=False, debug=False):
                 beg = [xx[tidx], yy[tidx]]
             else:
                 break
-
-        if noisy:
-            print 'done.'
-
 
         # Return the indices in the context of the original input arrays so we
         # can more easily extract them from the main data arrays.
