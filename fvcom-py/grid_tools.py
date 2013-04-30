@@ -1352,13 +1352,13 @@ def lineSample(x, y, positions, num=0, noisy=False, debug=False):
             inc = length / num
             xx = start[0] + (np.cumsum(np.hstack((0, np.repeat(inc, num)))) * np.sin(np.radians(dcn)))
             yy = start[1] + (np.cumsum(np.hstack((0, np.repeat(inc, num)))) * np.cos(np.radians(dcn)))
-            line = np.asarray([xx, yy])
+            [line.append(xy) for xy in zip([xx, yy]))
 
             # For each positions in the line array, find the nearest indices in the
             # supplied unstructured grid. We'll use our existing function
             # findNearestPoint for this.
             nx, ny, dist, tidx = findNearestPoint(x, y, xx, yy, noisy=noisy)
-            sidx.append(tidx)
+            idx.append(tidx)
 
         else:
             # So really, this shouldn't be that difficult, all we're doing is
