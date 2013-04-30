@@ -1293,28 +1293,39 @@ def lineSample(x, y, start, end, num=0, noisy=False, debug=False):
             # circumstances, the algorithm ends up going back along the line.
             # As such, add a check for the remaining distance to the end, and
             # if we're going backwards, find the next best point and use that.
+
+            # Closest node index.
             tidx = sdist.argmin().astype(int)
-            tdist = np.sqrt((end[0] - xx[tidx])**2 + (end[1] - yy[tidx])**2).min()
+            # Distance from the start point.
             fdist = np.sqrt((start[0] - xx[tidx])**2 + (start[1] - yy[tidx])**2).min()
-            if len(sidx) > 1:
-
+            # Distance to the end point.
+            tdist = np.sqrt((end[0] - xx[tidx])**2 + (end[1] - yy[tidx])**2).min()
+            # Last node's distance to the end point.
+            if len(sidx) >= 1:
                 oldtdist = np.sqrt((end[0] - xx[sidx[-1]])**2 + (end[1] - yy[sidx[-1]])**2).min()
+            else:
+                # Haven't found any points yet.
+                oldtdist = tdist
 
-                if fdist > length:
-                    # We've gone beyond the end of the line, so don't bother
-                    # trying to find another node.
-                    break
-                elif tdist > oldtdist:
-                    c = 0
-                    sdistidx = np.argsort(sdist)
+            print 'old: {}, new: {}'.format(oldtdist, tdist)
 
-                    while True:
-                        tidx = sdistidx[c]
-                        tdist = np.sqrt((end[0] - xx[tidx])**2 + (end[1] - yy[tidx])**2).min()
-                        c += 1
+            if fdist > length:
+                # We've gone beyond the end of the line, so don't bother
+                # trying to find another node.
+                break
+            elif tdist > oldtdist:
+                # We're moving away from the end point. Find the closest point
+                # in the direction of the end point.
+                c = 0
+                sdistidx = np.argsort(sdist)
 
-                        if tdist < oldtdist:
-                            break
+                while True:
+                    tidx = sdistidx[c]
+                    tdist = np.sqrt((end[0] - xx[tidx])**2 + (end[1] - yy[tidx])**2).min()
+                    c += 1
+
+                    if tdist < oldtdist:
+                        break
 
             sidx.append(tidx)
 
