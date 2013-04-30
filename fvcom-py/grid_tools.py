@@ -1148,7 +1148,7 @@ def mesh2grid(meshX, meshY, meshZ, nx, ny, thresh=None, noisy=False):
     return xx, yy, zz
 
 
-def lineSample(x, y, start, end, num=0, noisy=False, debug=False):
+def lineSample(x, y, positions, num=0, noisy=False, debug=False):
     """
     Function to take an unstructured grid of positions x and y and find the
     points which fall closest to a line defined by the coordinate pairs start
@@ -1169,12 +1169,12 @@ def lineSample(x, y, start, end, num=0, noisy=False, debug=False):
 
     x, y : ndarray
         Position arrays for the unstructured grid.
-    start, end : list
-        Lists of the line start and end coordinates (xpos, ypos). Units must
-        match those in (x, y).
+    positions : ndarray
+        Coordinate pairs of the sample line coordinates [[xpos, ypos], ...,
+        [xpos, ypos]].  Units must match those in (x, y).
     num : int, optional
         Optionally specify a number of points to sample along the line
-        described by (start, end). If no number is given, then the sampling of
+        described in `positions'. If no number is given, then the sampling of
         the line is based on the closest nodes to that line.
     noisy : bool, optional
         Set to True to enable verbose output.
@@ -1194,101 +1194,42 @@ def lineSample(x, y, start, end, num=0, noisy=False, debug=False):
     if type(num) is not int:
         raise TypeError('num must be an int')
 
-    if len(start) != 2 or len(end) != 2:
-        raise ValueError('start or end are incorrectly defined (too few values: need (x, y))')
-
     try:
         from grid_tools import findNearestPoint
     except ImportError:
         raise ImportError('Failed to import findNearestPoint from grid_tools')
 
-    # Get the lower left and upper right coordinates.
-    lowerx = min(start[0], end[0])
-    lowery = min(start[1], end[1])
-    upperx = max(start[0], end[0])
-    uppery = max(start[1], end[1])
-    ll = [lowerx, lowery]
-    ur = [upperx, uppery]
+    def __nodes_on_line__(xs, ys, start, end, noisy=False):
+        """
+        Child function to find all the points within the coordinates in sx and
+        sy which fall along the line described by the coordinate pairs start
+        and end.
 
-    lx = float(end[0] - start[0])
-    ly = float(end[1] - start[1])
-    length = np.sqrt(lx**2 + ly**2)
-    dcn = np.degrees(np.arctan2(lx, ly))
+        Parameters
+        ----------
 
-    if num > 1:
-        # This is easy: decimate the line between the start and end and find
-        # the grid nodes which fall closest to each point in the line.
+        xs, ys : ndarray
+            Node position arrays.
+        start, end : ndarray
+            Coordinate pairs for the start and end of the sample line.
 
-        # Create the line segments
-        inc = length / num
-        xx = start[0] + (np.cumsum(np.hstack((0, np.repeat(inc, num)))) * np.sin(np.radians(dcn)))
-        yy = start[1] + (np.cumsum(np.hstack((0, np.repeat(inc, num)))) * np.cos(np.radians(dcn)))
-        line = np.asarray([xx, yy])
+        Returns
+        -------
 
-        # For each positions in the line array, find the nearest indices in the
-        # supplied unstructured grid. We'll use our existing function
-        # findNearestPoint for this.
-        nx, ny, dist, idx = findNearestPoint(x, y, xx, yy, noisy=noisy)
+        idx : list
+            List of indices for the nodes used in the line sample.
+        line : ndarray
+            List of positions which fall along the line described by (start,
+            end).  These are the projected positions of the nodes which fall
+            closest to the line (not the positions of the nodes themselves).
 
-    else:
-        # So really, this shouldn't be that difficult, all we're doing is
-        # finding the intersection of two lines which are orthogonal to one
-        # another. We basically need to find the equations of both lines and
-        # the solve for the intersection.
 
-        # First things first, clip the coordinates to a rectangle defined by
-        # the start and end coordinates. We'll use a buffer based on the size
-        # of the elements which surround the first and last nodes. The ensures
-        # we'll get relatively sensible results if the profile is relatively
-        # flat or vertical. Use the six closest nodes as the definition of
-        # surrounding elements.
-        bstart = np.mean(np.sort(np.sqrt((x - start[0])**2 + (y - start[1])**2))[:6])
-        bend = np.mean(np.sort(np.sqrt((x - end[0])**2 + (y - end[1])**2))[:6])
-        # Use the larger of the two lengths to be on the safe side.
-        bb = 2 * np.max((bstart, bend))
-        ss = np.where((x >= (ll[0] - bb)) * (x <= (ur[0] + bb)) * (y >= (ll[1] - bb)) * (y <= (ur[1] + bb)))[0]
-        xs = x[ss]
-        ys = y[ss]
+        """
 
-        # Sampling line equation.
-        if lx == 0:
-            # Vertical line.
-            yy = ys
-            xx = np.repeat(start[0], len(yy))
+        # Create empty lists for the indices and positions.
+        sidx = []
+        line = []
 
-        elif ly == 0:
-            # Horizontal line.
-            xx = xs
-            yy = np.repeat(start[1], len(xx))
-
-        else:
-            m1 = ly / lx # sample line gradient
-            c1 = start[1] - (m1 * start[0]) # sample line intercept
-
-            # Find the equation of the line through all nodes in the domain
-            # normal to the original line (gradient = -1 / m).
-            m2 = -1 / m1
-            c2 = ys - (m2 * xs)
-
-            # Now find the intersection of the sample line and the all the lines
-            # which go through the nodes.
-            #   1a. y1 = (m1 * x1) + c1 # sample line
-            #   2a. y2 = (m2 * x2) + c2 # line normal to it
-            # Rearrange 1a for x.
-            #   1b. x1 = (y1 - c1) / m1
-
-            # Substitute equation 1a (y1) into 2a and solve for x.
-            xx = (c2 - c1) / (m1 - m2)
-            # Substitue xx into 2a to solve for y.
-            yy = (m2 * xx) + c2
-
-        # Find the distance from the original nodes to their corresponding
-        # projected node.
-        pdist = np.sqrt((xx - xs)**2 + (yy - ys)**2)
-
-        # Now we need to start our loop until we get beyond the end of the
-        # line.
-        line, sidx = [], []
         beg = start # seed the position with the start of the line.
 
         while True:
@@ -1325,12 +1266,11 @@ def lineSample(x, y, start, end, num=0, noisy=False, debug=False):
                 oldtdist = tdist
 
             if fdist > length:
-                # We've gone beyond the end of the line, so don't bother
-                # trying to find another node.
-                if noisy:
-                    print 'Reached the end of the sample line'
-
-                break
+                # We've gone beyond the end of the line, so don't bother trying
+                # to find another node.  Leave the if block so we actually add
+                # the current index and position to sidx and line. We'll break
+                # out of the main while loop a bit later.
+                pass
 
             elif tdist > oldtdist:
                 # We're moving away from the end point. Find the closest point
@@ -1360,27 +1300,142 @@ def lineSample(x, y, start, end, num=0, noisy=False, debug=False):
             # Check if we've gone beyond the end of the line (by checking the
             # length of the sampled line), and if so, break out of the loop.
             # Otherwise, carry on.
-            if beg == start or fdist < length:
+            if beg.tolist() == start.tolist() or fdist < length:
                 # Reset the beginning point for the next iteration if we're at
                 # the start or within the line extent.
-                beg = [xx[tidx], yy[tidx]]
+                beg = np.array(([xx[tidx], yy[tidx]]))
             else:
+                # Convert the list to an array before we leave.
+                line = np.asarray(line)
+                if noisy:
+                    print 'Reached the end of the sample line'
+
                 break
 
-        # Return the indices in the context of the original input arrays so we
-        # can more easily extract them from the main data arrays.
-        idx = ss[sidx]
+        return sidx, line
 
-        if debug:
-            plt.figure()
-            plt.plot(x, y, '.', markerfacecolor=[0.75, 0.75, 0.75], markeredgecolor=[0.75, 0.75, 0.75], zorder=0)
-            plt.plot(xs, ys, 'g.', zorder=1)
-            plt.plot([start[0], end[0]], [start[1], end[1]], 'k', zorder=100)
-            plt.plot(start[0], start[1], 'ro', zorder=100)
-            plt.plot(end[0], end[1], 'ro', zorder=100)
-            #plt.plot(xx, yy, 'co') # intersections
-            plt.plot(xx[sidx], yy[sidx], 'ko') # selected intersections
-            plt.plot(xs[sidx], ys[sidx], 'co') # selected nodes
-            plt.axis('equal')
+    # To do multi-segment lines, we'll break each one down into a separate
+    # line, and do those sequentially. This means I don't have to rewrite
+    # masses of the existing code and it's still pretty easy to understand (for
+    # me at least!).
+    nlocations = len(positions)
+
+    idx = []
+    if num < 1:
+        # We append to a list if we're doing the node sampling.
+        line = []
+
+    for xy in xrange(1, nlocations):
+        # Make the first segment.
+        start = positions[xy - 1]
+        end = positions[xy]
+
+        # Get the lower left and upper right coordinates of this section of the
+        # line.
+        lowerx = min(start[0], end[0])
+        lowery = min(start[1], end[1])
+        upperx = max(start[0], end[0])
+        uppery = max(start[1], end[1])
+        ll = [lowerx, lowery]
+        ur = [upperx, uppery]
+
+        lx = float(end[0] - start[0])
+        ly = float(end[1] - start[1])
+        length = np.sqrt(lx**2 + ly**2)
+        dcn = np.degrees(np.arctan2(lx, ly))
+
+        if num > 1:
+            # This is easy: decimate the line between the start and end and find
+            # the grid nodes which fall closest to each point in the line.
+
+            # Create the line segments
+            inc = length / num
+            xx = start[0] + (np.cumsum(np.hstack((0, np.repeat(inc, num)))) * np.sin(np.radians(dcn)))
+            yy = start[1] + (np.cumsum(np.hstack((0, np.repeat(inc, num)))) * np.cos(np.radians(dcn)))
+            line = np.asarray([xx, yy])
+
+            # For each positions in the line array, find the nearest indices in the
+            # supplied unstructured grid. We'll use our existing function
+            # findNearestPoint for this.
+            nx, ny, dist, tidx = findNearestPoint(x, y, xx, yy, noisy=noisy)
+            sidx.append(tidx)
+
+        else:
+            # So really, this shouldn't be that difficult, all we're doing is
+            # finding the intersection of two lines which are orthogonal to one
+            # another. We basically need to find the equations of both lines and
+            # the solve for the intersection.
+
+            # First things first, clip the coordinates to a rectangle defined by
+            # the start and end coordinates. We'll use a buffer based on the size
+            # of the elements which surround the first and last nodes. The ensures
+            # we'll get relatively sensible results if the profile is relatively
+            # flat or vertical. Use the six closest nodes as the definition of
+            # surrounding elements.
+            bstart = np.mean(np.sort(np.sqrt((x - start[0])**2 + (y - start[1])**2))[:6])
+            bend = np.mean(np.sort(np.sqrt((x - end[0])**2 + (y - end[1])**2))[:6])
+            # Use the larger of the two lengths to be on the safe side.
+            bb = 2 * np.max((bstart, bend))
+            ss = np.where((x >= (ll[0] - bb)) * (x <= (ur[0] + bb)) * (y >= (ll[1] - bb)) * (y <= (ur[1] + bb)))[0]
+            xs = x[ss]
+            ys = y[ss]
+
+            # Sampling line equation.
+            if lx == 0:
+                # Vertical line.
+                yy = ys
+                xx = np.repeat(start[0], len(yy))
+
+            elif ly == 0:
+                # Horizontal line.
+                xx = xs
+                yy = np.repeat(start[1], len(xx))
+
+            else:
+                m1 = ly / lx # sample line gradient
+                c1 = start[1] - (m1 * start[0]) # sample line intercept
+
+                # Find the equation of the line through all nodes in the domain
+                # normal to the original line (gradient = -1 / m).
+                m2 = -1 / m1
+                c2 = ys - (m2 * xs)
+
+                # Now find the intersection of the sample line and the all the lines
+                # which go through the nodes.
+                #   1a. y1 = (m1 * x1) + c1 # sample line
+                #   2a. y2 = (m2 * x2) + c2 # line normal to it
+                # Rearrange 1a for x.
+                #   1b. x1 = (y1 - c1) / m1
+
+                # Substitute equation 1a (y1) into 2a and solve for x.
+                xx = (c2 - c1) / (m1 - m2)
+                # Substitue xx into 2a to solve for y.
+                yy = (m2 * xx) + c2
+
+            # Find the distance from the original nodes to their corresponding
+            # projected node.
+            pdist = np.sqrt((xx - xs)**2 + (yy - ys)**2)
+
+            # Now we need to start our loop until we get beyond the end of the
+            # line.
+            tidx, tline = __nodes_on_line__(xs, ys, start, end, noisy=noisy)
+
+            [line.append(i) for i in tline.tolist()]
+            # Return the indices in the context of the original input arrays so
+            # we can more easily extract them from the main data arrays.
+            [idx.append(i) for i in ss[tidx]]
+
+    # Make the line list an array for easier plotting.
+    line = np.asarray(line)
+
+    if debug:
+        plt.figure()
+        plt.plot(x, y, '.', markerfacecolor=[0.75, 0.75, 0.75], markeredgecolor=[0.75, 0.75, 0.75], zorder=0)
+        plt.plot(xs, ys, 'g.', zorder=1)
+        plt.plot(positions[:, 0], positions[:, 1], 'k-o', zorder=100)
+        #plt.plot(xx, yy, 'co') # intersections
+        plt.plot(xx[idx], yy[idx], 'ko') # selected intersections
+        plt.plot(xs[idx], ys[idx], 'co') # selected nodes
+        plt.axis('equal')
 
     return idx, line
