@@ -967,15 +967,20 @@ def getRiverConfig(fileName, noisy=False):
     f = open(fileName)
     lines = f.readlines()
     rivers = {}
+    n = 0
     for line in lines:
         line = line.strip()
 
         if not line.startswith('&') and not line.startswith('/'):
+            n += 1
             param, value = [i.strip(",' ") for i in line.split('=')]
             if param in rivers:
                 rivers[param].append(value)
             else:
                 rivers[param] = [value]
+
+    if noisy:
+        print 'Found {} rivers.'.format(n)
 
     f.close()
 
@@ -1141,6 +1146,7 @@ def mesh2grid(meshX, meshY, meshZ, nx, ny, thresh=None, noisy=False):
         print 'done.'
 
     return xx, yy, zz
+
 
 def lineSample(x, y, start, end, num=0, noisy=False, debug=False):
     """
