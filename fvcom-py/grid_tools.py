@@ -1352,7 +1352,7 @@ def lineSample(x, y, positions, num=0, noisy=False, debug=False):
             inc = length / num
             xx = start[0] + (np.cumsum(np.hstack((0, np.repeat(inc, num)))) * np.sin(np.radians(dcn)))
             yy = start[1] + (np.cumsum(np.hstack((0, np.repeat(inc, num)))) * np.cos(np.radians(dcn)))
-            [line.append(xy) for xy in zip([xx, yy]))
+            [line.append(xy) for xy in zip([xx, yy])]
 
             # For each positions in the line array, find the nearest indices in the
             # supplied unstructured grid. We'll use our existing function
