@@ -5,16 +5,16 @@ interpolate the depths.
 
 """
 
-import sys
+import colorsys
+import os
 
 import numpy as np
 import matplotlib.pyplot as plt
 
-
-def colourInterp(R, G, B, zlev, fuzz=15):
+def rgb2elev(R, G, B, zlev):
     """
-    For the levels specified in zlev, interpolate the colour values in im which
-    fall between each set of levels.
+    For the levels specified in zlev, interpolate the colour values in [R, G,
+    B] which fall between each set of defined colour levels.
 
     Parameters
     ----------
@@ -27,15 +27,11 @@ def colourInterp(R, G, B, zlev, fuzz=15):
         triplet; z is the number of vertical levels to interpolate between.
         For best results, this should be as detailed as possible to reduce
         errors in the interpolation.
-    fuzz : int, optional
-        Add a bit of fuzziness to the search for the search ranges. This will
-        cause overlap between adjacent classes, but can be useful to fully
-        capture all the area of interest.
 
     Returns
     -------
 
-    elev : ndarray
+    z : ndarray
         Array of values interpolated from the ranges specified in zlev.
 
     """
@@ -43,159 +39,8 @@ def colourInterp(R, G, B, zlev, fuzz=15):
     if zlev.shape[-1] != 4:
         raise Exception('Specify [value, R, G, B] in the input zlev')
 
-    nz = zlev.shape[0]
-
-    elev = np.zeros((ny, nx))
-
-    for i in xrange(1, nz):
-
-        # Get the first set of ranges
-        rgbs = zlev[i - 1, 1:]
-        rgbe = zlev[i, 1:]
-        zs = zlev[i -1, 0]
-        ze = zlev[i, 0]
-
-        #fuzz = 1 / (abs(ze - zs) / 50.0)
-        fuzz = abs(ze - zs) * 2
-
-        # To find the values which fall within the specified ranges, we need to
-        # find the upper and lower values. We can't just assume the end value
-        # (rgbe) is higher as the end value can be lower than the start value.
-        rr = [rgbs[0], rgbe[0]]
-        gg = [rgbs[1], rgbe[1]]
-        bb = [rgbs[2], rgbe[2]]
-        rs = min(rr) - fuzz
-        re = max(rr) + fuzz
-        gs = min(gg) - fuzz
-        ge = max(gg) + fuzz
-        bs = min(bb) - fuzz
-        be = max(bb) + fuzz
-        rimin = np.argmin(rr)
-        gimin = np.argmin(rr)
-        bimin = np.argmin(rr)
-
-        if rs == re:
-            re = re + 1
-
-        if gs == ge:
-            ge = ge + 1
-
-        if bs == be:
-            be = be + 1
-
-        # Get the ranges and find which is the largest
-        rgbi = np.array(((re - rs, ge - gs, be - bs))).argmax()
-
-        # Find the parts of the image which fall within those ranges
-        idx = np.where((R >= rs) * (R < re) * (G >= gs) * (G < ge) * (B >= bs) * (B < be))
-
-        # Interpolate our z values to the intervals we've got from the RGB
-        # triplets.
-        if rgbi == 0:
-            # Red
-            print 'red',
-            Rt = R[idx]
-            if rimin == 0:
-                print 'right'
-                # Right way around
-                zi = (((ze - zs) * (Rt - Rt.min())) / (Rt.max() - Rt.min())) + zs
-            else:
-                # Wrong way around
-                print 'wrong'
-                zi = (((zs - ze) * (Rt - Rt.min())) / (Rt.max() - Rt.min())) + ze
-        elif rgbi == 1:
-            # Green
-            print 'green',
-            Gt = G[idx]
-            if gimin == 1:
-                # Right way around
-                print 'right'
-                zi = (((ze - zs) * (Gt - Gt.min())) / (Gt.max() - Gt.min())) + zs
-            else:
-                # Wrong way around
-                print 'wrong'
-                zi = (((zs - ze) * (Gt - Gt.min())) / (Gt.max() - Gt.min())) + ze
-        elif rgbi == 2:
-            # Blue
-            print 'blue',
-            Bt = B[idx]
-            if bimin == 1:
-                # Right way around
-                print 'right'
-                zi = (((ze - zs) * (Bt - Bt.min())) / (Bt.max() - Bt.min())) + zs
-            else:
-                # Wrong way around
-                print 'wrong'
-                zi = (((zs - ze) * (Bt - Bt.min())) / (Bt.max() - Bt.min())) + ze
-
-        elev[idx] = zi
-
-    return elev
-
-
-if __name__ == '__main__':
-
-    # Image file first
-    #tif = sys.argv[1]
-    tif = 'xia_et_al_2010_fig6_clean_alpha.png'
-    # Then coordinates as [west, east, south, north].
-    #wesn = sys.argv[2]
-    wesn = [366438.826916, 561926.062375, 5643743.000870, 5754525.445892]
-
-    im = plt.imread(tif)
-
-    # Images store their coordinates backwards.
-    nx = im.shape[1]
-    ny = im.shape[0]
-    west, east, south, north = wesn
-    xr = east - west
-    yr = north - south
-    x = np.arange(west, east, xr / nx)
-    y = np.arange(south, north, yr / ny)
-
-    # Now comes the hard bit. For the levels specified in zlev,
-    zlev = np.array([[-52, 232,   8,   7],
-            [-50, 255, 168,   0],
-            [-45, 255, 255,   4],
-            [-40, 188, 255,   7],
-            [-35,  93, 255,   8],
-            [-30,   0, 255,   0],
-            [-25,   1, 252,  84],
-            [-20,   0, 253, 167],
-            [-15,   0, 255, 255],
-            [-10,   0, 183, 238],
-            [ -5,   5,  90, 255],
-            [ -2,   0,  42, 255],
-            [  0,   0,   0, 250]])
-    zlev = np.array([[  0,   0,   0, 250],
-        [ -2,   0,  42, 255],
-        [ -5,   5,  90, 255],
-        [-10,   0, 183, 238],
-        [-15,   0, 255, 255],
-        [-20,   0, 253, 167],
-        [-25,   1, 252,  84],
-        [-30,   0, 255,   0],
-        [-35,  93, 255,   8],
-        [-40, 188, 255,   7],
-        [-45, 255, 255,   4],
-        [-50, 255, 168,   0],
-        [-52, 232,   8,   7]])
-
-    R = im[:, :, 0]
-    G = im[:, :, 1]
-    B = im[:, :, 2]
-
-    if R.max() <= 1:
-        R = R * 255
-
-    if G.max() <= 1:
-        G = G * 255
-
-    if B.max() <= 1:
-        B = B * 255
-
-    #elev = colourInterp(R, G, B, zlev, fuzz=15)
-    Y, I, Q = colorsys.rgb_to_yiq(R, G, B)
+    # Make zlev floats (otherwise the conversion to HSV doesn't work.
+    zlev = zlev.astype(float)
 
     # Some sort of bug in colorsys.rgb_to_hsv means we can't just dump the
     # arrays into the command like we can with rgb_to_yiq. Hence the horrible
@@ -210,12 +55,92 @@ if __name__ == '__main__':
     # Clear out the weird -1 values
     H[H > 0.7] = H[H < 0.7].max()
 
-    # Hue seems to vary quite nicely with the rainbow colour palette. We'll use
-    # that the map our depth values.
-    zs = zlev[:, 0].min()
-    ze = zlev[:, 0].max()
-    elev = (((ze - zs) * (H - H.min())) / (H.max() - H.min())) + zs
+    # Convert the RGBs to hues.
+    h = []
+    for lev in zlev:
+        rgb = np.asarray(lev[1:])
+        th, ts, tv = colorsys.rgb_to_hsv(rgb[0], rgb[1], rgb[2])
+        h.append(th)
+    del th, ts, tv
 
+    # Now go through the associated depths (in pairs) and find the values
+    # within H which fall between the corresponding h values and scale them to
+    # the depths.
+    z = np.zeros((ny, nx)) # images are all backwards
+    nz = zlev.shape[0]
+    for i in xrange(1, nz):
+
+        hs = h[i -1]
+        he = h[i]
+        if he < hs:
+            he, hs = hs, he
+        zs = zlev[i -1, 0]
+        ze = zlev[i, 0]
+        if ze < zs:
+            ze, zs = zs, ze
+
+        idx = np.where((H >= hs) * (H < he))
+
+        zi = (((ze - zs) * (H[idx] - H[idx].min())) / (H[idx].max() - H[idx].min())) + zs
+
+        z[idx] = zi
+
+    return z
+
+
+if __name__ == '__main__':
+
+    # Image file
+    img = '/users/modellers/pica/Desktop/xia_et_al_2010_fig6_clean_alpha.png'
+    # Then coordinates as [west, east, south, north].
+    wesn = [366438.826916, 561926.062375, 5643743.000870, 5754525.445892]
+
+    plotFig = False # plot an image of the converted elevations?
+
+    im = plt.imread(img)
+
+    # Images store their coordinates backwards.
+    nx = im.shape[1]
+    ny = im.shape[0]
+    west, east, south, north = wesn
+    xr = east - west
+    yr = north - south
+    x = np.arange(west, east, xr / nx)
+    y = np.arange(south, north, yr / ny)
+
+    R = im[:, :, 0]
+    G = im[:, :, 1]
+    B = im[:, :, 2]
+
+    if R.max() <= 1:
+        R = R * 255
+
+    if G.max() <= 1:
+        G = G * 255
+
+    if B.max() <= 1:
+        B = B * 255
+
+    # Array of elevation values with the corresponding RGB colour triplet for
+    # that depth. Colours will be converted to hue which is used as the key to
+    # find the relevant pixels in the image array. Specify more levels to get
+    # a better result here.
+    zlev = np.array([[   2,   0,   0, 250],
+        [  0,   0,  42, 255],
+        [ -5,   5,  90, 255],
+        [-10,   0, 183, 238],
+        [-15,   0, 255, 255],
+        [-20,   0, 253, 167],
+        [-25,   1, 252,  84],
+        [-30,   0, 255,   0],
+        [-35,  93, 255,   8],
+        [-40, 188, 255,   7],
+        [-45, 255, 255,   4],
+        [-50, 255, 168,   0],
+        [-52, 232,   8,   7]], dtype=float)
+
+    # Map the specified elevations onto the image data.
+    elev = rgb2elev(R, G, B, zlev)
 
     # Add the alpha channel as a mask.
     if im.shape[2] == 4:
@@ -224,9 +149,20 @@ if __name__ == '__main__':
         mask[mask > 0] = 1
         z = np.ma.array(elev, mask=False)
         z.mask[mask == 0] = True
+    else:
+        z = np.ma.array(elev, mask=False)
 
+    # Write out the coordinates as a CSV file.
+    X, Y = np.meshgrid(x, y)
+    xx = X.ravel()
+    yy = Y.ravel()
+    zz = np.flipud(z).ravel() # images are stored upside down
 
-    plt.figure()
-    plt.imshow(z, cmap=plt.cm.jet_r)
-    plt.colorbar()
-    plt.clim(5, -65)
+    csv = os.path.splitext(img)[0] + '.csv'
+    np.savetxt(csv, np.transpose((xx, yy, zz)), delimiter=",", fmt='%.2f,%.2f,%.2f')
+
+    if plotFig:
+        plt.figure()
+        plt.imshow(-z)
+        plt.colorbar()
+        plt.clim(-7, 65)
