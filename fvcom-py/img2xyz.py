@@ -1,7 +1,5 @@
 """
-Script to take a single channel tiff and, given its geographical extents,
-convert it to ASCII xyz. Specify the range of values between which to
-interpolate the depths.
+Functions to convert images to values along a given set of vertical elevations.
 
 """
 
@@ -87,82 +85,3 @@ def rgb2elev(R, G, B, zlev):
 
     return z
 
-
-if __name__ == '__main__':
-
-    # Image file
-    img = '/users/modellers/pica/Desktop/xia_et_al_2010_fig6_clean_alpha.png'
-    # Then coordinates as [west, east, south, north].
-    wesn = [366438.826916, 561926.062375, 5643743.000870, 5754525.445892]
-
-    plotFig = False # plot an image of the converted elevations?
-
-    im = plt.imread(img)
-
-    # Images store their coordinates backwards.
-    nx = im.shape[1]
-    ny = im.shape[0]
-    west, east, south, north = wesn
-    xr = east - west
-    yr = north - south
-    x = np.arange(west, east, xr / nx)
-    y = np.arange(south, north, yr / ny)
-
-    R = im[:, :, 0]
-    G = im[:, :, 1]
-    B = im[:, :, 2]
-
-    if R.max() <= 1:
-        R = R * 255
-
-    if G.max() <= 1:
-        G = G * 255
-
-    if B.max() <= 1:
-        B = B * 255
-
-    # Array of elevation values with the corresponding RGB colour triplet for
-    # that depth. Colours will be converted to hue which is used as the key to
-    # find the relevant pixels in the image array. Specify more levels to get
-    # a better result here.
-    zlev = np.array([[   2,   0,   0, 250],
-        [  0,   0,  42, 255],
-        [ -5,   5,  90, 255],
-        [-10,   0, 183, 238],
-        [-15,   0, 255, 255],
-        [-20,   0, 253, 167],
-        [-25,   1, 252,  84],
-        [-30,   0, 255,   0],
-        [-35,  93, 255,   8],
-        [-40, 188, 255,   7],
-        [-45, 255, 255,   4],
-        [-50, 255, 168,   0],
-        [-52, 232,   8,   7]], dtype=float)
-
-    # Map the specified elevations onto the image data.
-    elev = rgb2elev(R, G, B, zlev)
-
-    # Add the alpha channel as a mask.
-    if im.shape[2] == 4:
-        mask = im[:, :, 3]
-        # Make the mask binary (no graded boundaries).
-        mask[mask > 0] = 1
-        z = np.ma.array(elev, mask=False)
-        z.mask[mask == 0] = True
-    else:
-        z = np.ma.array(elev, mask=False)
-
-    # Write out the coordinates as a CSV file.
-    X, Y = np.meshgrid(x, y)
-    xx = X.ravel()
-    yy = Y.ravel()
-    zz = np.flipud(z).ravel() # images are stored upside down
-
-    csv = os.path.splitext(img)[0] + '.csv'
-    np.savetxt(csv, np.transpose((xx, yy, zz)), delimiter=",", fmt='%.2f,%.2f,%.2f')
-
-    if plotFig:
-        plt.figure()
-        plt.imshow(-z)
-        plt.colorbar()
-        plt.clim(-7, 65)
