@@ -9,7 +9,7 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 
-def rgb2elev(R, G, B, zlev):
+def rgb2z(R, G, B, zlev):
     """
     For the levels specified in zlev, interpolate the colour values in [R, G,
     B] which fall between each set of defined colour levels.
