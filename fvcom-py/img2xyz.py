@@ -43,12 +43,14 @@ def rgb2z(R, G, B, zlev):
     # Some sort of bug in colorsys.rgb_to_hsv means we can't just dump the
     # arrays into the command like we can with rgb_to_yiq. Hence the horrible
     # for loop.
+    ny, nx = np.shape(R)
     H = np.empty(R.shape)
     S = np.empty(R.shape)
     V = np.empty(R.shape)
     for xi, xx in enumerate(xrange(R.shape[0])):
         for yi, yy in enumerate(xrange(R.shape[1])):
             H[xi, yi], S[xi, yi], V[xi, yi] = colorsys.rgb_to_hsv(R[xi, yi], G[xi, yi], B[xi, yi])
+
 
     # Clear out the weird -1 values
     H[H > 0.7] = H[H < 0.7].max()
