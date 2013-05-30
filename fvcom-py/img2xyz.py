@@ -9,7 +9,7 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 
-def rgb2z(R, G, B, zlev):
+def rgb2z(R, G, B, zlev, parm='H'):
     """
     For the levels specified in zlev, interpolate the colour values in [R, G,
     B] which fall between each set of defined colour levels.
@@ -25,6 +25,10 @@ def rgb2z(R, G, B, zlev):
         triplet; z is the number of vertical levels to interpolate between.
         For best results, this should be as detailed as possible to reduce
         errors in the interpolation.
+    parm : str
+        Which parameter to use from the HSV decomposition: 'H' (hue), 'S'
+        (saturation) or 'V' (value). Default is 'H'. Hue works well for rainbow
+        colour palettes and value works well for grayscale.
 
     Returns
     -------
@@ -51,39 +55,59 @@ def rgb2z(R, G, B, zlev):
         for yi, yy in enumerate(xrange(R.shape[1])):
             H[xi, yi], S[xi, yi], V[xi, yi] = colorsys.rgb_to_hsv(R[xi, yi], G[xi, yi], B[xi, yi])
 
-
     # Clear out the weird -1 values
-    H[H > 0.7] = H[H < 0.7].max()
+    #H[H > 0.7] = H[H < 0.7].max()
 
-    # Convert the RGBs to hues.
-    h = []
+    # Convert the scaling RGBs to hues.
+    h, s, v = [], [], []
     for lev in zlev:
         rgb = np.asarray(lev[1:])
         th, ts, tv = colorsys.rgb_to_hsv(rgb[0], rgb[1], rgb[2])
         h.append(th)
+        s.append(ts)
+        v.append(tv)
     del th, ts, tv
 
+    # Depending on the value of parm, create an array C which contains the
+    # colour data we're translating to depths.
+    if parm is 'H':
+        C, ci = H, h
+    elif parm is 'S':
+        C, ci = S, s
+    elif parm is 'V':
+        C, ci = V, v
+
     # Now go through the associated depths (in pairs) and find the values
-    # within H which fall between the corresponding h values and scale them to
+    # within C which fall between the corresponding h values and scale them to
     # the depths.
     z = np.zeros((ny, nx)) # images are all backwards
     nz = zlev.shape[0]
     for i in xrange(1, nz):
 
-        hs = h[i -1]
-        he = h[i]
-        if he < hs:
-            he, hs = hs, he
+        cs = ci[i -1]
+        ce = ci[i]
+        if ce < cs:
+            ce, cs = cs, ce
         zs = zlev[i -1, 0]
         ze = zlev[i, 0]
         if ze < zs:
             ze, zs = zs, ze
 
-        idx = np.where((H >= hs) * (H < he))
+        # The range probably shouldn't be inclusive at both ends...
+        idx = np.where((C >= cs) * (C <= ce))
 
-        zi = (((ze - zs) * (H[idx] - H[idx].min())) / (H[idx].max() - H[idx].min())) + zs
+        if C[idx].max() - C[idx].min() == 0:
+            # If the range of colours in this level is zero, we've got discrete
+            # colours (probably). As such, the scaling approach won't work, so
+            # we'll just assign all the values we've found to the mean of the
+            # two depths at the extremes of the current set of colours.
+            z[idx] = (ze - zs) / 2.0
 
-        z[idx] = zi
+        else:
+            print '{} {}'.format(C[idx].min(), C[idx].max())
+            zi = (((ze - zs) * (C[idx] - C[idx].min())) / (C[idx].max() - C[idx].min())) + zs
+
+            z[idx] = zi
 
     return z
 
