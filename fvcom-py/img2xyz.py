@@ -104,7 +104,6 @@ def rgb2z(R, G, B, zlev, parm='H'):
             z[idx] = (ze - zs) / 2.0
 
         else:
-            print '{} {}'.format(C[idx].min(), C[idx].max())
             zi = (((ze - zs) * (C[idx] - C[idx].min())) / (C[idx].max() - C[idx].min())) + zs
 
             z[idx] = zi
