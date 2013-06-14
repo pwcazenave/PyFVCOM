@@ -86,7 +86,7 @@ def readFVCOM(file, varList, clipDims=False, noisy=False):
                 if len(str(toExtract)) < 60:
                     print '(extracted {})'.format(str(toExtract).replace('\'', ''))
                 else:
-                    print '(extracted given nodes)'
+                    print '(extracted given indices)'
 
         elif noisy:
                 print
