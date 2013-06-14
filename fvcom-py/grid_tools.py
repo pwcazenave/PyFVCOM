@@ -1073,7 +1073,7 @@ def getRivers(discharge, positions, noisy=False):
 def mesh2grid(meshX, meshY, meshZ, nx, ny, thresh=None, noisy=False):
     """
     Resample the unstructured grid in meshX and meshY onto a regular grid whose
-    size in nx by ny. Optionally specify dist to control the proximity of
+    size is nx by ny. Optionally specify dist to control the proximity of
     a value considered valid.
 
     Parameters
