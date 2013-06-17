@@ -90,11 +90,17 @@ def depth2pressure(z, lat):
 
     """
 
+    # Convert depths to positive values only - should this be more robust? When
+    # will we have both positive and negative depth values? Wetting and drying
+    # springs to mind, but not sure what I can do about that here. The data
+    # should probably be sanitised before coming to here.
+    pz = np.abs(z)
+
     c2 = 2.21e-6
     Y = np.sin(np.deg2rad(np.abs(lat)))
     c1 = (5.92 + (5.25 * Y**2.0)) * 1.e-3
 
-    p = ((1.0 - c1) - np.sqrt((1.0 - c1)**2.0 - (4.0 * c2 * z))) / (2.0 * c2)
+    p = ((1.0 - c1) - np.sqrt((1.0 - c1)**2.0 - (4.0 * c2 * pz))) / (2.0 * c2)
 
     return p
 
@@ -234,19 +240,19 @@ def cp_sw(t, s, p):
     # Check for values outside the valid ranges.
     if t.min() < -2:
         n = np.sum(t < -2)
-        prin('WARNING: {} values below minimum value temperature (-2C)'.format(n))
+        print('WARNING: {} values below minimum value temperature (-2C)'.format(n))
 
     if t.max() > 40:
         n = np.sum(t > 40)
-        prin('WARNING: {} values above maximum value temperature (40C)'.format(n))
+        print('WARNING: {} values above maximum value temperature (40C)'.format(n))
 
     if s.min() < 0:
         n = np.sum(s < 0)
-        prin('WARNING: {} values below minimum salinity value (0 PSU)'.format(n))
+        print('WARNING: {} values below minimum salinity value (0 PSU)'.format(n))
 
     if s.max() > 42:
         n = np.sum(s > 42)
-        prin('WARNING: {} values above maximum salinity value (42C)'.format(n))
+        print('WARNING: {} values above maximum salinity value (42C)'.format(n))
 
     # Convert from decibar to bar and temperature to the 1968 temperature scale.
     pbar = p / 10.0
@@ -496,7 +502,7 @@ def sw_seck(t, s, p):
 
 def sw_dens(t, s, p):
     """
-    Convert temperature, salinity and temperature to density.
+    Convert temperature, salinity and pressure to density.
 
     Parameters
     ----------
@@ -527,27 +533,27 @@ def sw_dens(t, s, p):
     # Check for values outside the valid ranges.
     if t.min() < -2:
         n = np.sum(t < -2)
-        prin('WARNING: {} values below minimum value temperature (-2C)'.format(n))
+        print('WARNING: {} values below minimum value temperature (-2C)'.format(n))
 
     if t.max() > 40:
         n = np.sum(t > 40)
-        prin('WARNING: {} values above maximum value temperature (40C)'.format(n))
+        print('WARNING: {} values above maximum value temperature (40C)'.format(n))
 
     if s.min() < 0:
         n = np.sum(s < 0)
-        prin('WARNING: {} values below minimum salinity value (0 PSU)'.format(n))
+        print('WARNING: {} values below minimum salinity value (0 PSU)'.format(n))
 
     if s.max() > 42:
         n = np.sum(s > 42)
-        prin('WARNING: {} values above maximum salinity value (42C)'.format(n))
+        print('WARNING: {} values above maximum salinity value (42C)'.format(n))
 
     if p.min() < 0:
         n = np.sum(p < 0)
-        prin('WARNING: {} values below minimum pressure value (0 decibar)'.format(n))
+        print('WARNING: {} values below minimum pressure value (0 decibar)'.format(n))
 
     if p.max() > 10000:
         n = np.sum(p > 10000)
-        prin('WARNING: {} values above maximum pressure value (10000 decibar)'.format(n))
+        print('WARNING: {} values above maximum pressure value (10000 decibar)'.format(n))
 
     dens0 = sw_dens0(t, s)
     k = sw_seck(t, s, p)
