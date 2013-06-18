@@ -106,13 +106,13 @@ def depth2pressure(z, lat):
 
 def dT_adiab_sw(t, s, p):
     """
-    Calculate adiabatic temperature gradient (degrees Celcius dbar^{-1})
+    Calculate adiabatic temperature gradient (degrees Celsius dbar^{-1})
 
     Parameters
     ----------
 
     t : ndarray
-        Temperature (Celcius)
+        Temperature (Celsius)
     s : ndarray
         Salinity (PSU)
     p : ndarray
@@ -167,7 +167,7 @@ def theta_sw(t, s, p, pr):
     ----------
 
     t : ndarray
-        Temperature (1D array) in degrees Celcius.
+        Temperature (1D array) in degrees Celsius.
     s : ndarray
         Salinity (1D array) in practical salinity units (unitless). Must be the
         same shape as t.
@@ -180,7 +180,7 @@ def theta_sw(t, s, p, pr):
     -------
 
     th : ndarray
-        Potential temperature (Celcius)
+        Potential temperature (Celsius)
 
     """
 
@@ -216,7 +216,7 @@ def cp_sw(t, s, p):
     ----------
 
     t : ndarray
-        Temperature (1D array) in degrees Celcius.
+        Temperature (1D array) in degrees Celsius.
     s : ndarray
         Salinity (1D array) in practical salinity units (unitless). Must be the
         same shape as t.
@@ -227,7 +227,7 @@ def cp_sw(t, s, p):
     -------
 
     cp : ndarray
-        Constant pressure specific heat (Celcius).
+        Constant pressure specific heat (Celsius).
 
     Notes
     -----
@@ -351,7 +351,7 @@ def sw_smow(t):
     ----------
 
     t : ndarray
-        Temperature (1D array) in degrees Celcius.
+        Temperature (1D array) in degrees Celsius.
 
     Returns
     -------
@@ -383,7 +383,7 @@ def sw_dens0(t, s):
     ----------
 
     t : ndarray
-        Temperature (1D array) in degrees Celcius.
+        Temperature (1D array) in degrees Celsius.
     s: ndarray
         Salinity (PSU). Must be the same size as t.
 
@@ -424,7 +424,7 @@ def sw_seck(t, s, p):
     ----------
 
     t : ndarray
-        Temperature (1D array) in degrees Celcius.
+        Temperature (1D array) in degrees Celsius.
     s : ndarray
         Salinity (1D array) in practical salinity units (unitless). Must be the
         same shape as t.
@@ -508,7 +508,7 @@ def sw_dens(t, s, p):
     ----------
 
     t : ndarray
-        Temperature (1D array) in degrees Celcius.
+        Temperature (1D array) in degrees Celsius.
     s : ndarray
         Salinity (1D array) in practical salinity units (unitless). Must be the
         same shape as t.
@@ -567,7 +567,7 @@ def sw_svan(t, s, p):
     Calculate the specific volume (steric) anomaly.
 
     t : ndarray
-        Temperature (1D array) in degrees Celcius.
+        Temperature (1D array) in degrees Celsius.
     s : ndarray
         Salinity (1D array) in practical salinity units (unitless). Must be the
         same shape as t.
