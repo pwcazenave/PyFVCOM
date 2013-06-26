@@ -78,6 +78,9 @@ def readFVCOM(file, varList=None, clipDims=False, noisy=False, globalAtts=False)
     if noisy:
         print "File format: " + rootgrp.file_format
 
+    if varList is None:
+        varList = rootgrp.variables.iterkeys()
+
     FVCOM = {}
 
     # Add the dimensions to the output dict. Hope we won't have a variable
@@ -90,7 +93,7 @@ def readFVCOM(file, varList=None, clipDims=False, noisy=False, globalAtts=False)
             print 'Found ' + key,
             sys.stdout.flush()
 
-        if key in varList or varList is None:
+        if key in varList:
             vDims = rootgrp.variables[key].dimensions
 
             toExtract = [dims[d] for d in vDims]
@@ -119,6 +122,9 @@ def readFVCOM(file, varList=None, clipDims=False, noisy=False, globalAtts=False)
 
         elif noisy:
                 print
+
+    # Close the open file.
+    rootgrp.close()
 
     if globalAtts:
         return FVCOM, attributes
