@@ -1,5 +1,5 @@
 
-def readFVCOM(file, varList, clipDims=False, noisy=False):
+def readFVCOM(file, varList=None, clipDims=False, noisy=False, globalAtts=False):
     """
     Read in the FVCOM results file and spit out numpy arrays for each of the
     variables specified in the varList list.
@@ -17,19 +17,25 @@ def readFVCOM(file, varList, clipDims=False, noisy=False):
 
     Any dimension not given in clipDims will be extracted in full.
 
+    Specify globalAtts=True to extract global attributes.
+
     Parameters
     ----------
 
     file : str
         Full path to an FVCOM NetCDF output file.
-    varList : list
-        List of variable names to be extracted.
+    varList : list, optional
+        List of variable names to be extracted. If omitted, all variables are
+        returned.
     clipDims : dict, optional
         Dict whose keys are dimensions and whose values are a string of either
         a range (e.g. {'time':'0:100'}) or a list of individual indices (e.g.
         {'time':'[0, 1, 80, 100]'}).
     noisy : bool
         Set to True to enable verbose output.
+    globalAtts : bool, optional
+        Set to True to enable output of the global attributes (defaults to
+        False).
 
     Returns
     -------
@@ -37,6 +43,11 @@ def readFVCOM(file, varList, clipDims=False, noisy=False):
     FVCOM : dict
         Dict of data extracted from the NetCDF file. Keys are those given in
         varList and the data are stored as ndarrays.
+    attributes : dict, optional
+        If globAtt=True, returns the global attributes as a dict for each
+        variable in varList. The key 'dims' contains the array dimensions (each
+        variable contains the names of its dimensions) as well as the shape of
+        the dimensions defined in the NetCDF file.
 
     """
 
@@ -68,12 +79,18 @@ def readFVCOM(file, varList, clipDims=False, noisy=False):
         print "File format: " + rootgrp.file_format
 
     FVCOM = {}
+
+    # Add the dimensions to the output dict. Hope we won't have a variable
+    # named 'global'...
+    attributes = {}
+    attributes['dims'] = dims
+
     for key, var in rootgrp.variables.iteritems():
         if noisy:
             print 'Found ' + key,
             sys.stdout.flush()
 
-        if key in varList:
+        if key in varList or varList is None:
             vDims = rootgrp.variables[key].dimensions
 
             toExtract = [dims[d] for d in vDims]
@@ -81,6 +98,18 @@ def readFVCOM(file, varList, clipDims=False, noisy=False):
             # I know, I know, eval() is evil.
             getData = 'rootgrp.variables[\'{}\']{}'.format(key,str(toExtract).replace('\'', ''))
             FVCOM[key] = eval(getData)
+
+            # Add the units and dimensions for this variable
+            attributes[key] = {}
+            try:
+                attributes[key]['units'] = rootgrp.variables[key].units
+            except:
+                pass
+
+            try:
+                attributes[key]['dims'] = rootgrp.variables[key].dimensions
+            except:
+                pass
 
             if noisy:
                 if len(str(toExtract)) < 60:
@@ -91,7 +120,10 @@ def readFVCOM(file, varList, clipDims=False, noisy=False):
         elif noisy:
                 print
 
-    return FVCOM
+    if globalAtts:
+        return FVCOM, attributes
+    else:
+        return FVCOM
 
 
 def elems2nodes(elems, tri, nvert, noisy=False):
