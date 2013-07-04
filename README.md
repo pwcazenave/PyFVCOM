@@ -25,7 +25,7 @@ Prerequisites
 
 * OSGeo, another tool to read ESRI Shapefiles, available from <http://wiki.osgeo.org/wiki/OSGeo_Python_Library>.
 
-* TAPPy, a harmonic analysis tool for surface elevation time series, available from <http://sourceforge.net/projects/tappy/>.
+* TAPPy, a harmonic analysis tool for surface elevation time series, available from <http://sourceforge.net/projects/tappy/>. A slightly modified version of the TAPPy library is included in the toolbox (to allow importing as a module).
 
 Optionally:
 
@@ -34,6 +34,10 @@ Optionally:
 
 Provides
 --------
+
+* ctd_tools - interrogate an SQLite data base of CTD casts.
+    - getCTDMetadata
+    - getCTDData
 
 * cst_tools - create coastline files for SMS from shapefiles or DHI MIKE arcs.
     - readESRIShapeFile
@@ -60,6 +64,22 @@ Provides
 * ll2utm - convert from spherical to cartesian UTM coordinates and back. Available from <http://robotics.ai.uiuc.edu/~hyoon24/LatLongUTMconversion.py>.
     - LLtoUTM
     - UTMtoLL
+
+* oceal_tools - a number of routines to convert between combinations of temperature, salinity, pressure, depth and density.
+    - pressure2depth
+    - depth2pressure
+    - dT_adiab_sw
+    - theta_sw
+    - cp_sw
+    - sw_smow
+    - sw_dens0
+    - sw_seck
+    - sw_dens
+    - sw_svan
+    - sw_sal78
+    - sw_sal80
+    - sw_salinity
+    - dens_jackett
 
 * process_FVCOM_results - perform some analyses on FVCOM data read in using read_FVCOM_results.
     - calculateTotalCO2
@@ -92,6 +112,7 @@ Provides
 
 * tide_tools - tools to use and abuse tidal data from an SQLite database of tidal time series.
     - julianDay
+    - gregorianDate
     - addHarmonicResults
     - getObservedData
     - getObservedMetadata
