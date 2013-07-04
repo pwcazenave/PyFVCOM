@@ -93,6 +93,76 @@ def julianDay(gregorianDateTime, mjd=False):
     else:
         return jd
 
+def gregorianDate(julianDay, mjd=False):
+    """
+    For a given Julian Day convert to Gregorian date (YYYY, MM, DD, hh, mm,
+    ss). Optionally convert from modified Julian Day with mjd=True).
+
+    This function is adapted to Python from the MATLAB julian2greg.m function
+    (http://www.mathworks.co.uk/matlabcentral/fileexchange/11410).
+
+    Parameters
+    ----------
+
+    julianDay : ndarray
+        Array of Julian Days
+    mjd : boolean, optional
+        Set to True if the input is Modified Julian Days.
+
+    Returns
+    -------
+
+    greg : ndarray
+        Array of [YYYY, MM, DD, hh, mm, ss].
+
+    Example
+    -------
+
+    >>> greg = gregorianDate(np.array([53583.00390625, 55895.9765625]), mjd=True)
+    >>> greg.astype(int)
+    array([[2005,    8,    1,    0,    5,   38],
+           [2011,   11,   30,   23,   26,   15])
+
+    """
+
+    if mjd:
+        julianDay = julianDay + 2400000.5
+
+    I = np.floor(julianDay + 0.5)
+    Fr = np.abs(I - (julianDay + 0.5))
+
+    if np.any(I < 2299160):
+        B = I
+    else:
+        A = np.floor((I - 1867216.25) / 36524.25)
+        a4 = np.floor(A / 4)
+        B = I + 1.0 + A - a4
+
+    C = B + 1524.0
+    D = np.floor((C - 122.1) / 365.25)
+    E = np.floor(365.25 * D)
+    G = np.floor((C - E) / 30.6001)
+    day = np.floor(C - E + Fr - np.floor(30.6001 * G))
+
+    if np.any(G > 13.5):
+        month = G - 13
+    else:
+        month = G - 1
+
+    if np.any(month <= 2.5):
+        year = D - 4715
+    else:
+        year = D - 4716
+
+    hour = np.floor(Fr * 24)
+    minu = np.floor(np.abs(hour - (Fr * 24)) * 60)
+    minufrac = (np.abs(hour - (Fr * 24)) * 60)
+    sec = ceil(np.abs(minu - minufrac) * 60)
+
+    greg = np.column_stack((year, month, day, hour, minu, sec))
+
+    return greg
+
 def addHarmonicResults(db, stationName, constituentName, phase, amplitude, speed, inferred, noisy=False):
     """
     Add data to an SQLite database.
