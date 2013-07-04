@@ -763,27 +763,25 @@ def elementSideLengths(triangles, x, y):
 
 def fixCoordinates(FVCOM, UTMZone, inVars=['x', 'y']):
     """
-    Use the UTMtoLL function to convert the grid from UTM to Lat/Long.
-    Returns longitude and latitude in the range -180 to 180.
+    Use the UTMtoLL function to convert the grid from UTM to Lat/Long. Returns
+    longitude and latitude in the range -180 to 180.
 
-    By default, the variables which will be converted from UTM to
-    Lat/Long are 'x' and 'y'. To specify a different pair, give
-    inVars=['xc', 'yc'], for example, to convert the 'xc' and 'yc'
-    variables instead. Their order should be x-direction followed by
-    y-direction.
+    By default, the variables which will be converted from UTM to Lat/Long are
+    'x' and 'y'. To specify a different pair, give inVars=['xc', 'yc'], for
+    example, to convert the 'xc' and 'yc' variables instead. Their order should
+    be x-direction followed by y-direction.
 
     Parameters
     ----------
 
     FVCOM : dict
-        Dict of the FVCOM model results (see
-        read_FVCOM_results.readFVCOM).
+        Dict of the FVCOM model results (see read_FVCOM_results.readFVCOM).
     UTMZone : str
         UTM Zone (e.g. '30N').
     inVars : list, optional
-        List of strings specifying the keys for FVCOM to be used as
-        input. Defaults to ['x', 'y'] but if you wanted to convert
-        element centres, change to ['xc', 'yc'] instead.
+        List of strings specifying the keys for FVCOM to be used as input.
+        Defaults to ['x', 'y'] but if you wanted to convert element centres,
+        change to ['xc', 'yc'] instead.
 
     Returns
     -------
@@ -1362,7 +1360,7 @@ def lineSample(x, y, positions, num=0, noisy=False, debug=False):
             # So really, this shouldn't be that difficult, all we're doing is
             # finding the intersection of two lines which are orthogonal to one
             # another. We basically need to find the equations of both lines and
-            # the solve for the intersection.
+            # then solve for the intersection.
 
             # First things first, clip the coordinates to a rectangle defined by
             # the start and end coordinates. We'll use a buffer based on the size
