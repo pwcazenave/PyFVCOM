@@ -1,0 +1,131 @@
+"""
+Functions to interrogate and extract CTD data from the ctd.db SQLite3 database.
+
+"""
+
+import numpy as np
+
+def getCTDMetadata(db):
+    """
+    Extracts the meta data from the CTD database.
+
+    Parameters
+    ----------
+
+    db : str
+        Full path to the CTD data SQLite database.
+
+    Returns
+    -------
+
+    meta_info : list
+        List of dicts with keys based on the field names from the Stations
+        table. Returns [False] if there is an error.
+
+    """
+
+    try:
+        import sqlite3
+    except ImportError:
+        raise ImportError('Failed to import the SQLite3 module')
+
+    def _dict_factory(cursor, row):
+        d = {}
+        for idx,col in enumerate(cursor.description):
+            d[col[0]] = row[idx]
+        return d
+
+    try:
+        con = sqlite3.connect(db)
+
+        con.row_factory = _dict_factory
+
+        c = con.cursor()
+
+        out = c.execute('SELECT * from Stations')
+
+        meta_info = out.fetchall()
+
+    except sqlite3.Error, e:
+        if con:
+            con.close()
+            print 'Error %s:' % e.args[0]
+            meta_info = [False]
+
+    finally:
+        if con:
+            con.close()
+
+    return meta_info
+
+def getCTDData(db, table, fields, noisy=False):
+    """
+    Extract the CTD from the SQLite database for a given site.  Specify the
+    database (db), the table name (table) of the station of interest.
+
+    Parameters
+    ----------
+
+    db : str
+        Full path to the CTD data SQLite database.
+    table : str
+        Name of the table to be extracted (e.g. 'b0000001').
+    fields : list
+        List of names of fields to extract for the given table, such as
+        ['Depth', 'Temperature']. Where no data exists, a column of NaNs will
+        be returned (actually Nones, but numpy does the conversion for you).
+    noisy : bool, optional
+        Set to True to enable verbose output.
+
+    Returns
+    -------
+
+    data : ndarray
+        Array of the fields requested from the table specified.
+
+    See Also
+    --------
+
+    ctd_tools.getObservedMetadata : extract metadata for a CTD cast.
+
+    Notes
+    -----
+
+    Search is case insensitive (b0737327 is equal to B0737327).
+
+    """
+
+    try:
+        import sqlite3
+    except ImportError:
+        raise ImportError('Failed to import the SQLite3 module')
+
+    if noisy:
+        print 'Getting data for {} from the database...'.format(table),
+
+    try:
+        con = sqlite3.connect(db)
+
+        with con:
+            c = con.cursor()
+            # I know, using a string is Bad. But it works and it's only me
+            # working with this.
+            c.execute('SELECT {} FROM {}'.format(','.join(fields), table))
+
+            # Now get the data in a format we might actually want to use
+            data = np.asarray(c.fetchall())
+
+        if noisy:
+            print 'done.'
+
+    except sqlite3.Error, e:
+        if con:
+            con.close()
+            print 'Error %s:' % e.args[0]
+            data = np.asarray([False])
+
+    finally:
+        if con:
+            con.close()
+
+    return data
