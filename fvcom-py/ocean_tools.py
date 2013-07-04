@@ -1,6 +1,7 @@
 """
-A collection of some useful ocean functions. These are taken from a range of MATLAB toolboxes as well as from ocean_funcs.ncl, which in turn has taken
-them from the CSIRO SEAWATER (now GSW) MATLAB toolbox.
+A collection of some useful ocean functions. These are taken from a range of
+MATLAB toolboxes as well as from ocean_funcs.ncl, which in turn has taken them
+from the CSIRO SEAWATER (now GSW) MATLAB toolbox.
 
 The NCL code can be found at:
     http://www.ncl.ucar.edu/Support/talk_archives/2013/att-1501/ocean_funcs.ncl__size_15540__creation-date_
@@ -57,9 +58,9 @@ c68 = 1.00024   # conversion constant to T68 temperature scale.
 c90 = 0.99976   # conversion constant to T90 temperature scale.
 
 def _tests():
-    import matplotlib.pyplot as plt
-
     # Put some unit tests in here to make sure the functions work as expected.
+
+    import matplotlib.pyplot as plt
 
     test_lat = 30
 
