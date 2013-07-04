@@ -125,6 +125,11 @@ def gregorianDate(julianDay, mjd=False):
 
     """
 
+    try:
+        import numpy as np
+    except ImportError:
+        raise ImportError('Failed to import NumPy')
+
     if mjd:
         julianDay = julianDay + 2400000.5
 
@@ -157,7 +162,7 @@ def gregorianDate(julianDay, mjd=False):
     hour = np.floor(Fr * 24)
     minu = np.floor(np.abs(hour - (Fr * 24)) * 60)
     minufrac = (np.abs(hour - (Fr * 24)) * 60)
-    sec = ceil(np.abs(minu - minufrac) * 60)
+    sec = np.ceil(np.abs(minu - minufrac) * 60)
 
     greg = np.column_stack((year, month, day, hour, minu, sec))
 
