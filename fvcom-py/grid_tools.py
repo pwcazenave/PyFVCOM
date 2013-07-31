@@ -1125,8 +1125,8 @@ def mesh2grid(meshX, meshY, meshZ, nx, ny, thresh=None, noisy=False):
         # Do all the y-positions with findNearestPoint
         for yi, ypos in enumerate(yy):
             # Find the nearest node in the unstructured grid data and grab its
-            # u and v valuev. If it's beyond some threshold distance, set the
-            # z value to NaN.
+            # u and v values. If it's beyond some threshold distance, leave the
+            # z value as NaN.
             dist = np.sqrt((meshX - xpos)**2 + (meshY - ypos)**2)
 
             # Get the index of the minimum and extract the values only if the
