@@ -164,6 +164,10 @@ def gregorianDate(julianDay, mjd=False):
     minufrac = (np.abs(hour - (Fr * 24)) * 60)
     sec = np.ceil(np.abs(minu - minufrac) * 60)
 
+    # Fix some months being negative. This only happens if the input is larger
+    # than ~30 elements in the array. No idea why.
+    month[month < 1] = month[month < 1] + 12
+
     greg = np.column_stack((year, month, day, hour, minu, sec))
 
     return greg
@@ -652,12 +656,12 @@ def runTAPPy(data, sparseDef=False, noisy=False, deleteFile=True, tappy='/usr/bi
     except:
         raise ImportError('Failed to import NumPy')
 
-    if sparseDef is False:
+    if not sparseDef:
         sparseDef = '/users/modellers/pica/Data/proc/tides/sparse.def'
 
     tFile = tempfile.NamedTemporaryFile(delete=deleteFile)
     if noisy:
-        if deleteFile is False:
+        if not deleteFile:
             print 'Saving to temporary file {}...'.format(tFile.name)
         else:
             print 'Saving to temporary file...',

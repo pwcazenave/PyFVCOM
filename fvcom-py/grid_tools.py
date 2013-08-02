@@ -597,7 +597,7 @@ def plotUnstructuredGridProjected(triangles, nodes, x, y, z, colourLabel, addTex
     from mpl_toolkits.basemap import Basemap
     from matplotlib import tri
 
-    if extents is False:
+    if not extents:
         # We don't have a specific region defined, so use minmax of x and y.
         extents = [ min(x), max(x), min(y), max(y) ]
 
