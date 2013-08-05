@@ -22,8 +22,10 @@ def readFVCOM(file, varList=None, clipDims=False, noisy=False, globalAtts=False)
     Parameters
     ----------
 
-    file : str
-        Full path to an FVCOM NetCDF output file.
+    file : str, list
+        If a string, the full path to an FVCOM NetCDF output file. If a list,
+        a series of files to be loaded. Data will be concatenated into a single
+        dict.
     varList : list, optional
         List of variable names to be extracted. If omitted, all variables are
         returned.
@@ -52,13 +54,18 @@ def readFVCOM(file, varList=None, clipDims=False, noisy=False, globalAtts=False)
     """
 
     try:
-        from netCDF4 import Dataset
+        from netCDF4 import Dataset, MFDataset
     except ImportError:
         raise ImportError('Failed to load the NetCDF4 library')
 
     import sys
 
-    rootgrp = Dataset(file, 'r')
+    # If we have a list, assume it's lots of files and load them all.
+    if isinstance(file, list):
+        rootgrp = MFDataset(file, 'r')
+    else:
+        rootgrp = Dataset(file, 'r')
+
 
     # Create a dict of the dimension names and their current sizes
     dims = {}
@@ -76,7 +83,7 @@ def readFVCOM(file, varList=None, clipDims=False, noisy=False, globalAtts=False)
             dims[k] = clipDims[k]
 
     if noisy:
-        print "File format: " + rootgrp.file_format
+        print "File format: {}".format(rootgrp.file_format)
 
     if varList is None:
         varList = rootgrp.variables.iterkeys()
