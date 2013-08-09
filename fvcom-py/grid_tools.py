@@ -1127,7 +1127,11 @@ def mesh2grid(meshX, meshY, meshZ, nx, ny, thresh=None, noisy=False):
         zz = np.empty((nx.shape) + meshZ.shape[1:]) * np.nan
 
     if noisy:
-        print 'Resampling the unstructured grid onto a regular grid ({} by {}). Be patient...'.format(nx, ny),
+        if isinstance(nx, int) and isinstance(ny, int):
+            print('Resampling the unstructured grid onto a regular grid ({} by {}). Be patient...'.format(nx, ny))
+        else:
+            print('Resampling the unstructured grid onto a regular grid ({} by {}). Be patient...'.format(len(nx[:, 1]), len(ny[0, :])))
+
         sys.stdout.flush()
 
     if isinstance(nx, int) and isinstance(ny, int):
@@ -1152,12 +1156,18 @@ def mesh2grid(meshX, meshY, meshZ, nx, ny, thresh=None, noisy=False):
     else:
         # We've been given positions, so run through those instead of our
         # regularly sampled grid.
-        for xi, _ in enumerate(xx[1]):
-            for yi, _ in enumerate(yy[0]):
-                dist = np.sqrt((meshX - xx[xi, yi])**2 + (meshY - yy[xi, yi])**2)
+        c = 0
+        for ci, _ in enumerate(xx[0, :]):
+            for ri, _ in enumerate(yy[:, 0]):
+                if noisy:
+                    if np.mod(c, 1000) == 0 or c == 0:
+                        print('{} of {}'.format(c, len(xx[0, :]) * len(yy[:, 0])))
+                c += 1
+
+                dist = np.sqrt((meshX - xx[ri, ci])**2 + (meshY - yy[ri, ci])**2)
                 if dist.min() < thresh:
                     idx = dist.argmin()
-                    zz[xi, yi, ...] = meshZ[idx, ...]
+                    zz[ri, ci, ...] = meshZ[idx, ...]
 
     if noisy:
         print 'done.'
