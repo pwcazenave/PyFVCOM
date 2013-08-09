@@ -1071,8 +1071,8 @@ def getRivers(discharge, positions, noisy=False):
 def mesh2grid(meshX, meshY, meshZ, nx, ny, thresh=None, noisy=False):
     """
     Resample the unstructured grid in meshX and meshY onto a regular grid whose
-    size is nx by ny. Optionally specify dist to control the proximity of
-    a value considered valid.
+    size is nx by ny or which is specified by the arrays nx, ny. Optionally
+    specify dist to control the proximity of a value considered valid.
 
     Parameters
     ----------
@@ -1083,9 +1083,10 @@ def mesh2grid(meshX, meshY, meshZ, nx, ny, thresh=None, noisy=False):
         Array of values to be resampled onto the regular grid. The shape of the
         array should have the nodes as the first dimension. All subsequent
         dimensions will be propagated automatically.
-    nx, ny : int
+    nx, ny : int, ndarray
         Number of samples in x and y onto which to sample the unstructured
-        grid.
+        grid. If given as a list or array, the values within the arrays are
+        assumed to be positions in x and y.
     thresh : float, optional
         Distance beyond which a sample is considered too far from the current
         node to be included.
@@ -1108,37 +1109,55 @@ def mesh2grid(meshX, meshY, meshZ, nx, ny, thresh=None, noisy=False):
     # Get the extents of the input data.
     xmin, xmax, ymin, ymax = meshX.min(), meshX.max(), meshY.min(), meshY.max()
 
-    xx = np.linspace(xmin, xmax, nx)
-    yy = np.linspace(ymin, ymax, ny)
+    if isinstance(nx, int) and isinstance(ny, int):
+        xx = np.linspace(xmin, xmax, nx)
+        yy = np.linspace(ymin, ymax, ny)
+    else:
+        xx = nx
+        yy = ny
 
     # We need to check the input we're resampling for its number of dimensions
     # so we can create an output array of the right shape. We can just take the
     # shape of the input, omitting the first value (the nodes). That should
     # leave us with the right shape. This even works for 1D inputs (i.e. a
     # single value at each unstructured grid location).
-    zz = np.empty((nx, ny) + meshZ.shape[1:]) * np.nan
+    if isinstance(nx, int) and isinstance(ny, int):
+        zz = np.empty((nx, ny) + meshZ.shape[1:]) * np.nan
+    else:
+        zz = np.empty((nx.shape) + meshZ.shape[1:]) * np.nan
+
     if noisy:
         print 'Resampling the unstructured grid onto a regular grid ({} by {}). Be patient...'.format(nx, ny),
         sys.stdout.flush()
 
-    for xi, xpos in enumerate(xx):
-        # Do all the y-positions with findNearestPoint
-        for yi, ypos in enumerate(yy):
-            # Find the nearest node in the unstructured grid data and grab its
-            # u and v values. If it's beyond some threshold distance, leave the
-            # z value as NaN.
-            dist = np.sqrt((meshX - xpos)**2 + (meshY - ypos)**2)
+    if isinstance(nx, int) and isinstance(ny, int):
+        for xi, xpos in enumerate(xx):
+            # Do all the y-positions with findNearestPoint
+            for yi, ypos in enumerate(yy):
+                # Find the nearest node in the unstructured grid data and grab its
+                # u and v values. If it's beyond some threshold distance, leave the
+                # z value as NaN.
+                dist = np.sqrt((meshX - xpos)**2 + (meshY - ypos)**2)
 
-            # Get the index of the minimum and extract the values only if the
-            # nearest point is within the threshold distance (thresh).
-            if dist.min() < thresh:
-                idx = dist.argmin()
+                # Get the index of the minimum and extract the values only if the
+                # nearest point is within the threshold distance (thresh).
+                if dist.min() < thresh:
+                    idx = dist.argmin()
 
-                # The ... means "and all the other dimensions". Since we've
-                # asked for our input array to have the nodes as the first
-                # dimension, this means we can just get all the others when
-                # using the node index.
-                zz[xi, yi, ...] = meshZ[idx, ...]
+                    # The ... means "and all the other dimensions". Since we've
+                    # asked for our input array to have the nodes as the first
+                    # dimension, this means we can just get all the others when
+                    # using the node index.
+                    zz[xi, yi, ...] = meshZ[idx, ...]
+    else:
+        # We've been given positions, so run through those instead of our
+        # regularly sampled grid.
+        for xi, _ in enumerate(xx[1]):
+            for yi, _ in enumerate(yy[0]):
+                dist = np.sqrt((meshX - xx[xi, yi])**2 + (meshY - yy[xi, yi])**2)
+                if dist.min() < thresh:
+                    idx = dist.argmin()
+                    zz[xi, yi, ...] = meshZ[idx, ...]
 
     if noisy:
         print 'done.'
