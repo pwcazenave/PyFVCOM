@@ -129,3 +129,72 @@ def getCTDData(db, table, fields, noisy=False):
             con.close()
 
     return data
+
+def getFerryBoxData(db, fields, table='PrideOfBilbao', noisy=False):
+    """
+    Extract the Ferry Box data from the SQLite database for a given route
+    (defaults to PrideOfBilbao). Specify the database (db), the table name
+    (table) of the station of interest.
+
+    Parameters
+    ----------
+
+    db : str
+        Full path to the CTD data SQLite database.
+    fields : list
+        List of names of fields to extract for the given table, such as
+        ['salinity', 'temp']. Where no data exists, a column of NaNs will
+        be returned (actually Nones, but numpy does the conversion for you).
+    table : str, optional
+        Name of the table to be extracted (defaults to 'PrideOfBilbao').
+    noisy : bool, optional
+        Set to True to enable verbose output.
+
+    Returns
+    -------
+
+    data : ndarray
+        Array of the fields requested from the table specified.
+
+    Notes
+    -----
+
+    Search is case insensitive (b0737327 is equal to B0737327).
+
+    """
+
+    try:
+        import sqlite3
+    except ImportError:
+        raise ImportError('Failed to import the SQLite3 module')
+
+    if noisy:
+        print 'Getting data for {} from the database...'.format(table),
+
+    try:
+        con = sqlite3.connect(db)
+
+        with con:
+            c = con.cursor()
+            # I know, using a string is Bad. But it works and it's only me
+            # working with this.
+            c.execute('SELECT {} FROM {}'.format(','.join(fields), table))
+
+            # Now get the data in a format we might actually want to use
+            data = np.asarray(c.fetchall())
+
+        if noisy:
+            print 'done.'
+
+    except sqlite3.Error, e:
+        if con:
+            con.close()
+            print 'Error %s:' % e.args[0]
+            data = np.asarray([False])
+
+    finally:
+        if con:
+            con.close()
+
+    return data
+
