@@ -2,14 +2,13 @@
 
 # Lat Long - UTM, UTM - Lat Long conversions
 
-from math import pi, sin, cos, tan, sqrt
+# Adjusted for use with NumPy by Pierre Cazenave <pica {at} pml.ac.uk>
+
+import numpy as np
 
 # LatLong- UTM conversion..h
 # definitions for lat/long to UTM and UTM to lat/lng conversions
 # include <string.h>
-
-_deg2rad = pi / 180.0
-_rad2deg = 180.0 / pi
 
 _EquatorialRadius = 2
 _eccentricitySquared = 3
@@ -67,39 +66,52 @@ def LLtoUTM(ReferenceEllipsoid, Lat, Long, ZoneNumber=False):
     # Lat and Long are in decimal degrees
     # Written by Chuck Gantz- chuck.gantz@globalstar.com
 
+    if ~isinstance(Long, np.ndarray):
+        Long = np.asarray(Long)
+
+    if ~isinstance(Lat, np.ndarray):
+        Lat = np.asarray(Lat)
+
     a = _ellipsoid[ReferenceEllipsoid][_EquatorialRadius]
     eccSquared = _ellipsoid[ReferenceEllipsoid][_eccentricitySquared]
     k0 = 0.9996
 
     # Make sure the longitude is between -180.00 .. 179.9
-    LongTemp = (Long+180)-int((Long+180)/360)*360-180 # -180.00 .. 179.9
+    LongTemp = (Long+180)-np.floor((Long+180)/360).astype(int)*360-180 # -180.00 .. 179.9
 
-    LatRad = Lat*_deg2rad
-    LongRad = LongTemp*_deg2rad
+    LatRad = np.deg2rad(Lat)
+    LongRad = np.deg2rad(LongTemp)
 
-    ZoneNumber = int((LongTemp + 180)/6) + 1
+    # Add loop around the Latitudes to get the correct zone information. Build
+    # a list of the zones for all coordinates.
+    Zone = []
+    if np.ndim(Lat) > 0:
+        for c, ll in enumerate(zip(LongTemp, Lat)):
+            ZoneNumber = int((ll[0] + 180)/6) + 1
 
-    if Lat >= 56.0 and Lat < 64.0 and LongTemp >= 3.0 and LongTemp < 12.0:
-        ZoneNumber = 32
+            if ll[1] >= 56.0 and ll[1] < 64.0 and ll[0] >= 3.0 and ll[0] < 12.0:
+                ZoneNumber = 32
 
-    # Special zones for Svalbard
-    if Lat >= 72.0 and Lat < 84.0:
-        if LongTemp >= 0.0  and LongTemp <  9.0: ZoneNumber = 31
-        elif LongTemp >= 9.0  and LongTemp < 21.0: ZoneNumber = 33
-        elif LongTemp >= 21.0 and LongTemp < 33.0: ZoneNumber = 35
-        elif LongTemp >= 33.0 and LongTemp < 42.0: ZoneNumber = 37
+            # Special zones for Svalbard
+            if ll[1] >= 72.0 and ll[1] < 84.0:
+                if ll[0] >= 0.0  and ll[0] <  9.0: ZoneNumber = 31
+                elif ll[0] >= 9.0  and ll[0] < 21.0: ZoneNumber = 33
+                elif ll[0] >= 21.0 and ll[0] < 33.0: ZoneNumber = 35
+                elif ll[0] >= 33.0 and ll[0] < 42.0: ZoneNumber = 37
 
-    LongOrigin = (ZoneNumber - 1) * 6 - 180 + 3 # +3 puts origin in middle of zone
-    LongOriginRad = LongOrigin * _deg2rad
+            LongOrigin = (ZoneNumber - 1) * 6 - 180 + 3 # +3 puts origin in middle of zone
+            LongOriginRad = np.deg2rad(LongOrigin)
 
-    # Compute the UTM Zone from the latitude and longitude
-    UTMZone = "%d%c" % (ZoneNumber, _UTMLetterDesignator(Lat))
+            # Compute the UTM Zone from the latitude and longitude
+            UTMZone ="%d%c" % (ZoneNumber, _UTMLetterDesignator(ll[1]))
+
+            Zone.append(UTMZone)
 
     eccPrimeSquared = (eccSquared)/(1-eccSquared)
-    N = a/sqrt(1-eccSquared*sin(LatRad)*sin(LatRad))
-    T = tan(LatRad)*tan(LatRad)
-    C = eccPrimeSquared*cos(LatRad)*cos(LatRad)
-    A = cos(LatRad)*(LongRad-LongOriginRad)
+    N = a/np.sqrt(1-eccSquared*np.sin(LatRad)*np.sin(LatRad))
+    T = np.tan(LatRad)*np.tan(LatRad)
+    C = eccPrimeSquared*np.cos(LatRad)*np.cos(LatRad)
+    A = np.cos(LatRad)*(LongRad-LongOriginRad)
 
     M = a*((1
             - eccSquared/4
@@ -107,24 +119,35 @@ def LLtoUTM(ReferenceEllipsoid, Lat, Long, ZoneNumber=False):
             - 5*eccSquared*eccSquared*eccSquared/256)*LatRad
            - (3*eccSquared/8
               + 3*eccSquared*eccSquared/32
-              + 45*eccSquared*eccSquared*eccSquared/1024)*sin(2*LatRad)
-           + (15*eccSquared*eccSquared/256 + 45*eccSquared*eccSquared*eccSquared/1024)*sin(4*LatRad)
-           - (35*eccSquared*eccSquared*eccSquared/3072)*sin(6*LatRad))
+              + 45*eccSquared*eccSquared*eccSquared/1024)*np.sin(2*LatRad)
+           + (15*eccSquared*eccSquared/256 + 45*eccSquared*eccSquared*eccSquared/1024)*np.sin(4*LatRad)
+           - (35*eccSquared*eccSquared*eccSquared/3072)*np.sin(6*LatRad))
 
     UTMEasting = (k0*N*(A+(1-T+C)*A*A*A/6
                         + (5-18*T+T*T+72*C-58*eccPrimeSquared)*A*A*A*A*A/120)
                   + 500000.0)
 
-    UTMNorthing = (k0*(M+N*tan(LatRad)*(A*A/2+(5-T+9*C+4*C*C)*A*A*A*A/24
+    UTMNorthing = (k0*(M+N*np.tan(LatRad)*(A*A/2+(5-T+9*C+4*C*C)*A*A*A*A/24
                                         + (61
                                            -58*T
                                            +T*T
                                            +600*C
                                            -330*eccPrimeSquared)*A*A*A*A*A*A/720)))
 
-    if Lat < 0:
-        UTMNorthing = UTMNorthing + 10000000.0; #10000000 meter offset for southern hemisphere
-    return (UTMZone, UTMEasting, UTMNorthing)
+    Northing = []
+    if np.ndim(Lat) > 0:
+        for c, l in enumerate(Lat):
+            if l < 0:
+                Northing.append(UTMNorthing[c] + 10000000.0) # 10000000 meter offset for southern hemisphere
+            else:
+                Northing.append(UTMNorthing[c])
+
+        UTMNorthing = Northing
+    else:
+        if Lat < 0:
+            UTMNorthing = UTMNorthing + 10000000.0; #10000000 meter offset for southern hemisphere
+
+    return (Zone, UTMEasting, UTMNorthing)
 
 def _UTMLetterDesignator(Lat):
     # This routine determines the correct UTM letter designator for the given
@@ -169,8 +192,14 @@ def UTMtoLL(ReferenceEllipsoid, northing, easting, zone):
     k0 = 0.9996
     a = _ellipsoid[ReferenceEllipsoid][_EquatorialRadius]
     eccSquared = _ellipsoid[ReferenceEllipsoid][_eccentricitySquared]
-    e1 = (1-sqrt(1-eccSquared))/(1+sqrt(1-eccSquared))
+    e1 = (1-np.sqrt(1-eccSquared))/(1+np.sqrt(1-eccSquared))
     # NorthernHemisphere; //1 for northern hemisphere, 0 for southern
+
+    if ~isinstance(easting, np.ndarray):
+        easting = np.asarray(easting)
+
+    if ~isinstance(northing, np.ndarray):
+        northing = np.asarray(northing)
 
     x = easting - 500000.0 # remove 500,000 meter offset for longitude
     y = northing
@@ -190,24 +219,24 @@ def UTMtoLL(ReferenceEllipsoid, northing, easting, zone):
     M = y / k0
     mu = M/(a*(1-eccSquared/4-3*eccSquared*eccSquared/64-5*eccSquared*eccSquared*eccSquared/256))
 
-    phi1Rad = (mu + (3*e1/2-27*e1*e1*e1/32)*sin(2*mu)
-               + (21*e1*e1/16-55*e1*e1*e1*e1/32)*sin(4*mu)
-               +(151*e1*e1*e1/96)*sin(6*mu))
-    phi1 = phi1Rad*_rad2deg;
+    phi1Rad = (mu + (3*e1/2-27*e1*e1*e1/32)*np.sin(2*mu)
+               + (21*e1*e1/16-55*e1*e1*e1*e1/32)*np.sin(4*mu)
+               +(151*e1*e1*e1/96)*np.sin(6*mu))
+    phi1 = np.rad2deg(phi1Rad)
 
-    N1 = a/sqrt(1-eccSquared*sin(phi1Rad)*sin(phi1Rad))
-    T1 = tan(phi1Rad)*tan(phi1Rad)
-    C1 = eccPrimeSquared*cos(phi1Rad)*cos(phi1Rad)
-    R1 = a*(1-eccSquared)/pow(1-eccSquared*sin(phi1Rad)*sin(phi1Rad), 1.5)
+    N1 = a/np.sqrt(1-eccSquared*np.sin(phi1Rad)*np.sin(phi1Rad))
+    T1 = np.tan(phi1Rad)*np.tan(phi1Rad)
+    C1 = eccPrimeSquared*np.cos(phi1Rad)*np.cos(phi1Rad)
+    R1 = a*(1-eccSquared)/np.power(1-eccSquared*np.sin(phi1Rad)*np.sin(phi1Rad), 1.5)
     D = x/(N1*k0)
 
-    Lat = phi1Rad - (N1*tan(phi1Rad)/R1)*(D*D/2-(5+3*T1+10*C1-4*C1*C1-9*eccPrimeSquared)*D*D*D*D/24
+    Lat = phi1Rad - (N1*np.tan(phi1Rad)/R1)*(D*D/2-(5+3*T1+10*C1-4*C1*C1-9*eccPrimeSquared)*D*D*D*D/24
                                           +(61+90*T1+298*C1+45*T1*T1-252*eccPrimeSquared-3*C1*C1)*D*D*D*D*D*D/720)
-    Lat = Lat * _rad2deg
+    Lat = np.rad2deg(Lat)
 
     Long = (D-(1+2*T1+C1)*D*D*D/6+(5-2*C1+28*T1-3*C1*C1+8*eccPrimeSquared+24*T1*T1)
-            *D*D*D*D*D/120)/cos(phi1Rad)
-    Long = LongOrigin + Long * _rad2deg
+            *D*D*D*D*D/120)/np.cos(phi1Rad)
+    Long = LongOrigin + np.rad2deg(Long)
     return (Lat, Long)
 
 if __name__ == '__main__':
