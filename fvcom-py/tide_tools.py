@@ -863,9 +863,8 @@ def readPOLPRED(harmonics, noisy=False):
     See Also
     --------
 
-    tide_tools.grid_polpred : Converts the POLPRED data into a
-        rectangular gridded data set with values of -999.9 outside the
-        POLPRED domain.
+    tide_tools.gridPOLPRED : Converts the POLPRED data into a rectangular
+        gridded data set with values of -999.9 outside the POLPRED domain.
 
     """
 
@@ -978,7 +977,7 @@ def gridPOLPRED(values, noisy=False):
     arridx = []
     for i, (xx, yy) in enumerate(values[:, [1, 0]]):
         if noisy:
-            if np.mod(i, 1000) == 0 or i == 0:
+            if np.mod(i + 1, 1000) == 0 or i == 0:
                 print '{} of {}'.format(i + 1, np.shape(values)[0])
         arridx.append([i, px.tolist().index(xx), py.tolist().index(yy)])
 
