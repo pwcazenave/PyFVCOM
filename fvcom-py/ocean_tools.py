@@ -100,6 +100,7 @@ def _tests():
     test_td = np.array(20) # for dens_jackett
     test_sd = np.array(20) # for dens_jackett
     test_pd = np.array(1000) # for dens_jackett
+    test_cond = np.array([100, 65000]) # for cond2salt
 
     # Use some of the Fofonoff and Millard (1983) checks.
     res_svan = sw_svan(test_t, test_s, test_p)
@@ -133,6 +134,9 @@ def _tests():
 
     res_dens = dens_jackett(test_td, test_sd, test_pd)
     print('Jackett density\nJackett et al. (2005):\t1017.728868019642\ndens_jackett:\t\t{}\n'.format(res_dens))
+
+    res_salt = cond2salt(test_cond)
+    print('Conductivity to salinity\nUSGS:\t\t0.046,\t\t\t44.016\ncond2salt:\t{},\t{}'.format(res_salt[0], res_salt[1]))
 
 def pressure2depth(p, lat):
     """
@@ -990,7 +994,102 @@ def dens_jackett(th, s, p=None):
 
     return dens
 
+def cond2salt(cond):
+    """
+    Convert conductivity to salinity assuming constant temperature (25 celsius)
+    and pressure.
+
+    Parameters
+    ----------
+
+    cond : ndarray
+        Conductivity in microsiemens per cm.
+
+    Returns
+    -------
+
+    salt : ndarray
+        Salinity in PSU.
+
+    References
+    ----------
+
+    Schemel, L. E., 2001, Simplified conversions between specific conductance
+    and salinity units for use with data from monitoring stations, IEP
+    Newsletter, v. 14, no. 1, p. 17-18 [accessed July 27, 2004, at
+    http://www.iep.ca.gov/report/newsletter/2001winter/IEPNewsletterWinter2001.pdf]
+
+    """
+
+    # Some constants
+    k1, k2, k3, k4, k5, k6 = 0.012, -0.2174, 25.3283, 13.7714, -6.4788, 2.5842
+
+    # Ratio of specific conductance at 25 celsius to standard seawater
+    # (salinity equals 35) at 25 celsius (53.087 millisiemens per centimetre).
+    R = cond / (53.087 * 1000) # convert from milli to micro
+
+    salt = \
+            k1 + \
+            (k2 * np.power(R, 1/2.0)) + \
+            (k3 * R) + \
+            (k4 * np.power(R, 3/2.0)) + \
+            (k5 * np.power(R, 2)) + \
+            (k6 * np.power(R, 5/2.0))
+
+    return salt
+
+def vorticity(x, y, u, v, vtype='averaged'):
+    """
+    Calculate vorticity from a velocity field for an unstructured grid output
+    from FVCOM.
+
+    This is a Python translation of the FVCOM calc_vort.F function which for
+    some reason seems to be ignored in the main FVCOM code.
+
+    Parameters
+    ----------
+
+    x, y : ndarray
+        Positions of the u and v samples. In FVCOM parlance, this is the 'xc'
+        and 'yc' or 'lonc' and 'latc' variables in the output file (element
+        centre positions).
+    u, v : ndarray
+        3D (i.e. vertically varying) u and v velocity components.
+    vtype : str, optional
+        Type of vorticity using either the vertically averaged velocity
+        (vtype='averaged') or the curl of the flux (vtype='flux'). Default is
+        vtype='averaged'.
+
+    Returns
+    -------
+
+    vort : ndarray
+        Calculated voriticity from the velocity components.
+
+    """
+
+    ## Need to do some calculations on the model grid to find neighbours etc. Use grid_tools for that.
+    #try:
+    #    from grid_tools import triangleGridEdge as tge
+    #except:
+    #    raise ImportError('Failed to import tge from the grid_tools.')
+
+    ## Some basic shape parameters
+    #nt, nz, nn = np.shape(u)
+
+    #if vtype == 'averaged':
+    #    # Vertically average the velocity components.
+    #    ua = np.mean(u, dims=0)
+    #    va = np.mean(v, dims=0)
+
+    #elif vtype == 'flux':
+    #    # Let's not do vertically averaged and instead do each vertical layer
+    #    # separately.
+    #    for zz in xrange(0, nz):
+
+
 if __name__ == '__main__':
 
     # Run the tests to check things are working OK.
     _tests()
+
