@@ -237,7 +237,7 @@ if __name__ == '__main__':
     # find the closest node in the unstructured grid.
     xy = np.array([-4.5, 55], [-6.9, 53]) # lon/lat pairs.
 
-    # Optionally extract only the surface layer.
+    # Extract only the surface layer.
     dims = {'siglay':'0'}
 
     # List of the variables to extract.
@@ -252,8 +252,8 @@ if __name__ == '__main__':
 
     fig0 = plt.figure()
     for c, ind in enumerate(idx):
-        ax = plt.subplot(len(xy), 1, c + 1)
-        LN0 = plt.plot(FVCOM['time'], FVCOM['zeta'][idx, :], 'g')
+        ax = fig0.add_subplot(len(idx), 1, c + 1)
+        LN0 = fig0.plot(FVCOM['time'], FVCOM['zeta'][idx, :], 'g')
         ax.set_title('Surface elevation at {}, {}'.format(xy[c, 0], xy[c, 1]))
         ax.set_xlabel('Time (Modified Julian Days)')
         ax.set_ylabel('Surface elevation (m)')
