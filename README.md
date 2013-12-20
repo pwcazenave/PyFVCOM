@@ -139,4 +139,124 @@ Installing
 
 In principle, python setup.py should install fvcom-py, though it is untested. Alternatively, download the fvcom-py directory, and add its contents to your PYTHONPATH.
 
+Examples
+--------
 
+Below are some brief examples of how to use the toolbox.
+
+```python
+""" Plot a surface from an FVCOM model output.
+
+"""
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+from mpl_toolkits.basemap import Basemap
+
+from read_FVCOM_results import readFVCOM
+
+if __name__ == '__main__':
+
+    fvcom = '/path/to/fvcom/netcdf/output.nc'
+
+    # Extract only the first 20 time steps.
+    dims = {'time':':20'}
+
+    # List of the variables to extract.
+    vars = ['lon', 'lat', 'nv', 'zeta', 'Times']
+
+    FVCOM = readFVCOM(fvcom, vars, clipDims=dims, noisy=True)
+
+    # Create the triangulation table array (with Python indexing [zero-based])
+    triangles = FVCOM['nv'].transpose() - 1
+
+    # Find the domain extents.
+    extents = np.array([FVCOM['lon'].min(),
+                       FVCOM['lon'].max(),
+                       FVCOM['lat'].min(),
+                       FVCOM['lat'].max()]
+
+    # Create a Basemap instance for plotting coastlines and so on.
+    m = Basemap(llcrnrlon=extents[0:2].min(),
+            llcrnrlat=extents[-2:].min(),
+            urcrnrlon=extents[0:2].max(),
+            urcrnrlat=extents[-2:].max(),
+            rsphere=(6378137.00,6356752.3142),
+            resolution='h',
+            projection='merc',
+            lat_0=extents[-2:].mean(),
+            lon_0=extents[0:2].mean(),
+            lat_ts=2.0)
+
+    parallels = np.arange(floor(extents[2]), ceil(extents[3]), 1)
+    meridians = np.arange(fllor(extents[0]), ceil(extents[1]), 1)
+
+    # Create the new figure and add the data.
+    x, y = m(FVCOM['lon'], FVCOM['lat'])
+    fig0 = plt.figure(figsize=(10, 10)) # size in inches
+    ax = fig0.add_axes([0.1, 0.1, 0.8, 0.8])
+
+    m.drawmapboundary()
+    m.drawcoastlines(zorder=100)
+    m.fillcontinents(color='0.6', zorder=100)
+    m.drawparallels(parallels, labels=[1,0,0,0], fontsize=10, linewidth=0)
+    m.drawmeridians(meridians, labels=[0,0,0,1], fontsize=10, linewidth=0)
+
+    # Plot the last surface elevation time step.
+    CS1 = ax.tripcolor(x, y, triangles, FVCOM['zeta'][-1, :])
+
+    # Clip the colour palette.
+    CS1.set_clim(4, 11)
+
+    # Add title, colour bar and so on.
+    ax.set_title(''.join(FVCOM['Times'][-1, :-4]))
+    cb = fig0.colorbar(CS1)
+    cb.set_label('Surface elevation (m)')
+
+    fig0.show()
+```
+
+
+```python
+""" Plot a time series of temperature at a given position.
+
+"""
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+from read_FVCOM_results import readFVCOM
+from grid_tools import findNearestPoint
+
+if __name__ == '__main__':
+
+    fvcom = '/path/to/fvcom/netcdf/output.nc'
+
+    # Positions we're interested in plotting. The findNearestPoint function will
+    # find the closest node in the unstructured grid.
+    xy = np.array([-4.5, 55], [-6.9, 53]) # lon/lat pairs.
+
+    # Optionally extract only the surface layer.
+    dims = {'siglay':'0'}
+
+    # List of the variables to extract.
+    vars = ['lon', 'lat', 'time', 'temp']
+
+    FVCOM = readFVCOM(fvcom, vars, clipDims=dims, noisy=True)
+
+    # Find the model node indices.
+    nearestX, nearestY, dist, idx = findNearestPoint(FVCOM['lon'], FVCOM['lat'],
+                                                     xy[:, 0], xy[:, 1],
+                                                     noisy=True)
+
+    fig0 = plt.figure()
+    for c, ind in enumerate(idx):
+        ax = plt.subplot(len(xy), 1, c + 1)
+        LN0 = plt.plot(FVCOM['time'], FVCOM['zeta'][idx, :], 'g')
+        ax.set_title('Surface elevation at {}, {}'.format(xy[c, 0], xy[c, 1]))
+        ax.set_xlabel('Time (Modified Julian Days)')
+        ax.set_ylabel('Surface elevation (m)')
+
+    fig0.show()
+```
