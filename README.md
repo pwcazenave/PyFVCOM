@@ -204,7 +204,7 @@ if __name__ == '__main__':
     m.drawmeridians(meridians, labels=[0,0,0,1], fontsize=10, linewidth=0)
 
     # Plot the last surface elevation time step.
-    CS1 = ax.tripcolor(x, y, triangles, FVCOM['zeta'][-1, :])
+    CS1 = ax.tripcolor(x, y, triangles, FVCOM['temp'][-1, :])
 
     # Clip the colour palette.
     CS1.set_clim(4, 11)
