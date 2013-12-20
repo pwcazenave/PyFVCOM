@@ -4,11 +4,11 @@ Welcome to fvcom-py!
 Table of contents
 -----------------
 
-[Introduction](#introduction)
-[Prerequisites](#prerequisites)
-[Provides](#provides)
-[Installing](#installing)
-[Examples](#examples)
+- [Introduction](#introduction)
+- [Prerequisites](#prerequisites)
+- [Provides](#provides)
+- [Installing](#installing)
+- [Examples](#examples)
 
 Introduction
 ------------
