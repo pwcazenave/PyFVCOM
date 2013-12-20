@@ -1,6 +1,7 @@
 Welcome to fvcom-py!
 --------------------
 
+doctoc .
 
 Introduction
 ------------
