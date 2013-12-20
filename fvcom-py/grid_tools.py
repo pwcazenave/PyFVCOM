@@ -718,6 +718,10 @@ def findNearestPoint(FX, FY, x, y, maxDistance=np.inf, noisy=False):
             nearestX[c] = FX[index[c]]
             nearestY[c] = FY[index[c]]
 
+    # Convert the indices to ints if we don't have any NaNs.
+    if not np.any(np.isnan(index)):
+        index = index.astype(int)
+
     return nearestX, nearestY, distance, index
 
 
