@@ -187,7 +187,7 @@ def LLtoUTM(ReferenceEllipsoid, Lat, Long, ZoneNumber=False):
     # a list of the zones for all coordinates.
     Zone = []
     if np.ndim(Lat) > 0:
-        for c, ll in enumerate(zip(LongTemp, Lat)):
+        for c, ll in enumerate(zip(np.asarray(LongTemp), Lat)):
             ZoneNumber = int((ll[0] + 180)/6) + 1
 
             if ll[1] >= 56.0 and ll[1] < 64.0 and ll[0] >= 3.0 and ll[0] < 12.0:
@@ -207,6 +207,30 @@ def LLtoUTM(ReferenceEllipsoid, Lat, Long, ZoneNumber=False):
             UTMZone ="%d%c" % (ZoneNumber, _UTMLetterDesignator(ll[1]))
 
             Zone.append(UTMZone)
+    else:
+        # Not an array, so assume single values in Long and Lat.
+
+        ll = [Long, Lat]
+        ZoneNumber = int((ll[0] + 180)/6) + 1
+
+        if ll[1] >= 56.0 and ll[1] < 64.0 and ll[0] >= 3.0 and ll[0] < 12.0:
+            ZoneNumber = 32
+
+        # Special zones for Svalbard
+        if ll[1] >= 72.0 and ll[1] < 84.0:
+            if ll[0] >= 0.0  and ll[0] <  9.0: ZoneNumber = 31
+            elif ll[0] >= 9.0  and ll[0] < 21.0: ZoneNumber = 33
+            elif ll[0] >= 21.0 and ll[0] < 33.0: ZoneNumber = 35
+            elif ll[0] >= 33.0 and ll[0] < 42.0: ZoneNumber = 37
+
+        LongOrigin = (ZoneNumber - 1) * 6 - 180 + 3 # +3 puts origin in middle of zone
+        LongOriginRad = np.deg2rad(LongOrigin)
+
+        # Compute the UTM Zone from the latitude and longitude
+        UTMZone ="%d%c" % (ZoneNumber, _UTMLetterDesignator(ll[1]))
+
+        Zone = UTMZone
+
 
     eccPrimeSquared = (eccSquared)/(1-eccSquared)
     N = a/np.sqrt(1-eccSquared*np.sin(LatRad)*np.sin(LatRad))
@@ -325,15 +349,38 @@ def UTMtoLL(ReferenceEllipsoid, northing, easting, zone):
     x = easting - 500000.0 # remove 500,000 meter offset for longitude
     y = northing
 
-    ZoneLetter = zone[-1]
-    ZoneNumber = int(zone[:-1])
-    if ZoneLetter >= 'N':
-        NorthernHemisphere = 1  # point is in northern hemisphere
-    else:
-        NorthernHemisphere = 0  # point is in southern hemisphere
-        y -= 10000000.0         # remove 10,000,000 meter offset used for southern hemisphere
+    # If our zone array is a string, we assume it's the same for all positions,
+    # which is easy peasy. Otherwise, if it's a list or a numpy array, we need
+    # to iterate through each zone to return the correct latitude and
+    # longitudes.
+    if isinstance(zone, str):
+        ZoneLetter = zone[-1]
+        ZoneNumber = int(zone[:-1])
+        if ZoneLetter >= 'N':
+            NorthernHemisphere = 1  # point is in northern hemisphere
+        else:
+            NorthernHemisphere = 0  # point is in southern hemisphere
+            y -= 10000000.0         # remove 10,000,000 meter offset used for southern hemisphere
 
-    LongOrigin = (ZoneNumber - 1)*6 - 180 + 3  # +3 puts origin in middle of zone
+        LongOrigin = (ZoneNumber - 1)*6 - 180 + 3  # +3 puts origin in middle of zone
+
+    elif isinstance(zone, np.ndarray) or isinstance(zone, list):
+        # Make the necessary output array depending on whether we got a list or
+        # an array.
+        if isinstance(zone, np.ndarray): LongOrigin = np.empty(zone.shape)
+        if isinstance(zone, list): LongOrigin = np.empty(np.asarray(zone).shape)
+
+        for c, i in enumerate(zone):
+            ZoneLetter = zone[c][-1]
+            ZoneNumber = int(zone[c][:-1])
+            if ZoneLetter >= 'N':
+                NorthernHemisphere = 1  # point is in northern hemisphere
+            else:
+                NorthernHemisphere = 0  # point is in southern hemisphere
+                y -= 10000000.0         # remove 10,000,000 meter offset used for southern hemisphere
+
+            LongOrigin[c] = (ZoneNumber - 1)*6 - 180 + 3  # +3 puts origin in middle of zone
+
 
     eccPrimeSquared = (eccSquared)/(1-eccSquared)
 
