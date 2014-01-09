@@ -54,7 +54,7 @@ _ellipsoid = [
 # of Defense World Geodetic System 1984 Technical Report. Part I and II.
 # Washington, DC: Defense Mapping Agency
 
-def _test(inLat, inLong):
+def _test(inLat, inLong, inZone=False):
     """ Simple test of the functions with a given lat/long pair.
 
     Parameters
@@ -65,7 +65,7 @@ def _test(inLat, inLong):
 
     """
 
-    (z, e, n) = LLtoUTM(23, inLat, inLong)
+    (z, e, n) = LLtoUTM(23, inLat, inLong, ZoneNumber=inZone)
     outLat, outLong = UTMtoLL(23, n, e, z)
 
     return z, e, n, outLat, outLong
@@ -188,30 +188,36 @@ def LLtoUTM(ReferenceEllipsoid, Lat, Long, ZoneNumber=False):
     Zone = []
     if np.ndim(Lat) > 0:
         for c, ll in enumerate(zip(np.asarray(LongTemp), Lat)):
-            ZoneNumber = int((ll[0] + 180)/6) + 1
+            # Generate the ZoneNumber if we haven't been given one.
+            if not ZoneNumber:
+                ZoneNumberTemp = int((ll[0] + 180)/6) + 1
+            else:
+                ZoneNumberTemp = ZoneNumber
 
             if ll[1] >= 56.0 and ll[1] < 64.0 and ll[0] >= 3.0 and ll[0] < 12.0:
-                ZoneNumber = 32
+                ZoneNumberTemp = 32
 
             # Special zones for Svalbard
             if ll[1] >= 72.0 and ll[1] < 84.0:
-                if ll[0] >= 0.0  and ll[0] <  9.0: ZoneNumber = 31
-                elif ll[0] >= 9.0  and ll[0] < 21.0: ZoneNumber = 33
-                elif ll[0] >= 21.0 and ll[0] < 33.0: ZoneNumber = 35
-                elif ll[0] >= 33.0 and ll[0] < 42.0: ZoneNumber = 37
+                if ll[0] >= 0.0  and ll[0] <  9.0: ZoneNumberTemp = 31
+                elif ll[0] >= 9.0  and ll[0] < 21.0: ZoneNumberTemp = 33
+                elif ll[0] >= 21.0 and ll[0] < 33.0: ZoneNumberTemp = 35
+                elif ll[0] >= 33.0 and ll[0] < 42.0: ZoneNumberTemp = 37
 
-            LongOrigin = (ZoneNumber - 1) * 6 - 180 + 3 # +3 puts origin in middle of zone
+            LongOrigin = (ZoneNumberTemp - 1) * 6 - 180 + 3 # +3 puts origin in middle of zone
             LongOriginRad = np.deg2rad(LongOrigin)
 
             # Compute the UTM Zone from the latitude and longitude
-            UTMZone ="%d%c" % (ZoneNumber, _UTMLetterDesignator(ll[1]))
+            UTMZone ="%d%c" % (ZoneNumberTemp, _UTMLetterDesignator(ll[1]))
 
             Zone.append(UTMZone)
     else:
         # Not an array, so assume single values in Long and Lat.
 
         ll = [Long, Lat]
-        ZoneNumber = int((ll[0] + 180)/6) + 1
+        # Set the Zone Number if we've not been given one.
+        if not ZoneNumber:
+            ZoneNumber = int((ll[0] + 180)/6) + 1
 
         if ll[1] >= 56.0 and ll[1] < 64.0 and ll[0] >= 3.0 and ll[0] < 12.0:
             ZoneNumber = 32
@@ -418,15 +424,22 @@ if __name__ == '__main__':
     print("Intermediate UTM: {}, {}, {}".format(e, n, z))
 
     print('\nTest with lists')
-    latTest, lonTest = [50, 55], [-10, -5]
+    latTest, lonTest = [50, 55], [-5, -20]
     z, e, n, outLat, outLong = _test(latTest, lonTest)
     for c in xrange(len(latTest)):
         print("Input (lat/long): {}, {}\nOutput (lat/long): {} {}".format(latTest[c], lonTest[c], outLat[c], outLong[c]))
         print("Intermediate UTM: {}, {}, {}".format(e[c], n[c], z[c]))
 
     print('\nTest with NumPy arrays')
-    latTest, lonTest = np.asarray([50, 55]), np.asarray([-10, -5])
+    latTest, lonTest = np.asarray([50, 55]), np.asarray([-5, -20])
     z, e, n, outLat, outLong = _test(latTest, lonTest)
+    for c in xrange(len(latTest)):
+        print("Input (lat/long): {}, {}\nOutput (lat/long): {} {}".format(latTest[c], lonTest[c], outLat[c], outLong[c]))
+        print("Intermediate UTM: {}, {}, {}".format(e[c], n[c], z[c]))
+
+    print('\nTest with NumPy arrays but a single zone')
+    latTest, lonTest = np.asarray([50, 55]), np.asarray([-5, -20])
+    z, e, n, outLat, outLong = _test(latTest, lonTest, inZone=30)
     for c in xrange(len(latTest)):
         print("Input (lat/long): {}, {}\nOutput (lat/long): {} {}".format(latTest[c], lonTest[c], outLat[c], outLong[c]))
         print("Intermediate UTM: {}, {}, {}".format(e[c], n[c], z[c]))
