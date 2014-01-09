@@ -405,13 +405,30 @@ def UTMtoLL(ReferenceEllipsoid, northing, easting, zone):
     Long = (D-(1+2*T1+C1)*D*D*D/6+(5-2*C1+28*T1-3*C1*C1+8*eccPrimeSquared+24*T1*T1)
             *D*D*D*D*D/120)/np.cos(phi1Rad)
     Long = LongOrigin + np.rad2deg(Long)
-    return (Lat, Long)
+
+    return Lat, Long
+
 
 if __name__ == '__main__':
-    #inLat, inLong = 40 + (6 + 18.3591/60)/60, -(88 + (13 + 9.52349/60)/60)
-    inLat, inLong = 50, -10
-    (z, e, n) = LLtoUTM(23, inLat, inLong)
-    outLat, outLong = UTMtoLL(23, n, e, z)
 
-    print "Input (lat/long): {}, {}\nOutput (lat/long): {} {}".format(inLat, inLong, outLat, outLong)
-    print "Intermediate UTM: {}, {}, {}".format(e, n, z)
+    print('\nTest with NumPy single values')
+    latTest, lonTest = 50, -5
+    z, e, n, outLat, outLong = _test(latTest, lonTest)
+    print("Input (lat/long): {}, {}\nOutput (lat/long): {} {}".format(latTest, lonTest, outLat, outLong))
+    print("Intermediate UTM: {}, {}, {}".format(e, n, z))
+
+    print('\nTest with lists')
+    latTest, lonTest = [50, 55], [-10, -5]
+    z, e, n, outLat, outLong = _test(latTest, lonTest)
+    for c in xrange(len(latTest)):
+        print("Input (lat/long): {}, {}\nOutput (lat/long): {} {}".format(latTest[c], lonTest[c], outLat[c], outLong[c]))
+        print("Intermediate UTM: {}, {}, {}".format(e[c], n[c], z[c]))
+
+    print('\nTest with NumPy arrays')
+    latTest, lonTest = np.asarray([50, 55]), np.asarray([-10, -5])
+    z, e, n, outLat, outLong = _test(latTest, lonTest)
+    for c in xrange(len(latTest)):
+        print("Input (lat/long): {}, {}\nOutput (lat/long): {} {}".format(latTest[c], lonTest[c], outLat[c], outLong[c]))
+        print("Intermediate UTM: {}, {}, {}".format(e[c], n[c], z[c]))
+
+
