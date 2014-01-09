@@ -14,9 +14,8 @@ _EquatorialRadius = 2
 _eccentricitySquared = 3
 
 _ellipsoid = [
-    # id, Ellipsoid name, Equatorial Radius, square of eccentricity
-    # first once is a placeholder only, To allow array indices to match id
-    # numbers
+    # id, Ellipsoid name, Equatorial Radius, square of eccentricity first once
+    # is a placeholder only, To allow array indices to match id numbers
     [ -1, "Placeholder", 0, 0],
     [ 1, "Airy", 6377563, 0.00667054],
     [ 2, "Australian National", 6378160, 0.006694542],
@@ -55,16 +54,118 @@ _ellipsoid = [
 # of Defense World Geodetic System 1984 Technical Report. Part I and II.
 # Washington, DC: Defense Mapping Agency
 
-# def LLtoUTM(int ReferenceEllipsoid, const double Lat, const double Long,
-#            double &UTMNorthing, double &UTMEasting, char* UTMZone)
+def _test(inLat, inLong):
+    """ Simple test of the functions with a given lat/long pair.
+
+    Parameters
+    ----------
+
+    inLat, inLong : float
+        Input latitude and longitude pair.
+
+    """
+
+    (z, e, n) = LLtoUTM(23, inLat, inLong)
+    outLat, outLong = UTMtoLL(23, n, e, z)
+
+    return z, e, n, outLat, outLong
+
+
+def _UTMLetterDesignator(Lat):
+    # This routine determines the correct UTM letter designator for the given
+    # latitude. Returns 'Z' if latitude is outside the UTM limits of 84N to 80S
+    # Written by Chuck Gantz: chuck.gantz@globalstar.com
+
+    if 84 >= Lat >= 72: return 'X'
+    elif 72 > Lat >= 64: return 'W'
+    elif 64 > Lat >= 56: return 'V'
+    elif 56 > Lat >= 48: return 'U'
+    elif 48 > Lat >= 40: return 'T'
+    elif 40 > Lat >= 32: return 'S'
+    elif 32 > Lat >= 24: return 'R'
+    elif 24 > Lat >= 16: return 'Q'
+    elif 16 > Lat >= 8: return 'P'
+    elif  8 > Lat >= 0: return 'N'
+    elif  0 > Lat >= -8: return 'M'
+    elif -8> Lat >= -16: return 'L'
+    elif -16 > Lat >= -24: return 'K'
+    elif -24 > Lat >= -32: return 'J'
+    elif -32 > Lat >= -40: return 'H'
+    elif -40 > Lat >= -48: return 'G'
+    elif -48 > Lat >= -56: return 'F'
+    elif -56 > Lat >= -64: return 'E'
+    elif -64 > Lat >= -72: return 'D'
+    elif -72 > Lat >= -80: return 'C'
+    else: return 'Z'    # if the Latitude is outside the UTM limits
+
+    # void UTMtoLL(int ReferenceEllipsoid, const double UTMNorthing,
+    #             const double UTMEasting, const char* UTMZone,
+    #             double& Lat,  double& Long )
+
 
 def LLtoUTM(ReferenceEllipsoid, Lat, Long, ZoneNumber=False):
-    # Converts lat/long to UTM coords. Equations from USGS Bulletin 1532
+    """ Converts lat/long to UTM coords. Equations from USGS Bulletin 1532.
 
-    # East Longitudes are positive, West longitudes are negative.
-    # North latitudes are positive, South latitudes are negative
-    # Lat and Long are in decimal degrees
-    # Written by Chuck Gantz- chuck.gantz@globalstar.com
+    East Longitudes are positive, west longitudes are negative. North latitudes
+    are positive, south latitudes are negative. Lat and Long are in decimal
+    degrees.
+
+    Parameters
+    ----------
+
+    ReferenceEllipsoid : int
+        Select from 23 reference ellipsoids:
+            1. Airy
+            2. Australian National
+            3. Bessel 1841
+            4. Bessel 1841 (Nambia)
+            5. Clarke 1866
+            6. Clarke 1880
+            7. Everest
+            8. Fischer 1960 (Mercury)
+            9. Fischer 1968
+            10. GRS 1967
+            11. GRS 1980
+            12. Helmert 1906
+            13. Hough
+            14. International
+            15. Krassovsky
+            16. Modified Airy
+            17. Modified Everest
+            18. Modified Fischer 1960
+            19. South American 1969
+            20. WGS 60
+            21. WGS 66
+            22. WGS-72
+            23. WGS-84
+
+    Lat, Long : float, ndarray
+        Latitude and longitude values as floating point values. Negative
+        coordinates are west and south for longitude and latitude respectively.
+
+    ZoneNumber : str, optional
+        UTM zone number in which the coordinates should be forced. This is
+        useful if the spherical coordinates supplied in Lat and Long exceed
+        a single UTM zone. Speficy both number and letter e.g. '30N'. If
+        omitted, it is calculated automatically.
+
+
+    Returns
+    -------
+
+    Zone : list
+        UTM Zone for the coordinates supplied in Lat and Long.
+
+    UTMEasting, UTMNorthing : ndarray
+        Cartesian coordinates for the positions in Lat and Long.
+
+    Notes
+    -----
+
+    Written by Chuck Gantz - chuck.gantz@globalstar.com
+    Modified by Pierre Cazenave - pica {at} pml <dot> ac (dot) uk
+
+    """
 
     if ~isinstance(Long, np.ndarray):
         Long = np.asarray(Long)
@@ -147,47 +248,67 @@ def LLtoUTM(ReferenceEllipsoid, Lat, Long, ZoneNumber=False):
         if Lat < 0:
             UTMNorthing = UTMNorthing + 10000000.0; #10000000 meter offset for southern hemisphere
 
-    return (Zone, UTMEasting, UTMNorthing)
+    return Zone, UTMEasting, UTMNorthing
 
-def _UTMLetterDesignator(Lat):
-    # This routine determines the correct UTM letter designator for the given
-    # latitude. Returns 'Z' if latitude is outside the UTM limits of 84N to 80S
-    # Written by Chuck Gantz: chuck.gantz@globalstar.com
-
-    if 84 >= Lat >= 72: return 'X'
-    elif 72 > Lat >= 64: return 'W'
-    elif 64 > Lat >= 56: return 'V'
-    elif 56 > Lat >= 48: return 'U'
-    elif 48 > Lat >= 40: return 'T'
-    elif 40 > Lat >= 32: return 'S'
-    elif 32 > Lat >= 24: return 'R'
-    elif 24 > Lat >= 16: return 'Q'
-    elif 16 > Lat >= 8: return 'P'
-    elif  8 > Lat >= 0: return 'N'
-    elif  0 > Lat >= -8: return 'M'
-    elif -8> Lat >= -16: return 'L'
-    elif -16 > Lat >= -24: return 'K'
-    elif -24 > Lat >= -32: return 'J'
-    elif -32 > Lat >= -40: return 'H'
-    elif -40 > Lat >= -48: return 'G'
-    elif -48 > Lat >= -56: return 'F'
-    elif -56 > Lat >= -64: return 'E'
-    elif -64 > Lat >= -72: return 'D'
-    elif -72 > Lat >= -80: return 'C'
-    else: return 'Z'    # if the Latitude is outside the UTM limits
-
-    # void UTMtoLL(int ReferenceEllipsoid, const double UTMNorthing,
-    #             const double UTMEasting, const char* UTMZone,
-    #             double& Lat,  double& Long )
 
 def UTMtoLL(ReferenceEllipsoid, northing, easting, zone):
-    # Converts UTM coords to lat/long. Equations from USGS Bulletin 1532
+    """ Converts UTM coords to lat/long. Equations from USGS Bulletin 1532.
 
-    # East Longitudes are positive, West longitudes are negative. North latitudes
-    # are positive, South latitudes are negative. Lat and Long are in decimal
-    # degrees.
-    # Written by Chuck Gantz: chuck.gantz@globalstar.com.
-    # Converted to Python by Russ Nelson <nelson@crynwr.com>
+    East Longitudes are positive, west longitudes are negative. North latitudes
+    are positive, south latitudes are negative. Lat and Long are in decimal
+    degrees.
+
+    Parameters
+    ----------
+
+    ReferenceEllipsoid : int
+        Select from 23 reference ellipsoids:
+            1. Airy
+            2. Australian National
+            3. Bessel 1841
+            4. Bessel 1841 (Nambia)
+            5. Clarke 1866
+            6. Clarke 1880
+            7. Everest
+            8. Fischer 1960 (Mercury)
+            9. Fischer 1968
+            10. GRS 1967
+            11. GRS 1980
+            12. Helmert 1906
+            13. Hough
+            14. International
+            15. Krassovsky
+            16. Modified Airy
+            17. Modified Everest
+            18. Modified Fischer 1960
+            19. South American 1969
+            20. WGS 60
+            21. WGS 66
+            22. WGS-72
+            23. WGS-84
+
+    northing, easting : float, ndarray
+        Latitude and longitude values as floating point values. Negative
+        coordinates are west and south for longitude and latitude respectively.
+
+    zone : str, optional
+        UTM zone number in which the coordinates are referenced.
+
+    Reutrns
+    -------
+
+    Lat, Long : ndarray
+        Latitude and longitudes for the coordinates in easting and northing.
+
+    Notes
+    -----
+
+    Written by Chuck Gantz: chuck.gantz@globalstar.com.
+    Converted to Python by Russ Nelson <nelson@crynwr.com>
+    Modified by Pierre Cazenave <pica {at} pml.ac.uk>
+
+    """
+
 
     k0 = 0.9996
     a = _ellipsoid[ReferenceEllipsoid][_EquatorialRadius]
