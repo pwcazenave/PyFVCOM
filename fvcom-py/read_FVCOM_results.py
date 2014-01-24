@@ -13,7 +13,7 @@ def readFVCOM(file, varList=None, clipDims=False, noisy=False, globalAtts=False)
 
     To extract the first, 400th and 10,000th values of any array with nodes:
 
-        clipDims = {'node':['0, 3999, 9999']}
+        clipDims = {'node':'[0, 3999, 9999]'}
 
     Any dimension not given in clipDims will be extracted in full.
 
