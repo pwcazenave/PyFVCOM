@@ -64,7 +64,12 @@ def readFVCOM(file, varList=None, clipDims=False, noisy=False, globalAtts=False)
 
     # If we have a list, assume it's lots of files and load them all.
     if isinstance(file, list):
-        rootgrp = MFDataset(file, 'r')
+        try:
+            rootgrp = MFDataset(file, 'r')
+        except:
+            # Try aggregating along a 'time' dimension (for POLCOMS, for example)
+            rootgrp = MFDataset(file, 'r', aggdim='time')
+
     else:
         rootgrp = Dataset(file, 'r')
 
