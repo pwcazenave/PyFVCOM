@@ -237,6 +237,114 @@ def parseUnstructuredGridMIKE(mesh, flipZ=True):
     return triangle, nodes, X, Y, Z, types
 
 
+def parseUnstructuredGridGMSH(mesh):
+    """
+    Reads in the GMSH unstructured grid format (version 2.2).
+
+    Parameters
+    ----------
+
+    mesh : str
+        Full path to the DHI MIKE21 unstructured grid file (.mesh usually).
+
+    Returns
+    -------
+
+    triangle : ndarray
+        Integer array of shape (ntri, 3). Each triangle is composed of
+        three points and this contains the three node numbers (stored in
+        nodes) which refer to the coordinates in X and Y (see below).
+    nodes : ndarray
+        Integer number assigned to each node.
+    X, Y, Z : ndarray
+        Coordinates of each grid node and any associated Z value.
+
+    """
+
+    fileRead = open(mesh, 'r')
+    lines = fileRead.readlines()
+    fileRead.close()
+
+    _header = False
+    _nodes = False
+    _elements = False
+
+    # Counters for the nodes and elements.
+    n = 0
+    e = 0
+
+    for line in lines:
+        line = line.strip()
+
+        # If we've been told we've got to the header, read in the mesh version
+        # here.
+        if _header:
+            _ver = line.split()
+            _header = False
+            continue
+
+        # Grab the number of nodes.
+        if _nodes:
+            nn = int(line.strip())
+            x, y, z, nodes = np.empty((nn,)), np.empty((nn,)),\
+                    np.empty((nn,)), np.empty((nn,))
+            _nodes = False
+            continue
+
+        # Grab the number of elements.
+        if _elements:
+            _elements = int(line.strip())
+            triangles = np.empty((_elements, 3))
+            _elements = False
+            continue
+
+        if line == r'$MeshFormat':
+            # Header information on the next line
+            _header = True
+            continue
+
+        elif line == r'$EndMeshFormat':
+            continue
+
+        elif line == r'$Nodes':
+            _nodes = True
+            continue
+
+        elif line == r'$EndNodes':
+            continue
+
+        elif line == r'$Elements':
+            _elements = True
+            continue
+
+        elif line == r'$EndElements':
+            continue
+
+        else:
+            # Some non-info line, so either nodes or elements. Discern that
+            # based on the number of fields.
+            s = line.split(' ')
+            if len(s) == 4:
+                # Nodes
+                nodes[n] = int(s[0])
+                x[n] = float(s[1])
+                y[n] = float(s[2])
+                z[n] = float(s[3])
+                n += 1
+
+            # Only keep the triangulation for the 2D mesh (ditch the 1D stuff).
+            elif len(s) > 4 and int(s[1]) == 2:
+                # Offset indices by one for Python indexing.
+                triangles[e, :] = [int(i) - 1 for i in s[-3:]]
+                e += 1
+
+            else:
+                continue
+
+
+    return triangles, nodes, x, y, z
+
+
 def writeUnstructuredGridSMS(triangles, nodes, x, y, z, types, mesh):
     """
     Takes appropriate triangle, node, boundary type and coordinate data and
