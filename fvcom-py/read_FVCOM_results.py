@@ -35,7 +35,7 @@ def readFVCOM(file, varList=None, clipDims=False, noisy=False, globalAtts=False)
         {'time':'[0, 1, 80, 100]'}). Slicing is supported (::5 for every fifth
         value) but it is not possible to extract data from the end of the array
         with a negative index (e.g. 0:-4).
-    noisy : bool
+    noisy : bool, optional
         Set to True to enable verbose output.
     globalAtts : bool, optional
         Set to True to enable output of the global attributes (defaults to
@@ -92,13 +92,12 @@ def readFVCOM(file, varList=None, clipDims=False, noisy=False, globalAtts=False)
     if noisy:
         print "File format: {}".format(rootgrp.file_format)
 
-    if varList is None:
+    if not varList:
         varList = rootgrp.variables.iterkeys()
 
     FVCOM = {}
 
-    # Add the dimensions to the output dict. Hope we won't have a variable
-    # named 'global'...
+    # Save the dimensions in the attributes dict.
     attributes = {}
     attributes['dims'] = dims
 
