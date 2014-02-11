@@ -372,7 +372,7 @@ def residualFlow(FVCOM, idxRange=False, checkPlot=False, noisy=False):
 
         for ii in xrange(nTimeSteps):
             # Create progressive vectors for all time steps in the current layer
-            if noisy and np.mod(ii, 99 == 0):
+            if noisy and np.mod(ii, 99) == 0:
                 print 'Create PVD at time step {} of {}'.format(ii +1, nTimeSteps)
 
             uRes[ii, hh, :] = uRes[ii, hh, :] + (uSum[ii, hh, :] * (dt * toSecFactor))
