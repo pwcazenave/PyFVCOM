@@ -286,15 +286,17 @@ def parseUnstructuredGridGMSH(mesh):
         # Grab the number of nodes.
         if _nodes:
             nn = int(line.strip())
-            x, y, z, nodes = np.empty((nn,)), np.empty((nn,)),\
-                    np.empty((nn,)), np.empty((nn,))
+            x, y, z, nodes = np.zeros((nn,)) - 1, \
+                    np.zeros((nn,)) - 1, \
+                    np.zeros((nn,)) - 1, \
+                    np.zeros((nn,)).astype(int) - 1
             _nodes = False
             continue
 
         # Grab the number of elements.
         if _elements:
-            _elements = int(line.strip())
-            triangles = np.empty((_elements, 3))
+            ne = int(line.strip())
+            triangles = np.zeros((ne, 3)).astype(int) - 1
             _elements = False
             continue
 
@@ -341,6 +343,10 @@ def parseUnstructuredGridGMSH(mesh):
             else:
                 continue
 
+    # Tidy up the triangles array  to remove the empty rows due to the number
+    # of elements specified in the mesh file including the 1D triangulation.
+    #triangles = triangles[triangles[:, 0] != -1, :]
+    triangles = triangles[:e, :]
 
     return triangles, nodes, x, y, z
 
