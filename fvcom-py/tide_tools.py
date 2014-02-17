@@ -977,7 +977,8 @@ def gridPOLPRED(values, noisy=False):
     arridx = []
     for i, (xx, yy) in enumerate(values[:, [1, 0]]):
         if noisy:
-            if np.mod(i + 1, 1000) == 0 or i == 0:
+            # Only on the first, last and every 1000th line.
+            if i == 0 or np.mod(i + 1, 1000) == 0 or i == values[:, 0].shape[0] - 1:
                 print '{} of {}'.format(i + 1, np.shape(values)[0])
         arridx.append([i, px.tolist().index(xx), py.tolist().index(yy)])
 
