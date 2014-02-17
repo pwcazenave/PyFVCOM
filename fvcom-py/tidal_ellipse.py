@@ -561,6 +561,9 @@ def prep_plot(SEMA, ECC, INC, PHA):
     b = wm * np.exp(-i * ot)
     w = a + b
 
+    # Repeat the first position in w so we close the ellipse.
+    w = np.hstack((w, w[0]))
+
     wmax = SEMA * np.exp(i * INC)
     wmin = SEMI * np.exp(i * (INC + np.pi / 2))
 
