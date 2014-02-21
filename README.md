@@ -55,6 +55,7 @@ Provides
     - parseUnstructuredGridSMS
     - parseUnstructuredGridFVCOM
     - parseUnstructuredGridMIKE
+    - parseUnstructuredGridGMSH
     - writeUnstructuredGridSMS
     - writeUnstructuredGridSMSBathy
     - writeUnstructuredGridMIKE
@@ -68,6 +69,8 @@ Provides
     - getRiverConfig
     - getRivers
     - mesh2grid
+    - OSGB36toWGS84
+    - connectivity
 
 * ll2utm - convert from spherical to cartesian UTM coordinates and back. Available from <http://robotics.ai.uiuc.edu/~hyoon24/LatLongUTMconversion.py>.
     - LLtoUTM
@@ -88,6 +91,7 @@ Provides
     - sw_sal80
     - sw_salinity
     - dens_jackett
+    - cond2salt
 
 * process_FVCOM_results - perform some analyses on FVCOM data read in using read_FVCOM_results.
     - calculateTotalCO2
