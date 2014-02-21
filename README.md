@@ -319,9 +319,12 @@ if __name__ == '__main__':
     # Create dicts for the results.
     uharmonics, vharmonics = {}, {}
 
-    # Transpose so we can analyse a time series for each location.
+    # Transpose so we can analyse a time series for each location. This takes
+    # a little while to run for lots of points.
     for i, comp in enumerate(uv.transpose()):
-        print i, uv.shape
+
+        print('{} of {}...'.format(i, uv.shape[-1])),
+
         # Combine the Times and velocity data.
         u = np.column_stack((Times, comp.real))
         v = np.column_stack((Times, comp.imag))
@@ -336,6 +339,8 @@ if __name__ == '__main__':
         key = '{}-{}'.format(FVCOM['lonc'][i], FVCOM['latc'][i])
         uharmonics[key] = uharm
         vharmonics[key] = vharm
+
+        print('done.')
 
     # Now plot the M2 results.
     m = Basemap(llcrnrlon=subset[0].min(),
