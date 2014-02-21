@@ -269,6 +269,7 @@ if __name__ == '__main__':
 
 import numpy as np
 import matplotlib.pyplot as plt
+
 from mpl_toolkits.basemap import Basemap
 
 from read_FVCOM_results import readFVCOM
@@ -286,7 +287,7 @@ if __name__ == '__main__':
     subset = np.array([[-5, -6], [49, 50]]) # [[xmin, xmax], [ymin, ymax]]
 
     # Scaling factor for the ellipses. You may need to experiment with this
-    value.
+    # value.
     scaling = 5000
 
     # Find the model nodes which fall within the subset defined above.
