@@ -1676,3 +1676,100 @@ def OSGB36toWGS84(eastings, northings):
     # Job's a good'n.
     return lon, lat
 
+
+def connectivity(p, t):
+    """
+    Assemble connectivity data for a triangular mesh.
+
+    The edge based connectivity is built for a triangular mesh and the boundary
+    nodes identified. This data should be useful when implementing FE/FV
+    methods using triangular meshes.
+
+    Parameters
+    ----------
+    p : ndarray
+        Nx2 array of nodes coordinates, [[x1, y1], [x2, y2], etc.]
+    t : ndarray
+        Mx3 array of triangles as indices, [[n11, n12, n13], [n21, n22, n23],
+        etc.]
+
+    Returns
+    -------
+    e : ndarray
+        Kx2 array of unique mesh edges - [[n11, n12], [n21, n22], etc.]
+    te : ndarray
+        Mx3 array of triangles as indices into e, [[e11, e12, e13], [e21, e22,
+        e23], etc.]
+    e2t : ndarray
+        Kx2 array of triangle neighbours for unique mesh edges - [[t11, t12],
+        [t21, t22], etc]. Each row has two entries corresponding to the
+        triangle numbers associated with each edge in e. Boundary edges have
+        e2t[i, 1] = 0.
+    bnd : ndarray, bool
+        Nx1 logical array identifying boundary nodes. p[i, :] is a boundary
+        node if bnd[i] = True.
+
+    Notes
+    -----
+    Python translation of the MATLAB MESH2D connectivity function by Darren
+    Engwirda.
+
+    """
+
+    def _unique_rows(A, return_index=False, return_inverse=False):
+        """
+        Similar to MATLAB's unique(A, 'rows'), this returns B, I, J
+        where B is the unique rows of A and I and J satisfy
+        A = B[J,:] and B = A[I,:]
+
+        Returns I if return_index is True
+        Returns J if return_inverse is True
+
+        Taken from https://github.com/numpy/numpy/issues/2871
+
+        """
+        A = np.require(A, requirements='C')
+        assert A.ndim == 2, "array must be 2-dim'l"
+
+        B = np.unique(A.view([('', A.dtype)]*A.shape[1]),
+                return_index=return_index,
+                return_inverse=return_inverse)
+
+        if return_index or return_inverse:
+            return (B[0].view(A.dtype).reshape((-1, A.shape[1]), order='C'),) \
+                + B[1:]
+        else:
+            return B.view(A.dtype).reshape((-1, A.shape[1]), order='C')
+
+    if p.shape[-1] != 2:
+        raise Exception('p must be an Nx2 array')
+    if t.shape[-1] != 3:
+        raise Exception('t must be an Mx3 array')
+    if np.any(t.ravel() < 0) or t.max() > p.shape[0] - 1:
+        raise Exception('Invalid t')
+
+    # Unique mesh edges as indices into p
+    numt = t.shape[0]
+    vect = np.arange(numt)                                                  # Triangle indices
+    e = np.vstack(([t[:, [0, 1]], t[:, [1, 2]], t[:, [2, 0]]]))             # Edges - not unique
+    e, j = _unique_rows(np.sort(e, axis=1), return_inverse=True)            # Unique edges
+    te = np.column_stack((j[vect], j[vect + numt], j[vect + (2 * numt)]))   # Unique edges in each triangle
+
+    # Edge-to-triangle connectivity
+    # Each row has two entries corresponding to the triangle numbers
+    # associated with each edge. Boundary edges have e2t[i, 1] = -1.
+    nume = e.shape[0]
+    e2t  = np.zeros((nume, 2)).astype(int) - 1
+    for k in xrange(numt):
+        for j in xrange(3):
+            ce = te[k, j]
+            if e2t[ce, 0] == -1:
+                e2t[ce, 0] = k
+            else:
+                e2t[ce, 1] = k
+
+    # Flag boundary nodes
+    bnd = np.zeros((p.shape[0],)).astype(bool)
+    bnd[e[e2t[:, 1] == -1, :]] = True                                       # True for bnd nodes
+
+    return e, te, e2t, bnd
