@@ -19,7 +19,6 @@ def julianDay(gregorianDateTime, mjd=False):
 
     Parameters
     ----------
-
     gregorianDateTime : ndarray
         Array of Gregorian dates formatted as [[YYYY, MM, DD, hh, mm,
         ss],...,[YYYY, MM, DD, hh, mm, ss]]. If hh, mm, ss are missing
@@ -30,14 +29,12 @@ def julianDay(gregorianDateTime, mjd=False):
 
     Returns
     -------
-
     jd : ndarray
         Modified Julian Day or Julian Day (depending on the value of
         mjd).
 
     Notes
     -----
-
     Julian Day epoch: 12:00 January 1, 4713 BC, Monday
     Modified Julain Day epoch: 00:00 November 17, 1858, Wednesday
 
@@ -103,7 +100,6 @@ def gregorianDate(julianDay, mjd=False):
 
     Parameters
     ----------
-
     julianDay : ndarray
         Array of Julian Days
     mjd : boolean, optional
@@ -111,13 +107,11 @@ def gregorianDate(julianDay, mjd=False):
 
     Returns
     -------
-
     greg : ndarray
         Array of [YYYY, MM, DD, hh, mm, ss].
 
     Example
     -------
-
     >>> greg = gregorianDate(np.array([53583.00390625, 55895.9765625]), mjd=True)
     >>> greg.astype(int)
     array([[2005,    8,    1,    0,    5,   38],
@@ -178,7 +172,6 @@ def addHarmonicResults(db, stationName, constituentName, phase, amplitude, speed
 
     Parameters
     ----------
-
     db : str
         Full path to an SQLite database. If absent, it will be created.
     stationName : str
@@ -244,7 +237,6 @@ def getObservedData(db, table, startYear=False, endYear=False, noisy=False):
 
     Parameters
     ----------
-
     db : str
         Full path to the tide data SQLite database.
     table : str
@@ -258,12 +250,10 @@ def getObservedData(db, table, startYear=False, endYear=False, noisy=False):
 
     See Also
     --------
-
     tide_tools.getObservedMetadata : extract metadata for a tide station.
 
     Notes
     -----
-
     Search is not fuzzy, so "NorthShields" is not the same as "North Shields".
     Search is case insensitive, however.
 
@@ -324,7 +314,6 @@ def getObservedMetadata(db, originator=False):
 
     Parameters
     ----------
-
     db : str
         Full path to the tide data SQLite database.
     originator : str, optional
@@ -333,7 +322,6 @@ def getObservedMetadata(db, originator=False):
 
     Returns
     -------
-
     lon : list
         Longitude of the requested station(s).
     lat : list
@@ -384,7 +372,6 @@ def cleanObservedData(data, removeResidual=False):
 
     Parameters
     ----------
-
     data : ndarray
         Array of [YYYY, MM, DD, hh, mm, ss, zeta, flag] data output by
         getObservedData().
@@ -394,7 +381,6 @@ def cleanObservedData(data, removeResidual=False):
 
     Returns
     -------
-
     dateMJD : ndarray
         Modified Julian Days of the input data.
     tideDataMSL : ndarray
@@ -456,13 +442,11 @@ def TAPPy(data, noisy=False):
 
     Parameters
     ----------
-
     data : ndarray
         Array of [YYYY, MM, DD, hh, mm, ss, ZZ], where ZZ is surface elevation.
 
     Returns
     -------
-
     cName : list
         Tidal constituent names.
     cSpeed : list
@@ -610,7 +594,6 @@ def runTAPPy(data, sparseDef=False, noisy=False, deleteFile=True, tappy='/usr/bi
 
     Parameters
     ----------
-
     data : ndarray
         Array of [YYYY, MM, DD, hh, mm, ss, ZZ], where ZZ is surface elevation.
     sparseDef : str, optional
@@ -626,7 +609,6 @@ def runTAPPy(data, sparseDef=False, noisy=False, deleteFile=True, tappy='/usr/bi
 
     Returns
     -------
-
     cName : list
         Tidal constituent names.
     cSpeed : list
@@ -692,13 +674,11 @@ def parseTAPPyXML(file):
 
     Parameters
     ----------
-
     file : str
         Full path to a TAPPy output XML file.
 
     Returns
     -------
-
     constituentName : list
         Tidal constituent names.
     constituentSpeed : list
@@ -753,7 +733,6 @@ def getHarmonics(db, stationName, noisy=False):
 
     Parameters
     ----------
-
     db : str
         Full path to the tidal harmonics SQLite database.
     stationName : str
@@ -763,7 +742,6 @@ def getHarmonics(db, stationName, noisy=False):
 
     Returns
     -------
-
     siteHarmonics : dict
         Contains all the harmonics data for the given tide station. Keys and units are:
             - 'stationName' (e.g. 'AVO')
@@ -842,7 +820,6 @@ def readPOLPRED(harmonics, noisy=False):
 
     Parameters
     ----------
-
     harmonics : str
         Full path to the POLPRED ASCII data file.
     noisy : bool, optional
@@ -850,7 +827,6 @@ def readPOLPRED(harmonics, noisy=False):
 
     Returns
     -------
-
     header : dict
         Contains the header data from the POLPRED ASCII file.
     values : ndarray
@@ -862,7 +838,6 @@ def readPOLPRED(harmonics, noisy=False):
 
     See Also
     --------
-
     tide_tools.gridPOLPRED : Converts the POLPRED data into a rectangular
         gridded data set with values of -999.9 outside the POLPRED domain.
 
@@ -937,7 +912,6 @@ def gridPOLPRED(values, noisy=False):
 
     Parameters
     ----------
-
     values : ndarray
         Output from readPOLPRED(). See `tide_tools.readPOLPRED'.
     noisy : bool, optional
@@ -945,7 +919,6 @@ def gridPOLPRED(values, noisy=False):
 
     Returns
     -------
-
     PX : ndarray
         X values created using np.meshgrid.
     PY : ndarray
@@ -959,7 +932,6 @@ def gridPOLPRED(values, noisy=False):
 
     See Also
     --------
-
     tide_tools.readPOLPRED : Reads in the POLPRED ASCII data.
     tide_tools.getHarmonicsPOLPRED : Extract tidal harmonics within a
         threshold distance of a supplied coordinate.
@@ -1001,7 +973,6 @@ def getHarmonicsPOLPRED(harmonics, constituents, lon, lat, stations, noisy=False
 
     Parameters
     ----------
-
     harmonics : str
         Full path to the POLPRED ASCII harmonics data.
     constituents : list
@@ -1023,7 +994,6 @@ def getHarmonicsPOLPRED(harmonics, constituents, lon, lat, stations, noisy=False
 
     Returns
     -------
-
     out : dict
         A dict whose keys are the station names. Within each of those
         dicts is another dict whose keys are 'amplitude', 'phase' and
@@ -1038,7 +1008,6 @@ def getHarmonicsPOLPRED(harmonics, constituents, lon, lat, stations, noisy=False
 
     See Also
     --------
-
     tide_tools.readPOLPRED : Read in the POLPRED data to split the ASCII
         file into a header dict and an ndarray of values.
     grid_tools.findNearestPoint : Find the closest point in one set of

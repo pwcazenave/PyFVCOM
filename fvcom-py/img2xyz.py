@@ -16,7 +16,6 @@ def rgb2z(R, G, B, zlev, parm='H'):
 
     Parameters
     ----------
-
     R, G, B : ndarray
         Image numpy array of the red, green and blue channels in the range
         0-255. Mask if you want to omit some parts from the scaling.
@@ -32,7 +31,6 @@ def rgb2z(R, G, B, zlev, parm='H'):
 
     Returns
     -------
-
     z : ndarray
         Array of values interpolated from the ranges specified in zlev.
 

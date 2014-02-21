@@ -272,7 +272,6 @@ def residualFlow(FVCOM, idxRange=False, checkPlot=False, noisy=False):
 
     Parameters
     ----------
-
     FVCOM : dict
         Contains the FVCOM model results.
     idxRange : list or str, optional
@@ -287,7 +286,6 @@ def residualFlow(FVCOM, idxRange=False, checkPlot=False, noisy=False):
 
     Returns
     -------
-
     uRes : ndarray
         Raw summed velocity u-direction vector component. Useful for PVD
         plots.
@@ -303,7 +301,6 @@ def residualFlow(FVCOM, idxRange=False, checkPlot=False, noisy=False):
 
     Notes
     -----
-
     Based on my MATLAB do_residual.m function.
 
 

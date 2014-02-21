@@ -11,13 +11,11 @@ def getBuoyMetadata(db):
 
     Parameters
     ----------
-
     db : str
         Full path to the buoy data SQLite database.
 
     Returns
     -------
-
     meta_info : list
         List of dicts with keys based on the field names from the Stations
         table. Returns [False] if there is an error.
@@ -65,7 +63,6 @@ def getBuoyData(db, table, fields, noisy=False):
 
     Parameters
     ----------
-
     db : str
         Full path to the buoy data SQLite database.
     table : str
@@ -79,18 +76,15 @@ def getBuoyData(db, table, fields, noisy=False):
 
     Returns
     -------
-
     data : ndarray
         Array of the fields requested from the table specified.
 
     See Also
     --------
-
     buoy_tools.getObservedMetadata : extract metadata for a buoy time series.
 
     Notes
     -----
-
     Search is case insensitive (b0737327 is equal to B0737327).
 
     """

@@ -25,7 +25,6 @@ def readESRIShapeFile(file, fileOut):
 
     Parameters
     ----------
-
     file : str
         Full path to the ESRI ShapeFile to convert.
     fileOut : str
@@ -78,7 +77,6 @@ def readArcMIKE(file, fileOut):
 
     Parameters
     ----------
-
     file : str
         Full path to the DHI MIKE21 arc files.
     fileOut : str

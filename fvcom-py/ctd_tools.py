@@ -11,13 +11,11 @@ def getCTDMetadata(db):
 
     Parameters
     ----------
-
     db : str
         Full path to the CTD data SQLite database.
 
     Returns
     -------
-
     meta_info : list
         List of dicts with keys based on the field names from the Stations
         table. Returns [False] if there is an error.
@@ -65,7 +63,6 @@ def getCTDData(db, table, fields, noisy=False):
 
     Parameters
     ----------
-
     db : str
         Full path to the CTD data SQLite database.
     table : str
@@ -79,18 +76,15 @@ def getCTDData(db, table, fields, noisy=False):
 
     Returns
     -------
-
     data : ndarray
         Array of the fields requested from the table specified.
 
     See Also
     --------
-
     ctd_tools.getObservedMetadata : extract metadata for a CTD cast.
 
     Notes
     -----
-
     Search is case insensitive (b0737327 is equal to B0737327).
 
     """
@@ -138,7 +132,6 @@ def getFerryBoxData(db, fields, table='PrideOfBilbao', noisy=False):
 
     Parameters
     ----------
-
     db : str
         Full path to the CTD data SQLite database.
     fields : list
@@ -152,13 +145,11 @@ def getFerryBoxData(db, fields, table='PrideOfBilbao', noisy=False):
 
     Returns
     -------
-
     data : ndarray
         Array of the fields requested from the table specified.
 
     Notes
     -----
-
     Search is case insensitive (b0737327 is equal to B0737327).
 
     """

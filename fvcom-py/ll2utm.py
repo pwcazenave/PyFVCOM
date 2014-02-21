@@ -59,7 +59,6 @@ def _test(inLat, inLong, inZone=False):
 
     Parameters
     ----------
-
     inLat, inLong : float
         Input latitude and longitude pair.
 
@@ -112,7 +111,6 @@ def LLtoUTM(ReferenceEllipsoid, Lat, Long, ZoneNumber=False):
 
     Parameters
     ----------
-
     ReferenceEllipsoid : int
         Select from 23 reference ellipsoids:
             1. Airy
@@ -152,7 +150,6 @@ def LLtoUTM(ReferenceEllipsoid, Lat, Long, ZoneNumber=False):
 
     Returns
     -------
-
     Zone : list
         UTM Zone for the coordinates supplied in Lat and Long.
 
@@ -161,7 +158,6 @@ def LLtoUTM(ReferenceEllipsoid, Lat, Long, ZoneNumber=False):
 
     Notes
     -----
-
     Written by Chuck Gantz - chuck.gantz@globalstar.com
     Modified by Pierre Cazenave - pica {at} pml <dot> ac (dot) uk
 
@@ -290,7 +286,6 @@ def UTMtoLL(ReferenceEllipsoid, northing, easting, zone):
 
     Parameters
     ----------
-
     ReferenceEllipsoid : int
         Select from 23 reference ellipsoids:
             1. Airy
@@ -326,13 +321,11 @@ def UTMtoLL(ReferenceEllipsoid, northing, easting, zone):
 
     Reutrns
     -------
-
     Lat, Long : ndarray
         Latitude and longitudes for the coordinates in easting and northing.
 
     Notes
     -----
-
     Written by Chuck Gantz: chuck.gantz@globalstar.com.
     Converted to Python by Russ Nelson <nelson@crynwr.com>
     Modified by Pierre Cazenave <pica {at} pml.ac.uk>

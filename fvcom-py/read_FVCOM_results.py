@@ -21,7 +21,6 @@ def readFVCOM(file, varList=None, clipDims=False, noisy=False, globalAtts=False)
 
     Parameters
     ----------
-
     file : str, list
         If a string, the full path to an FVCOM NetCDF output file. If a list,
         a series of files to be loaded. Data will be concatenated into a single
@@ -43,7 +42,6 @@ def readFVCOM(file, varList=None, clipDims=False, noisy=False, globalAtts=False)
 
     Returns
     -------
-
     FVCOM : dict
         Dict of data extracted from the NetCDF file. Keys are those given in
         varList and the data are stored as ndarrays.
@@ -154,7 +152,6 @@ def elems2nodes(elems, tri, nvert, noisy=False):
 
     Parameters
     ----------
-
     elems : ndarray
         Array of unstructured grid element values to move to the element
         nodes.
@@ -166,7 +163,6 @@ def elems2nodes(elems, tri, nvert, noisy=False):
 
     Returns
     -------
-
     nodes : ndarray
         Array of values at the grid nodes.
 
@@ -220,7 +216,6 @@ def nodes2elems(nodes, tri, noisy=False):
 
     Parameters
     ----------
-
     nodes : ndarray
         Array of unstructured grid node values to move to the element
         centres.
@@ -230,7 +225,6 @@ def nodes2elems(nodes, tri, noisy=False):
 
     Returns
     -------
-
     elems : ndarray
         Array of values at the grid nodes.
 
@@ -261,7 +255,6 @@ def getSurfaceElevation(Z, idx):
 
     Parameters
     ----------
-
     Z : ndarray
         Unstructured array of surface elevations with time.
     idx : list
@@ -270,7 +263,6 @@ def getSurfaceElevation(Z, idx):
 
     Returns
     -------
-
     surfaceElevation : ndarray
         Time series of surface elevations at the indices supplied in
         idx.

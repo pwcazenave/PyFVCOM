@@ -144,7 +144,6 @@ def pressure2depth(p, lat):
 
     Parameters
     ----------
-
     p : ndarray
         Pressure (1D array) in decibars.
     lat : ndarray
@@ -152,7 +151,6 @@ def pressure2depth(p, lat):
 
     Returns
     -------
-
     z : ndarray
         Water depth in metres.
 
@@ -182,7 +180,6 @@ def depth2pressure(z, lat):
 
     Parameters
     ----------
-
     z : ndarray
         Depth (1D array) in metres.
     lat : ndarray
@@ -190,7 +187,6 @@ def depth2pressure(z, lat):
 
     Returns
     -------
-
     p : ndarray
         Pressure in decibars.
 
@@ -216,7 +212,6 @@ def dT_adiab_sw(t, s, p):
 
     Parameters
     ----------
-
     t : ndarray
         Temperature (Celsius)
     s : ndarray
@@ -228,7 +223,6 @@ def dT_adiab_sw(t, s, p):
 
     Returns
     -------
-
     atg : ndarray
         Adiabatic temperature gradient
 
@@ -271,7 +265,6 @@ def theta_sw(t, s, p, pr):
 
     Parameters
     ----------
-
     t : ndarray
         Temperature (1D array) in degrees Celsius.
     s : ndarray
@@ -284,7 +277,6 @@ def theta_sw(t, s, p, pr):
 
     Returns
     -------
-
     th : ndarray
         Potential temperature (Celsius)
 
@@ -320,7 +312,6 @@ def cp_sw(t, s, p):
 
     Parameters
     ----------
-
     t : ndarray
         Temperature (1D array) in degrees Celsius.
     s : ndarray
@@ -331,13 +322,11 @@ def cp_sw(t, s, p):
 
     Returns
     -------
-
     cp : ndarray
         Constant pressure specific heat (Celsius).
 
     Notes
     -----
-
     Valid temperature range is -2 to 40C and salinity is 0-42 PSU. Warnings are
     issued if the data fall outside these ranges.
 
@@ -455,13 +444,11 @@ def sw_smow(t):
 
     Parameters
     ----------
-
     t : ndarray
         Temperature (1D array) in degrees Celsius.
 
     Returns
     -------
-
     rho : ndarray
         Density in kg m^{-3}.
 
@@ -487,7 +474,6 @@ def sw_dens0(t, s):
 
     Parameters
     ----------
-
     t : ndarray
         Temperature (1D array) in degrees Celsius.
     s: ndarray
@@ -495,7 +481,6 @@ def sw_dens0(t, s):
 
     Returns
     -------
-
     dens : ndarray
         Seawater density at atmospheric surface pressure (kg m^{-1}).
 
@@ -528,7 +513,6 @@ def sw_seck(t, s, p):
 
     Parameters
     ----------
-
     t : ndarray
         Temperature (1D array) in degrees Celsius.
     s : ndarray
@@ -539,7 +523,6 @@ def sw_seck(t, s, p):
 
     Returns
     -------
-
     k : ndarray
         Secant Bulk Modulus of seawater.
 
@@ -612,7 +595,6 @@ def sw_dens(t, s, p):
 
     Parameters
     ----------
-
     t : ndarray
         Temperature (1D array) in degrees Celsius.
     s : ndarray
@@ -623,13 +605,11 @@ def sw_dens(t, s, p):
 
     Returns
     -------
-
     rho : ndarray
         Density in kg m^{-3}.
 
     Notes
     -----
-
     Valid temperature range is -2 to 40C, salinity is 0-42 and pressure is
     0-10000 decibars. Warnings are issued if the data fall outside these
     ranges.
@@ -674,7 +654,6 @@ def sw_svan(t, s, p):
 
     Parameters
     ----------
-
     t : ndarray
         Temperature (1D array) in degrees Celsius.
     s : ndarray
@@ -685,7 +664,6 @@ def sw_svan(t, s, p):
 
     Returns
     -------
-
     svan : ndarray
         Specific Volume Anomaly in kg m^{-3}.
 
@@ -705,7 +683,6 @@ def sw_sal78(c, t, p):
 
     Parameters
     ----------
-
     c : ndarray
         Conductivity (S m{-1})
     t : ndarray
@@ -715,12 +692,10 @@ def sw_sal78(c, t, p):
 
     Returns
     -------
-
     s : salinity (PSU-78)
 
     Notes
     -----
-
     The Conversion from IPTS-68 to ITS90 is:
         T90 = 0.99976 * T68
         T68 = 1.00024 * T90
@@ -767,7 +742,6 @@ def sw_sal80(c, t, p):
 
     Parameters
     ----------
-
     c : ndarray
         Conductivity (S m{-1})
     t : ndarray
@@ -777,12 +751,10 @@ def sw_sal80(c, t, p):
 
     Returns
     -------
-
     s : salinity (PSU-78)
 
     Notes
     -----
-
     The Conversion from IPTS-68 to ITS90 is:
         T90 = 0.99976 * T68
         T68 = 1.00024 * T90
@@ -791,7 +763,6 @@ def sw_sal80(c, t, p):
 
     References
     ----------
-
     UNESCO Report No. 37, 1981 Practical Salinity Scale 1978: E.L. Lewis, IEEE
     Ocean Engineering, Jan., 1980
 
@@ -840,7 +811,6 @@ def sw_salinity(c, t, p):
 
     Parameters
     ----------
-
     c : ndarray
         Conductivity (1D array) in S m^{-1}.
     t : ndarray
@@ -850,7 +820,6 @@ def sw_salinity(c, t, p):
 
     Returns
     -------
-
     sw_salinity : ndarray
         Salinity in PSU (essentially unitless)
 
@@ -927,7 +896,6 @@ def dens_jackett(th, s, p=None):
 
     Parameters
     ----------
-
     th : ndarray
         Potential temperature (degrees Celsius)
     s : ndarray
@@ -937,13 +905,11 @@ def dens_jackett(th, s, p=None):
 
     Returns
     -------
-
     dens : ndarray
         In-situ density (kg m^{-3})
 
     References
     ----------
-
     Feistel, R., A new extended Gibbs thermodynamic potential of seawater,
     Prog. Oceanogr., 58, 43-115,
     http://authors.elsevier.com/sd/article/S0079661103000880 corrigendum 61
@@ -1001,19 +967,16 @@ def cond2salt(cond):
 
     Parameters
     ----------
-
     cond : ndarray
         Conductivity in microsiemens per cm.
 
     Returns
     -------
-
     salt : ndarray
         Salinity in PSU.
 
     References
     ----------
-
     Schemel, L. E., 2001, Simplified conversions between specific conductance
     and salinity units for use with data from monitoring stations, IEP
     Newsletter, v. 14, no. 1, p. 17-18 [accessed July 27, 2004, at
@@ -1048,7 +1011,6 @@ def vorticity(x, y, u, v, vtype='averaged'):
 
     Parameters
     ----------
-
     x, y : ndarray
         Positions of the u and v samples. In FVCOM parlance, this is the 'xc'
         and 'yc' or 'lonc' and 'latc' variables in the output file (element
@@ -1062,7 +1024,6 @@ def vorticity(x, y, u, v, vtype='averaged'):
 
     Returns
     -------
-
     vort : ndarray
         Calculated voriticity from the velocity components.
 

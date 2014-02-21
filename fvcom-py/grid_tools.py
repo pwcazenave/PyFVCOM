@@ -15,13 +15,11 @@ def parseUnstructuredGridSMS(mesh):
 
     Parameters
     ----------
-
     mesh : str
         Full path to an SMS unstructured grid (.2dm) file.
 
     Returns
     -------
-
     triangle : ndarray
         Integer array of shape (ntri, 3). Each triangle is composed of
         three points and this contains the three node numbers (stored in
@@ -109,13 +107,11 @@ def parseUnstructuredGridFVCOM(mesh):
 
     Parameters
     ----------
-
     mesh : str
         Full path to the FVCOM unstructured grid file (.dat usually).
 
     Returns
     -------
-
     triangle : ndarray
         Integer array of shape (ntri, 3). Each triangle is composed of
         three points and this contains the three node numbers (stored in
@@ -170,7 +166,6 @@ def parseUnstructuredGridMIKE(mesh, flipZ=True):
 
     Parameters
     ----------
-
     mesh : str
         Full path to the DHI MIKE21 unstructured grid file (.mesh usually).
     flipZ : bool, optional
@@ -180,7 +175,6 @@ def parseUnstructuredGridMIKE(mesh, flipZ=True):
 
     Returns
     -------
-
     triangle : ndarray
         Integer array of shape (ntri, 3). Each triangle is composed of
         three points and this contains the three node numbers (stored in
@@ -243,13 +237,11 @@ def parseUnstructuredGridGMSH(mesh):
 
     Parameters
     ----------
-
     mesh : str
         Full path to the DHI MIKE21 unstructured grid file (.mesh usually).
 
     Returns
     -------
-
     triangle : ndarray
         Integer array of shape (ntri, 3). Each triangle is composed of
         three points and this contains the three node numbers (stored in
@@ -381,7 +373,6 @@ def writeUnstructuredGridSMS(triangles, nodes, x, y, z, types, mesh):
 
     Parameters
     ----------
-
     triangles : ndarray
         Integer array of shape (ntri, 3). Each triangle is composed of
         three points and this contains the three node numbers (stored in
@@ -520,7 +511,6 @@ def writeUnstructuredGridSMSBathy(triangles, nodes, z, PTS):
 
     Parameters
     ----------
-
     triangle : ndarray
         Integer array of shape (ntri, 3). Each triangle is composed of
         three points and this contains the three node numbers (stored in
@@ -573,7 +563,6 @@ def writeUnstructuredGridMIKE(triangles, nodes, x, y, z, types, mesh):
 
     Parameters
     ----------
-
     triangles : ndarray
         Integer array of shape (ntri, 3). Each triangle is composed of
         three points and this contains the three node numbers (stored in
@@ -646,7 +635,6 @@ def plotUnstructuredGrid(triangles, nodes, x, y, z, colourLabel, addText=False, 
 
     Parameters
     ----------
-
     triangles : ndarray
         Integer array of shape (ntri, 3). Each triangle is composed of
         three points and this contains the three node numbers (stored in
@@ -761,7 +749,6 @@ def findNearestPoint(FX, FY, x, y, maxDistance=np.inf, noisy=False):
 
     Parameters
     ----------
-
     FX, FY : ndarray
         Coordinates within which to search for the nearest point given
         in x and y.
@@ -778,7 +765,6 @@ def findNearestPoint(FX, FY, x, y, maxDistance=np.inf, noisy=False):
 
     Returns
     -------
-
     nearestX, nearestY : ndarray
         Coordinates from FX and FY which are within maxDistance (if
         given) and closest to the corresponding point in x and y.
@@ -851,7 +837,6 @@ def elementSideLengths(triangles, x, y):
 
     Parameters
     ----------
-
     triangles : ndarray
         Integer array of shape (ntri, 3). Each triangle is composed of
         three points and this contains the three node numbers (stored in
@@ -861,7 +846,6 @@ def elementSideLengths(triangles, x, y):
 
     Returns
     -------
-
     elemSides : ndarray
         Length of each element described by triangles and x, y.
 
@@ -891,7 +875,6 @@ def fixCoordinates(FVCOM, UTMZone, inVars=['x', 'y']):
 
     Parameters
     ----------
-
     FVCOM : dict
         Dict of the FVCOM model results (see read_FVCOM_results.readFVCOM).
     UTMZone : str
@@ -903,7 +886,6 @@ def fixCoordinates(FVCOM, UTMZone, inVars=['x', 'y']):
 
     Returns
     -------
-
     X, Y : ndarray
         Converted coordinates in longitude and latitude.
 
@@ -946,20 +928,17 @@ def plotCoast(coastline):
 
     Parameters
     ----------
-
     coastline : str
         Full path to an ESRI ShapeFile of a coastline.
 
     Returns
     -------
-
     paths : list
         List of matplotlib.path.Paths which can be used with
         matplotlib.patches.PathPatch to plot the ShapeFile.
 
     Notes
     -----
-
     Lifted from:
     http://ondrejintheair.blogspot.co.uk/2011/11/plot-polygon-shapefiles-using-ogr-and.html
 
@@ -1007,7 +986,6 @@ def clipTri(MODEL, sideLength, keys=['xc', 'yc']):
 
     Parameters
     ----------
-
     MODEL : dict
         Contains the MODEL model results. Keys are assumed to be ['xc', 'yc']
         unless the optional argument `keys' is specified (see below).
@@ -1019,7 +997,6 @@ def clipTri(MODEL, sideLength, keys=['xc', 'yc']):
 
     Returns
     -------
-
     triClip : ndarray
         Triangulation (indices of the coordinates which make up an
         element) of the new clipped elements. This can be used with the
@@ -1065,7 +1042,6 @@ def getRiverConfig(fileName, noisy=False):
 
     Parameters
     ----------
-
     fileName : str
         Full path to an FVCOM Rivers name list.
     noisy : bool, optional
@@ -1073,7 +1049,6 @@ def getRiverConfig(fileName, noisy=False):
 
     Returns
     -------
-
     rivers : dict
         Dict of the parameters for each river defind in the name list.
         Dictionary keys are the name list parameter names (e.g. RIVER_NAME).
@@ -1109,7 +1084,6 @@ def getRivers(discharge, positions, noisy=False):
 
     Parameters
     ----------
-
     discharge : list
         Full path to the POLCOMS flw discharge ASCII file(s) for a given year.
         Number of rows is time, number of columns is number of rivers. The
@@ -1121,7 +1095,6 @@ def getRivers(discharge, positions, noisy=False):
 
     Returns
     -------
-
     rivers : dict
         Dictionary of the time series for each location in the positions file.
         For multiple discharge files, the data are appended in time. Dictionary
@@ -1194,7 +1167,6 @@ def mesh2grid(meshX, meshY, meshZ, nx, ny, thresh=None, noisy=False):
 
     Parameters
     ----------
-
     meshX, meshY : ndarray
         Arrays of the unstructured grid (mesh) node positions.
     meshZ : ndarray
@@ -1213,7 +1185,6 @@ def mesh2grid(meshX, meshY, meshZ, nx, ny, thresh=None, noisy=False):
 
     Returns
     -------
-
     xx, yy : ndarray
         New position arrays (1D). Can be used with numpy.meshgrid to plot the
         resampled variables with matplotlib.pyplot.pcolor.
@@ -1311,7 +1282,6 @@ def lineSample(x, y, positions, num=0, noisy=False, debug=False):
 
     Parameters
     ----------
-
     x, y : ndarray
         Position arrays for the unstructured grid.
     positions : ndarray
@@ -1326,7 +1296,6 @@ def lineSample(x, y, positions, num=0, noisy=False, debug=False):
 
     Returns
     -------
-
     idx : list
         List of indices for the nodes used in the line sample.
     line : ndarray
@@ -1352,7 +1321,6 @@ def lineSample(x, y, positions, num=0, noisy=False, debug=False):
 
         Parameters
         ----------
-
         xs, ys : ndarray
             Node position arrays.
         start, end : ndarray
@@ -1360,7 +1328,6 @@ def lineSample(x, y, positions, num=0, noisy=False, debug=False):
 
         Returns
         -------
-
         idx : list
             List of indices for the nodes used in the line sample.
         line : ndarray
