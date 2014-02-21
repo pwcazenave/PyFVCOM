@@ -23,7 +23,7 @@ def julianDay(gregorianDateTime, mjd=False):
         Array of Gregorian dates formatted as [[YYYY, MM, DD, hh, mm,
         ss],...,[YYYY, MM, DD, hh, mm, ss]]. If hh, mm, ss are missing
         they are assumed to be zero (i.e. midnight).
-    mjd : bool
+    mjd : boolean, optional
         Set to True to convert output from Julian Day to Modified Julian
         Day.
 
@@ -61,7 +61,10 @@ def julianDay(gregorianDateTime, mjd=False):
         numMissing = 6 - nc
         if numMissing > 0:
             extraCols = np.zeros([nr, numMissing])
-            gregorianDateTime = np.hstack([gregorianDateTime, extraCols])
+            if nr == 1:
+                gregorianDateTime = np.hstack([gregorianDateTime, extraCols[0]])
+            else:
+                gregorianDateTime = np.hstack([gregorianDateTime, extraCols])
 
     if nr > 1:
         year   = gregorianDateTime[:, 0]
