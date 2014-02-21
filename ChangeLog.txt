@@ -1,0 +1,23 @@
+20140221
+--------
+
+grid_tools:
+    * parseUnstructuredGridGMSH: new function to read GMSH unstructured grids.
+    * OSGB36toWGS84: new function to convert from British National Grid to
+    spherical (WGS84).
+    * connectivity: new function to calculate the connectivity of an
+    unstructured grid (e.g. find the boundary).
+ll2utm:
+    * Update the function to use arrays of positions rather than single
+    positions.
+    * Also add some tests to make sure things don't break with the new
+    changes.
+ocean_tools:
+    * cond2salt: new function to convert conductivity to salinity (assuming
+    temperature constant at 25 Celsius).
+read_FVCOM_results:
+    * readFVCOM: update to try aggregating multiple files along a dimension
+    called 'time' if unsuccessful with the automatic aggregation.
+
+README.md:
+    * Add example code section for some simple plots.
