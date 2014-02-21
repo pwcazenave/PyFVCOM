@@ -178,16 +178,16 @@ if __name__ == '__main__':
                        FVCOM['lat'].max()]
 
     # Create a Basemap instance for plotting coastlines and so on.
-    m = Basemap(llcrnrlon=extents[0:2].min(),
+    m = Basemap(llcrnrlon=extents[:2].min(),
             llcrnrlat=extents[-2:].min(),
-            urcrnrlon=extents[0:2].max(),
+            urcrnrlon=extents[:2].max(),
             urcrnrlat=extents[-2:].max(),
             rsphere=(6378137.00,6356752.3142),
             resolution='h',
             projection='merc',
             lat_0=extents[-2:].mean(),
-            lon_0=extents[0:2].mean(),
-            lat_ts=2.0)
+            lon_0=extents[:2].mean(),
+            lat_ts=extenst[:2].mean())
 
     parallels = np.arange(floor(extents[2]), ceil(extents[3]), 1)
     meridians = np.arange(fllor(extents[0]), ceil(extents[1]), 1)
@@ -259,4 +259,129 @@ if __name__ == '__main__':
         ax.set_ylabel('Surface elevation (m)')
 
     fig0.show()
+```
+
+
+```python
+""" Plot tidal ellipses from a model output.
+
+"""
+
+import numpy as np
+import matplotlib.pyplot as plt
+from mpl_toolkits.basemap import Basemap
+
+from read_FVCOM_results import readFVCOM
+from tidal_ellipse import ap2ep, prep_plot
+from tide_tools import TAPPy
+
+if __name__ == '__main__':
+
+    fvcom = '/path/to/fvcom/netcdf/output.nc'
+
+    vars = ['lonc', 'latc', 'u', 'v', 'Times']
+    dims = {'time':':360'} # first 15 days at hourly sampling
+
+    # Define a plot subset.
+    subset = np.array([[-5, -6], [49, 50]]) # [[xmin, xmax], [ymin, ymax]]
+
+    # Scaling factor for the ellipses. You may need to experiment with this
+    value.
+    scaling = 5000
+
+    # Find the model nodes which fall within the subset defined above.
+    FVCOM = readFVCOM(fvcom, ['lonc', 'latc'])
+    elems = np.where((FVCOM['lonc'] > subset[0].min()) *
+                     (FVCOM['lonc'] < subset[0].max()) *
+                     (FVCOM['latc'] > subset[1].min()) *
+                     (FVCOM['latc'] < subset[1].max()))[0]
+    dims.update({'nele':str(elems.tolist())})
+
+    FVCOM = readFVCOM(fvcom, vars, clipDims=dims, noisy=True)
+
+    # Depth-average the velocity components.
+    uBar, vBar = FVCOM['u'].mean(axis=1), FVCOM['v'].mean(axis=1)
+
+    # Create a time array for the TAPPy call.
+    years = [''.join(i) for i in FVCOM['Times'][:, 0:4]]
+    months = [''.join(i) for i in FVCOM['Times'][:, 5:7]]
+    days = [''.join(i) for i in FVCOM['Times'][:, 8:10]]
+    hours = [''.join(i) for i in FVCOM['Times'][:, 11:13]]
+    minutes = [''.join(i) for i in FVCOM['Times'][:, 14:16]]
+    seconds = [''.join(i) for i in FVCOM['Times'][:, 17:19]]
+    Times = np.column_stack((years, months, days, hours, minutes, seconds)).astype(int)
+
+    # Combine the u and v components as a complex array (so speed is simply
+    # np.abs(uv)).
+    uv = uBar + 1j * vBar
+
+    # Create dicts for the results.
+    uharmonics, vharmonics = {}, {}
+
+    # Transpose so we can analyse a time series for each location.
+    for i, comp in enumerate(uv.transpose()):
+        print i, uv.shape
+        # Combine the Times and velocity data.
+        u = np.column_stack((Times, comp.real))
+        v = np.column_stack((Times, comp.imag))
+
+        # Create a dict for the TAPPy results.
+        uharm, vharm = {}, {}
+        uharm['name'], uharm['speed'], uharm['phase'], uharm['amp'], uharm['infer'] = TAPPy(u)
+        vharm['name'], vharm['speed'], vharm['phase'], vharm['amp'], vharm['infer'] = TAPPy(v)
+
+        # Put the results into a meta dict with the key being the current
+        # position.
+        key = '{}-{}'.format(FVCOM['lonc'][i], FVCOM['latc'][i])
+        uharmonics[key] = uharm
+        vharmonics[key] = vharm
+
+    # Now plot the M2 results.
+    m = Basemap(llcrnrlon=subset[0].min(),
+            llcrnrlat=subset[1].min(),
+            urcrnrlon=subset[0].max(),
+            urcrnrlat=subset[1].max(),
+            rsphere=(6378137.00,6356752.3142),
+            resolution='h',
+            projection='merc',
+            lat_0=subset[1].mean(),
+            lon_0=subset[0].mean(),
+            lat_ts=subset[0].mean())
+
+    parallels = np.arange(np.floor(subset[1].min()), np.ceil(subset[1].max()), 0.1)
+    meridians = np.arange(np.floor(subset[0].min()), np.ceil(subset[0].max()), 0.2)
+
+    x, y = m(FVCOM['lonc'], FVCOM['latc'])
+
+    fig1 = plt.figure(figsize=(12, 12))
+    ax1 = fig1.add_subplot(1, 1, 1)
+
+    m.drawmapboundary()
+    m.drawcoastlines(zorder=100)
+    m.fillcontinents(color='0.6', zorder=100)
+    m.drawparallels(parallels, labels=[1,0,0,0], fontsize=10, linewidth=0)
+    m.drawmeridians(meridians, labels=[0,0,0,1], fontsize=10, linewidth=0)
+
+    ax1.set_title('M2 tidal ellipses')
+
+    for i, xy in enumerate(np.column_stack((x, y))):
+        # Make a key from the original positions. This is the key which we
+        # use to extract the harmonic results.
+        key = '{}-{}'.format(FVCOM['lonc'][i], FVCOM['latc'][i])
+
+        # Find the M2 data position for the current position.
+        idx = uharmonics[key]['name'].index('M2')
+
+        # Extract the amplitude and phase and calculate the ellipse.
+        uZ = float(uharmonics[key]['amp'][idx])
+        vZ = float(vharmonics[key]['amp'][idx])
+        uG = float(uharmonics[key]['phase'][idx])
+        vG = float(vharmonics[key]['phase'][idx])
+        SEMA, ECC, INC, PHA, w = ap2ep(uZ, uG, vZ, vG)
+        w, wmin, wmax = prep_plot(SEMA, ECC, INC, PHA)
+
+        ax1.plot((scaling * np.real(w)) + xy[0], (scaling * np.imag(w)) + xy[1], 'k', linewidth=2)
+
+        fig1.show()
+
 ```
