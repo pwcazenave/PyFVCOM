@@ -267,7 +267,7 @@ def residualFlow(FVCOM, idxRange=False, checkPlot=False, noisy=False):
     Calculate the residual flow. By default, the calculation will take place
     over the entire duration of FVCOM['Times']. To limit the calculation to a
     specific range, give the index range as idxRange = [0, 100], for the first
-    to 101st time step.  Alternatively, specify idxRange as 'daily' or
+    to 100th time step.  Alternatively, specify idxRange as 'daily' or
     'spring-neap' for daily and spring neap cycle residuals.
 
     Parameters
@@ -369,8 +369,9 @@ def residualFlow(FVCOM, idxRange=False, checkPlot=False, noisy=False):
 
         for ii in xrange(nTimeSteps):
             # Create progressive vectors for all time steps in the current layer
-            if noisy and np.mod(ii, 99) == 0:
-                print 'Create PVD at time step {} of {}'.format(ii +1, nTimeSteps)
+            if noisy:
+                if ii == 0 or np.mod(ii, 99) == 0:
+                    print 'Create PVD at time step {} of {}'.format(ii + 1, nTimeSteps)
 
             uRes[ii, hh, :] = uRes[ii, hh, :] + (uSum[ii, hh, :] * (dt * toSecFactor))
             vRes[ii, hh, :] = vRes[ii, hh, :] + (vSum[ii, hh, :] * (dt * toSecFactor))
