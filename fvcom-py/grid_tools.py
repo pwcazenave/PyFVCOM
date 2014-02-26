@@ -1783,7 +1783,7 @@ def clipDomain(x, y, extents, noisy=False):
     Parameters
     ----------
     x, y : ndarray
-        x and y coordinates (n x 2 shaped).
+        x and y coordinate arrays.
     extents : ndarray or list
         minimum and maximum of the extents of the x and y coordinates for the
         bounding box (xmin, xmax, ymin, ymax).
