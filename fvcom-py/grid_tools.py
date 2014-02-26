@@ -1790,13 +1790,13 @@ def clipDomain(x, y, extents, noisy=False):
 
     Returns
     -------
-    indices : ndarray
-        Array of the indices of the positions in pos which fall within the
-        bounding box.
+    mask : ndarrary
+        Mask (True = within the bounding box, False = not) array of the indices
+        of the positions in pos which fall within the bounding box.
 
     """
 
-    indices = np.where((x > extents[0]) * \
+    mask = np.where((x > extents[0]) * \
             (x < extents[1]) * \
             (y > extents[2]) * \
             (y < extents[3]))[0]
@@ -1804,6 +1804,6 @@ def clipDomain(x, y, extents, noisy=False):
     if noisy:
         print('Subset contains {} points of {} total.'.format(len(indices), len(x)))
 
-    return indices
+    return mask
 
 
