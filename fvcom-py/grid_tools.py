@@ -1773,3 +1773,37 @@ def connectivity(p, t):
     bnd[e[e2t[:, 1] == -1, :]] = True                                       # True for bnd nodes
 
     return e, te, e2t, bnd
+
+
+def clipDomain(x, y, extents, noisy=False):
+    """
+    Function to find the indices for the positions in pos which fall within the
+    bounding box defined in extents.
+
+    Parameters
+    ----------
+    x, y : ndarray
+        x and y coordinates (n x 2 shaped).
+    extents : ndarray or list
+        minimum and maximum of the extents of the x and y coordinates for the
+        bounding box (xmin, xmax, ymin, ymax).
+
+    Returns
+    -------
+    indices : ndarray
+        Array of the indices of the positions in pos which fall within the
+        bounding box.
+
+    """
+
+    indices = np.where((x > extents[0]) * \
+            (x < extents[1]) * \
+            (y > extents[2]) * \
+            (y < extents[3]))[0]
+
+    if noisy:
+        print('Subset contains {} points of {} total.'.format(len(indices), len(x)))
+
+    return indices
+
+
