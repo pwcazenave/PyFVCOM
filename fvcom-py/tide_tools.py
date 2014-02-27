@@ -446,7 +446,8 @@ def TAPPy(data, noisy=False):
     Parameters
     ----------
     data : ndarray
-        Array of [YYYY, MM, DD, hh, mm, ss, ZZ], where ZZ is surface elevation.
+        Array of [YYYY, MM, DD, hh, mm, ss, ZZ], where ZZ is time series data
+        (e.g. surface elevation, velocity components etc.).
 
     Returns
     -------
