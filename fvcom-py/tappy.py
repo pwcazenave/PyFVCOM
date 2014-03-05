@@ -83,7 +83,7 @@ def fatal(ftn, txt):
     raise SystemExit, msg
 
 def usage():
-    print __doc__
+    print(__doc__)
 
 
 def interpolate(data, start, stop, iavg):
@@ -202,7 +202,7 @@ class Util():
         else:
             if fname == '-':
                 for d, v in zip(x, y):
-                    print "%s %f" % (d.isoformat(), v)
+                    print("%s %f" % (d.isoformat(), v))
             else:
                 fpo = open(fname, "w")
                 for d, v in zip(x, y):
@@ -703,7 +703,7 @@ class Util():
         num_hours = (jd[-1] - jd[0]) * 24
         numpoint = len(jd) * 0.5 * rayleigh_comp
         if num_hours < 13:
-            print "Cannot calculate any constituents from this record length"
+            print("Cannot calculate any constituents from this record length")
             sys.exit()
         speed_dict["M2"] = self.tidal_dict["M2"]
         if num_hours >= (24 * rayleigh_comp):
@@ -882,7 +882,7 @@ class tappy(Util):
                                          mode='r')
         for line in fp:
             if 'water_level' not in line.parsed_dict.keys():
-                print 'Warning: record %i did not parse according to the supplied definition file' % line.line_number
+                print('Warning: record %i did not parse according to the supplied definition file' % line.line_number)
                 continue
             if 'datetime' in line.parsed_dict.keys():
                 self.dates.append(line.parsed_dict['datetime'])
@@ -900,12 +900,12 @@ class tappy(Util):
                                                 line.parsed_dict['minute'],
                                                 line.parsed_dict['second']))
             else:
-                print 'Warning: record %i did not parse the date and time according to the supplied definition file' % line.line_number
-                print 'Requires "year", "month", "day", and "hour" ("minute" and "second" are optional and default to zero) OR a Julian date/time'
+                print('Warning: record %i did not parse the date and time according to the supplied definition file' % line.line_number)
+                print('Requires "year", "month", "day", and "hour" ("minute" and "second" are optional and default to zero) OR a Julian date/time')
                 continue
             self.elevation.append(line.parsed_dict['water_level'])
         if len(self.elevation) == 0:
-            print 'No data was found in the input file.'
+            print('No data was found in the input file.')
             sys.exit()
         self.elevation = np.array(self.elevation)
         self.dates = np.array(self.dates)
@@ -917,7 +917,7 @@ class tappy(Util):
         """
 
         if task not in ['fail', 'ignore', 'fill']:
-            print "missing-data must be one of 'fail' (the default), 'ignore', or 'fill'"
+            print("missing-data must be one of 'fail' (the default), 'ignore', or 'fill'")
             sys.exit()
 
         if task == 'ignore':
@@ -927,7 +927,7 @@ class tappy(Util):
 
         if np.any(interval > datetime.timedelta(seconds = 3600)):
             if task == 'fail':
-                print "There is a difference of greater than one hour between values"
+                print("There is a difference of greater than one hour between values")
                 sys.exit()
 
         if task == 'fill':
@@ -1115,8 +1115,8 @@ class tappy(Util):
     def constituents(self):
         difference = self.dates[1:] - self.dates[:-1]
         if np.any(difference < datetime.timedelta(seconds = 0)):
-            print "Let's do the time warp again!"
-            print "The date values reverse - they must be constantly increasing."
+            print("Let's do the time warp again!")
+            print("The date values reverse - they must be constantly increasing.")
             sys.exit()
 
         p0 = [1.0]*(len(self.speed_dict)*2 + 2)
@@ -1440,7 +1440,7 @@ class tappy(Util):
             return dates_filled[nslice], relevation[nslice]
 
         if nstype == 'cd':
-            print "Complex demodulation filter doesn't work right yet - still testing."
+            print("Complex demodulation filter doesn't work right yet - still testing.")
 
             (new_dates, new_elev) = self.missing('fill', dates_filled, nelevation)
             kern = np.ones(25) * (1./25.)
@@ -1456,7 +1456,7 @@ class tappy(Util):
                 ns_amplitude[key] = np.absolute(yt)
                 ns_amplitude[key] = yt.real
                 ns_amplitude[key] = np.convolve(ns_amplitude[key], kern, mode='same')
-                print key, np.average(ns_amplitude[key])
+                print(key, np.average(ns_amplitude[key]))
                 ns_amplitude[key] = np.convolve(ns_amplitude[key],
                                                kern,
                                                mode = 1)
@@ -1487,30 +1487,30 @@ class tappy(Util):
         for k in self.key_list:
             ndict[k] = self.speed_dict[k]['speed']
 
-        print "\n#%12s %12s %12s %12s" % ("NAME", "SPEED", "H", "PHASE")
-        print   "#%12s %12s %12s %12s" % ("====", "=====", "=", "=====")
+        print("\n#%12s %12s %12s %12s" % ("NAME", "SPEED", "H", "PHASE"))
+        print("#%12s %12s %12s %12s" % ("====", "=====", "=", "====="))
         klist = [i[0] for i in self.sortbyvalue(ndict)]
         for i in klist:
-            print " %12s %12.8f %12.4f %12.4f" % (i,
+            print(" %12s %12.8f %12.4f %12.4f" % (i,
                                                 self.speed_dict[i]['speed']*rad2deg,
                                                 self.r[i],
-                                                self.phase[i])
-        print "\n# INFERRED CONSTITUENTS"
+                                                self.phase[i]))
+        print("\n# INFERRED CONSTITUENTS")
         ndict = {}
         for k in self.inferred_key_list:
             ndict[k] = self.tidal_dict[k]['speed']
-        print "#%12s %12s %12s %12s" % ("NAME", "SPEED", "H", "PHASE")
-        print "#%12s %12s %12s %12s" % ("====", "=====", "=", "=====")
+        print("#%12s %12s %12s %12s" % ("NAME", "SPEED", "H", "PHASE"))
+        print("#%12s %12s %12s %12s" % ("====", "=====", "=", "====="))
         klist = [i[0] for i in self.sortbyvalue(ndict)]
         for i in klist:
-            print " %12s %12.8f %12.4f %12.4f" % (i,
+            print(" %12s %12.8f %12.4f %12.4f" % (i,
                                                 self.tidal_dict[i]['speed']*rad2deg,
                                                 self.inferred_r[i],
-                                                self.inferred_phase[i])
+                                                self.inferred_phase[i]))
 
-        print "\n# AVERAGE (Z0) = ", self.fitted_average
+        print("\n# AVERAGE (Z0) = ", self.fitted_average)
         if self.linear_trend:
-            print "# SLOPE OF REMOVED LINEAR TREND = ", self.slope
+            print("# SLOPE OF REMOVED LINEAR TREND = ", self.slope)
 
 
     def print_ephemeris_table(self):
@@ -1557,24 +1557,24 @@ class tappy(Util):
             (zeta, nu, nup, nupp, kap_p, ii, R, Q, T, self.jd, s, h, Nv, p, p1) = package
             Ra = 1.0/np.sqrt(1.0 - 12.0*(np.tan(0.5*ii))**2 * np.cos(2.0*kap_p) +
                     36.0*(np.tan(0.5*ii))**4) # eq 215, schureman
-            print dates[0].isoformat(),
-            print ' h = ', h*rad2deg, h_schureman[d], h*rad2deg - h_schureman[d]
-            print ' p1 = ', p1[0]*rad2deg, p1_schureman[d], p1[0]*rad2deg - p1_schureman[d]
-            print ' s = ', s*rad2deg, s_schureman[d], s*rad2deg - s_schureman[d]
-            print ' p = ', p*rad2deg, p_schureman[d], p*rad2deg - p_schureman[d]
-            print ' Nv = ', Nv[0]*rad2deg, N_schureman[d], Nv[0]*rad2deg - N_schureman[d]
-            print " zeta = ", zeta*rad2deg
-            print " nu = ", nu*rad2deg
-            print " nup = ", nup*rad2deg
-            print " nupp = ", nupp*rad2deg
-            print " kap_p = ", kap_p*rad2deg
-            print " ii = ", ii*rad2deg
-            print " R = ", R*rad2deg
-            print " Ra = ", Ra*rad2deg
-            print " log(Ra) = ", np.log10(Ra)
-            print " Q = ", Q*rad2deg
-            print " log(Q) = ", np.log(Q)
-            print " T = ", T*rad2deg
+            print(dates[0].isoformat(), end=' ')
+            print(' h = ', h*rad2deg, h_schureman[d], h*rad2deg - h_schureman[d])
+            print(' p1 = ', p1[0]*rad2deg, p1_schureman[d], p1[0]*rad2deg - p1_schureman[d])
+            print(' s = ', s*rad2deg, s_schureman[d], s*rad2deg - s_schureman[d])
+            print(' p = ', p*rad2deg, p_schureman[d], p*rad2deg - p_schureman[d])
+            print(' Nv = ', Nv[0]*rad2deg, N_schureman[d], Nv[0]*rad2deg - N_schureman[d])
+            print(" zeta = ", zeta*rad2deg)
+            print(" nu = ", nu*rad2deg)
+            print(" nup = ", nup*rad2deg)
+            print(" nupp = ", nupp*rad2deg)
+            print(" kap_p = ", kap_p*rad2deg)
+            print(" ii = ", ii*rad2deg)
+            print(" R = ", R*rad2deg)
+            print(" Ra = ", Ra*rad2deg)
+            print(" log(Ra) = ", np.log10(Ra))
+            print(" Q = ", Q*rad2deg)
+            print(" log(Q) = ", np.log(Q))
+            print(" T = ", T*rad2deg)
 
         t = tappy(
             def_filename=None,
@@ -1602,9 +1602,9 @@ class tappy(Util):
         (speed_dict, key_list) = t.which_constituents(len(t.dates), package)
         for k in ['J1', 'K1', 'K2', 'L2', 'M1', 'M2', 'M3', 'M6', 'M8', 'O1', 'OO1', 'MO3', 'MO3', 'Mf', 'Mm']:
             for i in [1900, 1930]:
-                print i, k, speed_dict[k]['FF'][i-1900]
+                print(i, k, speed_dict[k]['FF'][i-1900])
                 if k == 'M2':
-                    print 'M2>>', -2.14*np.sin(Nv[0]*deg2rad)*rad2deg, speed_dict[k]['VAU']
+                    print('M2>>', -2.14*np.sin(Nv[0]*deg2rad)*rad2deg, speed_dict[k]['VAU'])
         self.print_v_u_table()
 
 
@@ -1636,7 +1636,7 @@ class tappy(Util):
 
         key_list.sort()
         for key in key_list:
-            print key, speed_dict[key]['VAU']
+            print(key, speed_dict[key]['VAU'])
 
 
     def print_node_factor_table(self):
@@ -1826,13 +1826,13 @@ if __name__ == '__main__':
             # FIX - have to run the constituents package here in order to have
             # filters available , and then run AGAIN later on.
             x.constituents()
-            print len(x.dates), len(x.elevation)
+            print(len(x.dates), len(x.elevation))
             x.dates_filled, x.elevation_filled = x.missing('fill', x.dates, x.elevation)
-            print len(x.dates_filled), len(x.elevation_filled)
+            print(len(x.dates_filled), len(x.elevation_filled))
             x.dates, filtered = x.filters(zero_ts,
                                           x.dates_filled,
                                           x.elevation_filled)
-            print len(x.dates), len(filtered)
+            print(len(x.dates), len(filtered))
             x.elevation = x.elevation_filled - filtered
             package = x.astronomic(x.dates)
             (x.zeta, x.nu, x.nup, x.nupp, x.kap_p, x.ii, x.R, x.Q, x.T, x.jd, x.s, x.h, x.N, x.p, x.p1) = package
