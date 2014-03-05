@@ -338,11 +338,11 @@ def cBEpm(g, f, sigma, nu, kappa, z, h):
 
     if (len(g)>1) | (len(f)>1) | (len(sigma)>1) | \
             (len(nu)>1) | (len(kappa)>1) | (len(h)>1):
-        print('inputs of g,f,sigma, nu, kappa, and h should be all scalars!')
+        print('inputs of g, f, sigma, nu, kappa, and h should be all scalars!')
         raise
 
     if (any(z / h > 0)) | (any(z / h < -1)):
-        print 'z must be negative and must be within [0 -h]'
+        print('z must be negative and must be within [0 -h]')
 
     delta_e = np.sqrt(2 *nu / f) # Ekman depth
     alpha = (1 + i) / delta_e * np.sqrt(1 + sigma / f)
@@ -459,7 +459,7 @@ def plot_ell(SEMA, ECC, INC, PHA, IND=[1]):
         titletxt = titletxt + ',  (red) green (anti-) clockwise component'
         plt.title(titletxt)
     elif len_IND:
-        print 'IND input contains zero element(s)!\nNo ellipse will be plotted.'
+        print('IND input contains zero element(s)!\nNo ellipse will be plotted.')
 
 def do_the_plot(SEMA, ECC, INC, PHA):
     """
