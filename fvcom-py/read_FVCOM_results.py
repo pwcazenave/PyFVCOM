@@ -143,6 +143,72 @@ def readFVCOM(file, varList=None, clipDims=False, noisy=False, globalAtts=False)
         return FVCOM
 
 
+def readProbes(files, noisy=False):
+    """
+    Read in FVCOM probes output files. Reads both 1 and 2D outputs. Currently
+    only sensible to import a single station with this function since all data
+    is output in a single array.
+
+    Parameters
+    ----------
+    files : list
+        List of file paths to load.
+    noisy : bool, optional
+        Set to True to enable verbose output.
+
+    Returns
+    -------
+    times : ndarray
+        Modified Julian Day times for the extracted time series.
+    values : ndarray
+        Array of the extracted time series values.
+
+    See Also
+    --------
+    readFVCOM : read in FVCOM netCDF output.
+
+    TODO
+    ----
+
+    Add support to multiple sites with a single call. Perhaps returning a dict
+    with the keys based on the file name is most sensible here?
+
+    """
+
+    try:
+        import numpy as np
+    except ImportError:
+        raise ImportError('Unable to load NumPy.')
+
+    if len(files) == 0:
+        raise Exception('No files provided.')
+
+    if not isinstance(files, list):
+        files = [files]
+
+    for i, file in enumerate(files):
+        if noisy: print('Loading file {} of {}...'.format(i + 1, len(files))),
+
+        data = np.genfromtxt(file, skip_header=18)
+
+        if i == 0:
+            times = data[:, 0]
+            values = data[:, 1:]
+        else:
+            times = np.hstack((times, data[:, 0]))
+            values = np.vstack((values, data[:, 1:]))
+
+        if noisy: print('done.')
+
+    # It may be the case that the files have been supplied in a random order,
+    # so sort the values by time here.
+    sidx = np.argsort(times)
+    times = times[sidx]
+    values = values[sidx, ...] # support both 1 and 2D data
+
+    return times, values
+
+
 def elems2nodes(elems, tri, nvert, noisy=False):
     """
     Calculate a nodal value based on the average value for the elements
