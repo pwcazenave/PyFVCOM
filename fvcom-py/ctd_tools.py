@@ -44,7 +44,7 @@ def getCTDMetadata(db):
 
         meta_info = out.fetchall()
 
-    except sqlite3.Error, e:
+    except sqlite3.Error as e:
         if con:
             con.close()
             print('Error {}:'.format(e.args[0]))
@@ -112,7 +112,7 @@ def getCTDData(db, table, fields, noisy=False):
         if noisy:
             print('done.')
 
-    except sqlite3.Error, e:
+    except sqlite3.Error as e:
         if con:
             con.close()
             print('Error {}:'.format(e.args[0]))
@@ -177,7 +177,7 @@ def getFerryBoxData(db, fields, table='PrideOfBilbao', noisy=False):
         if noisy:
             print('done.')
 
-    except sqlite3.Error, e:
+    except sqlite3.Error as e:
         if con:
             con.close()
             print('Error {}:'.format(e.args[0]))

@@ -49,8 +49,8 @@ def rgb2z(R, G, B, zlev, parm='H'):
     H = np.empty(R.shape)
     S = np.empty(R.shape)
     V = np.empty(R.shape)
-    for xi, xx in enumerate(xrange(R.shape[0])):
-        for yi, yy in enumerate(xrange(R.shape[1])):
+    for xi, xx in enumerate(range(R.shape[0])):
+        for yi, yy in enumerate(range(R.shape[1])):
             H[xi, yi], S[xi, yi], V[xi, yi] = colorsys.rgb_to_hsv(R[xi, yi], G[xi, yi], B[xi, yi])
 
     # Clear out the weird -1 values
@@ -80,7 +80,7 @@ def rgb2z(R, G, B, zlev, parm='H'):
     # the depths.
     z = np.zeros((ny, nx)) # images are all backwards
     nz = zlev.shape[0]
-    for i in xrange(1, nz):
+    for i in range(1, nz):
 
         cs = ci[i -1]
         ce = ci[i]

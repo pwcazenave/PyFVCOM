@@ -419,21 +419,21 @@ if __name__ == '__main__':
     print('\nTest with lists')
     latTest, lonTest = [50, 55], [-5, -20]
     z, e, n, outLat, outLong = _test(latTest, lonTest)
-    for c in xrange(len(latTest)):
+    for c in range(len(latTest)):
         print("Input (lat/long): {}, {}\nOutput (lat/long): {} {}".format(latTest[c], lonTest[c], outLat[c], outLong[c]))
         print("Intermediate UTM: {}, {}, {}".format(e[c], n[c], z[c]))
 
     print('\nTest with NumPy arrays')
     latTest, lonTest = np.asarray([50, 55]), np.asarray([-5, -20])
     z, e, n, outLat, outLong = _test(latTest, lonTest)
-    for c in xrange(len(latTest)):
+    for c in range(len(latTest)):
         print("Input (lat/long): {}, {}\nOutput (lat/long): {} {}".format(latTest[c], lonTest[c], outLat[c], outLong[c]))
         print("Intermediate UTM: {}, {}, {}".format(e[c], n[c], z[c]))
 
     print('\nTest with NumPy arrays but a single zone')
     latTest, lonTest = np.asarray([50, 55]), np.asarray([-5, -20])
     z, e, n, outLat, outLong = _test(latTest, lonTest, inZone=30)
-    for c in xrange(len(latTest)):
+    for c in range(len(latTest)):
         print("Input (lat/long): {}, {}\nOutput (lat/long): {} {}".format(latTest[c], lonTest[c], outLat[c], outLong[c]))
         print("Intermediate UTM: {}, {}, {}".format(e[c], n[c], z[c]))
 

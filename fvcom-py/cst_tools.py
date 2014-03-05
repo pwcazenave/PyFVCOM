@@ -49,7 +49,7 @@ def readESRIShapeFile(file, fileOut):
 
     z = 0
 
-    for arc in xrange(nArcs):
+    for arc in range(nArcs):
         # Write the current arc out to file. Start with number of nodes and z
         arcLength = len(shapes[arc].points)
         fileWrite.write('{}\t{}\n'.format(arcLength, float(z)))

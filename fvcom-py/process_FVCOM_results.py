@@ -42,7 +42,7 @@ def calculateTotalCO2(FVCOM, varPlot, startIdx, layerIdx, leakIdx, dt, noisy=Fal
 
     TCO2 = np.zeros(FVCOM['time'].shape)
 
-    for i in xrange(startIdx, Z.shape[0]):
+    for i in range(startIdx, Z.shape[0]):
         if i > 0:
             if len(np.shape(Z)) == 3:
                 TCO2[i] = TCO2[i-1] + (Z[i,layerIdx,leakIdx].squeeze() * dt)
@@ -154,7 +154,7 @@ def unstructuredGridVolume(FVCOM):
     Z = FVCOM['DYE']
     (tt, ll, xx) = np.shape(Z) # time, layers, node
     allVolumes = np.zeros([tt, ll, xx])*np.nan
-    for i in xrange(tt):
+    for i in range(tt):
         allVolumes[i,:,:] = ((elemDepths + elemTides[i,:]) * elemThickness) * elemAreas
 
     return allVolumes
@@ -223,7 +223,7 @@ def animateModelOutput(FVCOM, varPlot, startIdx, skipIdx, layerIdx, meshFile, ad
 
     # len(FVCOM['time'])+1 so range goes upto the length so that when i-1 is
     # called we get the last time step included in the animation.
-    for i in xrange(startIdx, len(FVCOM['time'])+1, skipIdx):
+    for i in range(startIdx, len(FVCOM['time'])+1, skipIdx):
         # Start animation at the beginning of the array or at startIdx-1
         # (i.e. i-2), whichever is larger.
         if i == startIdx:
@@ -354,7 +354,7 @@ def residualFlow(FVCOM, idxRange=False, checkPlot=False, noisy=False):
     uEnd = np.empty([nLayers, nElements])
     vEnd = np.empty([nLayers, nElements])
 
-    for hh in xrange(nLayers):
+    for hh in range(nLayers):
         if noisy:
             print('Layer {} of {}'.format(hh + 1, nLayers))
 
@@ -367,7 +367,7 @@ def residualFlow(FVCOM, idxRange=False, checkPlot=False, noisy=False):
             uSum[:, hh, :] = np.cumsum(np.squeeze(FVCOM['u'][startIdx:endIdx, :]), axis=0)
             vSum[:, hh, :] = np.cumsum(np.squeeze(FVCOM['v'][startIdx:endIdx, :]), axis=0)
 
-        for ii in xrange(nTimeSteps):
+        for ii in range(nTimeSteps):
             # Create progressive vectors for all time steps in the current layer
             if noisy:
                 if ii == 0 or np.mod(ii, 99) == 0:

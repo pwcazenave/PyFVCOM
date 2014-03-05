@@ -796,7 +796,7 @@ def findNearestPoint(FX, FY, x, y, maxDistance=np.inf, noisy=False):
         todo = np.column_stack([x, y])
         n = 1
     else:
-        todo = zip(x, y)
+        todo = list(zip(x, y))
         n = np.shape(x)[0]
 
     for c, pointXY in enumerate(todo):
@@ -964,7 +964,7 @@ def plotCoast(coastline):
             codes = []
             all_x = []
             all_y = []
-            for i in xrange(geom.GetGeometryCount()):
+            for i in range(geom.GetGeometryCount()):
                 # Read ring geometry and create path
                 r = geom.GetGeometryRef(i)
                 x = [r.GetX(j) for j in range(r.GetPointCount())]
@@ -1114,7 +1114,7 @@ def getRivers(discharge, positions, noisy=False):
         if c > 0:
             line = line.strip()
             lon, lat, name = line.split(',')
-            if locations.has_key(name.strip()):
+            if name.strip() in locations:
                 # Key already exists... just append a 1 to the key name.
                 if noisy:
                     print('Duplicate key {}. Renaming to {}_1'.format(name.strip(), name.strip()))
@@ -1145,7 +1145,7 @@ def getRivers(discharge, positions, noisy=False):
         if noisy:
             print('done.')
 
-    if flux.shape[-1] != len(locations.keys()):
+    if flux.shape[-1] != len(list(locations.keys())):
         raise Exception('Inconsistent number of rivers and discharge profiles')
 
     # Now we need to iterate through the names and create the dict with the
@@ -1435,7 +1435,7 @@ def lineSample(x, y, positions, num=0, noisy=False, debug=False):
     idx = []
     line = []
 
-    for xy in xrange(1, nlocations):
+    for xy in range(1, nlocations):
         # Make the first segment.
         start = positions[xy - 1]
         end = positions[xy]
@@ -1760,8 +1760,8 @@ def connectivity(p, t):
     # associated with each edge. Boundary edges have e2t[i, 1] = -1.
     nume = e.shape[0]
     e2t  = np.zeros((nume, 2)).astype(int) - 1
-    for k in xrange(numt):
-        for j in xrange(3):
+    for k in range(numt):
+        for j in range(3):
             ce = te[k, j]
             if e2t[ce, 0] == -1:
                 e2t[ce, 0] = k

@@ -44,7 +44,7 @@ def getBuoyMetadata(db):
 
         meta_info = out.fetchall()
 
-    except sqlite3.Error, e:
+    except sqlite3.Error as e:
         if con:
             con.close()
             print('Error %s:' % e.args[0])
@@ -112,7 +112,7 @@ def getBuoyData(db, table, fields, noisy=False):
         if noisy:
             print('done.')
 
-    except sqlite3.Error, e:
+    except sqlite3.Error as e:
         if con:
             con.close()
             print('Error %s:' % e.args[0])

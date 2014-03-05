@@ -437,7 +437,7 @@ def plot_ell(SEMA, ECC, INC, PHA, IND=[1]):
         else:
             titletxt = 'Ellipse ('
 
-        for k in xrange(len_IND):
+        for k in range(len_IND):
             if k == 0:
                 cmd = cmd + '[' + str(IND[k])
             else:
@@ -514,7 +514,7 @@ def do_the_plot(SEMA, ECC, INC, PHA):
     hnd_ab=plt.plot(np.real([a[0], a[0]+b[0]]), np.imag([a[0], a[0]+b[0]]), linestyle='--', color='g')
     hnd_ba=plt.plot(np.real([b[0], a[0]+b[0]]), np.imag([b[0], a[0]+b[0]]), linestyle='--', color='r')
 
-    for n in xrange(len(ot)):
+    for n in range(len(ot)):
         plt.hold('on')
         plt.plot(np.real(a[n]), np.imag(a[n]), 'ro')
         plt.plot(np.real(b[n]), np.imag(b[n]), 'go')

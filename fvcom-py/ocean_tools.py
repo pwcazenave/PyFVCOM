@@ -790,7 +790,7 @@ def sw_sal80(c, t, p):
 
     art = aa[0]
     brt = bb[0]
-    for ii in xrange(1, 6):
+    for ii in range(1, 6):
        rp  = rt**(ii / 2.0)
        art = art + aa[ii] * rp
        brt = brt + bb[ii] * rp

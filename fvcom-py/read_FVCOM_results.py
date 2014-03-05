@@ -78,7 +78,7 @@ def readFVCOM(file, varList=None, clipDims=False, noisy=False, globalAtts=False)
 
     # Create a dict of the dimension names and their current sizes
     dims = {}
-    for key, var in rootgrp.dimensions.iteritems():
+    for key, var in list(rootgrp.dimensions.items()):
         # Make the dimensions ranges so we can use them to extract all the
         # values.
         dims[key] = '0:' + str(len(var))
@@ -87,7 +87,7 @@ def readFVCOM(file, varList=None, clipDims=False, noisy=False, globalAtts=False)
     # been given a dict of dimensions which differs from those in the NetCDF
     # file, then use those.
     if clipDims is not False:
-        commonKeys = set(dims).intersection(clipDims.keys())
+        commonKeys = set(dims).intersection(list(clipDims.keys()))
         for k in commonKeys:
             dims[k] = clipDims[k]
 
@@ -95,7 +95,7 @@ def readFVCOM(file, varList=None, clipDims=False, noisy=False, globalAtts=False)
         print("File format: {}".format(rootgrp.file_format))
 
     if not varList:
-        varList = rootgrp.variables.iterkeys()
+        varList = iter(list(rootgrp.variables.keys()))
 
     FVCOM = {}
 
@@ -103,7 +103,7 @@ def readFVCOM(file, varList=None, clipDims=False, noisy=False, globalAtts=False)
     attributes = {}
     attributes['dims'] = dims
 
-    for key, var in rootgrp.variables.iteritems():
+    for key, var in list(rootgrp.variables.items()):
         if noisy:
             print('Found ' + key, end=' ')
             sys.stdout.flush()
@@ -335,7 +335,7 @@ def elems2nodes(elems, tri, nvert, noisy=False):
             count[n1] = count[n1] + 1
             count[n2] = count[n2] + 1
     else:
-        raise 'Too many dimensions (maximum of two)'
+        raise Exception('Too many dimensions (maximum of two)')
 
     # Now calculate the average for each node based on the number of
     # elements of which it is a part.
@@ -379,7 +379,7 @@ def nodes2elems(nodes, tri, noisy=False):
         for i, indices in enumerate(tri):
             elems[:, i] = np.mean(nodes[:, indices])
     else:
-        raise 'Too many dimensions (maximum of two)'
+        raise Exception('Too many dimensions (maximum of two)')
 
 
 def getSurfaceElevation(Z, idx):

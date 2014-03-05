@@ -220,7 +220,7 @@ def addHarmonicResults(db, stationName, constituentName, phase, amplitude, speed
 
     if noisy:
         print('amplitude, phase and speed.', end=' ')
-    for item in xrange(len(inferred)):
+    for item in range(len(inferred)):
         c.execute('INSERT INTO TidalConstituents VALUES (?,?,?,?,?,?,?,?,?)',\
             (stationName, amplitude[item], phase[item], speed[item], constituentName[item], 'metres', 'degrees', 'degrees per mean solar hour', inferred[item]))
 
@@ -301,7 +301,7 @@ def getObservedData(db, table, startYear=False, endYear=False, noisy=False):
         if noisy:
             print('done.')
 
-    except sqlite3.Error, e:
+    except sqlite3.Error as e:
         if con:
             con.close()
             print('Error {}:'.format(e.args[0]))
@@ -359,7 +359,7 @@ def getObservedMetadata(db, originator=False):
         site = [str(m[2]) for m in metadata]
         longName = [str(m[3]) for m in metadata]
 
-    except sqlite3.Error, e:
+    except sqlite3.Error as e:
         if con:
             con.close()
             print('Error {}:'.format(e.args[0]))
@@ -779,7 +779,7 @@ def getHarmonics(db, stationName, noisy=False):
             data = c.fetchall()
 
         con.close()
-    except sqlite3.Error, e:
+    except sqlite3.Error as e:
         if con:
             con.close()
             print('Error %s:' % e.args[0])
