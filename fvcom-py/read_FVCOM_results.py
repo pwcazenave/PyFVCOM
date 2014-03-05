@@ -147,6 +147,73 @@ def readFVCOM(file, varList=None, clipDims=False, noisy=False, globalAtts=False)
         return FVCOM
 
 
+def ncread(file, vars=None, dims=False, noisy=False, globalAtts=False):
+    """
+    Read in a netCDF file and return numpy arrays for each of the variables
+    specified in the vars list.
+
+    Optionally specify a dict with keys whose names match the dimension names
+    in the NetCDF file and whose values are strings specifying alternative
+    ranges or lists of indices. For example, to extract the first hundred time
+    steps, supply clipDims as:
+
+        dims = {'time':'0:100'}
+
+    To extract the first, 400th and 10,000th values of any array with nodes:
+
+        dims = {'node':'[0, 3999, 9999]'}
+
+    Any dimension not given in dims will be extracted in full.
+
+    Specify globalAtts=True to extract global attributes.
+
+    Parameters
+    ----------
+    file : str, list
+        If a string, the full path to an FVCOM NetCDF output file. If a list,
+        a series of files to be loaded. Data will be concatenated into a single
+        dict.
+    vars : list, optional
+        List of variable names to be extracted. If omitted, all variables are
+        returned.
+    dims : dict, optional
+        Dict whose keys are dimensions and whose values are a string of either
+        a range (e.g. {'time':'0:100'}) or a list of individual indices (e.g.
+        {'time':'[0, 1, 80, 100]'}). Slicing is supported (::5 for every fifth
+        value) but it is not possible to extract data from the end of the array
+        with a negative index (e.g. 0:-4).
+    noisy : bool, optional
+        Set to True to enable verbose output.
+    globalAtts : bool, optional
+        Set to True to enable output of the global attributes (defaults to
+        False).
+
+    Returns
+    -------
+    nc : dict
+        Dict of data extracted from the NetCDF file. Keys are those given in
+        varList and the data are stored as ndarrays.
+    attributes : dict, optional
+        If globAtt=True, returns the global attributes as a dict for each
+        variable in varList. The key 'dims' contains the array dimensions (each
+        variable contains the names of its dimensions) as well as the shape of
+        the dimensions defined in the NetCDF file.
+
+    Notes
+    -----
+    This is actually a wrapper for the readFVCOM function, but since that
+    function is actually not specific to FVCOM, it seemed sensible to have this
+    generic function. Eventually I imagine this will be the underlying version
+    and the readFVCOM function will call this one i.e. the roles will be
+    swapped.
+
+    """
+
+    nc = readFVCOM(file, varList=vars, clipDims=dims, noisy=noisy, globalAtts=globalAtts)
+
+    return nc
+
+
 def readProbes(files, noisy=False):
     """
     Read in FVCOM probes output files. Reads both 1 and 2D outputs. Currently
