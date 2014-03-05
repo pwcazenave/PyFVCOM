@@ -9,6 +9,8 @@ Some of the tidal analysis functions require TAPPy to be installed and in
 
 """
 
+from __future__ import print_function
+
 def julianDay(gregorianDateTime, mjd=False):
     """
     For a given gregorian date format (YYYY,MM,DD,hh,mm,ss) get the

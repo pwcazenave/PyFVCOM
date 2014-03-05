@@ -1,3 +1,4 @@
+from __future__ import print_function
 
 def readFVCOM(file, varList=None, clipDims=False, noisy=False, globalAtts=False):
     """

@@ -3,6 +3,8 @@ Functions to interrogate and extract buoy data from the buoys.db SQLite3 databas
 
 """
 
+from __future__ import print_function
+
 import numpy as np
 
 def getBuoyMetadata(db):

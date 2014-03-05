@@ -3,6 +3,8 @@ Functions to interrogate and extract CTD data from the ctd.db SQLite3 database.
 
 """
 
+from __future__ import print_function
+
 import numpy as np
 
 def getCTDMetadata(db):
