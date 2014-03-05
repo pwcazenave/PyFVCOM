@@ -802,9 +802,9 @@ def findNearestPoint(FX, FY, x, y, maxDistance=np.inf, noisy=False):
     for c, pointXY in enumerate(todo):
         if type(noisy) == int:
             if c == 0 or (c + 1) % noisy == 0:
-                print 'Point {} of {}'.format(c + 1, n)
+                print('Point {} of {}'.format(c + 1, n))
         elif noisy:
-            print 'Point {} of {}'.format(c + 1, n)
+            print('Point {} of {}'.format(c + 1, n))
 
         findX, findY = FX - pointXY[0], FY - pointXY[1]
         vectorDistances = np.sqrt(findX**2 + findY**2)
@@ -900,7 +900,7 @@ def fixCoordinates(FVCOM, UTMZone, inVars=['x', 'y']):
         Y = np.zeros(np.shape(FVCOM[inVars[1]])) * np.nan
         X = np.zeros(np.shape(FVCOM[inVars[0]])) * np.nan
     except IOError:
-        print 'Couldn''t find the {} or {} variables in the supplied FVCOM dict. Check you loaded them and try again.'.format(inVars[0], inVars[1])
+        print('Couldn\'t find the {} or {} variables in the supplied FVCOM dict. Check you loaded them and try again.'.format(inVars[0], inVars[1]))
 
     for count, posXY in enumerate(zip(FVCOM[inVars[0]], FVCOM[inVars[1]])):
 
@@ -1071,7 +1071,7 @@ def getRiverConfig(fileName, noisy=False):
                 rivers[param] = [value]
 
     if noisy:
-        print 'Found {} rivers.'.format(n)
+        print('Found {} rivers.'.format(n))
 
     f.close()
 
@@ -1117,7 +1117,7 @@ def getRivers(discharge, positions, noisy=False):
             if locations.has_key(name.strip()):
                 # Key already exists... just append a 1 to the key name.
                 if noisy:
-                    print 'Duplicate key {}. Renaming to {}_1'.format(name.strip(), name.strip())
+                    print('Duplicate key {}. Renaming to {}_1'.format(name.strip(), name.strip()))
 
                 locations[name.strip() + '_1'] = [float(lon), float(lat), order]
             else:
@@ -1134,7 +1134,7 @@ def getRivers(discharge, positions, noisy=False):
 
     for c, file in enumerate(discharge):
         if noisy:
-            print 'Reading in river discharge from file {}... '.format(file),
+            print('Reading in river discharge from file {}... '.format(file), end=' ')
 
         # Just dump the file with np.genfromtxt.
         if c == 0:
@@ -1143,7 +1143,7 @@ def getRivers(discharge, positions, noisy=False):
             flux = np.vstack((flux, np.genfromtxt(file)))
 
         if noisy:
-            print 'done.'
+            print('done.')
 
     if flux.shape[-1] != len(locations.keys()):
         raise Exception('Inconsistent number of rivers and discharge profiles')
@@ -1259,7 +1259,7 @@ def mesh2grid(meshX, meshY, meshZ, nx, ny, thresh=None, noisy=False):
                     zz[ri, ci, ...] = meshZ[idx, ...]
 
     if noisy:
-        print 'done.'
+        print('done.')
 
     return xx, yy, zz
 
@@ -1405,9 +1405,9 @@ def lineSample(x, y, positions, num=0, noisy=False, debug=False):
             if noisy:
                 done = 100 - ((tdist / length) * 100)
                 if len(sidx) == 1:
-                    print 'Found {} node ({:.2f}%)'.format(len(sidx), done)
+                    print('Found {} node ({:.2f})'.format(len(sidx), done))
                 else:
-                    print 'Found {} nodes ({:.2f}%)'.format(len(sidx), done)
+                    print('Found {} nodes ({:.2f})'.format(len(sidx), done))
 
             # Check if we've gone beyond the end of the line (by checking the
             # length of the sampled line), and if so, break out of the loop.
@@ -1420,7 +1420,7 @@ def lineSample(x, y, positions, num=0, noisy=False, debug=False):
                 # Convert the list to an array before we leave.
                 line = np.asarray(line)
                 if noisy:
-                    print 'Reached the end of the line segment'
+                    print('Reached the end of the line segment')
 
                 break
 

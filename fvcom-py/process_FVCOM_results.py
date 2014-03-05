@@ -62,10 +62,10 @@ def calculateTotalCO2(FVCOM, varPlot, startIdx, layerIdx, leakIdx, dt, noisy=Fal
 
     # Some results
     if noisy:
-        print "Leak:\t\t%i\nLayer:\t\t%i\nStart:\t\t%i" % (leakIdx, layerIdx, startIdx)
-        print "Total input per day:\t\t%.2f" % TCO2Scaled[-1]
-        print "Total in the system:\t\t%.2f" % totalCO2inSystem
-        print "Total in the system per day:\t%.2f" % (totalCO2inSystem/nDays)
+        print("Leak:\t\t{}\nLayer:\t\t{}\nStart:\t\t{}".format(leakIdx, layerIdx, startIdx))
+        print("Total input per day:\t\t{:.2f}".format(TCO2Scaled[-1]))
+        print("Total in the system:\t\t{:.2f}".format(totalCO2inSystem))
+        print("Total in the system per day:\t{:.2f}".format(totalCO2inSystem / nDays))
 
     # Make a pretty picture
     #plt.figure(100)
@@ -198,7 +198,7 @@ def animateModelOutput(FVCOM, varPlot, startIdx, skipIdx, layerIdx, meshFile, ad
     try:
         [triangles, nodes, x, y, z] = parseUnstructuredGridFVCOM(meshFile)
     except:
-        print 'Couldn''t import unstructured grid. Check specified file is the correct format'
+        print('Couldn''t import unstructured grid. Check specified file is the correct format')
 
     Z = FVCOM[varPlot]
 
@@ -256,10 +256,10 @@ def animateModelOutput(FVCOM, varPlot, startIdx, skipIdx, layerIdx, meshFile, ad
 
         # Some useful output
         if noisy:
-            print '%i of %i (date %.2f)' % (i, len(FVCOM['time']), FVCOM['time'][i-1])
-            print 'Min: %g Max: %g Range: %g Standard deviation: %g' % (plotZ.min(), plotZ.max(), plotZ.max()-plotZ.min(), plotZ.std())
+            print('{} of {} (date {.2f})'.format(i, len(FVCOM['time']), FVCOM['time'][i-1]))
+            print('Min: {} Max: {} Range: {} Standard deviation: {}'.format(plotZ.min(), plotZ.max(), plotZ.max()-plotZ.min(), plotZ.std()))
         else:
-            print
+            print()
 
 
 def residualFlow(FVCOM, idxRange=False, checkPlot=False, noisy=False):
@@ -356,7 +356,7 @@ def residualFlow(FVCOM, idxRange=False, checkPlot=False, noisy=False):
 
     for hh in xrange(nLayers):
         if noisy:
-            print 'Layer {} of {}'.format(hh + 1, nLayers)
+            print('Layer {} of {}'.format(hh + 1, nLayers))
 
         try:
             # 3D
@@ -371,7 +371,7 @@ def residualFlow(FVCOM, idxRange=False, checkPlot=False, noisy=False):
             # Create progressive vectors for all time steps in the current layer
             if noisy:
                 if ii == 0 or np.mod(ii, 99) == 0:
-                    print 'Create PVD at time step {} of {}'.format(ii + 1, nTimeSteps)
+                    print('Create PVD at time step {} of {}'.format(ii + 1, nTimeSteps))
 
             uRes[ii, hh, :] = uRes[ii, hh, :] + (uSum[ii, hh, :] * (dt * toSecFactor))
             vRes[ii, hh, :] = vRes[ii, hh, :] + (vSum[ii, hh, :] * (dt * toSecFactor))
@@ -391,7 +391,7 @@ def residualFlow(FVCOM, idxRange=False, checkPlot=False, noisy=False):
     # Plot to check everything's OK
     if checkPlot:
         if noisy:
-            print 'Plotting element {}'.format(checkPlot - 1)
+            print('Plotting element {}'.format(checkPlot - 1))
 
         elmt = checkPlot - 1
         lyr = 0

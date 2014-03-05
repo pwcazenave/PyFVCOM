@@ -92,7 +92,7 @@ def readFVCOM(file, varList=None, clipDims=False, noisy=False, globalAtts=False)
             dims[k] = clipDims[k]
 
     if noisy:
-        print "File format: {}".format(rootgrp.file_format)
+        print("File format: {}".format(rootgrp.file_format))
 
     if not varList:
         varList = rootgrp.variables.iterkeys()
@@ -105,7 +105,7 @@ def readFVCOM(file, varList=None, clipDims=False, noisy=False, globalAtts=False)
 
     for key, var in rootgrp.variables.iteritems():
         if noisy:
-            print 'Found ' + key,
+            print('Found ' + key, end=' ')
             sys.stdout.flush()
 
         if key in varList:
@@ -131,12 +131,12 @@ def readFVCOM(file, varList=None, clipDims=False, noisy=False, globalAtts=False)
 
             if noisy:
                 if len(str(toExtract)) < 60:
-                    print '(extracted {})'.format(str(toExtract).replace('\'', ''))
+                    print('(extracted {})'.format(str(toExtract).replace('\'', '')))
                 else:
-                    print '(extracted given indices)'
+                    print('(extracted given indices)')
 
         elif noisy:
-                print
+                print()
 
     # Close the open file.
     rootgrp.close()
@@ -191,7 +191,7 @@ def readProbes(files, noisy=False):
         files = [files]
 
     for i, file in enumerate(files):
-        if noisy: print('Loading file {} of {}...'.format(i + 1, len(files))),
+        if noisy: print('Loading file {} of {}...'.format(i + 1, len(files)), end=' ')
 
         data = np.genfromtxt(file, skip_header=18)
 

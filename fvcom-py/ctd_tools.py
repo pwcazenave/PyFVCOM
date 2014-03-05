@@ -47,7 +47,7 @@ def getCTDMetadata(db):
     except sqlite3.Error, e:
         if con:
             con.close()
-            print 'Error %s:' % e.args[0]
+            print('Error {}:'.format(e.args[0]))
             meta_info = [False]
 
     finally:
@@ -95,7 +95,7 @@ def getCTDData(db, table, fields, noisy=False):
         raise ImportError('Failed to import the SQLite3 module')
 
     if noisy:
-        print 'Getting data for {} from the database...'.format(table),
+        print('Getting data for {} from the database...'.format(table), end=' ')
 
     try:
         con = sqlite3.connect(db)
@@ -110,12 +110,12 @@ def getCTDData(db, table, fields, noisy=False):
             data = np.asarray(c.fetchall())
 
         if noisy:
-            print 'done.'
+            print('done.')
 
     except sqlite3.Error, e:
         if con:
             con.close()
-            print 'Error %s:' % e.args[0]
+            print('Error {}:'.format(e.args[0]))
             data = np.asarray([False])
 
     finally:
@@ -160,7 +160,7 @@ def getFerryBoxData(db, fields, table='PrideOfBilbao', noisy=False):
         raise ImportError('Failed to import the SQLite3 module')
 
     if noisy:
-        print 'Getting data for {} from the database...'.format(table),
+        print('Getting data for {} from the database...'.format(table), end=' ')
 
     try:
         con = sqlite3.connect(db)
@@ -175,12 +175,12 @@ def getFerryBoxData(db, fields, table='PrideOfBilbao', noisy=False):
             data = np.asarray(c.fetchall())
 
         if noisy:
-            print 'done.'
+            print('done.')
 
     except sqlite3.Error, e:
         if con:
             con.close()
-            print 'Error %s:' % e.args[0]
+            print('Error {}:'.format(e.args[0]))
             data = np.asarray([False])
 
     finally:

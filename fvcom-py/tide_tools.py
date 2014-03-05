@@ -219,7 +219,7 @@ def addHarmonicResults(db, stationName, constituentName, phase, amplitude, speed
         )')
 
     if noisy:
-        print 'amplitude, phase and speed.',
+        print('amplitude, phase and speed.', end=' ')
     for item in xrange(len(inferred)):
         c.execute('INSERT INTO TidalConstituents VALUES (?,?,?,?,?,?,?,?,?)',\
             (stationName, amplitude[item], phase[item], speed[item], constituentName[item], 'metres', 'degrees', 'degrees per mean solar hour', inferred[item]))
@@ -268,7 +268,7 @@ def getObservedData(db, table, startYear=False, endYear=False, noisy=False):
         raise ImportError('Failed to import the SQLite3 module')
 
     if noisy:
-        print 'Getting data for {} from the database...'.format(table),
+        print('Getting data for {} from the database...'.format(table), end=' ')
 
     try:
         con = sqlite3.connect(db)
@@ -299,12 +299,12 @@ def getObservedData(db, table, startYear=False, endYear=False, noisy=False):
         con.close()
 
         if noisy:
-            print 'done.'
+            print('done.')
 
     except sqlite3.Error, e:
         if con:
             con.close()
-            print 'Error %s:' % e.args[0]
+            print('Error {}:'.format(e.args[0]))
             data = [False]
 
     return data
@@ -362,7 +362,7 @@ def getObservedMetadata(db, originator=False):
     except sqlite3.Error, e:
         if con:
             con.close()
-            print 'Error %s:' % e.args[0]
+            print('Error {}:'.format(e.args[0]))
             lat, lon, site, longName = [False, False, False, False]
 
     return lat, lon, site, longName
@@ -648,16 +648,16 @@ def runTAPPy(data, sparseDef=False, noisy=False, deleteFile=True, tappy='/usr/bi
     tFile = tempfile.NamedTemporaryFile(delete=deleteFile)
     if noisy:
         if not deleteFile:
-            print 'Saving to temporary file {}...'.format(tFile.name)
+            print('Saving to temporary file {}...'.format(tFile.name))
         else:
-            print 'Saving to temporary file...',
+            print('Saving to temporary file...', end=' ')
 
 
     np.savetxt(tFile.name, data, fmt='%4i/%02i/%02i %02i:%02i:%02i %.3f')
 
     if noisy:
-        print 'done.'
-        print 'Running TAPPy on the current station...',
+        print('done.')
+        print('Running TAPPy on the current station...', end=' ')
 
     xFile = tempfile.NamedTemporaryFile()
     subprocess.call([tappy, 'analysis', '--def_filename=' + sparseDef, '--outputxml=' + xFile.name, '--quiet', tFile.name])
@@ -665,7 +665,7 @@ def runTAPPy(data, sparseDef=False, noisy=False, deleteFile=True, tappy='/usr/bi
     [cName, cSpeed, cPhase, cAmplitude, cInference] = parseTAPPyXML(xFile.name)
 
     if noisy:
-        print 'done.'
+        print('done.')
 
     return cName, cSpeed, cPhase, cAmplitude, cInference
 
@@ -768,7 +768,7 @@ def getHarmonics(db, stationName, noisy=False):
         raise ImportError('Failed to import NumPy')
 
     if noisy:
-        print 'Getting harmonics data for site {}...'.format(stationName),
+        print('Getting harmonics data for site {}...'.format(stationName), end=' ')
 
     try:
         con = sqlite3.connect(db)
@@ -782,11 +782,11 @@ def getHarmonics(db, stationName, noisy=False):
     except sqlite3.Error, e:
         if con:
             con.close()
-            print 'Error %s:' % e.args[0]
+            print('Error %s:' % e.args[0])
             data = [False]
 
         if noisy:
-            print 'extraction failed.'
+            print('extraction failed.')
 
     # Convert data to a dict of value pairs
     dictNames = ['amplitude', 'phase', 'speed', 'constituentName', 'inferredConstituent']
@@ -812,7 +812,7 @@ def getHarmonics(db, stationName, noisy=False):
     siteHarmonics['inferredConstituent'] = tInfer
 
     if noisy:
-        print 'done.'
+        print('done.')
 
     return siteHarmonics
 
@@ -860,7 +860,7 @@ def readPOLPRED(harmonics, noisy=False):
     values = []
 
     if noisy:
-        print 'Parsing POLPRED raw data...',
+        print('Parsing POLPRED raw data...', end=' ')
 
     for line in polpred:
         if readingHeader:
@@ -881,7 +881,7 @@ def readPOLPRED(harmonics, noisy=False):
     values = np.asarray(values, dtype=float)
 
     if noisy:
-        print 'done.'
+        print('done.')
 
     return header, values
 
@@ -955,7 +955,7 @@ def gridPOLPRED(values, noisy=False):
         if noisy:
             # Only on the first, last and every 1000th line.
             if i == 0 or np.mod(i + 1, 1000) == 0 or i == values[:, 0].shape[0] - 1:
-                print '{} of {}'.format(i + 1, np.shape(values)[0])
+                print('{} of {}'.format(i + 1, np.shape(values)[0]))
         arridx.append([i, px.tolist().index(xx), py.tolist().index(yy)])
 
     # Now use the lookup table to get the values out of values and into PZ.
@@ -1051,13 +1051,13 @@ def getHarmonicsPOLPRED(harmonics, constituents, lon, lat, stations, noisy=False
     # Find the relevant data for the current site.
     for c, key in enumerate(stations):
         if noisy:
-            print 'Extracting site {}...'.format(key),
+            print('Extracting site {}...'.format(key), end=' ')
             sys.stdout.flush()
 
         data = {}
         if np.isnan(index[c]):
             if noisy:
-                print 'skipping (outside domain).'
+                print('skipping (outside domain).')
         else:
             keys = ['amplitude', 'phase', 'uH', 'ug', 'vH', 'vg']
             for n, val in enumerate(keys):
@@ -1070,7 +1070,7 @@ def getHarmonicsPOLPRED(harmonics, constituents, lon, lat, stations, noisy=False
             out[key] = data
 
             if noisy:
-                print 'done.'
+                print('done.')
                 sys.stdout.flush()
 
 

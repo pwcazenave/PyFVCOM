@@ -30,10 +30,10 @@ def calculateRegression(x, y, type):
     minX = min(x)
     minY = min(y)
     if minX < 2e-7:
-        print 'Scaling x-data to improve numerical stability'
+        print('Scaling x-data to improve numerical stability')
         x, xFactor, xFactorFix = fixRange(x)
     if minY < 2e-7:
-        print 'Scaling y-data to improve numerical stability'
+        print('Scaling y-data to improve numerical stability')
         y, yFactor, yFactorFix = fixRange(y)
 
 
@@ -43,7 +43,7 @@ def calculateRegression(x, y, type):
         m, _, _, _ = np.linalg.lstsq(x, y)
         c, r, p = 0, np.nan, np.nan
     elif type is 'lin':
-        print 'lin'
+        print('lin')
         m, c, r, p, std_err = stats.linregress(x, y)
         xf = x
     elif type is 'log':
