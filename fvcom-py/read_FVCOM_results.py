@@ -51,6 +51,10 @@ def readFVCOM(file, varList=None, clipDims=False, noisy=False, globalAtts=False)
         variable contains the names of its dimensions) as well as the shape of
         the dimensions defined in the NetCDF file.
 
+    See Also
+    --------
+    readProbes : read in FVCOM ASCII probes output files.
+
     """
 
     try:
