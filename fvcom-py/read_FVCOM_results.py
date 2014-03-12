@@ -285,7 +285,7 @@ def readProbes(files, noisy=False):
     return times, values
 
 
-def elems2nodes(elems, tri, nvert, noisy=False):
+def elems2nodes(elems, tri, nvert):
     """
     Calculate a nodal value based on the average value for the elements
     of which it a part. This necessarily involves an average, so the
@@ -349,7 +349,7 @@ def elems2nodes(elems, tri, nvert, noisy=False):
     return nodes
 
 
-def nodes2elems(nodes, tri, noisy=False):
+def nodes2elems(nodes, tri):
     """
     Calculate a element centre value based on the average value for the
     nodes from which it is formed. This necessarily involves an average,
