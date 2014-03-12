@@ -1,6 +1,6 @@
 from __future__ import print_function
 
-def readFVCOM(file, varList=None, clipDims=False, noisy=False, globalAtts=False):
+def readFVCOM(file, varList=None, clipDims=False, noisy=False, atts=False):
     """
     Read in the FVCOM results file and spit out numpy arrays for each of the
     variables specified in the varList list.
@@ -18,7 +18,7 @@ def readFVCOM(file, varList=None, clipDims=False, noisy=False, globalAtts=False)
 
     Any dimension not given in clipDims will be extracted in full.
 
-    Specify globalAtts=True to extract global attributes.
+    Specify atts=True to extract the variable attributes.
 
     Parameters
     ----------
@@ -37,9 +37,8 @@ def readFVCOM(file, varList=None, clipDims=False, noisy=False, globalAtts=False)
         with a negative index (e.g. 0:-4).
     noisy : bool, optional
         Set to True to enable verbose output.
-    globalAtts : bool, optional
-        Set to True to enable output of the global attributes (defaults to
-        False).
+    atts : bool, optional
+        Set to True to enable output of the attributes (defaults to False).
 
     Returns
     -------
@@ -47,7 +46,7 @@ def readFVCOM(file, varList=None, clipDims=False, noisy=False, globalAtts=False)
         Dict of data extracted from the NetCDF file. Keys are those given in
         varList and the data are stored as ndarrays.
     attributes : dict, optional
-        If globAtt=True, returns the global attributes as a dict for each
+        If atts=True, returns the attributes as a dict for each
         variable in varList. The key 'dims' contains the array dimensions (each
         variable contains the names of its dimensions) as well as the shape of
         the dimensions defined in the NetCDF file.
@@ -101,8 +100,9 @@ def readFVCOM(file, varList=None, clipDims=False, noisy=False, globalAtts=False)
     FVCOM = {}
 
     # Save the dimensions in the attributes dict.
-    attributes = {}
-    attributes['dims'] = dims
+    if atts:
+        attributes = {}
+        attributes['dims'] = dims
 
     for key, var in list(rootgrp.variables.items()):
         if noisy:
@@ -118,17 +118,19 @@ def readFVCOM(file, varList=None, clipDims=False, noisy=False, globalAtts=False)
             getData = 'rootgrp.variables[\'{}\']{}'.format(key,str(toExtract).replace('\'', ''))
             FVCOM[key] = eval(getData)
 
-            # Add the units and dimensions for this variable
-            attributes[key] = {}
-            try:
-                attributes[key]['units'] = rootgrp.variables[key].units
-            except:
-                pass
+            # Add the units and dimensions for this variable to the list of
+            # attributes.
+            if atts:
+                attributes[key] = {}
+                try:
+                    attributes[key]['units'] = rootgrp.variables[key].units
+                except:
+                    pass
 
-            try:
-                attributes[key]['dims'] = rootgrp.variables[key].dimensions
-            except:
-                pass
+                try:
+                    attributes[key]['dims'] = rootgrp.variables[key].dimensions
+                except:
+                    pass
 
             if noisy:
                 if len(str(toExtract)) < 60:
@@ -142,13 +144,13 @@ def readFVCOM(file, varList=None, clipDims=False, noisy=False, globalAtts=False)
     # Close the open file.
     rootgrp.close()
 
-    if globalAtts:
+    if atts:
         return FVCOM, attributes
     else:
         return FVCOM
 
 
-def ncread(file, vars=None, dims=False, noisy=False, globalAtts=False):
+def ncread(file, vars=None, dims=False, noisy=False, atts=False):
     """
     Read in a netCDF file and return numpy arrays for each of the variables
     specified in the vars list.
@@ -166,7 +168,7 @@ def ncread(file, vars=None, dims=False, noisy=False, globalAtts=False):
 
     Any dimension not given in dims will be extracted in full.
 
-    Specify globalAtts=True to extract global attributes.
+    Specify atts=True to extract attributes.
 
     Parameters
     ----------
@@ -185,9 +187,8 @@ def ncread(file, vars=None, dims=False, noisy=False, globalAtts=False):
         with a negative index (e.g. 0:-4).
     noisy : bool, optional
         Set to True to enable verbose output.
-    globalAtts : bool, optional
-        Set to True to enable output of the global attributes (defaults to
-        False).
+    atts : bool, optional
+        Set to True to enable output of the attributes (defaults to False).
 
     Returns
     -------
@@ -195,10 +196,10 @@ def ncread(file, vars=None, dims=False, noisy=False, globalAtts=False):
         Dict of data extracted from the NetCDF file. Keys are those given in
         varList and the data are stored as ndarrays.
     attributes : dict, optional
-        If globAtt=True, returns the global attributes as a dict for each
-        variable in varList. The key 'dims' contains the array dimensions (each
-        variable contains the names of its dimensions) as well as the shape of
-        the dimensions defined in the NetCDF file.
+        If True, returns the attributes as a dict for each variable in varList.
+        The key 'dims' contains the array dimensions (each variable contains
+        the names of its dimensions) as well as the shape of the dimensions
+        defined in the NetCDF file.
 
     Notes
     -----
@@ -210,9 +211,12 @@ def ncread(file, vars=None, dims=False, noisy=False, globalAtts=False):
 
     """
 
-    nc = readFVCOM(file, varList=vars, clipDims=dims, noisy=noisy, globalAtts=globalAtts)
-
-    return nc
+    if atts:
+        nc, attributes = readFVCOM(file, varList=vars, clipDims=dims, noisy=noisy, atts=atts)
+        return nc, attributes
+    else:
+        nc = readFVCOM(file, varList=vars, clipDims=dims, noisy=noisy, atts=atts)
+        return nc
 
 
 def readProbes(files, noisy=False):
