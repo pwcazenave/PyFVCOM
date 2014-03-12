@@ -372,19 +372,21 @@ def nodes2elems(nodes, tri):
 
     """
 
+    try:
+        import numpy as np
+    except ImportError:
+        raise ImportError('NumPy not found')
+
     nvert = np.shape(tri)[0]
 
-    if np.ndim(elems) == 1:
-        elems = np.zeros(nvert)
-        for i, indices in enumerate(tri):
-            elems[i] = np.mean(nodes[indices])
-
-    elif np.ndim(elems) == 2:
-        elems = np.zeros((np.shape(nodes)[0], nvert))
-        for i, indices in enumerate(tri):
-            elems[:, i] = np.mean(nodes[:, indices])
+    if np.ndim(nodes) == 1:
+        elems = nodes[tri].mean(axis=-1)
+    elif np.ndim(nodes) == 2:
+        elems = nodes[..., tri].mean(axis=-1)
     else:
         raise Exception('Too many dimensions (maximum of two)')
+
+    return elems
 
 
 def getSurfaceElevation(Z, idx):
