@@ -1804,7 +1804,7 @@ def clipDomain(x, y, extents, noisy=False):
             (y < extents[3]))[0]
 
     if noisy:
-        print('Subset contains {} points of {} total.'.format(len(indices), len(x)))
+        print('Subset contains {} points of {} total.'.format(len(mask), len(x)))
 
     return mask
 
