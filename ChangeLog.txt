@@ -1,3 +1,27 @@
+20140422
+--------
+
+Changes since the last release.
+
+buoy_tools:
+    * getCTDMetadata: read CTD metadata from an SQLite3 data base.
+    * getCTDData: extract CTD data from an SQLite3 dadta base.
+cst_tools:
+    * readCST: read SMS CST files into a dict for each specified arc.
+img2xyz:
+    * rgb2z: Crude attempt at converting RGB images to depths.
+ll2utm:
+    * Code clean up and ability to work with arrays. Also included some tests
+    to ensure further changes don't negatively impact on the results.
+read_FVCOM_results:
+    * ncread: wrapper around readFVCOM with a more generic name since the
+    function is not specific to FVCOM, but works with any netCDF file.
+    * readProbes: read in FVCOM probes outputs (both 1 and 2D data).
+
+README.md:
+    * Added new functions to the list of functions.
+
+
 20140221
 --------
 
