@@ -1,4 +1,4 @@
-Welcome to fvcom-py!
+Welcome to PyFVCOM!
 --------------------
 
 Table of contents
@@ -13,7 +13,7 @@ Table of contents
 Introduction
 ------------
 
-fvcom-py is a collection of various tools and utilities which can be used to extract, analyse and plot input and output files from FVCOM.
+PyFVCOM is a collection of various tools and utilities which can be used to extract, analyse and plot input and output files from FVCOM.
 
 
 Prerequisites
@@ -154,7 +154,7 @@ Provides
 Installing
 ----------
 
-In principle, python setup.py should install fvcom-py, though it is untested. Alternatively, download the fvcom-py directory, and add its contents to your PYTHONPATH.
+In principle, python setup.py should install PyFVCOM, though it is untested. Alternatively, download the PyFVCOM directory, and add its contents to your PYTHONPATH.
 
 Examples
 --------
@@ -171,7 +171,7 @@ import matplotlib.pyplot as plt
 
 from mpl_toolkits.basemap import Basemap
 
-from read_FVCOM_results import readFVCOM
+from PyFVCOM.read_FVCOM_results import readFVCOM
 
 if __name__ == '__main__':
 
@@ -243,8 +243,8 @@ if __name__ == '__main__':
 import numpy as np
 import matplotlib.pyplot as plt
 
-from read_FVCOM_results import readFVCOM
-from grid_tools import findNearestPoint
+from PyFVCOM.read_FVCOM_results import readFVCOM
+from PyFVCOM.grid_tools import findNearestPoint
 
 if __name__ == '__main__':
 
@@ -289,9 +289,9 @@ import matplotlib.pyplot as plt
 
 from mpl_toolkits.basemap import Basemap
 
-from read_FVCOM_results import readFVCOM
-from tidal_ellipse import ap2ep, prep_plot
-from tide_tools import TAPPy
+from PyFVCOM.read_FVCOM_results import readFVCOM
+from PyFVCOM.tidal_ellipse import ap2ep, prep_plot
+from PyFVCOM.tide_tools import TAPPy
 
 if __name__ == '__main__':
 
