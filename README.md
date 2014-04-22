@@ -43,13 +43,19 @@ Optionally:
 Provides
 --------
 
-* ctd_tools - interrogate an SQLite data base of CTD casts.
-    - getCTDMetadata
-    - getCTDData
+* buoy_tools - read data from an SQLite3 database of BODC buoy data.
+    - getBuoyMetadata
+    - getBuoyData
 
 * cst_tools - create coastline files for SMS from shapefiles or DHI MIKE arcs.
     - readESRIShapeFile
     - readArcMIKE
+    - readCST
+
+* ctd_tools - interrogate an SQLite data base of CTD casts.
+    - getCTDMetadata
+    - getCTDData
+    - getFerryBoxData
 
 * grid_tools - tools to parse SMS, DHI MIKE and FVCOM unstructured grids. Also provides functionality to add coasts and clip triangulations to a given domain. Functions to parse SMS river files are also included, as is a function to resample an unstructured grid onto a regular grid (without interpolation, simply finding the nearest point within a threshold distance).
     - parseUnstructuredGridSMS
@@ -71,6 +77,10 @@ Provides
     - mesh2grid
     - OSGB36toWGS84
     - connectivity
+    - clipDomain
+
+* img2xyz - simple script to try and convert images to depths (or elevations).
+    - rgb2z
 
 * ll2utm - convert from spherical to cartesian UTM coordinates and back. Available from <http://robotics.ai.uiuc.edu/~hyoon24/LatLongUTMconversion.py>.
     - LLtoUTM
@@ -92,6 +102,7 @@ Provides
     - sw_salinity
     - dens_jackett
     - cond2salt
+    - vorticity (currently empty)
 
 * process_FVCOM_results - perform some analyses on FVCOM data read in using read_FVCOM_results.
     - calculateTotalCO2
@@ -103,6 +114,8 @@ Provides
 
 * read_FVCOM_results - parse the NetCDF model output and extract a subset of the variables.
     - readFVCOM
+    - ncread (wrapper around readFVCOM)
+    - readProbes
     - elems2nodes
     - nodes2elems
     - getSurfaceElevation
