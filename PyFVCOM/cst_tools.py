@@ -123,3 +123,63 @@ def readArcMIKE(file, fileOut):
     fileWrite.close()
 
 
+def readCST(cst):
+    """
+    Read a CST file and store the vertices in a dict.
+
+    Parameters
+    ----------
+    cst : str
+        Path to the CST file to load in.
+
+    Returns
+    -------
+    vert : dict
+        Dictionary with the coordinates of the vertices of the arcs defined in
+        the CST file.
+
+    """
+
+    f = open(cst, 'r')
+    lines = f.readlines()
+    f.close()
+
+    vert = {}
+    c = 0
+    for line in lines:
+        line = line.strip()
+        if line.startswith('COAST'):
+            pass
+        else:
+            # Split the line on tabs and work based on that output.
+            line = line.split('\t')
+            if len(line) == 1:
+                # Number of arcs. We don't especially need to know this.
+                pass
+
+            elif len(line) == 2:
+                # Number of nodes within a single arc. Store the current index
+                # and use as the key for the dict.
+
+                id = str(c) # dict key
+                vert[id] = [] # initialise the vert list
+                c += 1 # arc counter
+
+            elif len(line) == 3:
+                coords = [float(x) for x in line[:-1]]
+                # Skip the last position if we've already got some data in the
+                # dict for this arc.
+                if vert[id]:
+                    if float(line[0]) not in vert[id][0] and float(line[1]) not in vert[id][0]:
+                        vert[id].append(coords)
+                    else:
+                        # We're at the end of this arc, so convert the
+                        # coordinates we've got to a numpy array for easier
+                        # handling later on.
+                        vert[id] = np.asarray(vert[id])
+                else:
+                    vert[id].append(coords)
+
+    return vert
+
+
