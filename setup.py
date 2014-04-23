@@ -17,16 +17,16 @@ Topic :: Software Development :: Libraries :: Python Modules
 """
 
 setup(
-    name = "fvcom-py",
-    version = "0.1",
+    name = "PyFVCOM",
+    version = "1.0",
     author = "Pierre Cazenave",
-    author_email = "pwcazenave@gmail.com",
-    description = ("fvcom-py is a collection of various tools and utilities which can be used to extract, analyse and plot input and output files from FVCOM."),
-    license = "GPL",
+    author_email = "pica@pml.ac.uk",
+    description = ("PyFVCOM is a collection of various tools and utilities which can be used to extract, analyse and plot input and output files from FVCOM."),
+    license = "MIT",
     keywords = "fvcom",
     platforms = "any",
-    url = "https://bitbucket.org/pwcazenave/fvcom-py",
-    packages=['fvcom-py'],
+    url = "https://gitlab.ecosystem-modelling.pml.ac.uk/pica/PyFVCOM",
+    packages=['PyFVCOM'],
     long_description=read('README.md'),
     classifiers=classifiers
 )
