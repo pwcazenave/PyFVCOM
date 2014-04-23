@@ -7,7 +7,6 @@ import colorsys
 import os
 
 import numpy as np
-import matplotlib.pyplot as plt
 
 def rgb2z(R, G, B, zlev, parm='H'):
     """
