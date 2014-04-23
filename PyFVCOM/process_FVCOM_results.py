@@ -5,7 +5,6 @@ NetCDF file.
 """
 
 import numpy as np
-import matplotlib.pyplot as plt
 
 from sys import argv
 
@@ -305,6 +304,8 @@ def residualFlow(FVCOM, idxRange=False, checkPlot=False, noisy=False):
 
 
     """
+
+    import matplotlib.pyplot as plt
 
     toSecFactor = 24 * 60 * 60
 
