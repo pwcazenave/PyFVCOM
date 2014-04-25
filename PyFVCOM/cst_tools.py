@@ -140,6 +140,11 @@ def readCST(cst):
 
     """
 
+    try:
+        import numpy as np
+    except ImportError:
+        raise ImportError("Couldn't import NumPy.")
+
     f = open(cst, 'r')
     lines = f.readlines()
     f.close()
@@ -160,7 +165,7 @@ def readCST(cst):
             elif len(line) == 2:
                 # Number of nodes within a single arc. Store the current index
                 # and use as the key for the dict.
-
+                nv = int(line[0])
                 id = str(c) # dict key
                 vert[id] = [] # initialise the vert list
                 c += 1 # arc counter
@@ -170,7 +175,7 @@ def readCST(cst):
                 # Skip the last position if we've already got some data in the
                 # dict for this arc.
                 if vert[id]:
-                    if float(line[0]) not in vert[id][0] and float(line[1]) not in vert[id][0]:
+                    if len(vert[id]) != nv - 1:
                         vert[id].append(coords)
                     else:
                         # We're at the end of this arc, so convert the
