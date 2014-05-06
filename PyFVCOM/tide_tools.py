@@ -165,7 +165,8 @@ def gregorianDate(julianDay, mjd=False):
 
     # Fix some months being negative. This only happens if the input is larger
     # than ~30 elements in the array. No idea why.
-    month[month < 1] = month[month < 1] + 12
+    if len(month) > 1:
+        month[month < 1] = month[month < 1] + 12
 
     greg = np.column_stack((year, month, day, hour, minu, sec))
 
