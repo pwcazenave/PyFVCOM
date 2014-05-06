@@ -580,9 +580,6 @@ if __name__ == '__main__':
 
     """
 
-    import matplotlib.pyplot as plt
-    import numpy as np
-
     # Demonstrate how to use ap2ep and ep2ap
     Au = np.random.random([4, 3, 2]);           # so 4x3x2 multi-dimensional matrices
     Av = np.random.random([4, 3, 2]);           # are used for the demonstration.

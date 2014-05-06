@@ -6,9 +6,18 @@ Tools for manipulating and converting unstructured grids in a range of formats.
 from __future__ import print_function
 
 import matplotlib.pyplot as plt
+import matplotlib.path as mpath
+import matplotlib.delaunay as triang
 import numpy as np
 import math
 import sys
+
+from mpl_toolkits.basemap import Basemap
+from matplotlib import tri
+
+from ll2utm import UTMtoLL
+from grid_tools import findNearestPoint
+
 
 def parseUnstructuredGridSMS(mesh):
     """
@@ -894,11 +903,6 @@ def fixCoordinates(FVCOM, UTMZone, inVars=['x', 'y']):
     """
 
     try:
-        from ll2utm import UTMtoLL
-    except ImportError:
-        print('Failed to import ll2utm (available from http://robotics.ai.uiuc.edu/~hyoon24/LatLongUTMconversion.py')
-
-    try:
         Y = np.zeros(np.shape(FVCOM[inVars[1]])) * np.nan
         X = np.zeros(np.shape(FVCOM[inVars[0]])) * np.nan
     except IOError:
@@ -1005,8 +1009,6 @@ def clipTri(MODEL, sideLength, keys=['xc', 'yc']):
         input coordinates in MODEL to plot the new unstructured grid.
 
     """
-
-    import matplotlib.delaunay as triang
 
     cens, edg, tri, neig = triang.delaunay(MODEL[keys[0]], MODEL[keys[1]])
 
@@ -1309,11 +1311,6 @@ def lineSample(x, y, positions, num=0, noisy=False, debug=False):
 
     if type(num) is not int:
         raise TypeError('num must be an int')
-
-    try:
-        from grid_tools import findNearestPoint
-    except ImportError:
-        raise ImportError('Failed to import findNearestPoint from grid_tools')
 
     def __nodes_on_line__(xs, ys, start, end, noisy=False):
         """

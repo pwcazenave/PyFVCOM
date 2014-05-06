@@ -52,6 +52,8 @@ Pierre Cazenave (Plymouth Marine Laboratory) 2013/06/14
 """
 
 import numpy as np
+import matplotlib.pyplot as plt
+
 
 # Define some commonly used constants.
 c68 = 1.00024   # conversion constant to T68 temperature scale.
@@ -59,8 +61,6 @@ c90 = 0.99976   # conversion constant to T90 temperature scale.
 
 def _tests():
     # Put some unit tests in here to make sure the functions work as expected.
-
-    import matplotlib.pyplot as plt
 
     test_lat = 30
 

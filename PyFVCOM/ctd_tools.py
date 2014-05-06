@@ -5,7 +5,10 @@ Functions to interrogate and extract CTD data from the ctd.db SQLite3 database.
 
 from __future__ import print_function
 
+import sqlite3
+
 import numpy as np
+
 
 def getCTDMetadata(db):
     """
@@ -23,11 +26,6 @@ def getCTDMetadata(db):
         table. Returns [False] if there is an error.
 
     """
-
-    try:
-        import sqlite3
-    except ImportError:
-        raise ImportError('Failed to import the SQLite3 module')
 
     def _dict_factory(cursor, row):
         d = {}
@@ -91,11 +89,6 @@ def getCTDData(db, table, fields, noisy=False):
 
     """
 
-    try:
-        import sqlite3
-    except ImportError:
-        raise ImportError('Failed to import the SQLite3 module')
-
     if noisy:
         print('Getting data for {} from the database...'.format(table), end=' ')
 
@@ -155,11 +148,6 @@ def getFerryBoxData(db, fields, table='PrideOfBilbao', noisy=False):
     Search is case insensitive (b0737327 is equal to B0737327).
 
     """
-
-    try:
-        import sqlite3
-    except ImportError:
-        raise ImportError('Failed to import the SQLite3 module')
 
     if noisy:
         print('Getting data for {} from the database...'.format(table), end=' ')

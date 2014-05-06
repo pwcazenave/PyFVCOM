@@ -1,5 +1,11 @@
 from __future__ import print_function
 
+import sys
+
+import numpy as np
+
+from netCDF4 import Dataset, MFDataset
+
 def readFVCOM(file, varList=None, clipDims=False, noisy=False, atts=False):
     """
     Read in the FVCOM results file and spit out numpy arrays for each of the
@@ -56,13 +62,6 @@ def readFVCOM(file, varList=None, clipDims=False, noisy=False, atts=False):
     readProbes : read in FVCOM ASCII probes output files.
 
     """
-
-    try:
-        from netCDF4 import Dataset, MFDataset
-    except ImportError:
-        raise ImportError('Failed to load the NetCDF4 library')
-
-    import sys
 
     # If we have a list, assume it's lots of files and load them all.
     if isinstance(file, list):
@@ -257,11 +256,6 @@ def readProbes(files, noisy=False):
 
     """
 
-    try:
-        import numpy as np
-    except ImportError:
-        raise ImportError('Unable to load NumPy.')
-
     if len(files) == 0:
         raise Exception('No files provided.')
 
@@ -315,11 +309,6 @@ def elems2nodes(elems, tri, nvert):
         Array of values at the grid nodes.
 
     """
-
-    try:
-        import numpy as np
-    except ImportError:
-        raise ImportError('NumPy not found')
 
     count = np.zeros(nvert, dtype=int)
 
@@ -378,11 +367,6 @@ def nodes2elems(nodes, tri):
 
     """
 
-    try:
-        import numpy as np
-    except ImportError:
-        raise ImportError('NumPy not found')
-
     nvert = np.shape(tri)[0]
 
     if np.ndim(nodes) == 1:
@@ -418,10 +402,6 @@ def getSurfaceElevation(Z, idx):
         idx.
 
     """
-    try:
-        import numpy as np
-    except ImportError:
-        raise ImportError('NumPy not found')
 
     nt, nx = np.shape(Z)
 

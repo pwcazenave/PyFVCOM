@@ -19,6 +19,11 @@ the end.
 """
 
 
+import shapefile
+
+import numpy as np
+
+
 def readESRIShapeFile(file, fileOut):
     """
     Convert ESRI ShapeFiles to SMS-compatible CST files.
@@ -31,11 +36,6 @@ def readESRIShapeFile(file, fileOut):
         Full path to the output file.
 
     """
-
-    try:
-        import shapefile
-    except ImportError:
-        print('Module shapefile not found (and required). Try sudo yum install pyshape.')
 
     sf = shapefile.Reader(file)
     shapes = sf.shapes()
@@ -139,11 +139,6 @@ def readCST(cst):
         the CST file.
 
     """
-
-    try:
-        import numpy as np
-    except ImportError:
-        raise ImportError("Couldn't import NumPy.")
 
     f = open(cst, 'r')
     lines = f.readlines()

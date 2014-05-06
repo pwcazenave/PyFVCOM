@@ -4,6 +4,10 @@ functions.
 
 """
 
+import numpy as np
+
+from scipy import stats, polyfit, polyval
+
 def calculateRegression(x, y, type):
     """
     Calculate three types of regression:
@@ -12,16 +16,6 @@ def calculateRegression(x, y, type):
         3. Exponential (exp)
         4. Linear through zero (lin0)
     """
-
-    try:
-        import numpy as np
-    except ImportError:
-        raise ImportError('NumPy not found')
-
-    try:
-        from scipy import stats
-    except ImportError:
-        raise ImportError('SciPy not found')
 
     # Check the smallest value in x or y isn't below ~1x10-7 otherwise
     # we hit numerical instabilities.
@@ -73,11 +67,6 @@ def calculatePolyfit(x, y):
     # all values greater than one. The trouble mainly seems to happen when
     # log10(min(x)) negative.
 
-    try:
-        from scipy import polyfit, polyval
-    except ImportError:
-        raise ImportError('SciPy not found')
-
     # Check the smallest value in x or y isn't below 2x10-7 otherwise
     # we hit numerical instabilities.
     xFactorFix, xFactor = False, 0
@@ -104,11 +93,6 @@ def calculatePolyfit(x, y):
 
 def coefficientOfDetermination(obs, model):
     """ Calculate the coefficient of determination for a modelled function """
-    try:
-        import numpy as np
-    except ImportError:
-        raise ImportError('NumPy not found')
-
     obsBar = np.mean(obs)
     modelBar = np.mean(model)
 

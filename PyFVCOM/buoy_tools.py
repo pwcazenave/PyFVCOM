@@ -6,6 +6,8 @@ Functions to interrogate and extract buoy data from the buoys.db SQLite3 databas
 from __future__ import print_function
 
 import numpy as np
+import sqlite3
+
 
 def getBuoyMetadata(db):
     """
@@ -23,11 +25,6 @@ def getBuoyMetadata(db):
         table. Returns [False] if there is an error.
 
     """
-
-    try:
-        import sqlite3
-    except ImportError:
-        raise ImportError('Failed to import the SQLite3 module')
 
     def _dict_factory(cursor, row):
         d = {}
@@ -90,11 +87,6 @@ def getBuoyData(db, table, fields, noisy=False):
     Search is case insensitive (b0737327 is equal to B0737327).
 
     """
-
-    try:
-        import sqlite3
-    except ImportError:
-        raise ImportError('Failed to import the SQLite3 module')
 
     if noisy:
         print('Getting data for {} from the database...'.format(table), end=' ')

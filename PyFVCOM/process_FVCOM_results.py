@@ -5,13 +5,12 @@ NetCDF file.
 """
 
 import numpy as np
+import matplotlib.pyplot as plt
 
 from sys import argv
 
-import grid_tools as gp
-
 from read_FVCOM_results import readFVCOM
-from stats_tools import coefficientOfDetermination
+from grid_tools import parseUnstructuredGridFVCOM
 
 
 def calculateTotalCO2(FVCOM, varPlot, startIdx, layerIdx, leakIdx, dt, noisy=False):
@@ -30,12 +29,6 @@ def calculateTotalCO2(FVCOM, varPlot, startIdx, layerIdx, leakIdx, dt, noisy=Fal
     FIXME(pica) This doesn't work as is.
 
     """
-
-    try:
-        import numpy as np
-    except ImportError:
-        raise ImportError('NumPy not found')
-
 
     Z = FVCOM[varPlot]
 
@@ -93,12 +86,6 @@ def CO2LeakBudget(FVCOM, leakIdx, startDay):
 
     """
 
-    try:
-        import numpy as np
-    except ImportError:
-        raise ImportError('NumPy not found')
-
-
     # Get output file sampling in hours
     dt = int(round((FVCOM['time'][1] - FVCOM['time'][0]) * 24, 1))
     # Calculte number of steps required to get a day's worth of results
@@ -124,12 +111,6 @@ def CO2LeakBudget(FVCOM, leakIdx, startDay):
 def dataAverage(data, **args):
     """ Depth average a given FVCOM output data set along a specified axis """
 
-    try:
-        import numpy as np
-    except ImportError:
-        raise ImportError('NumPy not found')
-
-
     dataMask = np.ma.masked_array(data,np.isnan(data))
     dataMeaned = np.ma.filled(dataMask.mean(**args), fill_value=np.nan).squeeze()
 
@@ -138,11 +119,6 @@ def dataAverage(data, **args):
 
 def unstructuredGridVolume(FVCOM):
     """ Calculate the volume for every cell in the unstructured grid """
-    try:
-        import numpy as np
-    except ImportError:
-        raise ImportError('NumPy not found')
-
 
     elemAreas = FVCOM['art1']
     elemDepths = FVCOM['h']
@@ -177,22 +153,6 @@ def animateModelOutput(FVCOM, varPlot, startIdx, skipIdx, layerIdx, meshFile, ad
     relevant information to the console.
 
     """
-
-    try:
-        import numpy as np
-    except ImportError:
-        raise ImportError('NumPy not found')
-
-    try:
-        import matplotlib.pyplot as plt
-    except ImportError:
-        raise ImportError('matplotlib not found')
-
-    try:
-        from grid_tools import parseUnstructuredGridFVCOM
-    except ImportError:
-        raise ImportError('plot_unstruct_grid not found')
-
 
     try:
         [triangles, nodes, x, y, z] = parseUnstructuredGridFVCOM(meshFile)
@@ -304,8 +264,6 @@ def residualFlow(FVCOM, idxRange=False, checkPlot=False, noisy=False):
 
 
     """
-
-    import matplotlib.pyplot as plt
 
     toSecFactor = 24 * 60 * 60
 
