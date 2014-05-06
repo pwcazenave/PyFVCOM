@@ -16,7 +16,6 @@ from mpl_toolkits.basemap import Basemap
 from matplotlib import tri
 
 from ll2utm import UTMtoLL
-from grid_tools import findNearestPoint
 
 
 def parseUnstructuredGridSMS(mesh):
