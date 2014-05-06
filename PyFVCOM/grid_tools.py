@@ -689,59 +689,6 @@ def plotUnstructuredGrid(triangles, nodes, x, y, z, colourLabel, addText=False, 
     #plt.close() # for 'looping' (slowly)
 
 
-def plotUnstructuredGridProjected(triangles, nodes, x, y, z, colourLabel, addText=False, addMesh=False, extents=False):
-    """
-    Takes the output of parseUnstructuredGridFVCOM() or
-    parseUnstructuredGridSMS() and readFVCOM() and plots it on a projected
-    map. Best used for lat-long data sets.
-
-    Give triangles, nodes, x, y, z and a label for the colour scale. The first
-    five arguments are the output of parseUnstructuredGridFVCOM() or
-    parseUnstructuredGridSMS(). Optionally append addText=True|False and
-    addMesh=True|False to enable/disable node numbers and grid overlays,
-    respectively. Finally, provide optional extents (W/E/S/N format).
-
-    WARNING: THIS DOESN'T WORK ON FEDORA 14. REQUIRES FEDORA 16 AT LEAST
-    (I THINK -- DIFFICULT TO VERIFY WITHOUT ACCESS TO A NEWER VERSION OF
-    FEDORA).
-
-    """
-
-    from mpl_toolkits.basemap import Basemap
-    from matplotlib import tri
-
-    if not extents:
-        # We don't have a specific region defined, so use minmax of x and y.
-        extents = [ min(x), max(x), min(y), max(y) ]
-
-    # Create a triangulation object from the triagulated info read in from the
-    # grid files.
-    triang = tri.Triangulation(x, y, triangles)
-
-    # Create the basemap
-    fig = plt.figure()
-    ax = fig.add_axes([0.1,0.1,0.8,0.8])
-    m = Basemap(
-            llcrnrlat=extents[2],
-            urcrnrlat=extents[3],
-            llcrnrlon=extents[0],
-            urcrnrlon=extents[1],
-            projection='merc',
-            resolution='h',
-            lat_1=extents[2],
-            lat_2=extents[3],
-            lat_0=(extents[3]-extents[2])/2,
-            lon_0=extents[1],
-            ax=ax)
-    # Add the data
-    #m.tripcolor(triang,z) # version of matplotlib is too old on Fedora 14
-    # Add a coastline
-    #m.drawlsmask(land_color='grey', lakes=True, resolution='h')
-    # Can't add resolution here for some reason
-    #m.drawlsmask(land_color='grey')
-    m.drawcoastlines()
-    plt.show()
-
 
 def findNearestPoint(FX, FY, x, y, maxDistance=np.inf, noisy=False):
     """
@@ -925,64 +872,6 @@ def fixCoordinates(FVCOM, UTMZone, inVars=['x', 'y']):
 
     return X, Y
 
-
-def plotCoast(coastline):
-    """
-    Take an ESRI shapefile and output the paths required by
-    matplotlib.patches.  This is until I get the new version of
-    matplotlib which does Basemap with unstructured grids.
-
-    Parameters
-    ----------
-    coastline : str
-        Full path to an ESRI ShapeFile of a coastline.
-
-    Returns
-    -------
-    paths : list
-        List of matplotlib.path.Paths which can be used with
-        matplotlib.patches.PathPatch to plot the ShapeFile.
-
-    Notes
-    -----
-    Lifted from:
-    http://ondrejintheair.blogspot.co.uk/2011/11/plot-polygon-shapefiles-using-ogr-and.html
-
-    """
-
-    import numpy as np
-    import matplotlib.path as mpath
-    from osgeo import ogr
-
-    # Load in a coastline shape file
-    ds = ogr.Open(coastline)
-    lyr = ds.GetLayer(0)
-    ext = lyr.GetExtent()
-
-    paths = []
-    lyr.ResetReading()
-
-    # Read all features in layer and store as paths
-    for feat in lyr:
-        geom = feat.GetGeometryRef()
-        # check if geom is polygon
-        if geom.GetGeometryType() == ogr.wkbPolygon:
-            codes = []
-            all_x = []
-            all_y = []
-            for i in range(geom.GetGeometryCount()):
-                # Read ring geometry and create path
-                r = geom.GetGeometryRef(i)
-                x = [r.GetX(j) for j in range(r.GetPointCount())]
-                y = [r.GetY(j) for j in range(r.GetPointCount())]
-                # skip boundary between individual rings
-                codes += [mpath.Path.MOVETO] + (len(x)-1)*[mpath.Path.LINETO]
-                all_x += x
-                all_y += y
-            path = mpath.Path(np.column_stack((all_x,all_y)), codes)
-            paths.append(path)
-
-    return paths
 
 
 def clipTri(MODEL, sideLength, keys=['xc', 'yc']):
