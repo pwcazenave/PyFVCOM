@@ -88,7 +88,7 @@ def CO2LeakBudget(FVCOM, leakIdx, startDay):
 
     # Get output file sampling in hours
     dt = int(round((FVCOM['time'][1] - FVCOM['time'][0]) * 24, 1))
-    # Calculte number of steps required to get a day's worth of results
+    # Calculate number of steps required to get a day's worth of results
     timeSteps = np.r_[0:(24/dt)+1]+startDay
 
     # Preallocate the output arrays
@@ -143,7 +143,7 @@ def animateModelOutput(FVCOM, varPlot, startIdx, skipIdx, layerIdx, meshFile, ad
     Specify the variable of interest as a string (e.g. 'DYE'). This is case
     sensitive. Specify a starting index, a skip index of n to skip n time steps
     in the animation. The layerIdx is either the sigma layer to plot or, if
-    negative, means the depth averaged value is calcualted. Supply an
+    negative, means the depth averaged value is calculated. Supply an
     unstructured grid file (FVCOM format).
 
     Optionally add current vectors to the plot with addVectors=True which will
