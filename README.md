@@ -29,10 +29,6 @@ Prerequisites
 
 * netCDF4, version 0.9.9.
 
-* shapefile, a tool to parse ESRI Shapefiles, available from <http://sourceforge.net/projects/pyshape/>.
-
-* OSGeo, another tool to read ESRI Shapefiles, available from <http://wiki.osgeo.org/wiki/OSGeo_Python_Library>.
-
 * TAPPy, a harmonic analysis tool for surface elevation time series, available from <http://sourceforge.net/projects/tappy/>. A slightly modified version of the TAPPy library is included in the toolbox (to allow importing as a module).
 
 Optionally:
@@ -65,19 +61,16 @@ Provides
     - writeUnstructuredGridSMS
     - writeUnstructuredGridSMSBathy
     - writeUnstructuredGridMIKE
-    - plotUnstructuredGrid
-    - plotUnstructuredGridProjected
     - findNearestPoint
     - elementSideLengths
     - fixCoordinates
-    - plotCoast
     - clipTri
+    - clipDomain
     - getRiverConfig
     - getRivers
     - mesh2grid
     - OSGB36toWGS84
     - connectivity
-    - clipDomain
 
 * img2xyz - simple script to try and convert images to depths (or elevations).
     - rgb2z
@@ -109,7 +102,6 @@ Provides
     - CO2LeakBudget
     - dataAverage
     - unstructuredGridVolume
-    - animateModelOutput
     - residualFlow
 
 * read_FVCOM_results - parse the NetCDF model output and extract a subset of the variables.
