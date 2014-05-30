@@ -46,6 +46,7 @@ Provides functions:
       pressure (identical approach in sw_sal80)
     - dens_jackett : alternative formulation for calculating density from
       temperature and salinity (after Jackett et al. (2005)
+    - pea: calculate the potential energy anomaly (stratification index).
 
 Pierre Cazenave (Plymouth Marine Laboratory) 2013/06/14
 
@@ -1047,6 +1048,79 @@ def vorticity(x, y, u, v, vtype='averaged'):
     #    # Let's not do vertically averaged and instead do each vertical layer
     #    # separately.
     #    for zz in xrange(0, nz):
+
+def zbar(data, levels):
+    """
+    Depth-average values in data.
+
+    Parameters
+    ----------
+    data : ndarray
+        Values to be depth-averaged. Shape is [t, z, x] where t is time, z is
+        vertical and x is space (unstructured).  levels : ndarray Array of
+        vertical layer thicknesses. Shape is [x, z].
+
+    Returns
+    -------
+    databar : ndarray
+        Depth-averaged values in data.
+
+    Notes
+    -----
+
+    This is a naive implementation using a for-loop. A faster version is almost
+    certainly possible.
+
+    """
+
+    nt, nz, nx = data.shape
+    databar = np.zeros((nt, nx))
+    for i in range(nz):
+        databar = databar + (data[:, i, :] * levels[i, :])
+    databar = (1.0 / np.sum(levels, axis=0)) * databar
+
+    return databar
+
+def pea(temp, salinity, depth, levels):
+    """
+    Calculate potential energy anomaly (stratification index).
+
+    Parameters
+    ----------
+    temp : ndarray
+        Temperature data (depth-resolved).
+    salinity : ndarray
+        Salinity data (depth-resolved).
+    depth : ndarray
+        Water depth (positive down).
+    levels : ndarray
+        Vertical levels (fractions of 0-1) (FVCOM = siglev).
+
+    Returns
+    -------
+    PEA : ndarray
+        Potential energy anomaly (J/m^{3}).
+
+    """
+
+    g = 9.81
+    rho = dens_jackett(temp, salinity)
+    dz = np.abs(np.diff(levels, axis=0)) * depth
+    H = np.cumsum(dz, axis=0)
+    nz = dz.shape[0]
+
+    # Depth-averaged density
+    rhobar = zbar(rho, dz)
+
+    # Potential energy anomaly.
+    PEA = np.zeros(rhobar.shape)
+
+    # Hofmeister thesis equation.
+    for i in range(nz):
+        PEA = PEA + ((rho[:, i, :] - rhobar) * g * H[i, :] * dz[i, :])
+    PEA = (1.0 / depth) * PEA
+
+    return PEA
 
 
 if __name__ == '__main__':
