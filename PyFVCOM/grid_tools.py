@@ -5,8 +5,6 @@ Tools for manipulating and converting unstructured grids in a range of formats.
 
 from __future__ import print_function
 
-import matplotlib.pyplot as plt
-import matplotlib.path as mpath
 import matplotlib.delaunay as triang
 import numpy as np
 import math
@@ -638,57 +636,6 @@ def writeUnstructuredGridMIKE(triangles, nodes, x, y, z, types, mesh):
     fileWrite.close()
 
 
-def plotUnstructuredGrid(triangles, nodes, x, y, z, colourLabel, addText=False, addMesh=False):
-    """
-    Takes the output of parseUnstructuredGridFVCOM() or
-    parseUnstructuredGridSMS() and readFVCOM() and plots it.
-
-    Parameters
-    ----------
-    triangles : ndarray
-        Integer array of shape (ntri, 3). Each triangle is composed of
-        three points and this contains the three node numbers (stored in
-        nodes) which refer to the coordinates in X and Y (see below).
-    nodes : ndarray
-        Integer number assigned to each node.
-    x, y, z : ndarray
-        Coordinates of each grid node and any associated Z value.
-    colourLabel : str
-        String to add to the colour bar label.
-    addText : bool, optional
-        If True, add each node number to the plot.
-    addMesh : bool, optional
-        If True, overlay the grid mesh on the plot.
-
-    """
-
-    plt.figure()
-    if z.max()-z.min() != 0:
-        plt.tripcolor(x, y, triangles, z, shading='interp')
-        cb = plt.colorbar()
-        cb.set_label(colourLabel)
-
-    if addMesh:
-        plt.triplot(x, y, triangles, '-', color=[0.6, 0.6, 0.6])
-
-    # Add the node numbers (this is slow)
-    if addText:
-        for node in nodes:
-            plt.text(x[node-1], y[node-1], str(nodes[node-1]),
-                horizontalalignment='center', verticalalignment='top', size=8)
-    #plt.axes().set_aspect('equal')
-    plt.axes().autoscale(tight=True)
-    #plt.axis('tight')
-    #plt.clim(-500, 0)
-    #plt.title('Triplot of user-specified triangulation')
-    #plt.xlabel('Metres')
-    #plt.ylabel('Metres')
-
-    plt.show()
-    #plt.close() # for 'looping' (slowly)
-
-
-
 def findNearestPoint(FX, FY, x, y, maxDistance=np.inf, noisy=False):
     """
     Given some point(s) x and y, find the nearest grid node in FX and
@@ -870,7 +817,6 @@ def fixCoordinates(FVCOM, UTMZone, inVars=['x', 'y']):
         X[X > 180] = X[X > 180] - 360
 
     return X, Y
-
 
 
 def clipTri(MODEL, sideLength, keys=['xc', 'yc']):
@@ -1424,16 +1370,6 @@ def lineSample(x, y, positions, num=0, noisy=False, debug=False):
 
     # Make the line list an array for easier plotting.
     line = np.asarray(line)
-
-    if debug:
-        plt.figure()
-        plt.plot(x, y, '.', markerfacecolor=[0.75, 0.75, 0.75], markeredgecolor=[0.75, 0.75, 0.75], zorder=0)
-        plt.plot(xs, ys, 'g.', zorder=1)
-        plt.plot(positions[:, 0], positions[:, 1], 'k-o', zorder=100)
-        #plt.plot(xx, yy, 'co') # intersections
-        plt.plot(xx[idx], yy[idx], 'ko') # selected intersections
-        plt.plot(xs[idx], ys[idx], 'co') # selected nodes
-        plt.axis('equal')
 
     return idx, line
 
