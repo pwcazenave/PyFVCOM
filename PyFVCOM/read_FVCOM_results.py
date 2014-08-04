@@ -324,18 +324,18 @@ def elems2nodes(elems, tri, nvert):
             count[n1] = count[n1] + 1
             count[n2] = count[n2] + 1
 
-    elif np.ndim(elems) == 2:
-        nodes = np.zeros((np.shape(elems)[0], nvert))
+    elif np.ndim(elems) > 1:
+        # Horrible hack alert to get the output array shape for multiple
+        # dimensions.
+        nodes = np.zeros((list(np.shape(elems)[:-1]) + [nvert]))
         for i, indices in enumerate(tri):
             n0, n1, n2 = indices
-            nodes[:, n0] = nodes[:, n0] + elems[:, i]
-            nodes[:, n1] = nodes[:, n1] + elems[:, i]
-            nodes[:, n2] = nodes[:, n2] + elems[:, i]
+            nodes[..., n0] = nodes[..., n0] + elems[..., i]
+            nodes[..., n1] = nodes[..., n1] + elems[..., i]
+            nodes[..., n2] = nodes[..., n2] + elems[..., i]
             count[n0] = count[n0] + 1
             count[n1] = count[n1] + 1
             count[n2] = count[n2] + 1
-    else:
-        raise Exception('Too many dimensions (maximum of two)')
 
     # Now calculate the average for each node based on the number of
     # elements of which it is a part.
