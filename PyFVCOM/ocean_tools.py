@@ -110,6 +110,10 @@ def _tests():
     res_z = pressure2depth(test_p, test_lat)
     print('Pressure to depth\nFofonoff and Millard (1983):\t9712.653\npressure2depth:\t\t\t{}\n'.format(res_z))
 
+    # The return to depth is a bit inaccurate, not sure why.
+    res_pres = depth2pressure(res_z, test_lat)
+    print('Depth to pressure\nFofonoff and Millar (1983):\t9712.653\ndepth2pressure:\t\t\t{}\n'.format(res_pres))
+
     res_cp = cp_sw(test_t, test_s, test_p)
     print('Specific heat of seawater\nFofonoff and Millard (1983):\t3849.500\ncp_sw:\t\t\t\t{}\n'.format(res_cp))
 
@@ -946,7 +950,7 @@ def dens_jackett(th, s, p=None):
             th2 * 1.4716275472242334e-09))
 
     # Add pressure dependence
-    if p is not None and p > 0.0:
+    if p is not None and np.any(p > 0.0):
         pth = p * th
         anum += p * (1.1798263740430364e-02 + \
                 th2 * 9.8920219266399117e-08 + \
