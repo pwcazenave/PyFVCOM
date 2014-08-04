@@ -1,3 +1,51 @@
+20140804
+--------
+
+Changes since the last release.
+
+buoy_tools:
+    * Tidy up all the import statements to be at the beginning of the file.
+cst_tools:
+    * Tidy up all the import statements to be at the beginning of the file.
+    * readCST: Fix the way the end of a vertex is identified to be more
+    robust.
+ctd_tools:
+    * Tidy up all the import statements to be at the beginning of the file.
+grid_tools:
+    * Tidy up all the import statements to be at the beginning of the file.
+    * Remove the plotUnstructuredGrid, plotUnstructuredGridProjected and
+    plotCoast functions as they were pretty basic and only replicated half
+    a dozen lines of matplotlib which is better demonstrated in the examples
+    given on the wiki.
+ocean_tools:
+    * pea: new function to calculate the potential energy anomaly from
+    temperature, salinity and depth.
+    * zbar: new function to calculate the depth averaged value of an input.
+    Naive implementation with a loop which can almost certainly be optimised
+    significantly.
+    * dens_jackett: add support for arrays of pressure as opposed to single
+    values.
+    * _tests: add a test for the conversion from depth to pressure using the
+    output of the pressure2depth.
+process_FVCOM_results:
+    * Tidy up all the import statements to be at the beginning of the file.
+read_FVCOM_results:
+    * Tidy up all the import statements to be at the beginning of the file.
+    * elems2nodes: fix the function to support n-dimensional arrays (rather
+    than being limited to 2D arrays).
+stats_tools:
+    * Tidy up all the import statements to be at the beginning of the file.
+tidal_ellipse:
+    * Tidy up all the import statements to be at the beginning of the file.
+tide_tools:
+    * gregorianDate: fix issue with some month numbers being returned as zero.
+
+README.md
+    * Remove some old dependencies (mainly to do with the shapefile plotting
+    routine which has now been removed).
+    * Also update the list of functions provided by each group of functions.
+
+
 20140422
 --------
 
