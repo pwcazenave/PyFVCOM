@@ -183,3 +183,34 @@ def readCST(cst):
     return vert
 
 
+def writeCST(obc, file):
+    """
+    Read a CST file and store the vertices in a dict.
+
+    Parameters
+    ----------
+    obc : dict
+        Dict with each entry as a NumPy array of coordinates (x, y).
+    file : str
+        Path to the CST file to which to write (overwrites existing files).
+
+    """
+    nb = len(obc)
+
+    with open(file, 'w') as f:
+        # Header
+        f.write('COAST\n')
+        f.write('{:d}\n'.format(nb))
+
+        for _, bb in obc.iteritems(): # each boundary
+            np = len(bb)
+
+            # The current arc's header
+            f.write('{:d}\t0.0\n'.format(np))
+
+            for xy in bb:
+                f.write('\t{:.6f}\t{:.6f}\t0.0\n'.format(xy[0], xy[1]))
+
+        f.close
+
+
