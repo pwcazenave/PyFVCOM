@@ -1113,7 +1113,7 @@ class tappy(Util):
 
 
     def constituents(self):
-        difference = self.dates[1:] - self.dates[:-1]
+        difference = np.asarray(self.dates[1:]) - np.asarray(self.dates[:-1])
         if np.any(difference < datetime.timedelta(seconds = 0)):
             print("Let's do the time warp again!")
             print("The date values reverse - they must be constantly increasing.")
