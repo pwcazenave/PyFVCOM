@@ -306,8 +306,8 @@ class ncwrite():
                 rootgrp.createDimension(k, v)
         else:
             if self.Quiet == False:
-                print 'No NetCDF created:'
-                print '  No dimension key found (!! has to be \"dimensions\"!!!)'
+                print('No netCDF created:')
+                print('  No dimension key found (!! has to be \"dimensions\"!!!)')
             return()
 
         # Create global attributes.
@@ -316,7 +316,7 @@ class ncwrite():
                 rootgrp.setncattr(k,v)
         else:
             if self.Quiet == False:
-                print '  No global attribute key found (!! has to be \"global attributes\"!!!)'
+                print('  No global attribute key found (!! has to be \"global attributes\"!!!)')
 
 
         # Create variables.
@@ -330,19 +330,19 @@ class ncwrite():
                 data_type = 'f4'
             # Create ncdf variable
             if self.Quiet == False:
-                print '  Creating variable: ', k, data_type, dims
+                print('  Creating variable: {} {} {}'.format(k, data_type, dims))
             var = rootgrp.createVariable(k, data_type, dims, fill_value=-999.0)
             if len(dims) > np.ndim(data):
                 # If number of dimensions given to netCDF is greater than the
                 # number of dimension of the data, then  fill the netCDF
                 # variable accordingly.
                 if 'time' in dims:
-                # Check for presence of time dimension (which can be unlimited
-                # variable: defined by None).
+                    # Check for presence of time dimension (which can be
+                    # unlimited variable: defined by None).
                     var[:] = data
                 else:
                     if self.Quiet == False:
-                        print 'Problem in the number of dimensions'
+                        print('Problem in the number of dimensions')
             else:
                 var[:] = data
 
