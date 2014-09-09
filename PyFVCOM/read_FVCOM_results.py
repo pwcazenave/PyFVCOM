@@ -224,6 +224,136 @@ def ncread(file, vars=None, dims=False, noisy=False, atts=False):
         return nc
 
 
+class ncwrite():
+    """
+    Save data in a dict to a netCDF file.
+
+    Notes
+    -----
+    1. Unlimited dimension can only be time and MUST be the 1st dimension in
+       the variable dimensions list (or tuple).
+    2. Variable dimensions HAVE to BE lists ['time']
+
+    Parameters
+    ----------
+    data : dict
+        Dict of dicts with keys 'dimension', 'variables' and
+        'global_attributes'.
+    file : str
+        Path to output file name.
+
+    Author(s)
+    ---------
+    Stephane Saux-Picart
+    Pierre Cazenave
+
+    Examples
+    --------
+    >>> lon = np.arange(-10, 10)
+    >>> lat = np.arange(50, 60)
+    >>> Times = ['2010-02-11 00:10:00.000000', '2010-02-21 00:10:00.000000']
+    >>> p90 = np.sin(400).reshape(20, 10, 2)
+    >>> data = {}
+    >>> data['dimensions'] = {
+    ...     'lat': np.size(lat),
+    ...     'lon':np.size(lon),
+    ...     'time':np.shape(timeStr)[1],
+    ...     'DateStrLen':26
+    ... }
+    >>> data['variables'] = {
+    ... 'latitude':{'data':lat,
+    ...     'dimensions':['lat'],
+    ...     'attributes':{'units':'degrees north'}
+    ... },
+    ... 'longitude':{
+    ...     'data':lon,
+    ...     'dimensions':['lon'],
+    ...     'attributes':{'units':'degrees east'}
+    ... },
+    ... 'Times':{
+    ...     'data':timeStr,
+    ...     'dimensions':['time','DateStrLen'],
+    ...     'attributes':{'units':'degrees east'},
+    ...     'data_type':'c'
+    ... },
+    ... 'p90':{'data':data,
+    ...     'dimensions':['lat','lon'],
+    ...     'attributes':{'units':'mgC m-3'}}}
+    ... data['global attributes'] = {
+    ...     'description': 'P90 chlorophyll',
+    ...     'source':'netCDF3 python',
+    ...     'history':'Created {}'.format(time.ctime(time.time()))
+    ... }
+    >>> ncwrite(data, 'test.nc')
+
+    """
+
+    def __init__(self, input_dict, filename_out, Quiet=False):
+        '''
+        '''
+        self.filename_out = filename_out
+        self.input_dict = input_dict
+        self.Quiet = Quiet
+        self.createNCDF()
+
+    def createNCDF(self):
+
+        rootgrp = netCDF4.Dataset(self.filename_out, 'w', format='NETCDF3_CLASSIC')
+
+        # Create dimensions.
+        if self.input_dict.has_key('dimensions'):
+            for k,v in self.input_dict['dimensions'].iteritems():
+                rootgrp.createDimension(k, v)
+        else:
+            if self.Quiet == False:
+                print 'No NetCDF created:'
+                print '  No dimension key found (!! has to be \"dimensions\"!!!)'
+            return()
+
+        # Create global attributes.
+        if self.input_dict.has_key('global attributes'):
+            for k,v in self.input_dict['global attributes'].iteritems():
+                rootgrp.setncattr(k,v)
+        else:
+            if self.Quiet == False:
+                print '  No global attribute key found (!! has to be \"global attributes\"!!!)'
+
+
+        # Create variables.
+        for k,v in self.input_dict['variables'].iteritems():
+            dims = self.input_dict['variables'][k]['dimensions']
+            data = v['data']
+            # Create correct data type if provided
+            if self.input_dict['variables'][k].has_key('data_type'):
+                data_type = self.input_dict['variables'][k]['data_type']
+            else:
+                data_type = 'f4'
+            # Create ncdf variable
+            if self.Quiet == False:
+                print '  Creating variable: ', k, data_type, dims
+            var = rootgrp.createVariable(k, data_type, dims, fill_value=-999.0)
+            if len(dims) > np.ndim(data):
+                # If number of dimensions given to netCDF is greater than the
+                # number of dimension of the data, then  fill the netCDF
+                # variable accordingly.
+                if 'time' in dims:
+                # Check for presence of time dimension (which can be unlimited
+                # variable: defined by None).
+                    var[:] = data
+                else:
+                    if self.Quiet == False:
+                        print 'Problem in the number of dimensions'
+            else:
+                var[:] = data
+
+            # Create attributes for variables
+            if self.input_dict['variables'][k].has_key('attributes'):
+                for ka,va in self.input_dict['variables'][k]['attributes'].iteritems():
+                    var.setncattr(ka,va)
+
+        rootgrp.close()
+
+
 def readProbes(files, noisy=False):
     """
     Read in FVCOM probes output files. Reads both 1 and 2D outputs. Currently
