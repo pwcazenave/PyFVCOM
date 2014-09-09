@@ -298,7 +298,7 @@ class ncwrite():
 
     def createNCDF(self):
 
-        rootgrp = netCDF4.Dataset(self.filename_out, 'w', format='NETCDF3_CLASSIC')
+        rootgrp = Dataset(self.filename_out, 'w', format='NETCDF3_CLASSIC')
 
         # Create dimensions.
         if self.input_dict.has_key('dimensions'):
