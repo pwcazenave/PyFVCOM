@@ -290,16 +290,18 @@ class ncwrite():
     """
 
     def __init__(self, input_dict, filename_out, Quiet=False):
-        '''
-        '''
         self.filename_out = filename_out
         self.input_dict = input_dict
         self.Quiet = Quiet
         self.createNCDF()
 
     def createNCDF(self):
+        """
+        Function to create and write the data to the specified netCDF file.
 
-        rootgrp = Dataset(self.filename_out, 'w', format='NETCDF3_CLASSIC')
+        """
+
+        rootgrp = Dataset(self.filename_out, 'w', format='NETCDF3_CLASSIC', clobber=True)
 
         # Create dimensions.
         if self.input_dict.has_key('dimensions'):
@@ -329,10 +331,15 @@ class ncwrite():
                 data_type = self.input_dict['variables'][k]['data_type']
             else:
                 data_type = 'f4'
+            # Check whether we've been given a fill value.
+            if self.input_dict['variables'][k].has_key('fill_value'):
+                fill_value = self.input_dict['variables'][k]['fill_value']
+            else:
+                fill_value = None
             # Create ncdf variable
             if self.Quiet == False:
                 print('  Creating variable: {} {} {}'.format(k, data_type, dims))
-            var = rootgrp.createVariable(k, data_type, dims, fill_value=-999.0)
+            var = rootgrp.createVariable(k, data_type, dims, fill_value=fill_value)
             if len(dims) > np.ndim(data):
                 # If number of dimensions given to netCDF is greater than the
                 # number of dimension of the data, then  fill the netCDF
