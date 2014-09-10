@@ -274,6 +274,7 @@ class ncwrite():
     ...     'data':timeStr,
     ...     'dimensions':['time','DateStrLen'],
     ...     'attributes':{'units':'degrees east'},
+    ...     'fill_value':-999.0,
     ...     'data_type':'c'
     ... },
     ... 'p90':{'data':data,
@@ -339,12 +340,24 @@ class ncwrite():
                 if 'time' in dims:
                     # Check for presence of time dimension (which can be
                     # unlimited variable: defined by None).
-                    var[:] = data
+                    try:
+                        var[:] = data
+                    except IndexError:
+                        raise(IndexError(('Supplied data shape does not match the specified'
+                        ' dimensions for variable \'{}\'.'.format(k))))
+                    finally:
+                        raise(Exception('Something has gone wrong writing the data to the netCDF.'))
                 else:
                     if self.Quiet == False:
                         print('Problem in the number of dimensions')
             else:
-                var[:] = data
+                try:
+                    var[:] = data
+                except IndexError:
+                    raise(IndexError(('Supplied data shape does not match the specified'
+                    ' dimensions for variable \'{}\'.'.format(k))))
+                finally:
+                    raise(Exception('Something has gone wrong writing the data to the netCDF.'))
 
             # Create attributes for variables
             if self.input_dict['variables'][k].has_key('attributes'):
