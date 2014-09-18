@@ -92,7 +92,7 @@ def readFVCOM(file, varList=None, clipDims=False, noisy=False, atts=False):
     # Compare the dimensions in the NetCDF file with those provided. If we've
     # been given a dict of dimensions which differs from those in the NetCDF
     # file, then use those.
-    if clipDims is not False:
+    if clipDims:
         commonKeys = set(dims).intersection(list(clipDims.keys()))
         for k in commonKeys:
             dims[k] = clipDims[k]
