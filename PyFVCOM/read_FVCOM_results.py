@@ -123,6 +123,10 @@ def readFVCOM(file, varList=None, clipDims=False, noisy=False, atts=False):
 
             toExtract = [dims[d] for d in vDims]
 
+            # Thought I'd finally figured out how to replace the eval approach,
+            # but I still can't get past the indexing needed to be able to
+            # subset the data.
+            #FVCOM[key] = rootgrp.variables.get(key)[0:-1]
             # I know, I know, eval() is evil.
             getData = 'rootgrp.variables[\'{}\']{}'.format(key,str(toExtract).replace('\'', ''))
             FVCOM[key] = eval(getData)
