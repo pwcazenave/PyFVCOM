@@ -55,7 +55,8 @@ def readFVCOM(file, varList=None, clipDims=False, noisy=False, atts=False):
         If atts=True, returns the attributes as a dict for each
         variable in varList. The key 'dims' contains the array dimensions (each
         variable contains the names of its dimensions) as well as the shape of
-        the dimensions defined in the NetCDF file.
+        the dimensions defined in the NetCDF file. The key 'global' contains
+        the global attributes.
 
     See Also
     --------
@@ -108,6 +109,9 @@ def readFVCOM(file, varList=None, clipDims=False, noisy=False, atts=False):
     if atts:
         attributes = {}
         attributes['dims'] = dims
+        attributes['global'] = {}
+        for g in rootgrp.ncattrs():
+            attributes['global'][g] = getattr(rootgrp, g)
 
     for key, var in list(rootgrp.variables.items()):
         if noisy:
