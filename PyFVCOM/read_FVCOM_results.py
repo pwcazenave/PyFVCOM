@@ -355,7 +355,7 @@ class ncwrite():
                         var[:] = data
                     except IndexError:
                         raise(IndexError(('Supplied data shape {} does not match the specified'
-                        ' dimensions {}, for variable \'{}\'.'.format(var.shape, data.shape, k))))
+                        ' dimensions {}, for variable \'{}\'.'.format(data.shape, var.shape, k))))
                 else:
                     if self.Quiet == False:
                         print('Problem in the number of dimensions')
@@ -364,7 +364,7 @@ class ncwrite():
                     var[:] = data
                 except IndexError:
                     raise(IndexError(('Supplied data shape {} does not match the specified'
-                    ' dimensions {}, for variable \'{}\'.'.format(var.shape, data.shape, k))))
+                    ' dimensions {}, for variable \'{}\'.'.format(data.shape, var.shape, k))))
 
             # Create attributes for variables
             if self.input_dict['variables'][k].has_key('attributes'):
