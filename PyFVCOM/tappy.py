@@ -40,24 +40,26 @@ EXAMPLES:
 
 """
 #===imports======================
+from __future__ import print_function
+
 import sys
 import os
 import os.path
 import numpy as np
-from scipy.optimize import leastsq
 import datetime
+from scipy.optimize import leastsq
 
 import tappy_lib
 import sparser
 import astronomia.calendar as cal
 import astronomia.util as uti
 import pad.pad as pad
-from parameter_database import _master_speed_dict, letter_to_factor_map
 import baker
+from parameter_database import _master_speed_dict, letter_to_factor_map
 
 #===globals======================
 modname = "tappy"
-__version__ = "0.9.0"
+__version__ = "0.10.0"
 
 #--option args--
 debug_p = 0
@@ -80,7 +82,7 @@ def debug(ftn, txt):
 
 def fatal(ftn, txt):
     msg = "%s.%s:FATAL:%s\n" % (modname, ftn, txt)
-    raise SystemExit, msg
+    raise SystemExit(msg)
 
 def usage():
     print(__doc__)
@@ -196,7 +198,7 @@ class Util():
 
     def write_file(self, x, y, fname='-'):
         if isinstance(y, dict):
-            for key in y.keys():
+            for key in list(y.keys()):
                 nfname = "%s_%s.dat" % (os.path.splitext(fname)[-2], key)
                 self.write_file(x, y[key], fname=nfname)
         else:
@@ -840,7 +842,7 @@ class Util():
         if num_hours >= 77554 * rayleigh_comp:
             speed_dict["M1"] = self.tidal_dict["M1"]
 
-        key_list = speed_dict.keys()
+        key_list = list(speed_dict.keys())
         key_list.sort()
 
         return (speed_dict, key_list)
@@ -881,16 +883,16 @@ class tappy(Util):
                                          def_filename = def_filename,
                                          mode='r')
         for line in fp:
-            if 'water_level' not in line.parsed_dict.keys():
+            if 'water_level' not in list(line.parsed_dict.keys()):
                 print('Warning: record %i did not parse according to the supplied definition file' % line.line_number)
                 continue
-            if 'datetime' in line.parsed_dict.keys():
+            if 'datetime' in list(line.parsed_dict.keys()):
                 self.dates.append(line.parsed_dict['datetime'])
             elif (
-                'year' in line.parsed_dict.keys() and
-                'month' in line.parsed_dict.keys() and
-                'day' in line.parsed_dict.keys() and
-                'hour' in line.parsed_dict.keys()):
+                'year' in list(line.parsed_dict.keys()) and
+                'month' in list(line.parsed_dict.keys()) and
+                'day' in list(line.parsed_dict.keys()) and
+                'hour' in list(line.parsed_dict.keys())):
                     line.parsed_dict.setdefault('minute', 0)
                     line.parsed_dict.setdefault('second', 0)
                     self.dates.append(datetime.datetime(line.parsed_dict['year'],
@@ -1475,10 +1477,10 @@ class tappy(Util):
 
     def sortbyvalue(self, dict):
         """ Return a list of (key, value) pairs, sorted by value. """
-        _swap2 = lambda (x, y): (y, x)
-        mdict = map(_swap2, dict.items())
+        _swap2 = lambda x_y: (x_y[1], x_y[0])
+        mdict = list(map(_swap2, list(dict.items())))
         mdict.sort()
-        mdict = map(_swap2, mdict)
+        mdict = list(map(_swap2, mdict))
         return mdict
 
 
