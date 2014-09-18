@@ -7,7 +7,6 @@ from __future__ import print_function
 
 import matplotlib.delaunay as triang
 import numpy as np
-import math
 import sys
 
 from mpl_toolkits.basemap import Basemap
