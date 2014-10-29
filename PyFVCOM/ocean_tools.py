@@ -1185,6 +1185,42 @@ def simpsonhunter(u, v, depth, levels, sampling=False):
 
     return SH
 
+def mixedlayerdepth(rho, depth, levels, thresh=0.03):
+    """
+    Calculate the mixed layer depth based on a threshold in the vertical
+    density distribution.
+
+    Parameters
+    ----------
+    rho : ndarray
+        Density in kg m^{3}.
+    depth : ndarray
+        Water depth (m, +ve down).
+    levels : ndarray
+        Vertical levels (fractions of 0-1) (FVCOM = siglev).
+    thresh : float, optional
+        Optionally specify a different threshold (use at your own risk!).
+        Defaults to 0.03kg m^{-3}.
+
+    Returns
+    -------
+    mld : ndarray
+        Depth at which the density exceeds the surface value plus the
+        threshold.
+
+    Notes
+    -----
+    The mixed layer depth is given as a layer depth and is not interpolated
+    between layer depths (for now). Thus, if you have coarse layers, you will
+    resolve the mixed layer depth poorly.
+
+    """
+
+    rhosurface = rho[:, 0, :]
+    mld = depth[np.argmin(np.abs(
+        rho - (rhosurface[:, np.newaxis, :] + thresh)
+        ), axis=1)]
+
 
 if __name__ == '__main__':
 
