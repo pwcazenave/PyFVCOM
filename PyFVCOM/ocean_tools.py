@@ -53,6 +53,8 @@ Provides functions:
     - pea: calculate the potential energy anomaly (stratification index).
     - simpsonhunter: calculate the Simpson-Hunter parameter to predict frontal
       locations.
+    - mixedlayerdepth: calculate the mixed layer depth using the ERSEM
+      definition.
 
 Pierre Cazenave (Plymouth Marine Laboratory) 2013/06/14
 
