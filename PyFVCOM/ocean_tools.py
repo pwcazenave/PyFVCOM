@@ -26,6 +26,10 @@ See also:
     conservative temperature and freezing temperature of seawater, Journal of
     Atmospheric and Oceanic Technology, submitted, 2005.
 
+The Simpson-Hunter parameter is described in:
+    Simpson, JH, and JR Hunter. "Fronts in the Irish Sea." Nature 250 (1974):
+    404-6.
+
 Provides functions:
     - pressure2depth : convert pressure (decibars) to depth in metres
     - depth2pressure : convert depth in metres to pressure in decibars
@@ -47,6 +51,8 @@ Provides functions:
     - dens_jackett : alternative formulation for calculating density from
       temperature and salinity (after Jackett et al. (2005)
     - pea: calculate the potential energy anomaly (stratification index).
+    - simpsonhunter: calculate the Simpson-Hunter parameter to predict frontal
+      locations.
 
 Pierre Cazenave (Plymouth Marine Laboratory) 2013/06/14
 
@@ -1126,6 +1132,58 @@ def pea(temp, salinity, depth, levels):
     PEA = (1.0 / depth) * PEA
 
     return PEA
+
+def simpsonhunter(u, v, depth, levels, sampling=False):
+    """
+    Calculate the Simpson-Hunter parameter (h/u^{3}).
+
+    Parameters
+    ----------
+    u, v : ndarray
+        Depth-resolved current vectors.
+    depth : ndarray
+        Water depth (m, +ve down). Must be on the same grid as u and v.
+    levels : ndarray
+        Vertical levels (fractions of 0-1) (FVCOM = siglev).
+    sampling : int, optional
+        If given, calculate the current speed maximum over `sampling' indices.
+
+    Returns
+    -------
+    SH : ndarray
+        Simpson-Hunter parameter (np.log10(m^{-2}s^{-3})).
+
+    References
+    ----------
+    - Simpson, JH, and JR Hunter. "Fronts in the Irish Sea." Nature 250 (1974):
+      404-6.
+    - Holt, Jason, and Lars Umlauf. "Modelling the Tidal Mixing Fronts and
+      Seasonal Stratification of the Northwest European Continental Shelf."
+      Continental Shelf Research 28, no. 7 (April 2008): 887-903.
+      doi:10.1016/j.csr.2008.01.012.
+
+
+    """
+
+    dz = np.abs(np.diff(levels, axis=0)) * depth
+    uv = zbar(np.sqrt(u**2 + v**2), dz)
+
+    if isinstance(sampling, int):
+        nd = uv.shape[0] / sampling
+        uvmax = np.empty((nd, uv.shape[-1]))
+        for i in range(nd):
+            uvmax[i, :] = uv[i * sampling:(i + 1) * sampling, :].max(axis=0)
+    else:
+        uvmax = uv
+
+    del(uv)
+
+    # Take the average of the maxima for the parameter calculation.
+    uvbar = uvmax.mean(axis=0)
+
+    SH = np.log10(depth / np.sqrt((uvbar**3)**2))
+
+    return SH
 
 
 if __name__ == '__main__':
