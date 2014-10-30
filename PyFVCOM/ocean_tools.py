@@ -1187,7 +1187,7 @@ def simpsonhunter(u, v, depth, levels, sampling=False):
 
     return SH
 
-def mixedlayerdepth(rho, depth, levels, thresh=0.03):
+def mixedlayerdepth(rho, depth, thresh=0.03):
     """
     Calculate the mixed layer depth based on a threshold in the vertical
     density distribution.
@@ -1197,9 +1197,7 @@ def mixedlayerdepth(rho, depth, levels, thresh=0.03):
     rho : ndarray
         Density in kg m^{3}.
     depth : ndarray
-        Water depth (m, +ve down).
-    levels : ndarray
-        Vertical levels (fractions of 0-1) (FVCOM = siglev).
+        Water depth (m, -ve down).
     thresh : float, optional
         Optionally specify a different threshold (use at your own risk!).
         Defaults to 0.03kg m^{-3}.
@@ -1208,20 +1206,30 @@ def mixedlayerdepth(rho, depth, levels, thresh=0.03):
     -------
     mld : ndarray
         Depth at which the density exceeds the surface value plus the
-        threshold.
+        threshold (m, -ve down).
 
     Notes
     -----
-    The mixed layer depth is given as a layer depth and is not interpolated
-    between layer depths (for now). Thus, if you have coarse layers, you will
-    resolve the mixed layer depth poorly.
+    The mixed layer depth is given as the layer depth where the density is
+    greater than the threshold. As such, there is no interpolation between
+    layer depths (for now).
+
+    If you have coarse layers, you will resolve the mixed layer depth poorly.
+    You will also get odd patterns where the water depth happens to make the
+    vertical layer which is closest to the actual density threshold jump by
+    one, either up or down.
+
+    Really, I need to add a linear interpolation between the two closest
+    layers.
 
     """
 
     rhosurface = rho[:, 0, :]
-    mld = depth[np.argmin(np.abs(
-        rho - (rhosurface[:, np.newaxis, :] + thresh)
-        ), axis=1)]
+    mld = np.max(np.ma.masked_where(
+            rho < (rhosurface[:, np.newaxis, :] + thresh),
+            depth), axis=1)
+
+    return mld
 
 
 if __name__ == '__main__':
