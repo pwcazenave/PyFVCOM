@@ -110,6 +110,10 @@ def _tests():
     test_sd = np.array(20) # for dens_jackett
     test_pd = np.array(1000) # for dens_jackett
     test_cond = np.array([100, 65000]) # for cond2salt
+    test_h = np.array((10, 20, 30, 100)) # depths for stokes
+    test_U = 0.25 # U for stokes
+    test_omega = 1 / 44714.1647021416 # omega for stokes
+    test_z0 = np.array((0.0025)) # z0 for stokes
 
     # Use some of the Fofonoff and Millard (1983) checks.
     res_svan = sw_svan(test_t, test_s, test_p)
@@ -150,6 +154,9 @@ def _tests():
 
     res_salt = cond2salt(test_cond)
     print('Conductivity to salinity\nUSGS:\t\t0.046,\t\t\t44.016\ncond2salt:\t{},\t{}'.format(res_salt[0], res_salt[1]))
+
+    res_stokes, res_u_star, res_delta = stokes(test_h, test_U, test_omega, test_z0, U_star=True, delta=True)
+    print('Stokes number\nSouza (2013):\tS:\tTEST\tstokes:\tS:{}\n\t\t\tSouza (2013):\tU*:\tTEST\t{}\n\t\t\tSouza (2013):\tdelta:\tTEST\t{}\n'.format(res_stokes, res_u_star, res_delta))
 
 def pressure2depth(p, lat):
     """
@@ -1071,7 +1078,8 @@ def zbar(data, levels):
         Values to be depth-averaged. Shape is [t, z, x] where t is time, z is
         vertical and x is space (unstructured).
     levels : ndarray
-        Array of vertical layer thicknesses. Shape is [x, z].
+        Array of vertical layer thicknesses (fraction in the range 0-1). Shape
+        is [x, z].
 
     Returns
     -------
@@ -1230,6 +1238,72 @@ def mixedlayerdepth(rho, depth, thresh=0.03):
             depth), axis=1)
 
     return mld
+
+def stokes(h, U, omega, z0, delta=False, U_star=False):
+    """ Calculate the Stokes number for a given data set.
+
+    Parameters
+    ----------
+    h : ndarray
+        Water depth (positive down) in metres.
+    U : float
+        Velocity amplitude of constituent of interest (e.g. M2) in metres.
+    omega : float
+        Oscillatory frequency of the constituent of interest (e.g. M2) in
+        s^{-1}.
+    z0 : float, ndarray
+        Roughness length in metres. Either a single value or an array the same
+        shape as the depth data.
+    delta : bool, optional
+        Return the oscillatory boundary layer thickness (delta).
+    U_star : bool, optional
+        Return the frictional velocity (U_star).
+
+    Returns
+    -------
+    S : ndarray
+        Stokes number.
+    delta : ndarray, optional
+        Oscillatory boundary layer thickness (Lamb, 1932).
+    U_star : ndarray, optional
+        Frictional velocity (U_star = Cd^{1/2}U)
+
+    Examples
+    --------
+    >>> h = 30
+    >>> z0 = 0.0025
+    >>> U = 0.25
+    >>> omega = 1 / 44714.1647021416
+    >>> S = stokes(h, U, omega, z0)
+    >>> S
+    17.759230258384392
+    >>> S, U_star = stokes(h, U, omega, z0, U_star=True)
+    >>> U_star
+    0.011915170758540733
+
+    References
+    ----------
+    Souza, A. J. "On the Use of the Stokes Number to Explain Frictional Tidal
+    Dynamics and Water Column Structure in Shelf Seas." Ocean Science 9, no.
+    2 (April 2, 2013): 391-98. doi:10.5194/os-9-391-2013.
+
+    """
+
+    c1 = 1 # what's this value supposed to be?
+
+    Cd = (0.4 / (1 + np.log(z0 / h)))**2
+    u_s = np.sqrt(Cd) * U
+    d = (c1 * u_s) / omega
+    S = d / h
+
+    if delta and U_star:
+        return S, d, u_s
+    elif delta and not U_star:
+        return S, d
+    elif not delta and U_star:
+        return S, u_s
+    else:
+        return S
 
 
 if __name__ == '__main__':
