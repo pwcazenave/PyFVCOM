@@ -378,7 +378,7 @@ class ncwrite():
         rootgrp.close()
 
 
-def readProbes(files, noisy=False):
+def readProbes(files, noisy=False, locations=False):
     """
     Read in FVCOM probes output files. Reads both 1 and 2D outputs. Currently
     only sensible to import a single station with this function since all data
@@ -386,10 +386,12 @@ def readProbes(files, noisy=False):
 
     Parameters
     ----------
-    files : list
+    files : list, tuple
         List of file paths to load.
     noisy : bool, optional
         Set to True to enable verbose output.
+    locations : bool, optional
+        Set to True to export position and depth data for the sites.
 
     Returns
     -------
@@ -397,6 +399,9 @@ def readProbes(files, noisy=False):
         Modified Julian Day times for the extracted time series.
     values : ndarray
         Array of the extracted time series values.
+    positions : ndarray, optional
+        If locations has been set to True, return an array of the positions
+        (lon, lat, depth) for each site.
 
     See Also
     --------
@@ -413,20 +418,29 @@ def readProbes(files, noisy=False):
     if len(files) == 0:
         raise Exception('No files provided.')
 
-    if not isinstance(files, list):
+    if not (isinstance(files, list) or isinstance(files, tuple)):
         files = [files]
 
     for i, file in enumerate(files):
         if noisy: print('Loading file {} of {}...'.format(i + 1, len(files)), end=' ')
+
+        # Get the header so we can extract the position data.
+        with open(file, 'r') as f:
+            # Latitude and longitude is stored at line 15 (14 in sPpython
+            # counting). Eastings and northings are at 13 (12 in Python
+            # indexing).
+            lonlatz = [float(pos.strip()) for pos in filter(None, f.readlines()[14].split(' '))]
 
         data = np.genfromtxt(file, skip_header=18)
 
         if i == 0:
             times = data[:, 0]
             values = data[:, 1:]
+            positions = lonlatz
         else:
             times = np.hstack((times, data[:, 0]))
             values = np.vstack((values, data[:, 1:]))
+            positions = np.vstack((positions, lonlatz))
 
         if noisy: print('done.')
 
@@ -436,7 +450,10 @@ def readProbes(files, noisy=False):
     times = times[sidx]
     values = values[sidx, ...] # support both 1 and 2D data
 
-    return times, values
+    if locations:
+        return times, values, positions
+    else:
+        return times, values
 
 
 def elems2nodes(elems, tri, nvert):
