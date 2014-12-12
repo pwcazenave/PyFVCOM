@@ -328,10 +328,8 @@ def getObservedMetadata(db, originator=False):
 
     Returns
     -------
-    lon : list
-        Longitude of the requested station(s).
-    lat : list
-        Latitude of the requested station(s).
+    lat, lon : list
+        Latitude and longitude of the requested station(s).
     site : list
         Short names (e.g. 'AVO' for 'Avonmouth') of the tide stations.
     longName : list
