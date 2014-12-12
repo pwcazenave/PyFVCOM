@@ -1223,9 +1223,15 @@ def lineSample(x, y, positions, num=0, noisy=False, debug=False):
                 sdistidx = np.argsort(sdist)
 
                 while True:
-                    tidx = sdistidx[c]
-                    tdist = np.sqrt((end[0] - xx[tidx])**2 + (end[1] - yy[tidx])**2).min()
-                    c += 1
+                    try:
+                        tidx = sdistidx[c]
+                        tdist = np.sqrt((end[0] - xx[tidx])**2 + (end[1] - yy[tidx])**2).min()
+                        c += 1
+                    except IndexError:
+                        # Eh, we've run out of indicies for some reason. Let's
+                        # just go with whatever we had as the last set of
+                        # values.
+                        break
 
                     if tdist < oldtdist:
                         break
