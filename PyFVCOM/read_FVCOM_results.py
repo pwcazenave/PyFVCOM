@@ -123,6 +123,12 @@ def readFVCOM(file, varList=None, clipDims=False, noisy=False, atts=False):
 
             toExtract = [dims[d] for d in vDims]
 
+            # If we have no dimensions, we must have only a single value, in
+            # which case set the dimensions to empty and append the function to
+            # extract the value.
+            if not toExtract:
+                toExtract = '.getValue()'
+
             # Thought I'd finally figured out how to replace the eval approach,
             # but I still can't get past the indexing needed to be able to
             # subset the data.
