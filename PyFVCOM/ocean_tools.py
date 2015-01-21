@@ -1079,7 +1079,7 @@ def zbar(data, levels):
         vertical and x is space (unstructured).
     levels : ndarray
         Array of vertical layer thicknesses (fraction in the range 0-1). Shape
-        is [x, z].
+        is [z, x] or [t, z, x].
 
     Returns
     -------
@@ -1092,13 +1092,33 @@ def zbar(data, levels):
     This is a naive implementation using a for-loop. A faster version is almost
     certainly possible.
 
+    Also, the code could probably be cleaned up (possibly at the expense of
+    understanding) by transposing all the arrays to have the vertical (z)
+    dimension first and the others after. This would make summation along an
+    axis always be axis=0, rather than the current situation where I have to
+    check what the number of dimensions is and act accordingly.
+
     """
 
     nt, nz, nx = data.shape
+    nd = np.ndim(levels)
     databar = np.zeros((nt, nx))
     for i in range(nz):
-        databar = databar + (data[:, i, :] * levels[i, :])
-    databar = (1.0 / np.sum(levels, axis=0)) * databar
+        if nd == 2:
+            # Depth, space only.
+            databar = databar + (data[:, i, :] * levels[i, :])
+        elif nd == 3:
+            # Time, depth, space.
+            databar = databar + (data[:, i, :] * levels[:, i, :])
+        else:
+            raise IndexError('Unable to use the number of dimensions provided in the levels data.')
+
+    if nd == 2:
+        databar = (1.0 / np.sum(levels, axis=0)) * databar
+    elif nd == 3:
+        databar = (1.0 / np.sum(levels, axis=1)) * databar
+    else:
+        raise IndexError('Unable to use the number of dimensions provided in the levels data.')
 
     return databar
 
@@ -1113,7 +1133,8 @@ def pea(temp, salinity, depth, levels):
     salinity : ndarray
         Salinity data (depth-resolved).
     depth : ndarray
-        Water depth (positive down).
+        Water depth (positive down). Can be 1D (node) or 3D (time, siglay,
+        node).
     levels : ndarray
         Vertical levels (fractions of 0-1) (FVCOM = siglev).
 
@@ -1122,13 +1143,29 @@ def pea(temp, salinity, depth, levels):
     PEA : ndarray
         Potential energy anomaly (J/m^{3}).
 
+    Notes
+    -----
+
+    As with the zbar code, this could do with cleaning up by transposing the
+    arrays so the depth dimension is always first. This would make calculations
+    which require an axis to always use the 0th one instead of either the 0th
+    or 1st.
+
     """
+
+    nd = np.ndim(depth)
 
     g = 9.81
     rho = dens_jackett(temp, salinity)
     dz = np.abs(np.diff(levels, axis=0)) * depth
-    H = np.cumsum(dz, axis=0)
-    nz = dz.shape[0]
+    if nd == 1:
+        # dims is time only.
+        H = np.cumsum(dz, axis=0)
+        nz = dz.shape[0]
+    else:
+        # dims are [time, siglay, node].
+        H = np.cumsum(dz, axis=1)
+        nz = dz.shape[1]
 
     # Depth-averaged density
     rhobar = zbar(rho, dz)
@@ -1138,8 +1175,14 @@ def pea(temp, salinity, depth, levels):
 
     # Hofmeister thesis equation.
     for i in range(nz):
-        PEA = PEA + ((rho[:, i, :] - rhobar) * g * H[i, :] * dz[i, :])
-    PEA = (1.0 / depth) * PEA
+        if nd == 1:
+            PEA = PEA + ((rho[:, i, :] - rhobar) * g * H[i, :] * dz[i, :])
+        else:
+            PEA = PEA + ((rho[:, i, :] - rhobar) * g * H[:, i, :] * dz[:, i, :])
+    if nd == 1:
+        PEA = (1.0 / depth) * PEA
+    else:
+        PEA = (1.0 / depth.max(axis=1)) * PEA
 
     return PEA
 
