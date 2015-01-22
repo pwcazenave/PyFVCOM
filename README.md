@@ -47,6 +47,7 @@ Provides
     - readESRIShapeFile
     - readArcMIKE
     - readCST
+    - writeCST
 
 * ctd_tools - interrogate an SQLite data base of CTD casts.
     - getCTDMetadata
@@ -69,6 +70,7 @@ Provides
     - getRiverConfig
     - getRivers
     - mesh2grid
+    - lineSample
     - OSGB36toWGS84
     - connectivity
 
@@ -96,6 +98,11 @@ Provides
     - dens_jackett
     - cond2salt
     - vorticity (currently empty)
+    - zbar
+    - epa
+    - simpsonhunter
+    - mixedlayerdepth
+    - stokes
 
 * process_FVCOM_results - perform some analyses on FVCOM data read in using read_FVCOM_results.
     - calculateTotalCO2
@@ -173,25 +180,26 @@ if __name__ == '__main__':
     dims = {'time':':20'}
 
     # List of the variables to extract.
-    vars = ['lon', 'lat', 'nv', 'zeta', 'Times']
+    vars = ('lon', 'lat', 'nv', 'zeta', 'Times')
 
     FVCOM = readFVCOM(fvcom, vars, clipDims=dims, noisy=True)
 
-    # Create the triangulation table array (with Python indexing [zero-based])
+    # Create the triangulation table array (with Python indexing
+    # [zero-based])
     triangles = FVCOM['nv'].transpose() - 1
 
     # Find the domain extents.
-    extents = np.array([FVCOM['lon'].min(),
+    extents = np.array((FVCOM['lon'].min(),
                        FVCOM['lon'].max(),
                        FVCOM['lat'].min(),
-                       FVCOM['lat'].max()]
+                       FVCOM['lat'].max()))
 
     # Create a Basemap instance for plotting coastlines and so on.
     m = Basemap(llcrnrlon=extents[:2].min(),
             llcrnrlat=extents[-2:].min(),
             urcrnrlon=extents[:2].max(),
             urcrnrlat=extents[-2:].max(),
-            rsphere=(6378137.00,6356752.3142),
+            rsphere=(6378137.00, 6356752.3142),
             resolution='h',
             projection='merc',
             lat_0=extents[-2:].mean(),
@@ -209,8 +217,10 @@ if __name__ == '__main__':
     m.drawmapboundary()
     m.drawcoastlines(zorder=100)
     m.fillcontinents(color='0.6', zorder=100)
-    m.drawparallels(parallels, labels=[1,0,0,0], fontsize=10, linewidth=0)
-    m.drawmeridians(meridians, labels=[0,0,0,1], fontsize=10, linewidth=0)
+    m.drawparallels(parallels, labels=[1, 0, 0, 0],
+                    fontsize=10, linewidth=0)
+    m.drawmeridians(meridians, labels=[0, 0, 0, 1],
+                    fontsize=10, linewidth=0)
 
     # Plot the last surface elevation time step.
     CS1 = ax.tripcolor(x, y, triangles, FVCOM['temp'][-1, :])
@@ -244,26 +254,28 @@ if __name__ == '__main__':
 
     # Positions we're interested in plotting. The findNearestPoint function will
     # find the closest node in the unstructured grid.
-    xy = np.array([-4.5, 55], [-6.9, 53]) # lon/lat pairs.
+    xy = np.array((-4.5, 55), (-6.9, 53)) # lon/lat pairs.
 
     # Extract only the surface layer.
     dims = {'siglay':'0'}
 
     # List of the variables to extract.
-    vars = ['lon', 'lat', 'time', 'temp']
+    vars = ('lon', 'lat', 'time', 'temp')
 
     FVCOM = readFVCOM(fvcom, vars, clipDims=dims, noisy=True)
 
     # Find the model node indices.
-    nearestX, nearestY, dist, idx = findNearestPoint(FVCOM['lon'], FVCOM['lat'],
-                                                     xy[:, 0], xy[:, 1],
-                                                     noisy=True)
+    nearestX, nearestY, dist, idx = findNearestPoint(
+            FVCOM['lon'], FVCOM['lat'], xy[:, 0], xy[:, 1], noisy=True
+            )
 
     fig0 = plt.figure()
     for c, ind in enumerate(idx):
         ax = fig0.add_subplot(len(idx), 1, c + 1)
         LN0 = fig0.plot(FVCOM['time'], FVCOM['zeta'][idx, :], 'g')
-        ax.set_title('Surface elevation at {}, {}'.format(xy[c, 0], xy[c, 1]))
+        ax.set_title('Surface elevation at {}, {}'.format(
+            xy[c, 0], xy[c, 1])
+            )
         ax.set_xlabel('Time (Modified Julian Days)')
         ax.set_ylabel('Surface elevation (m)')
 
@@ -293,7 +305,7 @@ if __name__ == '__main__':
     dims = {'time':':360'} # first 15 days at hourly sampling
 
     # Define a plot subset.
-    subset = np.array([[-5, -6], [49, 50]]) # [[xmin, xmax], [ymin, ymax]]
+    subset = np.array(((-5, -6), (49, 50))) # ((xmin, xmax), (ymin, ymax))
 
     # Scaling factor for the ellipses. You may need to experiment with this
     # value.
@@ -319,7 +331,14 @@ if __name__ == '__main__':
     hours = [''.join(i) for i in FVCOM['Times'][:, 11:13]]
     minutes = [''.join(i) for i in FVCOM['Times'][:, 14:16]]
     seconds = [''.join(i) for i in FVCOM['Times'][:, 17:19]]
-    Times = np.column_stack((years, months, days, hours, minutes, seconds)).astype(int)
+    Times = np.column_stack((
+        years,
+        months,
+        days,
+        hours,
+        minutes,
+        seconds
+        )).astype(int)
 
     # Combine the u and v components as a complex array (so speed is simply
     # np.abs(uv)).
@@ -363,8 +382,10 @@ if __name__ == '__main__':
             lon_0=subset[0].mean(),
             lat_ts=subset[0].mean())
 
-    parallels = np.arange(np.floor(subset[1].min()), np.ceil(subset[1].max()), 0.1)
-    meridians = np.arange(np.floor(subset[0].min()), np.ceil(subset[0].max()), 0.2)
+    parallels = np.arange(np.floor(subset[1].min()),
+            np.ceil(subset[1].max()), 0.1)
+    meridians = np.arange(np.floor(subset[0].min()),
+            np.ceil(subset[0].max()), 0.2)
 
     x, y = m(FVCOM['lonc'], FVCOM['latc'])
 
@@ -374,8 +395,10 @@ if __name__ == '__main__':
     m.drawmapboundary()
     m.drawcoastlines(zorder=100)
     m.fillcontinents(color='0.6', zorder=100)
-    m.drawparallels(parallels, labels=[1,0,0,0], fontsize=10, linewidth=0)
-    m.drawmeridians(meridians, labels=[0,0,0,1], fontsize=10, linewidth=0)
+    m.drawparallels(parallels, labels=[1,0,0,0],
+            fontsize=10, linewidth=0)
+    m.drawmeridians(meridians, labels=[0,0,0,1],
+            fontsize=10, linewidth=0)
 
     ax1.set_title('M2 tidal ellipses')
 
@@ -395,7 +418,9 @@ if __name__ == '__main__':
         SEMA, ECC, INC, PHA, w = ap2ep(uZ, uG, vZ, vG)
         w, wmin, wmax = prep_plot(SEMA, ECC, INC, PHA)
 
-        ax1.plot((scaling * np.real(w)) + xy[0], (scaling * np.imag(w)) + xy[1], 'k', linewidth=2)
+        ax1.plot((scaling * np.real(w)) + xy[0],
+                (scaling * np.imag(w)) + xy[1],
+                'k', linewidth=2)
 
         fig1.show()
 

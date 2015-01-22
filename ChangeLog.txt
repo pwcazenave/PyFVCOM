@@ -1,3 +1,37 @@
+20150122
+--------
+
+Add a few new functions, expand some others (maintaining backward
+compatibility) and fix some bugs.
+
+cst_tools:
+    * writeCST: New function to write out a CST file for a given set of arcs.
+grid_tools:
+    * Remove unused import math.
+    * lineSample: Fix (in a manner of speaking) a bug when creating a transect
+    through an unstructured grid.
+    * connectivity: Fix docstring to be correct for one of the outputs.
+ocean_tools:
+    * zbar: Add support for time varying arrays.
+    * pea: Add support for time varying arrays.
+    * simpsonhunter: New function to calculate the Simpson-Hunter parameter
+    for some velocity and depth data.
+    * mixedlayerdepth: New function to calculate the mixed layer depth (as
+    defined in ERSEM).
+    * stokes: Initial attempt at calculating the Stokes number as a predictor
+    of front locations (in the same vein as simpsonhunter). As yet unfinished
+    but may be useful to someone as is.
+read_FVCOM_results:
+    * readFVCOM: Add support for exporing the global attributes from a netCDF
+    file.
+    * ncwrite: Add function to write netCDF files.
+    * readProbes: Add support for returning the location of each probe.
+tappy:
+    * Make the code python3 safe.
+tide_tools:
+    * getObservedMetedata: Tidy the docstring.
+
+
 20140804
 --------
 
