@@ -1532,7 +1532,7 @@ def connectivity(p, t):
         Kx2 array of triangle neighbours for unique mesh edges - [[t11, t12],
         [t21, t22], etc]. Each row has two entries corresponding to the
         triangle numbers associated with each edge in e. Boundary edges have
-        e2t[i, 1] = 0.
+        e2t[i, 1] = -1.
     bnd : ndarray, bool
         Nx1 logical array identifying boundary nodes. p[i, :] is a boundary
         node if bnd[i] = True.
