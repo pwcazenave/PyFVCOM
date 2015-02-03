@@ -101,3 +101,35 @@ def coefficientOfDetermination(obs, model):
     R2 = SSreg / SStot
 
     return R2
+
+
+
+def fixRange(a, nmin, nmax):
+    """
+    Given an array of values `a', scale the values within in to the range
+    specified by `nmin' and `nmax'.
+
+    Parameters
+    ----------
+    a : ndarray
+        Array of values to scale.
+    nmin, nmax : float
+        New minimum and maximum values for the new range.
+
+    Returns
+    -------
+    b : ndarray
+        Scaled array.
+
+    """
+
+    A = a.min()
+    B = a.max()
+    C = nmin
+    D = nmax
+
+    b = (((D - C) * (a - A)) / (B - A)) + C
+
+    return b
+
+
