@@ -1635,3 +1635,39 @@ def clipDomain(x, y, extents, noisy=False):
     return mask
 
 
+def surrounders(n, triangles):
+    """
+    Return the IDs of the nodes surrounding node number `n'.
+
+    Parameters
+    ----------
+    n : int
+        Node ID around which to find the connected nodes.
+    triangles : ndarray
+        Triangulation matrix to find the connected nodes.
+
+    Returns
+    -------
+    surroundingidx : ndarray
+        Indices of the surrounding nodes.
+
+    Notes
+    -----
+
+    Check it works with:
+    >>> for n in [300, 500, 1000, 4000, 6000]:
+    ...     aa = surrounders(n, triangles)
+    ...     figure(); plt.triplot(x, y, triangles, zorder=20, alpha=0.5)
+    ...     plot(x[n], y[n], 'ro')
+    ...     plot(x[aa], y[aa], 'ko')
+    ...     xlim(x[aa].min() - 0.01, x[aa].max() + 0.01)
+    ...     ylim(y[aa].min() - 0.01, y[aa].max() + 0.01)
+
+    """
+
+    eidx = np.max((np.abs(triangles - n) == 0), axis=1)
+    surroundingidx = np.unique(triangles[eidx][triangles[eidx] != n])
+
+    return surroundingidx
+
+
