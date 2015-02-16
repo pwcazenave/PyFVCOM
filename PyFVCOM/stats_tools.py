@@ -103,7 +103,6 @@ def coefficientOfDetermination(obs, model):
     return R2
 
 
-
 def fixRange(a, nmin, nmax):
     """
     Given an array of values `a', scale the values within in to the range
@@ -132,4 +131,29 @@ def fixRange(a, nmin, nmax):
 
     return b
 
+
+def rmse(a, b, axis=0):
+    """
+    Calculate the Root Mean Square Error (RMSE) between two identically sized
+    arrays.
+
+    RMSE = np.sqrt(np.mean((A - B)**2, axis=2))
+
+    Parameters
+    ----------
+    a, b : ndarray
+        Array of values to calculate RMSE.
+    axis : int, optional
+        Axis along which to calculate the mean. Defaults to the zeroth axis.
+
+    Returns
+    -------
+    rmse: ndarray
+        RMSE of `a' and `b'.
+
+    """
+
+    rmse = np.sqrt(np.mean((a - b)**2, axis=axis))
+
+    return rmse
 
