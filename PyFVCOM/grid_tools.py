@@ -486,24 +486,7 @@ def writeUnstructuredGridSMS(triangles, nodes, x, y, z, types, mesh):
     # BEG2DMBC = Beginning of the model assignments
     # MAT = Material assignment
     # END2DMBC = End of the model assignments
-    footer = 'BEGPARAMDEF\n\
-GM  "Mesh"\n\
-SI  0\n\
-DY  0\n\
-TU  ""\n\
-TD  0  0\n\
-NUME  3\n\
-BCPGC  0\n\
-BEDISP  0 0 0 0 1 0 1 0 0 0 0 1\n\
-BEFONT  0 2\n\
-BEDISP  1 0 0 0 1 0 1 0 0 0 0 1\n\
-BEFONT  1 2\n\
-BEDISP  2 0 0 0 1 0 1 0 0 0 0 1\n\
-BEFONT  2 2\n\
-ENDPARAMDEF\n\
-BEG2DMBC\n\
-MAT  1 "material 01"\n\
-END2DMBC\n'
+    footer = 'BEGPARAMDEF\nGM  "Mesh"\nSI  0\nDY  0\nTU  ""\nTD  0  0\nNUME  3\nBCPGC  0\nBEDISP  0 0 0 0 1 0 1 0 0 0 0 1\nBEFONT  0 2\nBEDISP  1 0 0 0 1 0 1 0 0 0 0 1\nBEFONT  1 2\nBEDISP  2 0 0 0 1 0 1 0 0 0 0 1\nBEFONT  2 2\nENDPARAMDEF\nBEG2DMBC\nMAT  1 "material 01"\nEND2DMBC\n'
 
     fileWrite.write(footer)
 
