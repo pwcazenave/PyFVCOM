@@ -1671,3 +1671,52 @@ def surrounders(n, triangles):
     return surroundingidx
 
 
+def heron(v0, v1, v2):
+    """ Calculate the area of a triangle using Heron's formula.
+
+    Parameters
+    ----------
+    v0, v1, v2 : ndarray
+        Coordinates of the three vertices of a triangle. Can be a 1D array of
+        positions.
+
+    Returns
+    -------
+    area : ndarray
+        Area of the triangle. Units of v0, v1 and v2.
+
+    Notes
+    -----
+    There are two approaches to calculating the area with Heron's formula, one
+    which is simple and one more complicated and more numerically stable. They
+    are:
+
+    A = sqrt(s * (s - a) * (s - b) * (s - c))
+
+    where a, b and c are the triangle side lengths and s is the semiperimeter:
+
+    s = 0.5 * (a + b + c) # semiperimeter
+
+    and the numerically stable version:
+
+    A = 0.25 * (sqrt((a + (b + c)) * (c - (a - b)) * (c + (a - b)) * (a + (b - c))))
+
+    Examples
+    --------
+    >>> v0 = numpy.array((4, 0))
+    >>> v1 = numpy.array((10, -3))
+    >>> v2 = numpy.array((7, 9))
+    >>> a = heron(v0, v1, v2)
+    >>> print(a)
+    31.5
+
+    """
+
+    a = np.sqrt((v0[0] - v1[0])**2 + (v0[1] - v1[1])**2)
+    b = np.sqrt((v1[0] - v2[0])**2 + (v1[1] - v2[1])**2)
+    c = np.sqrt((v2[0] - v0[0])**2 + (v2[1] - v0[1])**2)
+
+    A = 0.25 * (np.sqrt((a + (b + c)) * (c - (a - b)) * (c + (a - b)) * (a + (b - c))))
+
+    return A
+
