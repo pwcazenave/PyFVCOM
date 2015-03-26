@@ -891,7 +891,7 @@ def getRiverConfig(fileName, noisy=False):
                 rivers[param] = [value]
 
     if noisy:
-        print('Found {} rivers.'.format(n))
+        print('Found {} rivers.'.format(len(rivers['RIVER_NAME'])))
 
     f.close()
 
