@@ -3,6 +3,8 @@ Tools to work with current data. Reuses some functions from tide_tools.
 
 """
 
+import numpy as np
+
 from tide_tools import addHarmonicResults, getObservedData, getObservedMetadata, getHarmonics, TAPPy
 
 
@@ -29,7 +31,6 @@ def scalar2vector(direction, speed):
     v = np.cos(np.deg2rad(direction)) * speed
 
     return u, v
-
 
 def vector2scalar(u, v):
     """
