@@ -314,9 +314,9 @@ def getObservedData(db, table, startYear=False, endYear=False, noisy=False):
 
 def getObservedMetadata(db, originator=False):
     """
-    Extracts the meta data from the tidal elevations database. If the
-    supplied originator is False (default), then information from all
-    stations is returned.
+    Extracts the meta data from the supplied database. If the supplied
+    originator is False (default), then information from all stations is
+    returned.
 
     Parameters
     ----------
