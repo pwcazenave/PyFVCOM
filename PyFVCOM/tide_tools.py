@@ -172,7 +172,7 @@ def gregorianDate(julianDay, mjd=False):
 
     return greg
 
-def addHarmonicResults(db, stationName, constituentName, phase, amplitude, speed, inferred, noisy=False):
+def addHarmonicResults(db, stationName, constituentName, phase, amplitude, speed, inferred, ident=None, noisy=False):
     """
     Add data to an SQLite database.
 
@@ -194,6 +194,9 @@ def addHarmonicResults(db, stationName, constituentName, phase, amplitude, speed
         'true' or 'false' indicating whether the values are inferred
         (i.e. the time series is too short to perform a robust harmonic
         analysis).
+    ident : str
+        Optional prefix for the table names in the SQLite database. Usage of
+        this option means you can store both u and v data in the same database.
     noisy : bool
         Set to True to enable verbose output.
 
@@ -203,6 +206,11 @@ def addHarmonicResults(db, stationName, constituentName, phase, amplitude, speed
         import sqlite3
     except ImportError:
         raise ImportError('Failed to import the SQLite3 module')
+
+    if not ident:
+        ident = ''
+    else:
+        ident = '_' + ident
 
     conn = sqlite3.connect(db)
     c = conn.cursor()
@@ -225,7 +233,7 @@ def addHarmonicResults(db, stationName, constituentName, phase, amplitude, speed
         print('amplitude, phase and speed.', end=' ')
     for item in range(len(inferred)):
         c.execute('INSERT INTO TidalConstituents VALUES (?,?,?,?,?,?,?,?,?)',\
-            (stationName, amplitude[item], phase[item], speed[item], constituentName[item], 'metres', 'degrees', 'degrees per mean solar hour', inferred[item]))
+            (stationName + ident, amplitude[item], phase[item], speed[item], constituentName[item], 'metres', 'degrees', 'degrees per mean solar hour', inferred[item]))
 
     conn.commit()
 
