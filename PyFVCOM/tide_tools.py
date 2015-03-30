@@ -320,7 +320,7 @@ def getObservedData(db, table, startYear=False, endYear=False, noisy=False):
 
     return data
 
-def getObservedMetadata(db, originator=False):
+def getObservedMetadata(db, originator=False, obsdepth=None):
     """
     Extracts the meta data from the supplied database. If the supplied
     originator is False (default), then information from all stations is
@@ -333,6 +333,9 @@ def getObservedMetadata(db, originator=False):
     originator : str, optional
         Specify an originator (e.g. 'NTSLF', 'NSTD', 'REFMAR') to
         extract only that data. Defaults to all data.
+    obsdepth : bool, optional
+        Set to True to return the observation depth (useful for current meter
+        data). Defaults to False.
 
     Returns
     -------
@@ -342,6 +345,8 @@ def getObservedMetadata(db, originator=False):
         Short names (e.g. 'AVO' for 'Avonmouth') of the tide stations.
     longName : list
         Long names of the tide stations (e.g. 'Avonmouth').
+    depth : list
+        If obsdepth=True on input, then depths are returned, otherwise omitted.
 
     """
 
@@ -356,8 +361,10 @@ def getObservedMetadata(db, originator=False):
         c = con.cursor()
 
         if originator is not False:
-            out = c.execute('SELECT * from Stations where originatorName is ? or originatorLongName is ?',\
-                [originator, originator])
+            out = c.execute(
+                    'SELECT * from Stations where originatorName is ? or originatorLongName is ?',
+                    [originator, originator]
+                    )
         else:
             out = c.execute('SELECT * from Stations')
 
@@ -367,14 +374,21 @@ def getObservedMetadata(db, originator=False):
         lon = [float(m[1]) for m in metadata]
         site = [str(m[2]) for m in metadata]
         longName = [str(m[3]) for m in metadata]
+        if len(m) > 4:
+            depth = [str(m[4]) for m in metadata]
+        else:
+            depth = None
 
     except sqlite3.Error as e:
         if con:
             con.close()
             print('Error {}:'.format(e.args[0]))
-            lat, lon, site, longName = [False, False, False, False]
+            lat, lon, site, longName, depth = False, False, False, False, False
 
-    return lat, lon, site, longName
+    if not obsdepth:
+        return lat, lon, site, longName
+    else:
+        return lat, lon, site, longName, depth
 
 def cleanObservedData(data, removeResidual=False):
     """
