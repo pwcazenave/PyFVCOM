@@ -42,7 +42,7 @@ import matplotlib.pyplot as plt
 def ap2ep(Au, PHIu, Av, PHIv, plot_demo=False):
     """
     Convert tidal amplitude and phase lag (ap-) parameters into tidal ellipse
-    (ep-) parameters. Please refer to ep2app for its inverse function.
+    (ep-) parameters. Please refer to ep2ap for its inverse function.
 
     Usage:
 
@@ -56,8 +56,8 @@ def ap2ep(Au, PHIu, Av, PHIv, plot_demo=False):
 
         plot_demo is an optional argument, when it is supplied as an array
         of indices, say [i j k l], the program will plot an ellipse
-        corresponding to Au(i,j, k, l), PHIu(i,j,k,l), Av(i,j,k,l), and
-        PHIv(i,j,k,l). Defaults to False (i.e. no plot).
+        corresponding to Au[i, j, k, l], PHIu[i, j, k, l], Av[i, j, k, l], and
+        PHIv[i, j, k, l]. Defaults to False (i.e. no plot).
 
         Any number of dimensions are allowed as long as your computer
         resource can handle.
@@ -79,9 +79,9 @@ def ap2ep(Au, PHIu, Av, PHIv, plot_demo=False):
 
         w:    A matrix whose rows allow for plotting ellipses and whose columns
               are for different ellipses corresponding columnwise to SEMA. For
-              example, plot(real(w(1,:)), imag(w(1,:))) will let you see the
-              first ellipse. You may need to use squeeze function when w is a
-              more than two dimensional array. See example.py.
+              example, plot(np.real(w[0, :]), np.imag(w[0, :])) will let you
+              see the first ellipse. You may need to use squeeze function when
+              w is a more than two dimensional array. See example.py.
 
     Document:   tidal_ellipse.ps
 
@@ -162,9 +162,9 @@ def ap2ep(Au, PHIu, Av, PHIv, plot_demo=False):
     ECC = SEMI / SEMA              # Eccentricity
 
     PHA = (THETAm - THETAp) / 2    # Phase angle, the time (in angle) when
-                                    # the velocity reaches the maximum
+                                   # the velocity reaches the maximum
     INC = (THETAm + THETAp) / 2    # Inclination, the angle between the
-                                    # semi major axis and x-axis (or u-axis).
+                                   # semi major axis and x-axis (or u-axis).
 
     # convert to degrees for output
     PHA = PHA / np.pi*180
