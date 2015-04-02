@@ -29,8 +29,6 @@ Prerequisites
 
 * netCDF4, version 0.9.9.
 
-* TAPPy, a harmonic analysis tool for surface elevation time series, available from <http://sourceforge.net/projects/tappy/>. A slightly modified version of the TAPPy library is included in the toolbox (to allow importing as a module).
-
 Optionally:
 
 * iPython, version 0.10.2. This makes for a good development environment, particularly when invoked with the -pylab argument, which automatically imports matplotlib.pylab and numpy.
@@ -54,7 +52,7 @@ Provides
     - getCTDData
     - getFerryBoxData
 
-* grid_tools - tools to parse SMS, DHI MIKE and FVCOM unstructured grids. Also provides functionality to add coasts and clip triangulations to a given domain. Functions to parse SMS river files are also included, as is a function to resample an unstructured grid onto a regular grid (without interpolation, simply finding the nearest point within a threshold distance).
+* grid_tools - tools to parse SMS, DHI MIKE and FVCOM unstructured grids. Also provides functionality to add coasts and clip triangulations to a given domain. Functions to parse FVCOM river files are also included, as is a function to resample an unstructured grid onto a regular grid (without interpolation, simply finding the nearest point within a threshold distance).
     - parseUnstructuredGridSMS
     - parseUnstructuredGridFVCOM
     - parseUnstructuredGridMIKE
@@ -81,7 +79,7 @@ Provides
     - LLtoUTM
     - UTMtoLL
 
-* oceal_tools - a number of routines to convert between combinations of temperature, salinity, pressure, depth and density.
+* ocean_tools - a number of routines to convert between combinations of temperature, salinity, pressure, depth and density.
     - pressure2depth
     - depth2pressure
     - dT_adiab_sw
@@ -111,7 +109,7 @@ Provides
     - unstructuredGridVolume
     - residualFlow
 
-* read_FVCOM_results - parse the NetCDF model output and extract a subset of the variables.
+* read_FVCOM_results - parse the netCDF model output and extract a subset of the variables.
     - readFVCOM
     - ncread (wrapper around readFVCOM)
     - readProbes
