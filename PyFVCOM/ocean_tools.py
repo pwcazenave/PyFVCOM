@@ -201,7 +201,8 @@ def depth2pressure(z, lat):
     Parameters
     ----------
     z : ndarray
-        Depth (1D array) in metres.
+        Depth (1D array) in metres. Must be positive down (negative values are
+        set to zero before conversion to pressure).
     lat : ndarray
         Latitudes for samples in z.
 
@@ -212,11 +213,10 @@ def depth2pressure(z, lat):
 
     """
 
-    # Convert depths to positive values only - should this be more robust? When
-    # will we have both positive and negative depth values? Wetting and drying
-    # springs to mind, but not sure what I can do about that here. The data
-    # should probably be sanitised before coming to here.
-    pz = np.abs(z)
+    # Set negative depths to 0. We assume positive depth values (as in the
+    # docstring).
+    pz = z.copy()
+    pz[z < 0] = 0
 
     c2 = 2.21e-6
     Y = np.sin(np.deg2rad(np.abs(lat)))
