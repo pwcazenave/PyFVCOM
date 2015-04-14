@@ -46,7 +46,7 @@ def ap2ep(Au, PHIu, Av, PHIv, plot_demo=False):
 
     Usage:
 
-    SEMA,  ECC, INC, PHA, w = ap2ep(Au, PHIu, Av, PHIv, plot_demo=False)
+    SEMA, ECC, INC, PHA, w = ap2ep(Au, PHIu, Av, PHIv, plot_demo=False)
 
     Where:
 
