@@ -1362,7 +1362,7 @@ def dissipation(rho0, U, Cd=2.5e-3):
     ----------
     rho0 : ndarray
         Density (kg m^{-3}). See dens_jackett() for calculating density from
-        temperature and salinity.
+        temperature and salinity. Must be depth-averaged or a single value.
     U : ndarray
         Tidal harmonic major axis. Extend the array into the second dimension
         to include results from multiple constituents.
@@ -1384,7 +1384,7 @@ def dissipation(rho0, U, Cd=2.5e-3):
 
     """
 
-    if np.ndim(U) == 1:
+    if np.ndim(U) == 0:
         D = rho0 * Cd * np.abs(U)**3
     else:
         D = rho0[:, np.newaxis] * Cd[:, np.newaxis] * np.abs(U)**3
