@@ -1350,6 +1350,43 @@ def stokes(h, U, omega, z0, delta=False, U_star=False):
     else:
         return S
 
+def dissipation(rho0, U, Cd=2.5e-3):
+    """
+    Calculate tidal dissipation for a given tidal harmonic (or harmonics).
+
+    Parameters
+    ----------
+    rho0 : ndarray
+        Density (kg m^{-3}). See dens_jackett() for calculating density from
+        temperature and salinity.
+    U : ndarray
+        Tidal harmonic major axis. Extend the array into the second dimension
+        to include results from multiple constituents.
+    Cd : float, ndarray, optional
+        If provided, a value for the quadratic drag coefficient. Defaults to
+        2.5e-3m. Can be an array whose size matches the number of locations in
+        rho0.
+
+    Returns
+    -------
+    D : ndarray
+        Tidal dissipation.
+
+    References
+    ----------
+    Souza, A. J. "On the Use of the Stokes Number to Explain Frictional Tidal
+    Dynamics and Water Column Structure in Shelf Seas." Ocean Science 9, no.
+    2 (April 2, 2013): 391-98. doi:10.5194/os-9-391-2013.
+
+    """
+
+    if np.ndim(U) == 1:
+        D = rho0 * Cd * np.abs(U)**3
+    else:
+        D = rho0[:, np.newaxis] * Cd[:, np.newaxis] * np.abs(U)**3
+
+    return D
+
 
 if __name__ == '__main__':
 
