@@ -462,12 +462,11 @@ def readProbes(files, noisy=False, locations=False):
         return times, values
 
 
-def elems2nodes(elems, tri, nvert):
+def elems2nodes(elems, tri, nvert=None):
     """
     Calculate a nodal value based on the average value for the elements
     of which it a part. This necessarily involves an average, so the
-    conversion from nodes2elems and elems2nodes is not necessarily
-    reversible.
+    conversion from nodes2elems and elems2nodes is not reversible.
 
     Parameters
     ----------
@@ -477,7 +476,7 @@ def elems2nodes(elems, tri, nvert):
     tri : ndarray
         Array of shape (nelem, 3) comprising the list of connectivity
         for each element.
-    nvert : int
+    nvert : int, optional
         Number of nodes (vertices) in the unstructured grid.
 
     Returns
@@ -487,6 +486,8 @@ def elems2nodes(elems, tri, nvert):
 
     """
 
+    if not nvert:
+        nvert = np.max(tri) + 1
     count = np.zeros(nvert, dtype=int)
 
     # Deal with 1D and 2D element arrays separately
