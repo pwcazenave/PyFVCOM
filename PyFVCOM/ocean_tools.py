@@ -1290,10 +1290,10 @@ def stokes(h, U, omega, z0, delta=False, U_star=False):
     h : ndarray
         Water depth (positive down) in metres.
     U : float
-        Velocity amplitude of constituent of interest (e.g. M2) in metres.
+        Constituent of intetest's (e.g. M2) major axis in metres.
     omega : float
         Oscillatory frequency of the constituent of interest (e.g. M2) in
-        s^{-1}.
+        s^{-1}. For M2, omega is 1.4e-4.
     z0 : float, ndarray
         Roughness length in metres. Either a single value or an array the same
         shape as the depth data.
@@ -1319,7 +1319,7 @@ def stokes(h, U, omega, z0, delta=False, U_star=False):
     >>> omega = 1 / 44714.1647021416
     >>> S = stokes(h, U, omega, z0)
     >>> S
-    17.759230258384392
+    0.70923635467504365
     >>> S, U_star = stokes(h, U, omega, z0, U_star=True)
     >>> U_star
     0.011915170758540733
@@ -1329,13 +1329,15 @@ def stokes(h, U, omega, z0, delta=False, U_star=False):
     Souza, A. J. "On the Use of the Stokes Number to Explain Frictional Tidal
     Dynamics and Water Column Structure in Shelf Seas." Ocean Science 9, no.
     2 (April 2, 2013): 391-98. doi:10.5194/os-9-391-2013.
+    Lamb, H. "Hydrodynamics", 6th Edn., Cambridge University Press, New York,
+    USA, p. 622, 1932.
 
     """
 
-    c1 = 1 # what's this value supposed to be?
+    c1 = 0.25 # after Lamb (1932)
 
     Cd = (0.4 / (1 + np.log(z0 / h)))**2
-    u_s = np.sqrt(Cd) * U
+    u_s = np.sqrt(Cd * U**2)
     d = (c1 * u_s) / omega
     S = d / h
 
