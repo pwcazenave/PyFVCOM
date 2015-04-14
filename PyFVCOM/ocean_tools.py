@@ -111,9 +111,10 @@ def _tests():
     test_pd = np.array(1000) # for dens_jackett
     test_cond = np.array([100, 65000]) # for cond2salt
     test_h = np.array((10, 20, 30, 100)) # depths for stokes
-    test_U = 0.25 # U for stokes
+    test_U = 0.25 # U for stokes and dissipation
     test_omega = 1 / 44714.1647021416 # omega for stokes
     test_z0 = np.array((0.0025)) # z0 for stokes
+    test_rho0 = 1025
 
     # Use some of the Fofonoff and Millard (1983) checks.
     res_svan = sw_svan(test_t, test_s, test_p)
@@ -157,6 +158,9 @@ def _tests():
 
     res_stokes, res_u_star, res_delta = stokes(test_h, test_U, test_omega, test_z0, U_star=True, delta=True)
     print('Stokes number\nSouza (2013):\tS:\tTEST\tstokes:\tS:{}\n\t\t\tSouza (2013):\tU*:\tTEST\t{}\n\t\t\tSouza (2013):\tdelta:\tTEST\t{}\n'.format(res_stokes, res_u_star, res_delta))
+
+    res_dissipation = dissipation(test_rho0, test_U)
+    print('Tidal dissipation\nKnown good:\t0.0400390625\ndissipation():\t{}'.format(res_dissipation))
 
 def pressure2depth(p, lat):
     """
