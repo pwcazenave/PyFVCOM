@@ -228,7 +228,8 @@ def depth2pressure(z, lat):
     # Set negative depths to 0. We assume positive depth values (as in the
     # docstring).
     pz = z.copy()
-    pz[z < 0] = 0
+    if isinstance(pz, np.ndarray):
+        pz[z < 0] = 0
 
     c2 = 2.21e-6
     Y = np.sin(np.deg2rad(np.abs(lat)))
