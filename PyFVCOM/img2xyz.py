@@ -7,6 +7,7 @@ import colorsys
 
 import numpy as np
 
+
 def rgb2z(R, G, B, zlev, parm='H'):
     """
     For the levels specified in zlev, interpolate the colour values in [R, G,
@@ -49,10 +50,11 @@ def rgb2z(R, G, B, zlev, parm='H'):
     V = np.empty(R.shape)
     for xi, xx in enumerate(range(R.shape[0])):
         for yi, yy in enumerate(range(R.shape[1])):
-            H[xi, yi], S[xi, yi], V[xi, yi] = colorsys.rgb_to_hsv(R[xi, yi], G[xi, yi], B[xi, yi])
+            H[xi, yi], S[xi, yi], V[xi, yi] = colorsys.rgb_to_hsv(
+                R[xi, yi], G[xi, yi], B[xi, yi])
 
     # Clear out the weird -1 values
-    #H[H > 0.7] = H[H < 0.7].max()
+    # H[H > 0.7] = H[H < 0.7].max()
 
     # Convert the scaling RGBs to hues.
     h, s, v = [], [], []
@@ -76,15 +78,15 @@ def rgb2z(R, G, B, zlev, parm='H'):
     # Now go through the associated depths (in pairs) and find the values
     # within C which fall between the corresponding h values and scale them to
     # the depths.
-    z = np.zeros((ny, nx)) # images are all backwards
+    z = np.zeros((ny, nx))  # images are all backwards
     nz = zlev.shape[0]
     for i in range(1, nz):
 
-        cs = ci[i -1]
+        cs = ci[i - 1]
         ce = ci[i]
         if ce < cs:
             ce, cs = cs, ce
-        zs = zlev[i -1, 0]
+        zs = zlev[i - 1, 0]
         ze = zlev[i, 0]
         if ze < zs:
             ze, zs = zs, ze
@@ -100,9 +102,10 @@ def rgb2z(R, G, B, zlev, parm='H'):
             z[idx] = (ze - zs) / 2.0
 
         else:
-            zi = (((ze - zs) * (C[idx] - C[idx].min())) / (C[idx].max() - C[idx].min())) + zs
+            zi = (((ze - zs) *
+                   (C[idx] - C[idx].min())) /
+                  (C[idx].max() - C[idx].min())) + zs
 
             z[idx] = zi
 
     return z
-

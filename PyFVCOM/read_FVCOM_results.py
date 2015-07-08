@@ -69,13 +69,13 @@ def readFVCOM(file, varList=None, clipDims=False, noisy=False, atts=False):
         try:
             try:
                 rootgrp = MFDataset(file, 'r')
-            except IOError as e:
+            except IOError:
                 raise IOError('Unable to open file {}. Aborting.'.format(file))
         except:
             # Try aggregating along a 'time' dimension (for POLCOMS, for example)
             try:
                 rootgrp = MFDataset(file, 'r', aggdim='time')
-            except IOError as e:
+            except IOError:
                 raise IOError('Unable to open file {}. Aborting.'.format(file))
 
     else:
