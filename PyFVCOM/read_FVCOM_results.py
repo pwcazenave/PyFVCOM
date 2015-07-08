@@ -554,37 +554,3 @@ def nodes2elems(nodes, tri):
         raise Exception('Too many dimensions (maximum of two)')
 
     return elems
-
-
-def getSurfaceElevation(Z, idx):
-    """
-    Extract the surface elevation from Z at index ind. If ind is multiple
-    values, extract and return the surface elevations at all those locations.
-
-    Z is usually extracted from the dict created when using readFVCOM() on a
-    NetCDF file.
-
-    Parameters
-    ----------
-    Z : ndarray
-        Unstructured array of surface elevations with time.
-    idx : list
-        List of indices from which to extract time series of surface
-        elevations.
-
-    Returns
-    -------
-    surfaceElevation : ndarray
-        Time series of surface elevations at the indices supplied in
-        idx.
-
-    """
-
-    nt, nx = np.shape(Z)
-
-    surfaceElevation = np.empty([nt,np.shape(idx)[0]])
-    for cnt, i in enumerate(idx):
-        if not np.isnan(i):
-            surfaceElevation[:,cnt] = Z[:,i]
-
-    return surfaceElevation
