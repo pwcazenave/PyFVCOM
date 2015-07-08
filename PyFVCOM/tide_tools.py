@@ -812,7 +812,6 @@ def getHarmonics(db, stationName, noisy=False):
             print('extraction failed.')
 
     # Convert data to a dict of value pairs
-    dictNames = ['amplitude', 'phase', 'speed', 'constituentName', 'inferredConstituent']
     siteHarmonics = {}
     tAmp = np.empty(np.shape(data)[0])
     tPhase = np.empty(np.shape(data)[0])

@@ -4,7 +4,6 @@ Functions to convert images to values along a given set of vertical elevations.
 """
 
 import colorsys
-import os
 
 import numpy as np
 

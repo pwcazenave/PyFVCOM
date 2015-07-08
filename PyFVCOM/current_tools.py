@@ -5,9 +5,6 @@ Tools to work with current data. Reuses some functions from tide_tools.
 
 import numpy as np
 
-from tide_tools import addHarmonicResults, getObservedData, getObservedMetadata, getHarmonics, TAPPy
-
-
 def scalar2vector(direction, speed):
     """
     Convert arrays of two scalars into the corresponding vector components.

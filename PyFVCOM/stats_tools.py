@@ -94,7 +94,6 @@ def calculatePolyfit(x, y):
 def coefficientOfDetermination(obs, model):
     """ Calculate the coefficient of determination for a modelled function """
     obsBar = np.mean(obs)
-    modelBar = np.mean(model)
 
     SStot = np.sum((obs - obsBar)**2)
     SSreg = np.sum((model - obsBar)**2)

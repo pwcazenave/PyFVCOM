@@ -7,9 +7,6 @@ NetCDF file.
 import numpy as np
 import matplotlib.pyplot as plt
 
-from sys import argv
-
-from read_FVCOM_results import readFVCOM
 from grid_tools import parseUnstructuredGridFVCOM
 
 

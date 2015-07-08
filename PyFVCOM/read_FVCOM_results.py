@@ -545,8 +545,6 @@ def nodes2elems(nodes, tri):
 
     """
 
-    nvert = np.shape(tri)[0]
-
     if np.ndim(nodes) == 1:
         elems = nodes[tri].mean(axis=-1)
     elif np.ndim(nodes) == 2:

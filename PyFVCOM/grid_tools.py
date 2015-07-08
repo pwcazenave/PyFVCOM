@@ -9,9 +9,6 @@ import matplotlib.delaunay as triang
 import numpy as np
 import sys
 
-from mpl_toolkits.basemap import Basemap
-from matplotlib import tri
-
 from ll2utm import UTMtoLL
 
 
@@ -278,7 +275,6 @@ def parseUnstructuredGridGMSH(mesh):
         # If we've been told we've got to the header, read in the mesh version
         # here.
         if _header:
-            _ver = line.split()
             _header = False
             continue
 
@@ -742,9 +738,9 @@ def elementSideLengths(triangles, x, y):
         pos1x, pos2x, pos3x = x[tri]
         pos1y, pos2y, pos3y = y[tri]
 
-        elemSides[it,0] = sqrt((pos1x - pos2x)**2 + (pos1y - pos2y)**2)
-        elemSides[it,1] = sqrt((pos2x - pos3x)**2 + (pos2y - pos3y)**2)
-        elemSides[it,2] = sqrt((pos3x - pos1x)**2 + (pos3y - pos1y)**2)
+        elemSides[it,0] = np.sqrt((pos1x - pos2x)**2 + (pos1y - pos2y)**2)
+        elemSides[it,1] = np.sqrt((pos2x - pos3x)**2 + (pos2y - pos3y)**2)
+        elemSides[it,2] = np.sqrt((pos3x - pos1x)**2 + (pos3y - pos1y)**2)
 
     return elemSides
 

@@ -345,8 +345,8 @@ def cBEpm(g, f, sigma, nu, kappa, z, h):
         print('z must be negative and must be within [0 -h]')
 
     delta_e = np.sqrt(2 *nu / f) # Ekman depth
-    alpha = (1 + i) / delta_e * np.sqrt(1 + sigma / f)
-    beta  = (1 + i) / delta_e * np.sqrt(1 - sigma / f)
+    alpha = (1 + 1j) / delta_e * np.sqrt(1 + sigma / f)
+    beta  = (1 + 1j) / delta_e * np.sqrt(1 - sigma / f)
 
     BEp = get_BE(g, alpha, h, z, nu, kappa)
     BEm = get_BE(g, beta,  h, z,  nu, kappa)
@@ -427,8 +427,6 @@ def plot_ell(SEMA, ECC, INC, PHA, IND=[1]):
 
     """
 
-    size_SEMA=np.shape(SEMA)
-
     len_IND = len(IND)
     if IND:
         cmd = 'sub2ind(size_SEMA, '
@@ -451,6 +449,7 @@ def plot_ell(SEMA, ECC, INC, PHA, IND=[1]):
                 titletxt = titletxt + str(IND[k]) + ')'
 
         cmd = 'n = ' + cmd + '])'
+        # This is pretty nasty, but it works.
         exec(cmd)
 
         plt.gcf()
@@ -505,14 +504,14 @@ def do_the_plot(SEMA, ECC, INC, PHA):
     plt.ylabel('v')
     plt.plot(np.real(a), np.imag(a), 'r')
     plt.plot(np.real(b), np.imag(b), 'g')
-    hnd_a = plt.plot([0, np.real(a[0])], [0, np.imag(a[0])], 'ro')
-    hnd_b = plt.plot([0, np.real(b[0])], [0, np.imag(b[0])], 'go')
-    hnd_w = plt.plot([0, np.real(w[0])], [0, np.imag(w[0])], 'bo')
+    plt.plot([0, np.real(a[0])], [0, np.imag(a[0])], 'ro')
+    plt.plot([0, np.real(b[0])], [0, np.imag(b[0])], 'go')
+    plt.plot([0, np.real(w[0])], [0, np.imag(w[0])], 'bo')
     plt.plot(np.real(a[0]), np.imag(a[0]), 'ro')
     plt.plot(np.real(b[0]), np.imag(b[0]), 'go')
     plt.plot(np.real(w[0]), np.imag(w[0]), 'bo')
-    hnd_ab=plt.plot(np.real([a[0], a[0]+b[0]]), np.imag([a[0], a[0]+b[0]]), linestyle='--', color='g')
-    hnd_ba=plt.plot(np.real([b[0], a[0]+b[0]]), np.imag([b[0], a[0]+b[0]]), linestyle='--', color='r')
+    plt.plot(np.real([a[0], a[0]+b[0]]), np.imag([a[0], a[0]+b[0]]), linestyle='--', color='g')
+    plt.plot(np.real([b[0], a[0]+b[0]]), np.imag([b[0], a[0]+b[0]]), linestyle='--', color='r')
 
     for n in range(len(ot)):
         plt.hold('on')
