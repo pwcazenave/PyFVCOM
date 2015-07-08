@@ -337,7 +337,6 @@ def UTMtoLL(ReferenceEllipsoid, northing, easting, zone):
     a = _ellipsoid[ReferenceEllipsoid][_EquatorialRadius]
     eccSquared = _ellipsoid[ReferenceEllipsoid][_eccentricitySquared]
     e1 = (1-np.sqrt(1-eccSquared))/(1+np.sqrt(1-eccSquared))
-    # NorthernHemisphere; //1 for northern hemisphere, 0 for southern
 
     if ~isinstance(easting, np.ndarray):
         easting = np.asarray(easting)
@@ -356,9 +355,8 @@ def UTMtoLL(ReferenceEllipsoid, northing, easting, zone):
         ZoneLetter = zone[-1]
         ZoneNumber = int(zone[:-1])
         if ZoneLetter >= 'N':
-            NorthernHemisphere = 1  # point is in northern hemisphere
+            pass
         else:
-            NorthernHemisphere = 0  # point is in southern hemisphere
             y -= 10000000.0         # remove 10,000,000 meter offset used for southern hemisphere
 
         LongOrigin = (ZoneNumber - 1)*6 - 180 + 3  # +3 puts origin in middle of zone
@@ -373,9 +371,8 @@ def UTMtoLL(ReferenceEllipsoid, northing, easting, zone):
             ZoneLetter = zone[c][-1]
             ZoneNumber = int(zone[c][:-1])
             if ZoneLetter >= 'N':
-                NorthernHemisphere = 1  # point is in northern hemisphere
+                pass
             else:
-                NorthernHemisphere = 0  # point is in southern hemisphere
                 y -= 10000000.0         # remove 10,000,000 meter offset used for southern hemisphere
 
             LongOrigin[c] = (ZoneNumber - 1)*6 - 180 + 3  # +3 puts origin in middle of zone
@@ -389,7 +386,6 @@ def UTMtoLL(ReferenceEllipsoid, northing, easting, zone):
     phi1Rad = (mu + (3*e1/2-27*e1*e1*e1/32)*np.sin(2*mu)
                + (21*e1*e1/16-55*e1*e1*e1*e1/32)*np.sin(4*mu)
                +(151*e1*e1*e1/96)*np.sin(6*mu))
-    phi1 = np.rad2deg(phi1Rad)
 
     N1 = a/np.sqrt(1-eccSquared*np.sin(phi1Rad)*np.sin(phi1Rad))
     T1 = np.tan(phi1Rad)*np.tan(phi1Rad)
