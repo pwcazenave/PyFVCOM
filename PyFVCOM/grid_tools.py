@@ -9,7 +9,7 @@ import matplotlib.delaunay as triang
 import numpy as np
 import sys
 
-from ll2utm import UTMtoLL
+from PyFVCOM.ll2utm import UTMtoLL
 
 
 def parseUnstructuredGridSMS(mesh):
@@ -64,9 +64,9 @@ def parseUnstructuredGridSMS(mesh):
         line = line.strip()
         if line.startswith('E3T'):
             ttt = line.split()
-            t1 = int(ttt[2])-1
-            t2 = int(ttt[3])-1
-            t3 = int(ttt[4])-1
+            t1 = int(ttt[2]) - 1
+            t2 = int(ttt[3]) - 1
+            t3 = int(ttt[4]) - 1
             triangles.append([t1, t2, t3])
         elif line.startswith('ND '):
             xy = line.split()
@@ -85,14 +85,13 @@ def parseUnstructuredGridSMS(mesh):
             allTypes = line.split(' ')
 
             for nodeID in allTypes[2:]:
-                types[np.abs(int(nodeID))-1] = typeCount
+                types[np.abs(int(nodeID)) - 1] = typeCount
                 nodeStrings.append(int(nodeID))
 
                 # Count the number of node strings, and output that to types.
                 # Nodes in the node strings are stored in nodeStrings.
                 if int(nodeID) < 0:
-                    typeCount+=1
-
+                    typeCount += 1
 
     # Convert to numpy arrays.
     triangle = np.asarray(triangles)
@@ -141,9 +140,9 @@ def parseUnstructuredGridFVCOM(mesh):
     for line in lines:
         ttt = line.strip().split()
         if len(ttt) == 5:
-            t1 = int(ttt[1])-1
-            t2 = int(ttt[2])-1
-            t3 = int(ttt[3])-1
+            t1 = int(ttt[1]) - 1
+            t2 = int(ttt[2]) - 1
+            t3 = int(ttt[3]) - 1
             triangles.append([t1, t2, t3])
         elif len(ttt) == 4:
             x.append(float(ttt[1]))
@@ -209,9 +208,9 @@ def parseUnstructuredGridMIKE(mesh, flipZ=True):
     for line in lines:
         ttt = line.strip().split()
         if len(ttt) == 4:
-            t1 = int(ttt[1])-1
-            t2 = int(ttt[2])-1
-            t3 = int(ttt[3])-1
+            t1 = int(ttt[1]) - 1
+            t2 = int(ttt[2]) - 1
+            t3 = int(ttt[3]) - 1
             triangles.append([t1, t2, t3])
         elif len(ttt) == 5:
             x.append(float(ttt[1]))
@@ -247,9 +246,9 @@ def parseUnstructuredGridGMSH(mesh):
     Returns
     -------
     triangle : ndarray
-        Integer array of shape (ntri, 3). Each triangle is composed of
-        three points and this contains the three node numbers (stored in
-        nodes) which refer to the coordinates in X and Y (see below).
+        Integer array of shape (ntri, 3). Each triangle is composed of three
+        points and this contains the three node numbers (stored in nodes) which
+        refer to the coordinates in X and Y (see below).
     nodes : ndarray
         Integer number assigned to each node.
     X, Y, Z : ndarray
@@ -340,7 +339,7 @@ def parseUnstructuredGridGMSH(mesh):
 
     # Tidy up the triangles array  to remove the empty rows due to the number
     # of elements specified in the mesh file including the 1D triangulation.
-    #triangles = triangles[triangles[:, 0] != -1, :]
+    # triangles = triangles[triangles[:, 0] != -1, :]
     triangles = triangles[:e, :]
 
     return triangles, nodes, x, y, z
@@ -409,11 +408,10 @@ def writeUnstructuredGridSMS(triangles, nodes, x, y, z, types, mesh):
         for value in line:
             strLine.append(str(value))
 
-        currentNode+=1
+        currentNode += 1
         # Build the output string for the connectivity table
         output = ['E3T'] + [str(currentNode)] + strLine + ['1']
         output = ' '.join(output)
-        #print output
 
         fileWrite.write(output + '\n')
 
@@ -440,15 +438,15 @@ def writeUnstructuredGridSMS(triangles, nodes, x, y, z, types, mesh):
     # Iterate through the unique boundary types to get a new node string for
     # each boundary type (ignore types of less than 2 which are not open
     # boundaries in MIKE).
-    for boundaryType in np.unique(types[types>1]):
+    for boundaryType in np.unique(types[types > 1]):
 
         # Find the nodes for the boundary type which are greater than 1 (i.e.
         # not 0 or 1).
-        nodeBoundaries = nodes[types==boundaryType]
+        nodeBoundaries = nodes[types == boundaryType]
 
         nodeStrings = 0
         for counter, node in enumerate(nodeBoundaries):
-            if counter+1 == len(nodeBoundaries) and node > 0:
+            if counter + 1 == len(nodeBoundaries) and node > 0:
                 node = -node
 
             nodeStrings += 1
@@ -514,9 +512,10 @@ def writeUnstructuredGridSMSBathy(triangles, nodes, z, PTS):
 
     # Get some information needed for the metadata side of things
     nodeNumber = len(nodes)
-    elementNumber = len(triangles[:,0])
+    elementNumber = len(triangles[:, 0])
 
-    # Header format (see http://wikis.aquaveo.com/xms/index.php?title=GMS:Data_Set_Files)
+    # Header format (see:
+    #     http://wikis.aquaveo.com/xms/index.php?title=GMS:Data_Set_Files)
     # DATASET = indicates data
     # OBJTYPE = type of object (i.e. mesh 3d, mesh 2d) data is associated with
     # BEGSCL = Start of the scalar data set
@@ -571,7 +570,7 @@ def writeUnstructuredGridMIKE(triangles, nodes, x, y, z, types, mesh):
     fileWrite.write(output + '\n')
 
     if len(types) == 0:
-        types = np.zeros(shape=(len(nodes),1))
+        types = np.zeros(shape=(len(nodes), 1))
 
     # Write out the node information
     for count, line in enumerate(nodes):
@@ -592,7 +591,6 @@ def writeUnstructuredGridMIKE(triangles, nodes, x, y, z, types, mesh):
     # Now for the connectivity
 
     # Little header. No idea what the 3 and 21 are all about (version perhaps?)
-    #output = '{} {} {}'.format(int(len(triangles)), int(len(np.unique(types))), '21')
     output = '{} {} {}'.format(int(len(triangles)), '3', '21')
     fileWrite.write(output + '\n')
 
@@ -606,7 +604,7 @@ def writeUnstructuredGridMIKE(triangles, nodes, x, y, z, types, mesh):
             strLine.append(str(value))
 
         # Build the output string for the connectivity table
-        output = [str(count+1)] + strLine
+        output = [str(count + 1)] + strLine
         output = ' '.join(output)
 
         fileWrite.write(output + '\n')
@@ -738,9 +736,9 @@ def elementSideLengths(triangles, x, y):
         pos1x, pos2x, pos3x = x[tri]
         pos1y, pos2y, pos3y = y[tri]
 
-        elemSides[it,0] = np.sqrt((pos1x - pos2x)**2 + (pos1y - pos2y)**2)
-        elemSides[it,1] = np.sqrt((pos2x - pos3x)**2 + (pos2y - pos3y)**2)
-        elemSides[it,2] = np.sqrt((pos3x - pos1x)**2 + (pos3y - pos1y)**2)
+        elemSides[it, 0] = np.sqrt((pos1x - pos2x)**2 + (pos1y - pos2y)**2)
+        elemSides[it, 1] = np.sqrt((pos2x - pos3x)**2 + (pos2y - pos3y)**2)
+        elemSides[it, 2] = np.sqrt((pos3x - pos1x)**2 + (pos3y - pos1y)**2)
 
     return elemSides
 
@@ -777,7 +775,13 @@ def fixCoordinates(FVCOM, UTMZone, inVars=['x', 'y']):
         Y = np.zeros(np.shape(FVCOM[inVars[1]])) * np.nan
         X = np.zeros(np.shape(FVCOM[inVars[0]])) * np.nan
     except IOError:
-        print('Couldn\'t find the {} or {} variables in the supplied FVCOM dict. Check you loaded them and try again.'.format(inVars[0], inVars[1]))
+        print(
+            "Couldn't find the {} or {} variables in the FVCOM dict.".format(
+                inVars[0], inVars[1],
+                end=''
+            )
+        )
+        print('Check you loaded them and try again.')
 
     for count, posXY in enumerate(zip(FVCOM[inVars[0]], FVCOM[inVars[1]])):
 
@@ -822,22 +826,22 @@ def clipTri(MODEL, sideLength, keys=['xc', 'yc']):
 
     """
 
-    cens, edg, tri, neig = triang.delaunay(MODEL[keys[0]], MODEL[keys[1]])
+    _, _, tri, _ = triang.delaunay(MODEL[keys[0]], MODEL[keys[1]])
 
     # Get the length of all element edges
     xx, yy = MODEL[keys[0]][tri], MODEL[keys[1]][tri]
     dx = np.empty(np.shape(xx))
     dy = np.empty(np.shape(yy))
     sxy = np.empty(np.shape(xx))
-    dx[:,0] = xx[:,0] - xx[:,1]
-    dx[:,1] = xx[:,1] - xx[:,2]
-    dx[:,2] = xx[:,2] - xx[:,0]
-    dy[:,0] = yy[:,0] - yy[:,1]
-    dy[:,1] = yy[:,1] - yy[:,2]
-    dy[:,2] = yy[:,2] - yy[:,0]
-    sxy[:,0] = np.sqrt(dx[:,0]**2 + dy[:,1]**2)
-    sxy[:,1] = np.sqrt(dx[:,1]**2 + dy[:,2]**2)
-    sxy[:,2] = np.sqrt(dx[:,2]**2 + dy[:,0]**2)
+    dx[:, 0] = xx[:, 0] - xx[:, 1]
+    dx[:, 1] = xx[:, 1] - xx[:, 2]
+    dx[:, 2] = xx[:, 2] - xx[:, 0]
+    dy[:, 0] = yy[:, 0] - yy[:, 1]
+    dy[:, 1] = yy[:, 1] - yy[:, 2]
+    dy[:, 2] = yy[:, 2] - yy[:, 0]
+    sxy[:, 0] = np.sqrt(dx[:, 0]**2 + dy[:, 1]**2)
+    sxy[:, 1] = np.sqrt(dx[:, 1]**2 + dy[:, 2]**2)
+    sxy[:, 2] = np.sqrt(dx[:, 2]**2 + dy[:, 0]**2)
 
     triClip = []
     for i, t in enumerate(sxy):
@@ -874,12 +878,10 @@ def getRiverConfig(fileName, noisy=False):
     f = open(fileName)
     lines = f.readlines()
     rivers = {}
-    n = 0
     for line in lines:
         line = line.strip()
 
         if not line.startswith('&') and not line.startswith('/'):
-            n += 1
             param, value = [i.strip(",' ") for i in line.split('=')]
             if param in rivers:
                 rivers[param].append(value)
@@ -933,9 +935,12 @@ def getRivers(discharge, positions, noisy=False):
             if name.strip() in locations:
                 # Key already exists... just append a 1 to the key name.
                 if noisy:
-                    print('Duplicate key {}. Renaming to {}_1'.format(name.strip(), name.strip()))
+                    print('Duplicate key {}. Renaming to {}_1'.format(
+                        name.strip(), name.strip()))
 
-                locations[name.strip() + '_1'] = [float(lon), float(lat), order]
+                locations[name.strip() + '_1'] = [float(lon),
+                    float(lat),
+                    order]
             else:
                 locations[name.strip()] = [float(lon), float(lat), order]
 
@@ -945,18 +950,18 @@ def getRivers(discharge, positions, noisy=False):
 
     f.close()
 
-
     rivers = {}
 
-    for c, file in enumerate(discharge):
+    for c, dfile in enumerate(discharge):
         if noisy:
-            print('Reading in river discharge from file {}... '.format(file), end=' ')
+            print('Reading in river discharge from file {}... '.format(dfile),
+                  end=' ')
 
         # Just dump the file with np.genfromtxt.
         if c == 0:
-            flux = np.genfromtxt(file)
+            flux = np.genfromtxt(dfile)
         else:
-            flux = np.vstack((flux, np.genfromtxt(file)))
+            flux = np.vstack((flux, np.genfromtxt(dfile)))
 
         if noisy:
             print('done.')
@@ -1033,13 +1038,12 @@ def mesh2grid(meshX, meshY, meshZ, nx, ny, thresh=None, noisy=False):
 
     if noisy:
         if isinstance(nx, int) and isinstance(ny, int):
-            print('Resampling from unstructured to regular grid ({} by {}). Be patient...'.format(
-                nx, ny
-                ), end='')
+            print('Resampling unstructured to regular ({} by {}).'.format(nx, ny), end='')
+            print('Be patient...', end='')
         else:
-            print('Resampling from unstructured to regular grid ({} by {}). Be patient...'.format(
-                len(nx[:, 1]), len(ny[0, :])
-                ), end='')
+            _nx, _ny = len(nx[:, 1]), len(ny[0, :])
+            print('Resampling unstructured to regular ({} by {}).'.format(_nx, _ny), end='')
+            print('Be patient...', end='')
 
         sys.stdout.flush()
 
@@ -1047,13 +1051,13 @@ def mesh2grid(meshX, meshY, meshZ, nx, ny, thresh=None, noisy=False):
         for xi, xpos in enumerate(xx):
             # Do all the y-positions with findNearestPoint
             for yi, ypos in enumerate(yy):
-                # Find the nearest node in the unstructured grid data and grab its
-                # u and v values. If it's beyond some threshold distance, leave the
-                # z value as NaN.
+                # Find the nearest node in the unstructured grid data and grab
+                # its u and v values. If it's beyond some threshold distance,
+                # leave the z value as NaN.
                 dist = np.sqrt((meshX - xpos)**2 + (meshY - ypos)**2)
 
-                # Get the index of the minimum and extract the values only if the
-                # nearest point is within the threshold distance (thresh).
+                # Get the index of the minimum and extract the values only if
+                # the nearest point is within the threshold distance (thresh).
                 if dist.min() < thresh:
                     idx = dist.argmin()
 
@@ -1070,10 +1074,14 @@ def mesh2grid(meshX, meshY, meshZ, nx, ny, thresh=None, noisy=False):
             for ri, _ in enumerate(yy[:, 0]):
                 if noisy:
                     if np.mod(c, 1000) == 0 or c == 0:
-                        print('{} of {}'.format(c, len(xx[0, :]) * len(yy[:, 0])))
+                        print('{} of {}'.format(c,
+                            len(xx[0, :]) * len(yy[:, 0])
+                        ))
                 c += 1
 
-                dist = np.sqrt((meshX - xx[ri, ci])**2 + (meshY - yy[ri, ci])**2)
+                dist = np.sqrt(
+                    (meshX - xx[ri, ci])**2 + (meshY - yy[ri, ci])**2
+                )
                 if dist.min() < thresh:
                     idx = dist.argmin()
                     zz[ri, ci, ...] = meshZ[idx, ...]
@@ -1084,7 +1092,7 @@ def mesh2grid(meshX, meshY, meshZ, nx, ny, thresh=None, noisy=False):
     return xx, yy, zz
 
 
-def lineSample(x, y, positions, num=0, noisy=False, debug=False):
+def lineSample(x, y, positions, num=0, noisy=False):
     """
     Function to take an unstructured grid of positions x and y and find the
     points which fall closest to a line defined by the coordinate pairs start
@@ -1157,7 +1165,7 @@ def lineSample(x, y, positions, num=0, noisy=False, debug=False):
         sidx = []
         line = []
 
-        beg = start # seed the position with the start of the line.
+        beg = start  # seed the position with the start of the line.
 
         while True:
 
@@ -1182,12 +1190,18 @@ def lineSample(x, y, positions, num=0, noisy=False, debug=False):
             # Closest node index.
             tidx = sdist.argmin().astype(int)
             # Distance from the start point.
-            fdist = np.sqrt((start[0] - xx[tidx])**2 + (start[1] - yy[tidx])**2).min()
+            fdist = np.sqrt((start[0] - xx[tidx])**2 +
+                            (start[1] - yy[tidx])**2
+                            ).min()
             # Distance to the end point.
-            tdist = np.sqrt((end[0] - xx[tidx])**2 + (end[1] - yy[tidx])**2).min()
+            tdist = np.sqrt((end[0] - xx[tidx])**2 +
+                            (end[1] - yy[tidx])**2
+                            ).min()
             # Last node's distance to the end point.
             if len(sidx) >= 1:
-                oldtdist = np.sqrt((end[0] - xx[sidx[-1]])**2 + (end[1] - yy[sidx[-1]])**2).min()
+                oldtdist = np.sqrt((end[0] - xx[sidx[-1]])**2 +
+                                   (end[1] - yy[sidx[-1]])**2
+                                   ).min()
             else:
                 # Haven't found any points yet.
                 oldtdist = tdist
@@ -1208,7 +1222,9 @@ def lineSample(x, y, positions, num=0, noisy=False, debug=False):
                 while True:
                     try:
                         tidx = sdistidx[c]
-                        tdist = np.sqrt((end[0] - xx[tidx])**2 + (end[1] - yy[tidx])**2).min()
+                        tdist = np.sqrt((end[0] - xx[tidx])**2 +
+                                        (end[1] - yy[tidx])**2
+                                        ).min()
                         c += 1
                     except IndexError:
                         # Eh, we've run out of indicies for some reason. Let's
@@ -1276,38 +1292,46 @@ def lineSample(x, y, positions, num=0, noisy=False, debug=False):
         dcn = np.degrees(np.arctan2(lx, ly))
 
         if num > 1:
-            # This is easy: decimate the line between the start and end and find
-            # the grid nodes which fall closest to each point in the line.
+            # This is easy: decimate the line between the start and end and
+            # find the grid nodes which fall closest to each point in the line.
 
             # Create the line segments
             inc = length / num
-            xx = start[0] + (np.cumsum(np.hstack((0, np.repeat(inc, num)))) * np.sin(np.radians(dcn)))
-            yy = start[1] + (np.cumsum(np.hstack((0, np.repeat(inc, num)))) * np.cos(np.radians(dcn)))
+            xx = start[0] + (np.cumsum(np.hstack((0, np.repeat(inc, num)))) *
+                             np.sin(np.radians(dcn)))
+            yy = start[1] + (np.cumsum(np.hstack((0, np.repeat(inc, num)))) *
+                             np.cos(np.radians(dcn)))
             [line.append(xy) for xy in zip([xx, yy])]
 
-            # For each positions in the line array, find the nearest indices in the
-            # supplied unstructured grid. We'll use our existing function
+            # For each positions in the line array, find the nearest indices in
+            # the supplied unstructured grid. We'll use our existing function
             # findNearestPoint for this.
-            nx, ny, dist, tidx = findNearestPoint(x, y, xx, yy, noisy=noisy)
+            _, _, _, tidx = findNearestPoint(x, y, xx, yy, noisy=noisy)
             [idx.append(i) for i in tidx.tolist()]
 
         else:
             # So really, this shouldn't be that difficult, all we're doing is
             # finding the intersection of two lines which are orthogonal to one
-            # another. We basically need to find the equations of both lines and
-            # then solve for the intersection.
+            # another. We basically need to find the equations of both lines
+            # and then solve for the intersection.
 
-            # First things first, clip the coordinates to a rectangle defined by
-            # the start and end coordinates. We'll use a buffer based on the size
-            # of the elements which surround the first and last nodes. The ensures
-            # we'll get relatively sensible results if the profile is relatively
-            # flat or vertical. Use the six closest nodes as the definition of
-            # surrounding elements.
-            bstart = np.mean(np.sort(np.sqrt((x - start[0])**2 + (y - start[1])**2))[:6])
-            bend = np.mean(np.sort(np.sqrt((x - end[0])**2 + (y - end[1])**2))[:6])
+            # First things first, clip the coordinates to a rectangle defined
+            # by the start and end coordinates. We'll use a buffer based on the
+            # size of the elements which surround the first and last nodes. The
+            # ensures we'll get relatively sensible results if the profile is
+            # relatively flat or vertical. Use the six closest nodes as the
+            # definition of surrounding elements.
+            bstart = np.mean(np.sort(np.sqrt((x - start[0])**2 +
+                                             (y - start[1])**2))[:6])
+            bend = np.mean(np.sort(np.sqrt((x - end[0])**2 +
+                                           (y - end[1])**2))[:6])
             # Use the larger of the two lengths to be on the safe side.
             bb = 2 * np.max((bstart, bend))
-            ss = np.where((x >= (ll[0] - bb)) * (x <= (ur[0] + bb)) * (y >= (ll[1] - bb)) * (y <= (ur[1] + bb)))[0]
+            ss = np.where((x >= (ll[0] - bb)) *
+                          (x <= (ur[0] + bb)) *
+                          (y >= (ll[1] - bb)) *
+                          (y <= (ur[1] + bb))
+                          )[0]
             xs = x[ss]
             ys = y[ss]
 
@@ -1323,16 +1347,16 @@ def lineSample(x, y, positions, num=0, noisy=False, debug=False):
                 yy = np.repeat(start[1], len(xx))
 
             else:
-                m1 = ly / lx # sample line gradient
-                c1 = start[1] - (m1 * start[0]) # sample line intercept
+                m1 = ly / lx  # sample line gradient
+                c1 = start[1] - (m1 * start[0])  # sample line intercept
 
                 # Find the equation of the line through all nodes in the domain
                 # normal to the original line (gradient = -1 / m).
                 m2 = -1 / m1
                 c2 = ys - (m2 * xs)
 
-                # Now find the intersection of the sample line and the all the lines
-                # which go through the nodes.
+                # Now find the intersection of the sample line and the all the
+                # lines which go through the nodes.
                 #   1a. y1 = (m1 * x1) + c1 # sample line
                 #   2a. y2 = (m2 * x2) + c2 # line normal to it
                 # Rearrange 1a for x.
@@ -1392,16 +1416,22 @@ def OSGB36toWGS84(eastings, northings):
     """
 
     # E, N are the British national grid coordinates - eastings and northings
-    a, b = 6377563.396, 6356256.909     # The Airy 180 semi-major and semi-minor axes used for OSGB36 (m)
-    F0 = 0.9996012717                   # scale factor on the central meridian
-    lat0 = np.deg2rad(49)               # Latitude of true origin (radians)
-    lon0 = np.deg2rad(-2)               # Longtitude of true origin and central meridian (radians)
-    N0, E0 = -100000, 400000            # Northing & easting of true origin (m)
-    e2 = 1 - (b*b)/(a*a)                # eccentricity squared
+
+    # The Airy 180 semi-major and semi-minor axes used for OSGB36 (m)
+    a, b = 6377563.396, 6356256.909
+    # Scale factor on the central meridian
+    F0 = 0.9996012717
+    # Latitude of true origin (radians)
+    lat0 = np.deg2rad(49)
+    # Longtitude of true origin and central meridian (radians)
+    lon0 = np.deg2rad(-2)
+    # Northing & easting of true origin (m)
+    N0, E0 = -100000, 400000
+    # eccentricity squared
+    e2 = 1 - (b*b)/(a*a)
     n = (a-b)/(a+b)
 
     # Iterate through the pairs of values in eastings and northings.
-
     lonlist, latlist = [], []
     for xy in zip(eastings, northings):
 
@@ -1411,70 +1441,84 @@ def OSGB36toWGS84(eastings, northings):
         # Initialise the iterative variables
         lat, M = lat0, 0
 
-
-        while N-N0-M >= 0.00001: # Accurate to 0.01mm
-            lat = (N-N0-M)/(a*F0) + lat;
-            M1 = (1 + n + (5./4)*n**2 + (5./4)*n**3) * (lat-lat0)
-            M2 = (3*n + 3*n**2 + (21./8)*n**3) * np.sin(lat-lat0) * np.cos(lat+lat0)
-            M3 = ((15./8)*n**2 + (15./8)*n**3) * np.sin(2*(lat-lat0)) * np.cos(2*(lat+lat0))
+        while N - N0 - M >= 0.00001:  # Accurate to 0.01mm
+            lat = (N - N0 - M)/(a * F0) + lat
+            M1 = (1 + n + (5./4) * n**2 + (5./4) * n**3) * (lat-lat0)
+            M2 = (3*n + 3 * n**2 + (21./8)*n**3) * np.sin(lat-lat0) * \
+                np.cos(lat+lat0)
+            M3 = ((15./8) * n**2 + (15./8)*n**3) * np.sin(2*(lat-lat0)) * \
+                np.cos(2 * (lat+lat0))
             M4 = (35./24)*n**3 * np.sin(3*(lat-lat0)) * np.cos(3*(lat+lat0))
             # meridional arc
             M = b * F0 * (M1 - M2 + M3 - M4)
 
         # transverse radius of curvature
-        nu = a*F0/np.sqrt(1-e2*np.sin(lat)**2)
+        nu = a * F0 / np.sqrt(1-e2 * np.sin(lat)**2)
 
         # meridional radius of curvature
-        rho = a*F0*(1-e2)*(1-e2*np.sin(lat)**2)**(-1.5)
-        eta2 = nu/rho-1
+        rho = a * F0 * (1-e2) * (1-e2 * np.sin(lat)**2)**(-1.5)
+        eta2 = nu / rho-1
 
         secLat = 1./np.cos(lat)
-        VII = np.tan(lat)/(2*rho*nu)
-        VIII = np.tan(lat)/(24*rho*nu**3)*(5+3*np.tan(lat)**2+eta2-9*np.tan(lat)**2*eta2)
-        IX = np.tan(lat)/(720*rho*nu**5)*(61+90*np.tan(lat)**2+45*np.tan(lat)**4)
-        X = secLat/nu
-        XI = secLat/(6*nu**3)*(nu/rho+2*np.tan(lat)**2)
-        XII = secLat/(120*nu**5)*(5+28*np.tan(lat)**2+24*np.tan(lat)**4)
-        XIIA = secLat/(5040*nu**7)*(61+662*np.tan(lat)**2+1320*np.tan(lat)**4+720*np.tan(lat)**6)
+        VII = np.tan(lat) / (2 * rho * nu)
+        VIII = np.tan(lat) / (24 * rho * nu**3) * (5 + 3 * np.tan(lat)**2 +
+            eta2 - 9 * np.tan(lat)**2 * eta2)
+        IX = np.tan(lat) / (720 * rho * nu**5) * (61 + 90 * np.tan(lat)**2 +
+            45 * np.tan(lat)**4)
+        X = secLat / nu
+        XI = secLat / (6 * nu**3) * (nu / rho + 2 * np.tan(lat)**2)
+        XII = secLat / (120 * nu**5) * (5 + 28 * np.tan(lat)**2 + 24 *
+            np.tan(lat)**4)
+        XIIA = secLat / (5040 * nu**7) * (61 + 662 * np.tan(lat)**2 + 1320 *
+            np.tan(lat)**4 + 720 * np.tan(lat)**6)
         dE = E-E0
 
         # These are on the wrong ellipsoid currently: Airy1830. (Denoted by _1)
-        lat_1 = lat - VII*dE**2 + VIII*dE**4 - IX*dE**6
-        lon_1 = lon0 + X*dE - XI*dE**3 + XII*dE**5 - XIIA*dE**7
+        lat_1 = lat - VII * dE**2 + VIII * dE**4 - IX * dE**6
+        lon_1 = lon0 + X * dE - XI * dE**3 + XII * dE**5 - XIIA * dE**7
 
         # Want to convert to the GRS80 ellipsoid.
         # First convert to cartesian from spherical polar coordinates
-        H = 0 #Third spherical coord.
-        x_1 = (nu/F0 + H)*np.cos(lat_1)*np.cos(lon_1)
-        y_1 = (nu/F0+ H)*np.cos(lat_1)*np.sin(lon_1)
-        z_1 = ((1-e2)*nu/F0 +H)*np.sin(lat_1)
+        H = 0  # Third spherical coord.
+        x_1 = (nu / F0 + H) * np.cos(lat_1) * np.cos(lon_1)
+        y_1 = (nu / F0 + H) * np.cos(lat_1) * np.sin(lon_1)
+        z_1 = ((1-e2) * nu / F0 + H) * np.sin(lat_1)
 
         # Perform Helmut transform (to go between Airy 1830 (_1) and GRS80 (_2))
-        s = -20.4894*10**-6 #The scale factor -1
-        tx, ty, tz = 446.448, -125.157, + 542.060 #The translations along x,y,z axes respectively
-        rxs,rys,rzs = 0.1502,  0.2470,  0.8421  #The rotations along x,y,z respectively, in seconds
-        rx, ry, rz = rxs*np.pi/(180*3600.), rys*np.pi/(180*3600.), rzs*np.pi/(180*3600.) #In radians
-        x_2 = tx + (1+s)*x_1 + (-rz)*y_1 + (ry)*z_1
-        y_2 = ty + (rz)*x_1  + (1+s)*y_1 + (-rx)*z_1
-        z_2 = tz + (-ry)*x_1 + (rx)*y_1 +  (1+s)*z_1
+        s = -20.4894 * 10**-6  # The scale factor -1
+        # The translations along x,y,z axes respectively
+        tx, ty, tz = 446.448, -125.157, + 542.060
+        # The rotations along x,y,z respectively, in seconds
+        rxs, rys, rzs = 0.1502, 0.2470, 0.8421
+        # And in radians
+        rx = rxs * np.pi / (180 * 3600.)
+        ry = rys * np.pi / (180 * 3600.)
+        rz = rzs * np.pi / (180 * 3600.)
+
+        x_2 = tx + (1 + s) * x_1 + (-rz) * y_1 + (ry) * z_1
+        y_2 = ty + (rz) * x_1 + (1 + s) * y_1 + (-rx) * z_1
+        z_2 = tz + (-ry) * x_1 + (rx) * y_1 + (1 + s) * z_1
 
         # Back to spherical polar coordinates from cartesian
         # Need some of the characteristics of the new ellipsoid
-        a_2, b_2 =6378137.000, 6356752.3141 #The GSR80 semi-major and semi-minor axes used for WGS84(m)
-        e2_2 = 1- (b_2*b_2)/(a_2*a_2)   #The eccentricity of the GRS80 ellipsoid
+
+        # The GSR80 semi-major and semi-minor axes used for WGS84(m)
+        a_2, b_2 = 6378137.000, 6356752.3141
+        # The eccentricity of the GRS80 ellipsoid
+        e2_2 = 1 - (b_2 * b_2) / (a_2 * a_2)
         p = np.sqrt(x_2**2 + y_2**2)
 
         # Lat is obtained by an iterative proceedure:
-        lat = np.arctan2(z_2,(p*(1-e2_2))) #Initial value
-        latold = 2*np.pi
-        while abs(lat - latold)>10**-16:
+        lat = np.arctan2(z_2, (p * (1-e2_2)))  # Initial value
+        latold = 2 * np.pi
+        while abs(lat - latold) > 10**-16:
             lat, latold = latold, lat
-            nu_2 = a_2/np.sqrt(1-e2_2*np.sin(latold)**2)
-            lat = np.arctan2(z_2+e2_2*nu_2*np.sin(latold), p)
+            nu_2 = a_2 / np.sqrt(1-e2_2 * np.sin(latold)**2)
+            lat = np.arctan2(z_2 + e2_2 * nu_2 * np.sin(latold), p)
 
         # Lon and height are then pretty easy
-        lon = np.arctan2(y_2,x_2)
-        H = p/np.cos(lat) - nu_2
+        lon = np.arctan2(y_2, x_2)
+        H = p / np.cos(lat) - nu_2
 
         # Convert to degrees
         latlist.append(np.rad2deg(lat))
@@ -1543,8 +1587,8 @@ def connectivity(p, t):
         assert A.ndim == 2, "array must be 2-dim'l"
 
         B = np.unique(A.view([('', A.dtype)]*A.shape[1]),
-                return_index=return_index,
-                return_inverse=return_inverse)
+                      return_index=return_index,
+                      return_inverse=return_inverse)
 
         if return_index or return_inverse:
             return (B[0].view(A.dtype).reshape((-1, A.shape[1]), order='C'),) \
@@ -1561,16 +1605,20 @@ def connectivity(p, t):
 
     # Unique mesh edges as indices into p
     numt = t.shape[0]
-    vect = np.arange(numt)                                                  # Triangle indices
-    e = np.vstack(([t[:, [0, 1]], t[:, [1, 2]], t[:, [2, 0]]]))             # Edges - not unique
-    e, j = _unique_rows(np.sort(e, axis=1), return_inverse=True)            # Unique edges
-    te = np.column_stack((j[vect], j[vect + numt], j[vect + (2 * numt)]))   # Unique edges in each triangle
+    # Triangle indices
+    vect = np.arange(numt)
+    # Edges - not unique
+    e = np.vstack(([t[:, [0, 1]], t[:, [1, 2]], t[:, [2, 0]]]))
+    # Unique edges
+    e, j = _unique_rows(np.sort(e, axis=1), return_inverse=True)
+    # Unique edges in each triangle
+    te = np.column_stack((j[vect], j[vect + numt], j[vect + (2 * numt)]))
 
     # Edge-to-triangle connectivity
     # Each row has two entries corresponding to the triangle numbers
     # associated with each edge. Boundary edges have e2t[i, 1] = -1.
     nume = e.shape[0]
-    e2t  = np.zeros((nume, 2)).astype(int) - 1
+    e2t = np.zeros((nume, 2)).astype(int) - 1
     for k in range(numt):
         for j in range(3):
             ce = te[k, j]
@@ -1581,7 +1629,8 @@ def connectivity(p, t):
 
     # Flag boundary nodes
     bnd = np.zeros((p.shape[0],)).astype(bool)
-    bnd[e[e2t[:, 1] == -1, :]] = True                                       # True for bnd nodes
+    # True for bnd nodes
+    bnd[e[e2t[:, 1] == -1, :]] = True
 
     return e, te, e2t, bnd
 
@@ -1607,13 +1656,14 @@ def clipDomain(x, y, extents, noisy=False):
 
     """
 
-    mask = np.where((x > extents[0]) * \
-            (x < extents[1]) * \
-            (y > extents[2]) * \
+    mask = np.where((x > extents[0]) *
+            (x < extents[1]) *
+            (y > extents[2]) *
             (y < extents[3]))[0]
 
     if noisy:
-        print('Subset contains {} points of {} total.'.format(len(mask), len(x)))
+        print('Subset contains {} points of {} total.'.format(len(mask),
+                                                              len(x)))
 
     return mask
 
@@ -1708,7 +1758,10 @@ def heron(v0, v1, v2):
     b = np.sqrt((v1[0] - v2[0])**2 + (v1[1] - v2[1])**2)
     c = np.sqrt((v2[0] - v0[0])**2 + (v2[1] - v0[1])**2)
 
-    A = 0.25 * (np.sqrt((a + (b + c)) * (c - (a - b)) * (c + (a - b)) * (a + (b - c))))
+    A = 0.25 * (np.sqrt((a + (b + c)) *
+                        (c - (a - b)) *
+                        (c + (a - b)) *
+                        (a + (b - c))
+                        ))
 
     return A
-

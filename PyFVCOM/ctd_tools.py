@@ -29,7 +29,7 @@ def getCTDMetadata(db):
 
     def _dict_factory(cursor, row):
         d = {}
-        for idx,col in enumerate(cursor.description):
+        for idx, col in enumerate(cursor.description):
             d[col[0]] = row[idx]
         return d
 
@@ -56,9 +56,10 @@ def getCTDMetadata(db):
 
     return meta_info
 
+
 def getCTDData(db, table, fields, noisy=False):
     """
-    Extract the CTD from the SQLite database for a given site.  Specify the
+    Extract the CTD from the SQLite database for a given site. Specify the
     database (db), the table name (table) of the station of interest.
 
     Parameters
@@ -90,7 +91,8 @@ def getCTDData(db, table, fields, noisy=False):
     """
 
     if noisy:
-        print('Getting data for {} from the database...'.format(table), end=' ')
+        print('Getting data for {} from the database...'.format(table),
+              end=' ')
 
     try:
         con = sqlite3.connect(db)
@@ -118,6 +120,7 @@ def getCTDData(db, table, fields, noisy=False):
             con.close()
 
     return data
+
 
 def getFerryBoxData(db, fields, table='PrideOfBilbao', noisy=False):
     """
@@ -150,7 +153,8 @@ def getFerryBoxData(db, fields, table='PrideOfBilbao', noisy=False):
     """
 
     if noisy:
-        print('Getting data for {} from the database...'.format(table), end=' ')
+        print('Getting data for {} from the database...'.format(table),
+              end=' ')
 
     try:
         con = sqlite3.connect(db)
@@ -178,4 +182,3 @@ def getFerryBoxData(db, fields, table='PrideOfBilbao', noisy=False):
             con.close()
 
     return data
-
