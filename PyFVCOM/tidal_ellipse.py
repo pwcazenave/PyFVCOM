@@ -39,6 +39,7 @@ major axis convention.
 import numpy as np
 import matplotlib.pyplot as plt
 
+
 def ap2ep(Au, PHIu, Av, PHIv, plot_demo=False):
     """
     Convert tidal amplitude and phase lag (ap-) parameters into tidal ellipse
@@ -137,7 +138,6 @@ def ap2ep(Au, PHIu, Av, PHIv, plot_demo=False):
 
     """
 
-
     # Assume the input phase lags are in degrees and convert them in radians.
     PHIu = PHIu / 180 * np.pi
     PHIv = PHIv / 180 * np.pi
@@ -195,6 +195,7 @@ def ap2ep(Au, PHIu, Av, PHIv, plot_demo=False):
     w = np.reshape(w, np.shape(wp))
 
     return SEMA, ECC, INC, PHA, w
+
 
 def ep2ap(SEMA, ECC, INC, PHA, plot_demo=False):
     """
@@ -261,8 +262,8 @@ def ep2ap(SEMA, ECC, INC, PHA, plot_demo=False):
     # Calculate cAu, cAv --- complex amplitude of u and v
     cAu = wp + np.conj(wm)
     cAv = -i * (wp-np.conj(wm))
-    Au  = np.abs(cAu)
-    Av  = np.abs(cAv)
+    Au = np.abs(cAu)
+    Av = np.abs(cAv)
     PHIu = -np.angle(cAu) * 180 / np.pi
     PHIv = -np.angle(cAv) * 180 / np.pi
 
@@ -273,9 +274,10 @@ def ep2ap(SEMA, ECC, INC, PHA, plot_demo=False):
     PHIv[id] = PHIv[id] + 360
 
     if plot_demo:
-        plot_ell(SEMA,ECC,INC,PHA,plot_demo);
+        plot_ell(SEMA, ECC, INC, PHA, plot_demo)
 
     return Au, PHIu, Av, PHIv, w
+
 
 def cBEpm(g, f, sigma, nu, kappa, z, h):
     """
@@ -336,31 +338,32 @@ def cBEpm(g, f, sigma, nu, kappa, z, h):
 
     """
 
-    if (len(g)>1) | (len(f)>1) | (len(sigma)>1) | \
-            (len(nu)>1) | (len(kappa)>1) | (len(h)>1):
+    if (len(g) > 1) | (len(f) > 1) | (len(sigma) > 1) | \
+            (len(nu) > 1) | (len(kappa) > 1) | (len(h) > 1):
         print('inputs of g, f, sigma, nu, kappa, and h should be all scalars!')
         raise
 
     if (any(z / h > 0)) | (any(z / h < -1)):
         print('z must be negative and must be within [0 -h]')
 
-    delta_e = np.sqrt(2 *nu / f) # Ekman depth
+    delta_e = np.sqrt(2 * nu / f)  # Ekman depth
     alpha = (1 + 1j) / delta_e * np.sqrt(1 + sigma / f)
-    beta  = (1 + 1j) / delta_e * np.sqrt(1 - sigma / f)
+    beta = (1 + 1j) / delta_e * np.sqrt(1 - sigma / f)
 
     BEp = get_BE(g, alpha, h, z, nu, kappa)
-    BEm = get_BE(g, beta,  h, z,  nu, kappa)
+    BEm = get_BE(g, beta, h, z, nu, kappa)
 
     return BEp, BEm
+
 
 def get_BE(g, alpha, h, z, nu, kappa):
     """ Child function of cBEpm """
 
-    z     = z.flatten()
-    z_h   = z / h
-    ah    = alpha * h
-    az    = alpha * z
-    ah2   = ah * 2
+    z = z.flatten()
+    z_h = z / h
+    ah = alpha * h
+    az = alpha * z
+    ah2 = ah * 2
     anu_k = alpha * nu / kappa
     nu_kh = nu / (kappa * h)
 
@@ -370,7 +373,7 @@ def get_BE(g, alpha, h, z, nu, kappa):
         C = -g * h * h / (nu * (1 + anu_k * np.tanh(ah))) * 2
         A1 = (1 - z_h * z_h) / 2 + nu_kh
         B1 = np.exp(-ah) / (1 + np.exp(-ah2))
-        B  = B1
+        B = B1
         series_sum = A1 * B1
 
         for t in np.arange(2, T):
@@ -385,14 +388,12 @@ def get_BE(g, alpha, h, z, nu, kappa):
     else:
         c = -g * h * h / nu
         denom = (np.exp(az - ah) + np.exp(-(az + ah))) / (1 + np.exp(-2 * ah))
-            # = cosh(az)/cosh(ah)
-            # but this a better way to evaluate it.
 
         numer = 1 + anu_k * np.tanh(ah)
-        # BE=c * (1 - denom / numer)
         BE = c * ((1 - denom / numer) / (ah * ah))
 
     return BE
+
 
 def sub2ind(shape, pos):
     """
@@ -413,6 +414,7 @@ def sub2ind(shape, pos):
         acc *= si
 
     return res
+
 
 def plot_ell(SEMA, ECC, INC, PHA, IND=[1]):
     """
@@ -459,6 +461,7 @@ def plot_ell(SEMA, ECC, INC, PHA, IND=[1]):
         plt.title(titletxt)
     elif len_IND:
         print('IND input contains zero element(s)!\nNo ellipse will be plotted.')
+
 
 def do_the_plot(SEMA, ECC, INC, PHA):
     """
@@ -522,6 +525,7 @@ def do_the_plot(SEMA, ECC, INC, PHA):
     plt.hold('off')
     plt.show()
 
+
 def prep_plot(SEMA, ECC, INC, PHA):
     """
     Take the output of ap2ep (SEMA, ECC, INC, and PHA) and prepare it for
@@ -580,10 +584,10 @@ if __name__ == '__main__':
     """
 
     # Demonstrate how to use ap2ep and ep2ap
-    Au = np.random.random([4, 3, 2]);           # so 4x3x2 multi-dimensional matrices
-    Av = np.random.random([4, 3, 2]);           # are used for the demonstration.
-    Phi_v = np.random.random([4, 3, 2]) * 360;  # phase lags inputs are expected to
-    Phi_u = np.random.random([4, 3, 2]) * 360;  # be in degrees.
+    Au = np.random.random([4, 3, 2])           # so 4x3x2 multi-dimensional matrices
+    Av = np.random.random([4, 3, 2])           # are used for the demonstration.
+    Phi_v = np.random.random([4, 3, 2]) * 360  # phase lags inputs are expected to
+    Phi_u = np.random.random([4, 3, 2]) * 360  # be in degrees.
 
     plt.figure(1)
     plt.clf()
@@ -593,11 +597,11 @@ if __name__ == '__main__':
     rAu, rPhi_u, rAv, rPhi_v, rw = ep2ap(SEMA, ECC, INC, PHA, [2, 3, 1])
 
     # Check if ep2ap has recovered Au, Phi_u, Av, Phi_v
-    print(np.max(np.abs(rAu - Au).flatten()))       #  = 9.9920e-16, = 2.22044604925e-16
-    print(np.max(np.abs(rAv - Av).flatten()))       #  = 6.6613e-16, = 7.77156117238e-16
-    print(np.max(np.abs(rPhi_u - Phi_u).flatten())) #  = 4.4764e-13, = 1.70530256582e-13
-    print(np.max(np.abs(rPhi_v - Phi_v).flatten())) #  = 1.1369e-13, = 2.27373675443e-13
-    print(np.max(np.max(np.abs(w - rw).flatten()))) #  = 1.3710e-15, = 1.1322097734e-15
+    print(np.max(np.abs(rAu - Au).flatten()))        # = 9.9920e-16, = 2.22044604925e-16
+    print(np.max(np.abs(rAv - Av).flatten()))        # = 6.6613e-16, = 7.77156117238e-16
+    print(np.max(np.abs(rPhi_u - Phi_u).flatten()))  # = 4.4764e-13, = 1.70530256582e-13
+    print(np.max(np.abs(rPhi_v - Phi_v).flatten()))  # = 1.1369e-13, = 2.27373675443e-13
+    print(np.max(np.max(np.abs(w - rw).flatten())))  # = 1.3710e-15, = 1.1322097734e-15
     # For the random realization I (Zhigang Xu) had, the differences are listed
     # on the right hand of the above column. I (Pierre Cazenave) got the second
     # column with the Python version. What are yours?
@@ -606,4 +610,3 @@ if __name__ == '__main__':
     # Nov. 12, 2000
     # Pierre Cazenave
     # October, 2012
-

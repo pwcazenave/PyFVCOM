@@ -8,6 +8,7 @@ import numpy as np
 
 from scipy import stats, polyfit, polyval
 
+
 def calculateRegression(x, y, type):
     """
     Calculate three types of regression:
@@ -30,10 +31,9 @@ def calculateRegression(x, y, type):
         print('Scaling y-data to improve numerical stability')
         y, yFactor, yFactorFix = fixRange(y)
 
-
     if type is 'lin0':
         xf = x
-        x = x[:,np.newaxis] # make a singleton extra dimension
+        x = x[:, np.newaxis]  # make a singleton extra dimension
         m, _, _, _ = np.linalg.lstsq(x, y)
         c, r, p = 0, np.nan, np.nan
     elif type is 'lin':
@@ -41,10 +41,10 @@ def calculateRegression(x, y, type):
         m, c, r, p, std_err = stats.linregress(x, y)
         xf = x
     elif type is 'log':
-        m, c, r, p, std_err = stats.linregress(np.log10(x),y)
+        m, c, r, p, std_err = stats.linregress(np.log10(x), y)
         xf = np.log10(x)
     elif type is 'exp':
-        m, c, r, p, std_err = stats.linregress(x,np.log10(y))
+        m, c, r, p, std_err = stats.linregress(x, np.log10(y))
         xf = x
     else:
         raise ValueError('Unknown regression type')
@@ -77,7 +77,6 @@ def calculatePolyfit(x, y):
         x, xFactor, xFactorFix = fixRange(x)
     if minY < 2e-7:
         y, yFactor, yFactorFix = fixRange(y)
-
 
     (ar, br) = polyfit(x, y, 1)
     yf = polyval([ar, br], x)
@@ -155,4 +154,3 @@ def rmse(a, b, axis=0):
     rmse = np.sqrt(np.mean((a - b)**2, axis=axis))
 
     return rmse
-

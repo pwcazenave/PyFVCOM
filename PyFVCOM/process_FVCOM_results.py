@@ -34,20 +34,16 @@ def calculateTotalCO2(FVCOM, varPlot, startIdx, layerIdx, leakIdx, dt, noisy=Fal
     for i in range(startIdx, Z.shape[0]):
         if i > 0:
             if len(np.shape(Z)) == 3:
-                TCO2[i] = TCO2[i-1] + (Z[i,layerIdx,leakIdx].squeeze() * dt)
+                TCO2[i] = TCO2[i-1] + (Z[i, layerIdx, leakIdx].squeeze() * dt)
             else:
-                TCO2[i] = TCO2[i-1] + (Z[i,leakIdx].squeeze() * dt)
-
-            # Maybe a little too noisy...
-            #if noisy:
-            #    print "Total " + varPlot + ": " + str(TCO2[i]) + "\n\t" + varPlot + ": " + str(Z[i,0,leakIdx].squeeze())
+                TCO2[i] = TCO2[i-1] + (Z[i, leakIdx].squeeze() * dt)
 
     # Scale to daily input. Input rate begins two days into model run
     nDays = FVCOM['time'].max()-FVCOM['time'].min()-2
     TCO2Scaled = TCO2/nDays
 
     # Get the total CO2 in the system at the end of the simulation
-    totalCO2inSystem = np.sum(Z[np.isfinite(Z)]) # skip NaNs
+    totalCO2inSystem = np.sum(Z[np.isfinite(Z)])  # skip NaNs
 
     # Some results
     if noisy:
@@ -57,13 +53,13 @@ def calculateTotalCO2(FVCOM, varPlot, startIdx, layerIdx, leakIdx, dt, noisy=Fal
         print("Total in the system per day:\t{:.2f}".format(totalCO2inSystem / nDays))
 
     # Make a pretty picture
-    #plt.figure(100)
-    #plt.clf()
-    ##plt.plot(FVCOM['time'],TCO2,'r-x')
-    #plt.plot(xrange(Z.shape[0]),np.squeeze(Z[:,layerIdx,leakIdx]),'r-x')
-    #plt.xlabel('Time')
-    #plt.ylabel(varPlot + ' input')
-    #plt.show()
+    # plt.figure(100)
+    # plt.clf()
+    # #plt.plot(FVCOM['time'],TCO2,'r-x')
+    # plt.plot(xrange(Z.shape[0]),np.squeeze(Z[:,layerIdx,leakIdx]),'r-x')
+    # plt.xlabel('Time')
+    # plt.ylabel(varPlot + ' input')
+    # plt.show()
 
     return totalCO2inSystem
 
@@ -93,12 +89,12 @@ def CO2LeakBudget(FVCOM, leakIdx, startDay):
     CO2Leak = np.ones(np.shape(CO2))*np.nan
 
     for i, tt in enumerate(timeSteps):
-        dump = FVCOM['h']+FVCOM['zeta'][tt,:]
+        dump = FVCOM['h'] + FVCOM['zeta'][tt, :]
         dz = np.abs(np.diff(FVCOM['siglev'], axis=0))
-        data = FVCOM['DYE'][tt,:,:]*dz
+        data = FVCOM['DYE'][tt, :, :]*dz
         data = np.sum(data, axis=0)
-        CO2[i] = np.sum(data*FVCOM['art1']*dump)
-        CO2Leak[i] = np.sum(data[leakIdx]*FVCOM['art1'][leakIdx])
+        CO2[i] = np.sum(data*FVCOM['art1'] * dump)
+        CO2Leak[i] = np.sum(data[leakIdx] * FVCOM['art1'][leakIdx])
 
     maxCO2 = np.max(CO2)
 
@@ -108,7 +104,7 @@ def CO2LeakBudget(FVCOM, leakIdx, startDay):
 def dataAverage(data, **args):
     """ Depth average a given FVCOM output data set along a specified axis """
 
-    dataMask = np.ma.masked_array(data,np.isnan(data))
+    dataMask = np.ma.masked_array(data, np.isnan(data))
     dataMeaned = np.ma.filled(dataMask.mean(**args), fill_value=np.nan).squeeze()
 
     return dataMeaned
@@ -140,11 +136,11 @@ def unstructuredGridVolume(FVCOM):
     elemThickness = np.abs(np.diff(FVCOM['siglev'], axis=0))
 
     # Get volumes for each cell at each time step to include tidal changes
-    tt, xx = FVCOM['zeta'].shape # time, node
-    ll = FVCOM['siglev'].shape[0] - 1 # layers = levels - 1
-    allVolumes = ((
-        elemDepths + np.tile(elemTides, [ll, 1, 1]).transpose(1, 0, 2)
-        ) * np.tile(elemThickness, [tt, 1, 1])) * elemAreas
+    tt, xx = FVCOM['zeta'].shape  # time, node
+    ll = FVCOM['siglev'].shape[0] - 1  # layers = levels - 1
+    allVolumes = ((elemDepths
+        + np.tile(elemTides, [ll, 1, 1]).transpose(1, 0, 2))
+        * np.tile(elemThickness, [tt, 1, 1])) * elemAreas
 
     return allVolumes
 
@@ -286,7 +282,7 @@ def residualFlow(FVCOM, idxRange=False, checkPlot=False, noisy=False):
 
     # Some tidal assumptions. This will need to change in areas in which the
     # diurnal tide dominates over the semidiurnal.
-    tideCycle =  (12.0 + (25.0 / 60)) / 24.0
+    tideCycle = (12.0 + (25.0 / 60)) / 24.0
     # The number of values in the output file which covers a tidal cycle
     tideWindow = np.ceil(tideCycle / dt)
 
@@ -294,10 +290,11 @@ def residualFlow(FVCOM, idxRange=False, checkPlot=False, noisy=False):
     # idxRange). If it's spring-neap, use 14.4861 days; daily is one day,
     # obviously.
 
-    startIdx = np.ceil(3 / dt) # start at the third day to skip the warm up period
+    startIdx = np.ceil(3 / dt)  # start at the third day to skip the warm up period
 
     if idxRange == 'spring-neap':
-        endIdx = startIdx + tideWindow + np.ceil(14.4861 / dt) # to the end of the spring-neap cycle
+        # To the end of the spring-neap cycle
+        endIdx = startIdx + tideWindow + np.ceil(14.4861 / dt)
     elif idxRange == 'daily':
         endIdx = startIdx + tideWindow + np.ceil(1 / dt)
     elif idxRange is False:
@@ -358,8 +355,8 @@ def residualFlow(FVCOM, idxRange=False, checkPlot=False, noisy=False):
     vDiff = vEnd - vStart
 
     # Calculate direction and magnitude.
-    rDir = np.arctan2(uDiff, vDiff) * (180 / np.pi); # in degrees.
-    rMag = np.sqrt(uDiff**2 + vDiff**2) / tideDuration; # in units/s.
+    rDir = np.arctan2(uDiff, vDiff) * (180 / np.pi)  # in degrees.
+    rMag = np.sqrt(uDiff**2 + vDiff**2) / tideDuration  # in units/s.
 
     # Plot to check everything's OK
     if checkPlot:
@@ -383,4 +380,3 @@ def residualFlow(FVCOM, idxRange=False, checkPlot=False, noisy=False):
         fig.show()
 
     return uRes, vRes, rDir, rMag
-

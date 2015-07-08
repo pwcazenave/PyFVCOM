@@ -6,6 +6,7 @@ import numpy as np
 
 from netCDF4 import Dataset, MFDataset
 
+
 def readFVCOM(file, varList=None, clipDims=False, noisy=False, atts=False):
     """
     Read in the FVCOM results file and spit out numpy arrays for each of the
@@ -81,7 +82,6 @@ def readFVCOM(file, varList=None, clipDims=False, noisy=False, atts=False):
     else:
         rootgrp = Dataset(file, 'r')
 
-
     # Create a dict of the dimension names and their current sizes
     dims = {}
     for key, var in list(rootgrp.dimensions.items()):
@@ -132,9 +132,9 @@ def readFVCOM(file, varList=None, clipDims=False, noisy=False, atts=False):
             # Thought I'd finally figured out how to replace the eval approach,
             # but I still can't get past the indexing needed to be able to
             # subset the data.
-            #FVCOM[key] = rootgrp.variables.get(key)[0:-1]
+            # FVCOM[key] = rootgrp.variables.get(key)[0:-1]
             # I know, I know, eval() is evil.
-            getData = 'rootgrp.variables[\'{}\']{}'.format(key,str(toExtract).replace('\'', ''))
+            getData = 'rootgrp.variables[\'{}\']{}'.format(key, str(toExtract).replace('\'', ''))
             FVCOM[key] = eval(getData)
 
             # Add the units and dimensions for this variable to the list of
@@ -318,40 +318,39 @@ class ncwrite():
         rootgrp = Dataset(self.filename_out, 'w', format='NETCDF3_CLASSIC', clobber=True)
 
         # Create dimensions.
-        if self.input_dict.has_key('dimensions'):
-            for k,v in self.input_dict['dimensions'].iteritems():
+        if 'dimensions' in self.input_dict:
+            for k, v in self.input_dict['dimensions'].iteritems():
                 rootgrp.createDimension(k, v)
         else:
-            if self.Quiet == False:
+            if not self.Quiet:
                 print('No netCDF created:')
                 print('  No dimension key found (!! has to be \"dimensions\"!!!)')
             return()
 
         # Create global attributes.
-        if self.input_dict.has_key('global attributes'):
-            for k,v in self.input_dict['global attributes'].iteritems():
-                rootgrp.setncattr(k,v)
+        if 'global attributes' in self.input_dict:
+            for k, v in self.input_dict['global attributes'].iteritems():
+                rootgrp.setncattr(k, v)
         else:
-            if self.Quiet == False:
+            if not self.Quiet:
                 print('  No global attribute key found (!! has to be \"global attributes\"!!!)')
 
-
         # Create variables.
-        for k,v in self.input_dict['variables'].iteritems():
+        for k, v in self.input_dict['variables'].iteritems():
             dims = self.input_dict['variables'][k]['dimensions']
             data = v['data']
             # Create correct data type if provided
-            if self.input_dict['variables'][k].has_key('data_type'):
+            if 'data_type' in self.input_dict['variables'][k]:
                 data_type = self.input_dict['variables'][k]['data_type']
             else:
                 data_type = 'f4'
             # Check whether we've been given a fill value.
-            if self.input_dict['variables'][k].has_key('fill_value'):
+            if 'fill_value' in self.input_dict['variables'][k]:
                 fill_value = self.input_dict['variables'][k]['fill_value']
             else:
                 fill_value = None
             # Create ncdf variable
-            if self.Quiet == False:
+            if not self.Quiet:
                 print('  Creating variable: {} {} {}'.format(k, data_type, dims))
             var = rootgrp.createVariable(k, data_type, dims, fill_value=fill_value)
             if len(dims) > np.ndim(data):
@@ -367,7 +366,7 @@ class ncwrite():
                         raise(IndexError(('Supplied data shape {} does not match the specified'
                         ' dimensions {}, for variable \'{}\'.'.format(data.shape, var.shape, k))))
                 else:
-                    if self.Quiet == False:
+                    if not self.Quiet:
                         print('Problem in the number of dimensions')
             else:
                 try:
@@ -377,9 +376,9 @@ class ncwrite():
                     ' dimensions {}, for variable \'{}\'.'.format(data.shape, var.shape, k))))
 
             # Create attributes for variables
-            if self.input_dict['variables'][k].has_key('attributes'):
-                for ka,va in self.input_dict['variables'][k]['attributes'].iteritems():
-                    var.setncattr(ka,va)
+            if 'attributes' in self.input_dict['variables'][k]:
+                for ka, va in self.input_dict['variables'][k]['attributes'].iteritems():
+                    var.setncattr(ka, va)
 
         rootgrp.close()
 
@@ -428,7 +427,8 @@ def readProbes(files, noisy=False, locations=False):
         files = [files]
 
     for i, file in enumerate(files):
-        if noisy: print('Loading file {} of {}...'.format(i + 1, len(files)), end=' ')
+        if noisy:
+            print('Loading file {} of {}...'.format(i + 1, len(files)), end=' ')
 
         # Get the header so we can extract the position data.
         with open(file, 'r') as f:
@@ -448,13 +448,14 @@ def readProbes(files, noisy=False, locations=False):
             values = np.vstack((values, data[:, 1:]))
             positions = np.vstack((positions, lonlatz))
 
-        if noisy: print('done.')
+        if noisy:
+            print('done.')
 
     # It may be the case that the files have been supplied in a random order,
     # so sort the values by time here.
     sidx = np.argsort(times)
     times = times[sidx]
-    values = values[sidx, ...] # support both 1 and 2D data
+    values = values[sidx, ...]  # support both 1 and 2D data
 
     if locations:
         return times, values, positions

@@ -11,6 +11,7 @@ Some of the tidal analysis functions require TAPPy to be installed and in
 
 from __future__ import print_function
 
+
 def julianDay(gregorianDateTime, mjd=False):
     """
     For a given gregorian date format (YYYY,MM,DD,hh,mm,ss) get the
@@ -69,17 +70,17 @@ def julianDay(gregorianDateTime, mjd=False):
                 gregorianDateTime = np.hstack([gregorianDateTime, extraCols])
 
     if nr > 1:
-        year   = gregorianDateTime[:, 0]
-        month  = gregorianDateTime[:, 1]
-        day    = gregorianDateTime[:, 2]
-        hour   = gregorianDateTime[:, 3]
+        year = gregorianDateTime[:, 0]
+        month = gregorianDateTime[:, 1]
+        day = gregorianDateTime[:, 2]
+        hour = gregorianDateTime[:, 3]
         minute = gregorianDateTime[:, 4]
         second = gregorianDateTime[:, 5]
     else:
-        year   = gregorianDateTime[0]
-        month  = gregorianDateTime[1]
-        day    = gregorianDateTime[2]
-        hour   = gregorianDateTime[3]
+        year = gregorianDateTime[0]
+        month = gregorianDateTime[1]
+        day = gregorianDateTime[2]
+        hour = gregorianDateTime[3]
         minute = gregorianDateTime[4]
         second = gregorianDateTime[5]
 
@@ -94,6 +95,7 @@ def julianDay(gregorianDateTime, mjd=False):
         return jd - 2400000.5
     else:
         return jd
+
 
 def gregorianDate(julianDay, mjd=False):
     """
@@ -172,6 +174,7 @@ def gregorianDate(julianDay, mjd=False):
 
     return greg
 
+
 def addHarmonicResults(db, stationName, constituentName, phase, amplitude, speed, inferred, ident=None, noisy=False):
     """
     Add data to an SQLite database.
@@ -215,29 +218,28 @@ def addHarmonicResults(db, stationName, constituentName, phase, amplitude, speed
     conn = sqlite3.connect(db)
     c = conn.cursor()
 
-
     # Create the necessary tables if they don't exist already
-    c.execute('CREATE TABLE IF NOT EXISTS TidalConstituents (\
-        shortName TEXT COLLATE nocase,\
-        amplitude FLOAT(10),\
-        phase FLOAT(10),\
-        speed FLOAT(10),\
-        constituentName TEXT COLLATE nocase,\
-        amplitudeUnits TEXT COLLATE nocase,\
-        phaseUnits TEXT COLLATE nocase,\
-        speedUnits TEXT COLLATE nocase,\
-        inferredConstituent TEXT COLLATE nocase\
-        )')
+    c.execute('CREATE TABLE IF NOT EXISTS TidalConstituents (
+        shortName TEXT COLLATE nocase,
+        amplitude FLOAT(10),
+        phase FLOAT(10),
+        speed FLOAT(10),
+        constituentName TEXT COLLATE nocase,
+        amplitudeUnits TEXT COLLATE nocase,
+        phaseUnits TEXT COLLATE nocase,
+        speedUnits TEXT COLLATE nocase,
+        inferredConstituent TEXT COLLATE nocase)')
 
     if noisy:
         print('amplitude, phase and speed.', end=' ')
     for item in range(len(inferred)):
-        c.execute('INSERT INTO TidalConstituents VALUES (?,?,?,?,?,?,?,?,?)',\
+        c.execute('INSERT INTO TidalConstituents VALUES (?,?,?,?,?,?,?,?,?)',
             (stationName + ident, amplitude[item], phase[item], speed[item], constituentName[item], 'metres', 'degrees', 'degrees per mean solar hour', inferred[item]))
 
     conn.commit()
 
     conn.close()
+
 
 def getObservedData(db, table, startYear=False, endYear=False, noisy=False):
     """
@@ -291,18 +293,18 @@ def getObservedData(db, table, startYear=False, endYear=False, noisy=False):
                 if startYear == endYear:
                     # We have the same start and end dates, so just do a
                     # simpler version
-                    c.execute('SELECT * FROM ' + table + ' WHERE ' + \
-                    table + '.year == ' + str(startYear) + \
+                    c.execute('SELECT * FROM ' + table + ' WHERE ' +
+                    table + '.year == ' + str(startYear) +
                     ' ORDER BY year, month, day, hour, minute, second')
                 else:
                     # We have a date range
-                    c.execute('SELECT * FROM ' + table + ' WHERE ' + \
-                    table + '.year > ' + str(startYear) + \
-                    ' AND ' + table + '.year < ' + str(endYear) + \
+                    c.execute('SELECT * FROM ' + table + ' WHERE ' +
+                    table + '.year > ' + str(startYear) +
+                    ' AND ' + table + '.year < ' + str(endYear) +
                     ' ORDER BY year, month, day, hour, minute, second')
             else:
                 # Return all data
-                c.execute('SELECT * FROM ' + table + \
+                c.execute('SELECT * FROM ' + table +
                     ' ORDER BY year, month, day, hour, minute, second')
             # Now get the data in a format we might actually want to use
             data = c.fetchall()
@@ -319,6 +321,7 @@ def getObservedData(db, table, startYear=False, endYear=False, noisy=False):
             data = [False]
 
     return data
+
 
 def getObservedMetadata(db, originator=False, obsdepth=None):
     """
@@ -390,6 +393,7 @@ def getObservedMetadata(db, originator=False, obsdepth=None):
     else:
         return lat, lon, site, longName, depth
 
+
 def cleanObservedData(data, removeResidual=False):
     """
     Process the observed raw data to a more sensible format. Also
@@ -430,8 +434,8 @@ def cleanObservedData(data, removeResidual=False):
     npObsData = []
     npFlagData = []
     for row in data:
-        npObsData.append(row[0:-1]) # eliminate the flag from the numeric data
-        npFlagData.append(row[-1]) # save the flag separately
+        npObsData.append(row[0:-1])  # eliminate the flag from the numeric data
+        npFlagData.append(row[-1])   # save the flag separately
 
     # For the tidal data, convert the numbers to floats to avoid issues
     # with truncation.
@@ -439,16 +443,16 @@ def cleanObservedData(data, removeResidual=False):
     npFlagData = np.asarray(npFlagData)
 
     # Extract the time and tide data
-    allObsTideData = np.asarray(npObsData[:,6])
+    allObsTideData = np.asarray(npObsData[:, 6])
     allObsTideResidual = np.asarray(npObsData[:, 7])
-    allDateTimes = np.asarray(npObsData[:,0:6], dtype=float)
+    allDateTimes = np.asarray(npObsData[:, 0:6], dtype=float)
 
     dateMJD = julianDay(allDateTimes, mjd=True)
 
     # Apply a correction (of sorts) from LAT to MSL by calculating the
     # mean (excluding nodata values (-99 for NTSLF, -9999 for SHOM))
     # and removing that from the elevation.
-    tideDataMSL = allObsTideData - np.mean(allObsTideData[allObsTideData>-99])
+    tideDataMSL = allObsTideData - np.mean(allObsTideData[allObsTideData > -99])
 
     if removeResidual:
         # Replace the residuals to remove with zeros where they're -99
@@ -458,6 +462,7 @@ def cleanObservedData(data, removeResidual=False):
         tideDataMSL = tideDataMSL - allObsTideResidual
 
     return dateMJD, tideDataMSL, npFlagData, allDateTimes
+
 
 def TAPPy(data, noisy=False):
     """
@@ -521,9 +526,8 @@ def TAPPy(data, noisy=False):
     include_inferred = True
 
     # Create a tappy object.
-    x = tappy.tappy(
-        outputts = outputts,
-        outputxml = outputxml,
+    x = tappy.tappy(outputts=outputts,
+        outputxml=outputxml,
         quiet=quiet,
         debug=debug,
         ephemeris=ephemeris,
@@ -535,8 +539,7 @@ def TAPPy(data, noisy=False):
         zero_ts=zero_ts,
         filter=filter,
         pad_filters=pad_filters,
-        include_inferred=include_inferred,
-        )
+        include_inferred=include_inferred)
 
     # Add the time series to the TAPPy object
     x.dates = []
@@ -558,9 +561,9 @@ def TAPPy(data, noisy=False):
         ray = 1.0
     (x.speed_dict, x.key_list) = x.which_constituents(len(x.dates),
                                                       package,
-                                                      rayleigh_comp = ray)
+                                                      rayleigh_comp=ray)
 
-    x.constituents() # the analysis
+    x.constituents()  # the analysis
 
     # Format output to match that returned by runTAPPy().
     cName = []
@@ -594,6 +597,7 @@ def TAPPy(data, noisy=False):
         cInference.append(True)
 
     return cName, cSpeed, cPhase, cAmplitude, cInference
+
 
 def runTAPPy(data, sparseDef=False, noisy=False, deleteFile=True, tappy='/usr/bin/tappy.py'):
     """
@@ -675,7 +679,6 @@ def runTAPPy(data, sparseDef=False, noisy=False, deleteFile=True, tappy='/usr/bi
         else:
             print('Saving to temporary file...', end=' ')
 
-
     np.savetxt(tFile.name, data, fmt='%4i/%02i/%02i %02i:%02i:%02i %.3f')
 
     if noisy:
@@ -691,6 +694,7 @@ def runTAPPy(data, sparseDef=False, noisy=False, deleteFile=True, tappy='/usr/bi
         print('done.')
 
     return cName, cSpeed, cPhase, cAmplitude, cInference
+
 
 def parseTAPPyXML(file):
     """
@@ -752,6 +756,7 @@ def parseTAPPyXML(file):
             constituentAmplitude.append(item.text)
 
     return constituentName, constituentSpeed, constituentPhase, constituentAmplitude, constituentInference
+
 
 def getHarmonics(db, stationName, noisy=False):
     """
@@ -838,6 +843,7 @@ def getHarmonics(db, stationName, noisy=False):
 
     return siteHarmonics
 
+
 def readPOLPRED(harmonics, noisy=False):
     """
     Load a POLPRED data file into a NumPy array. This can then be used by
@@ -907,6 +913,7 @@ def readPOLPRED(harmonics, noisy=False):
 
     return header, values
 
+
 def gridPOLPRED(values, noisy=False):
     """
     The POLPRED data are stored as a 2D array, with a single row for each
@@ -967,8 +974,8 @@ def gridPOLPRED(values, noisy=False):
     import numpy as np
 
     # Create rectangular arrays of the coordinates in the POLCOMS domain.
-    px = np.unique(values[:,1])
-    py = np.unique(values[:,0])
+    px = np.unique(values[:, 1])
+    py = np.unique(values[:, 0])
     PX, PY = np.meshgrid(px, py)
 
     # I think appending to a list is faster than a NumPy array.
@@ -987,6 +994,7 @@ def gridPOLPRED(values, noisy=False):
         PZ[yidx, xidx, :] = values[idx, :]
 
     return PX, PY, PZ
+
 
 def getHarmonicsPOLPRED(harmonics, constituents, lon, lat, stations, noisy=False, distThresh=0.5):
     """
@@ -1094,6 +1102,5 @@ def getHarmonicsPOLPRED(harmonics, constituents, lon, lat, stations, noisy=False
             if noisy:
                 print('done.')
                 sys.stdout.flush()
-
 
     return out

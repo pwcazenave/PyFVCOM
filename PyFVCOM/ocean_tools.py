@@ -70,6 +70,7 @@ import matplotlib.pyplot as plt
 c68 = 1.00024   # conversion constant to T68 temperature scale.
 c90 = 0.99976   # conversion constant to T90 temperature scale.
 
+
 def _tests():
     """
     Put some (sort of) unit tests in here to make sure the functions work as
@@ -79,8 +80,8 @@ def _tests():
 
     test_lat = 30
 
-    test_z = np.logspace(0.1, 4, 50) # log depth distribution
-    test_p = np.logspace(0.1, 4, 50) # log pressure distribution
+    test_z = np.logspace(0.1, 4, 50)  # log depth distribution
+    test_p = np.logspace(0.1, 4, 50)  # log pressure distribution
 
     res_p1 = depth2pressure(test_z, test_lat)
     res_z1 = pressure2depth(res_p1, test_lat)
@@ -105,21 +106,20 @@ def _tests():
 
         fig0.show()
 
-
     # Input parameters
     test_t = np.array(40)
     test_s = np.array(40)
     test_p = np.array(10000)
     test_pr = np.array(0)
     test_c = np.array(1.888091)
-    test_td = np.array(20) # for dens_jackett
-    test_sd = np.array(20) # for dens_jackett
-    test_pd = np.array(1000) # for dens_jackett
-    test_cond = np.array([100, 65000]) # for cond2salt
-    test_h = np.array((10, 20, 30, 100)) # depths for stokes
-    test_U = 0.25 # U for stokes and dissipation
-    test_omega = 1 / 44714.1647021416 # omega for stokes
-    test_z0 = np.array((0.0025)) # z0 for stokes
+    test_td = np.array(20)  # for dens_jackett
+    test_sd = np.array(20)  # for dens_jackett
+    test_pd = np.array(1000)  # for dens_jackett
+    test_cond = np.array([100, 65000])  # for cond2salt
+    test_h = np.array((10, 20, 30, 100))  # depths for stokes
+    test_U = 0.25  # U for stokes and dissipation
+    test_omega = 1 / 44714.1647021416  # omega for stokes
+    test_z0 = np.array((0.0025))  # z0 for stokes
     test_rho = 1025
 
     # Use some of the Fofonoff and Millard (1983) checks.
@@ -144,17 +144,17 @@ def _tests():
 
     # Haven't got the right input values for sal78 and sw_salinity, but the
     # outputs match the MATLAB functions, so I'm assuming they're OK...
-    #res_salinity = sw_salinity(test_c, test_t, test_p)
-    #print('Salinity\nFofonoff and Millard (1983):\t40\nsw_salinity:\t\t\t{}\n'.format(res_salinity))
+    # res_salinity = sw_salinity(test_c, test_t, test_p)
+    # print('Salinity\nFofonoff and Millard (1983):\t40\nsw_salinity:\t\t\t{}\n'.format(res_salinity))
 
     res_sal78 = sw_sal78(test_c, test_t, test_p)
     print('Salinity\nFofonoff and Millard (1983):\t40\nsw_sal78:\t\t\t{}\n'.format(res_sal78))
 
     # Haven't got the right input values for sal78 and sw_salinity, but the
     # outputs match the MATLAB functions, so I'm assuming they're OK...
-    #test_c, test_t, test_p = np.array(1.888091), np.array(40), np.array(10000)
-    #res_sal80 = sw_sal80(test_c, test_t, test_p)
-    #print('Salinity\nFofonoff and Millard (1983):\t40\nsw_sal80:\t\t\t{}\n'.format(res_sal80))
+    # test_c, test_t, test_p = np.array(1.888091), np.array(40), np.array(10000)
+    # res_sal80 = sw_sal80(test_c, test_t, test_p)
+    # print('Salinity\nFofonoff and Millard (1983):\t40\nsw_sal80:\t\t\t{}\n'.format(res_sal80))
 
     res_dens = dens_jackett(test_td, test_sd, test_pd)
     print('Jackett density\nJackett et al. (2005):\t1017.728868019642\ndens_jackett:\t\t{}\n'.format(res_dens))
@@ -167,6 +167,7 @@ def _tests():
 
     res_dissipation = dissipation(test_rho, test_U)
     print('Tidal dissipation\nKnown good:\t0.0400390625\ndissipation():\t{}'.format(res_dissipation))
+
 
 def pressure2depth(p, lat):
     """
@@ -186,11 +187,11 @@ def pressure2depth(p, lat):
 
     """
 
-    c1  =  9.72659
-    c2  = -2.1512e-5
-    c3  =  2.279e-10
-    c4  = -1.82e-15
-    gam =  2.184e-6
+    c1 = 9.72659
+    c2 = -2.1512e-5
+    c3 = 2.279e-10
+    c4 = -1.82e-15
+    gam = 2.184e-6
 
     y = np.abs(lat)
     rad = np.sin(np.deg2rad(y))**2
@@ -203,6 +204,7 @@ def pressure2depth(p, lat):
     z = tline / bline
 
     return z
+
 
 def depth2pressure(z, lat):
     """
@@ -236,6 +238,7 @@ def depth2pressure(z, lat):
 
     return p
 
+
 def dT_adiab_sw(t, s, p):
     """
     Calculate adiabatic temperature gradient (degrees Celsius dbar^{-1})
@@ -259,34 +262,34 @@ def dT_adiab_sw(t, s, p):
     """
 
     # Constants
-    a0 =  3.5803e-5
-    a1 =  8.5258e-6
+    a0 = 3.5803e-5
+    a1 = 8.5258e-6
     a2 = -6.836e-8
-    a3 =  6.6228e-10
+    a3 = 6.6228e-10
 
-    b0 =  1.8932e-6
+    b0 = 1.8932e-6
     b1 = -4.2393e-8
 
-    c0 =  1.8741e-8
+    c0 = 1.8741e-8
     c1 = -6.7795e-10
-    c2 =  8.733e-12
+    c2 = 8.733e-12
     c3 = -5.4481e-14
 
     d0 = -1.1351e-10
-    d1 =  2.7759e-12
+    d1 = 2.7759e-12
 
     e0 = -4.6206e-13
-    e1 =  1.8676e-14
+    e1 = 1.8676e-14
     e2 = -2.1687e-16
 
-    T68 = t * c68 # convert to 1968 temperature scale
-
+    T68 = t * c68  # convert to 1968 temperature scale
 
     atg = a0 + (a1 + (a2 + a3 * T68) * T68) * T68 + (b0 + b1 * T68) * (s - 35) + \
-            ((c0 + (c1 + (c2 + c3 * T68) * T68) * T68) + (d0 + d1 * T68) * \
+            ((c0 + (c1 + (c2 + c3 * T68) * T68) * T68) + (d0 + d1 * T68) *
             (s - 35)) * p + (e0 + (e1 + e2 * T68) * T68) * p * p
 
     return atg
+
 
 def theta_sw(t, s, p, pr):
     """
@@ -312,28 +315,29 @@ def theta_sw(t, s, p, pr):
 
     """
 
-    dP = pr - p # pressure difference.
+    dP = pr - p  # pressure difference.
 
     # 1st iteration
     dth = dP * dT_adiab_sw(t, s, p)
-    th  = (t * c68) + (0.5 * dth)
-    q   = dth
+    th = (t * c68) + (0.5 * dth)
+    q = dth
 
     # 2nd interation
     dth = dP * dT_adiab_sw(th / c68, s, (p + (0.5 * dP)))
-    th  = th + ((1 - (1 / np.sqrt(2))) * (dth - q))
-    q   = ((2 - np.sqrt(2)) * dth) + (((3 / np.sqrt(2)) - 2) * q)
+    th = th + ((1 - (1 / np.sqrt(2))) * (dth - q))
+    q = ((2 - np.sqrt(2)) * dth) + (((3 / np.sqrt(2)) - 2) * q)
 
     # 3rd iteration
     dth = dP * dT_adiab_sw(th / c68, s, (p + (0.5 * dP)))
-    th  = th + ((1 + (1 / np.sqrt(2))) * (dth - q))
-    q   = ((2 + np.sqrt(2)) * dth) + (((-3 / np.sqrt(2)) - 2) * q)
+    th = th + ((1 + (1 / np.sqrt(2))) * (dth - q))
+    q = ((2 + np.sqrt(2)) * dth) + (((-3 / np.sqrt(2)) - 2) * q)
 
     # 4th interation
     dth = dP * dT_adiab_sw(th / c68, s, (p + dP))
-    th  = (th + (dth - (2 * q)) / 6) / c68
+    th = (th + (dth - (2 * q)) / 6) / c68
 
     return th
+
 
 def cp_sw(t, s, p):
     """
@@ -391,19 +395,19 @@ def cp_sw(t, s, p):
     T4 = T1**4
 
     # Empirical constants
-    c0 =  4217.4
+    c0 = 4217.4
     c1 = -3.720283
-    c2 =  0.1412855
+    c2 = 0.1412855
     c3 = -2.654387e-3
-    c4 =  2.093236e-5
+    c4 = 2.093236e-5
 
     a0 = -7.643575
-    a1 =  0.1072763
+    a1 = 0.1072763
     a2 = -1.38385e-3
 
-    b0 =  0.1770383
+    b0 = 0.1770383
     b1 = -4.07718e-3
-    b2 =  5.148e-5
+    b2 = 5.148e-5
 
     cp_0t0 = c0 + (c1 * T1) + (c2 * T2) + (c3 * T3) + (c4 * T4)
 
@@ -414,59 +418,60 @@ def cp_sw(t, s, p):
 
     # Pressure dependance
     a0 = -4.9592e-1
-    a1 =  1.45747e-2
+    a1 = 1.45747e-2
     a2 = -3.13885e-4
-    a3 =  2.0357e-6
-    a4 =  1.7168e-8
+    a3 = 2.0357e-6
+    a4 = 1.7168e-8
 
-    b0 =  2.4931e-4
+    b0 = 2.4931e-4
     b1 = -1.08645e-5
-    b2 =  2.87533e-7
+    b2 = 2.87533e-7
     b3 = -4.0027e-9
-    b4 =  2.2956e-11
+    b4 = 2.2956e-11
 
     c0 = -5.422e-8
-    c1 =  2.6380e-9
+    c1 = 2.6380e-9
     c2 = -6.5637e-11
-    c3 =  6.136e-13
+    c3 = 6.136e-13
 
     d1_cp = (pbar * (a0 + (a1 * T1) + (a2 * T2) + (a3 * T3) + (a4 * T4))) + \
             (pbar**2 * (b0 + (b1 * T1) + (b2 * T2) + (b3 * T3) + (b4 * T4))) + \
             (pbar**3 * (c0 + (c1 * T1) + (c2 * T2) + (c3 * T3)))
 
-    d0 =  4.9247e-3
+    d0 = 4.9247e-3
     d1 = -1.28315e-4
-    d2 =  9.802e-7
-    d3 =  2.5941e-8
+    d2 = 9.802e-7
+    d3 = 2.5941e-8
     d4 = -2.9179e-10
 
     e0 = -1.2331e-4
     e1 = -1.517e-6
-    e2 =  3.122e-8
+    e2 = 3.122e-8
 
     f0 = -2.9558e-6
-    f1 =  1.17054e-7
+    f1 = 1.17054e-7
     f2 = -2.3905e-9
-    f3 =  1.8448e-11
+    f3 = 1.8448e-11
 
-    g0 =  9.971e-8
+    g0 = 9.971e-8
 
-    h0 =  5.540e-10
+    h0 = 5.540e-10
     h1 = -1.7682e-11
-    h2 =  3.513e-13
+    h2 = 3.513e-13
 
     j1 = -1.4300e-12
 
     d2_cp = pbar * \
-            ((s * (d0 + (d1 * T1) + (d2 * T2) + (d3 * T3) + (d4 * T4))) + \
-            (s**1.5 *(e0 + (e1 * T1) + (e2 * T2)))) + \
-            (pbar**2 * ((s * (f0 + (f1 * T1) + (f2 * T2) + (f3 * T3))) + \
-            (g0 * s**1.5))) + (pbar**3 * ((s * (h0 + (h1 * T1) + (h2 * T2))) + \
-            (j1 *T1 * s**1.5)))
+            ((s * (d0 + (d1 * T1) + (d2 * T2) + (d3 * T3) + (d4 * T4))) +
+            (s**1.5 * (e0 + (e1 * T1) + (e2 * T2)))) + \
+            (pbar**2 * ((s * (f0 + (f1 * T1) + (f2 * T2) + (f3 * T3))) +
+            (g0 * s**1.5))) + (pbar**3 * ((s * (h0 + (h1 * T1) + (h2 * T2))) +
+            (j1 * T1 * s**1.5)))
 
     cp = cp_st0 + d1_cp + d2_cp
 
     return(cp)
+
 
 def sw_smow(t):
     """
@@ -485,18 +490,20 @@ def sw_smow(t):
     """
 
     # Coefficients
-    a0 =  999.842594
-    a1 =  6.793952e-2
+    a0 = 999.842594
+    a1 = 6.793952e-2
     a2 = -9.095290e-3
-    a3 =  1.001685e-4
+    a3 = 1.001685e-4
     a4 = -1.120083e-6
-    a5 =  6.536332e-9
+    a5 = 6.536332e-9
 
     T68 = t * c68
 
-    dens = a0 + (a1 * T68) + (a2 * T68**2) + (a3 * T68**3) + (a4 * T68**4) + (a5 * T68**5)
+    dens = a0 + (a1 * T68) + (a2 * T68**2) + (a3 * T68**3) \
+            + (a4 * T68**4) + (a5 * T68**5)
 
     return dens
+
 
 def sw_dens0(t, s):
     """
@@ -516,17 +523,17 @@ def sw_dens0(t, s):
 
     """
 
-    b0 =  8.24493e-1
+    b0 = 8.24493e-1
     b1 = -4.0899e-3
-    b2 =  7.6438e-5
+    b2 = 7.6438e-5
     b3 = -8.2467e-7
-    b4 =  5.3875e-9
+    b4 = 5.3875e-9
 
     c0 = -5.72466e-3
-    c1 =  1.0227e-4
+    c1 = 1.0227e-4
     c2 = -1.6546e-6
 
-    d0 =  4.8314e-4
+    d0 = 4.8314e-4
 
     t68 = t * c68
 
@@ -536,6 +543,7 @@ def sw_dens0(t, s):
     dens = dens + sw_smow(t68)
 
     return dens
+
 
 def sw_seck(t, s, p):
     """
@@ -561,63 +569,64 @@ def sw_seck(t, s, p):
     # Compression terms
 
     T68 = t * c68
-    Patm = p / 10.0 # convert to bar
+    Patm = p / 10.0  # convert to bar
 
     h3 = -5.77905e-7
-    h2 =  1.16092e-4
-    h1 =  1.43713e-3
-    h0 =  3.239908
+    h2 = 1.16092e-4
+    h1 = 1.43713e-3
+    h0 = 3.239908
 
     AW = h0 + (h1 * T68) + (h2 * T68**2) + (h3 * T68**3)
 
-    k2 =  5.2787e-8
+    k2 = 5.2787e-8
     k1 = -6.12293e-6
-    k0 =  8.50935e-5
+    k0 = 8.50935e-5
 
     BW = k0 + (k1 + k2 * T68) * T68
 
     e4 = -5.155288e-5
-    e3 =  1.360477e-2
+    e3 = 1.360477e-2
     e2 = -2.327105
-    e1 =  148.4206
-    e0 =  19652.21
+    e1 = 148.4206
+    e0 = 19652.21
 
     KW = e0 + (e1 + (e2 + (e3 + e4 * T68) * T68) * T68) * T68
 
     # K at atmospheric pressure
 
-    j0 =  1.91075e-4
+    j0 = 1.91075e-4
 
     i2 = -1.6078e-6
     i1 = -1.0981e-5
-    i0 =  2.2838e-3
+    i0 = 2.2838e-3
 
-    A = AW + s * (i0 + (i1 * T68) + (i2 * T68**2) ) + (j0 * s**1.5)
+    A = AW + s * (i0 + (i1 * T68) + (i2 * T68**2)) + (j0 * s**1.5)
 
-    m2 =  9.1697e-10
-    m1 =  2.0816e-8
+    m2 = 9.1697e-10
+    m1 = 2.0816e-8
     m0 = -9.9348e-7
 
     # Equation 18
     B = BW + (m0 + (m1 * T68) + (m2 * T68**2)) * s
 
     f3 = -6.1670e-5
-    f2 =  1.09987e-2
+    f2 = 1.09987e-2
     f1 = -0.603459
-    f0 =  54.6746
+    f0 = 54.6746
 
     g2 = -5.3009e-4
-    g1 =  1.6483e-2
-    g0 =  7.944e-2
+    g1 = 1.6483e-2
+    g0 = 7.944e-2
 
     # Equation 16
-    K0 = KW + s * (f0 + (f1 * T68)+ (f2 * T68**2) + (f3 * T68**3)) + \
+    K0 = KW + s * (f0 + (f1 * T68) + (f2 * T68**2) + (f3 * T68**3)) + \
             s**1.5 * (g0 + (g1 * T68) + (g2 * T68**2))
 
     # K at t, s, p
-    K = K0 + (A * Patm) + (B * Patm**2) # Equation 15
+    K = K0 + (A * Patm) + (B * Patm**2)  # Equation 15
 
     return K
+
 
 def sw_dens(t, s, p):
     """
@@ -673,10 +682,11 @@ def sw_dens(t, s, p):
 
     dens0 = sw_dens0(t, s)
     k = sw_seck(t, s, p)
-    Patm = p / 10.0 # pressure in bars
+    Patm = p / 10.0  # pressure in bars
     rho = dens0 / (1 - Patm / k)
 
     return rho
+
 
 def sw_svan(t, s, p):
     """
@@ -699,11 +709,12 @@ def sw_svan(t, s, p):
 
     """
 
-    rho  = sw_dens(t, s, p)
+    rho = sw_dens(t, s, p)
     rho0 = sw_dens(np.zeros(p.shape), np.ones(p.shape) * 35.0, p)
     svan = (1 / rho) - (1 / rho0)
 
     return svan
+
 
 def sw_sal78(c, t, p):
     """
@@ -741,7 +752,7 @@ def sw_sal78(c, t, p):
     DT = t - 15.0
 
     # Convert conductivity to salinity
-    rt35 = np.array((((1.0031E-9 * t - 6.9698E-7) * t + 1.104259E-4) \
+    rt35 = np.array((((1.0031E-9 * t - 6.9698E-7) * t + 1.104259E-4)
             * t + 2.00564E-2) * t + 0.6766097)
     a0 = np.array(-3.107E-3 * t + 0.4215)
     b0 = np.array((4.464E-4 * t + 3.426E-2) * t + 1.0)
@@ -750,10 +761,9 @@ def sw_sal78(c, t, p):
     R = np.array(c / C1535)
     RT = np.sqrt(np.abs(R / (rt35 * (1.0 + c0 / (b0 + a0 * R)))))
 
-    s = np.array(
-            ((((2.7081 * RT - 7.0261) * RT + 14.0941) * RT + 25.3851) * RT - 0.1692) \
-            * RT + 0.0080 + (DT / (1.0 + 0.0162 * DT)) * \
-            (((((-0.0144 * RT + 0.0636) * RT - 0.0375) * \
+    s = np.array(((((2.7081 * RT - 7.0261) * RT + 14.0941) * RT + 25.3851)
+        * RT - 0.1692) * RT + 0.0080 + (DT / (1.0 + 0.0162 * DT)) *
+            (((((-0.0144 * RT + 0.0636) * RT - 0.0375) *
             RT - 0.0066) * RT - 0.0056) * RT + 0.0005))
 
     # Zero salinity trap
@@ -761,6 +771,7 @@ def sw_sal78(c, t, p):
         s[c < 5e-4] = 0
 
     return s
+
 
 def sw_sal80(c, t, p):
     """
@@ -798,18 +809,19 @@ def sw_sal80(c, t, p):
 
     """
 
-    #c  = c / 10; # [S/m]
+    # c = c / 10; # [S/m]
 
     r0 = 4.2914
     tk = 0.0162
 
-    a  = np.array([2.070e-05, -6.370e-10, 3.989e-15])
-    b  = np.array([3.426e-02, 4.464e-04, 4.215e-01, -3.107e-3])
+    a = np.array([2.070e-05, -6.370e-10, 3.989e-15])
+    b = np.array([3.426e-02, 4.464e-04, 4.215e-01, -3.107e-3])
 
     aa = np.array([0.0080, -0.1692, 25.3851, 14.0941, -7.0261, 2.7081])
-    bb = np.array([0.0005, -0.0056, -0.0066, -0.0375,  0.0636, -0.0144])
+    bb = np.array([0.0005, -0.0056, -0.0066, -0.0375, 0.0636, -0.0144])
 
-    cc = np.array([6.766097e-01, 2.00564e-02, 1.104259e-04, -6.9698e-07, 1.0031e-09])
+    cc = np.array([6.766097e-01, 2.00564e-02, 1.104259e-04,
+        -6.9698e-07, 1.0031e-09])
 
     rt = cc[0] + cc[1] * t + cc[2] * t * t + cc[3] * t * t * t + cc[4] * t * t * t * t
 
@@ -821,15 +833,16 @@ def sw_sal80(c, t, p):
     art = aa[0]
     brt = bb[0]
     for ii in range(1, 6):
-       rp  = rt**(ii / 2.0)
-       art = art + aa[ii] * rp
-       brt = brt + bb[ii] * rp
+        rp = rt**(ii / 2.0)
+        art = art + aa[ii] * rp
+        brt = brt + bb[ii] * rp
 
     rt = t - 15.0
 
     s = art + (rt / (1 + tk * rt)) * brt
 
     return s
+
 
 def sw_salinity(c, t, p):
     """
@@ -858,43 +871,44 @@ def sw_salinity(c, t, p):
     # Define constants
     C15 = 4.2914
 
-    a0 =  0.008
+    a0 = 0.008
     a1 = -0.1692
     a2 = 25.3851
     a3 = 14.0941
     a4 = -7.0261
-    a5 =  2.7081
+    a5 = 2.7081
 
-    b0 =  0.0005
+    b0 = 0.0005
     b1 = -0.0056
     b2 = -0.0066
     b3 = -0.0375
-    b4 =  0.0636
+    b4 = 0.0636
     b5 = -0.0144
 
-    c0 =  0.6766097
-    c1 =  2.00564e-2
-    c2 =  1.104259e-4
+    c0 = 0.6766097
+    c1 = 2.00564e-2
+    c2 = 1.104259e-4
     c3 = -6.9698e-7
-    c4 =  1.0031e-9
+    c4 = 1.0031e-9
 
-    d1 =  3.426e-2
-    d2 =  4.464e-4
-    d3 =  4.215e-1
+    d1 = 3.426e-2
+    d2 = 4.464e-4
+    d3 = 4.215e-1
     d4 = -3.107e-3
 
     # The e# coefficients reflect the use of pressure in dbar rather than in
     # Pascals (SI).
-    e1 =  2.07e-5
+    e1 = 2.07e-5
     e2 = -6.37e-10
-    e3 =  3.989e-15
+    e3 = 3.989e-15
 
     k = 0.0162
 
     # Calculate internal variables
     R = c / C15
     rt = c0 + (c1 + (c2 + (c3 + c4 * t) * t) * t) * t
-    Rp = 1.0 + (e1 + (e2 + e3 * p) * p) * p / (1.0 + (d1 + d2 * t) * t + (d3 + d4 * t) * R)
+    Rp = 1.0 + (e1 + (e2 + e3 * p) * p) * p / (1.0 + (d1 + d2 * t)
+            * t + (d3 + d4 * t) * R)
     Rt = R / Rp / rt
     sqrt_Rt = np.sqrt(Rt)
 
@@ -907,6 +921,7 @@ def sw_salinity(c, t, p):
     sw_salinity = salt + dS
 
     return sw_salinity
+
 
 def dens_jackett(th, s, p=None):
     """
@@ -956,39 +971,40 @@ def dens_jackett(th, s, p=None):
     sqrts = np.sqrt(s)
 
     anum = 9.9984085444849347e+02 + \
-            th * ( 7.3471625860981584e+00 + \
-            th * (-5.3211231792841769e-02 + \
+            th * (7.3471625860981584e+00 +
+            th * (-5.3211231792841769e-02 +
             th * 3.6492439109814549e-04)) + \
-            s * ( 2.5880571023991390e+00 - \
-            th * 6.7168282786692355e-03 + \
+            s * (2.5880571023991390e+00 -
+            th * 6.7168282786692355e-03 +
             s * 1.9203202055760151e-03)
 
     aden = 1.0 + \
-            th * (7.2815210113327091e-03 + \
-            th * (-4.4787265461983921e-05 + \
-            th * (3.3851002965802430e-07 + \
+            th * (7.2815210113327091e-03 +
+            th * (-4.4787265461983921e-05 +
+            th * (3.3851002965802430e-07 +
             th * 1.3651202389758572e-10))) + \
-            s * (1.7632126669040377e-03 - \
-            th * (8.8066583251206474e-06 + \
-            th2 * 1.8832689434804897e-10) + \
-            sqrts * (5.7463776745432097e-06 + \
+            s * (1.7632126669040377e-03 -
+            th * (8.8066583251206474e-06 +
+            th2 * 1.8832689434804897e-10) +
+            sqrts * (5.7463776745432097e-06 +
             th2 * 1.4716275472242334e-09))
 
     # Add pressure dependence
     if p is not None and np.any(p > 0.0):
         pth = p * th
-        anum += p * (1.1798263740430364e-02 + \
-                th2 * 9.8920219266399117e-08 + \
-                s * 4.6996642771754730e-06 - \
-                p * (2.5862187075154352e-08 + \
+        anum += p * (1.1798263740430364e-02 +
+                th2 * 9.8920219266399117e-08 +
+                s * 4.6996642771754730e-06 -
+                p * (2.5862187075154352e-08 +
                 th2 * 3.2921414007960662e-12))
-        aden += p * (6.7103246285651894e-06 - \
-                pth * (th2 * 2.4461698007024582e-17 + \
+        aden += p * (6.7103246285651894e-06 -
+                pth * (th2 * 2.4461698007024582e-17 +
                 p * 9.1534417604289062e-18))
 
     dens = anum/aden
 
     return dens
+
 
 def cond2salt(cond):
     """
@@ -1019,7 +1035,7 @@ def cond2salt(cond):
 
     # Ratio of specific conductance at 25 celsius to standard seawater
     # (salinity equals 35) at 25 celsius (53.087 millisiemens per centimetre).
-    R = cond / (53.087 * 1000) # convert from milli to micro
+    R = cond / (53.087 * 1000)  # convert from milli to micro
 
     salt = \
             k1 + \
@@ -1030,6 +1046,7 @@ def cond2salt(cond):
             (k6 * np.power(R, 5/2.0))
 
     return salt
+
 
 def vorticity(x, y, u, v, vtype='averaged'):
     """
@@ -1059,24 +1076,26 @@ def vorticity(x, y, u, v, vtype='averaged'):
 
     """
 
-    ## Need to do some calculations on the model grid to find neighbours etc. Use grid_tools for that.
-    #try:
-    #    from grid_tools import triangleGridEdge as tge
-    #except:
-    #    raise ImportError('Failed to import tge from the grid_tools.')
+    # # Need to do some calculations on the model grid to find neighbours etc.
+    # # Use grid_tools for that.
+    # try:
+    #     from grid_tools import triangleGridEdge as tge
+    # except:
+    #     raise ImportError('Failed to import tge from the grid_tools.')
 
-    ## Some basic shape parameters
-    #nt, nz, nn = np.shape(u)
+    # # Some basic shape parameters
+    # nt, nz, nn = np.shape(u)
 
-    #if vtype == 'averaged':
-    #    # Vertically average the velocity components.
-    #    ua = np.mean(u, dims=0)
-    #    va = np.mean(v, dims=0)
+    # if vtype == 'averaged':
+    #     # Vertically average the velocity components.
+    #     ua = np.mean(u, dims=0)
+    #     va = np.mean(v, dims=0)
 
-    #elif vtype == 'flux':
-    #    # Let's not do vertically averaged and instead do each vertical layer
-    #    # separately.
-    #    for zz in xrange(0, nz):
+    # elif vtype == 'flux':
+    #     # Let's not do vertically averaged and instead do each vertical layer
+    #     # separately.
+    #     for zz in xrange(0, nz):
+
 
 def zbar(data, levels):
     """
@@ -1131,6 +1150,7 @@ def zbar(data, levels):
         raise IndexError('Unable to use the number of dimensions provided in the levels data.')
 
     return databar
+
 
 def pea(temp, salinity, depth, levels):
     """
@@ -1196,6 +1216,7 @@ def pea(temp, salinity, depth, levels):
 
     return PEA
 
+
 def simpsonhunter(u, v, depth, levels, sampling=False):
     """
     Calculate the Simpson-Hunter parameter (h/u^{3}).
@@ -1248,6 +1269,7 @@ def simpsonhunter(u, v, depth, levels, sampling=False):
 
     return SH
 
+
 def mixedlayerdepth(rho, depth, thresh=0.03):
     """
     Calculate the mixed layer depth based on a threshold in the vertical
@@ -1286,11 +1308,11 @@ def mixedlayerdepth(rho, depth, thresh=0.03):
     """
 
     rhosurface = rho[:, 0, :]
-    mld = np.max(np.ma.masked_where(
-            rho < (rhosurface[:, np.newaxis, :] + thresh),
-            depth), axis=1)
+    mld = np.max(np.ma.masked_where(rho < (rhosurface[:, np.newaxis, :] + thresh),
+        depth), axis=1)
 
     return mld
+
 
 def stokes(h, U, omega, z0, delta=False, U_star=False):
     """
@@ -1345,7 +1367,7 @@ def stokes(h, U, omega, z0, delta=False, U_star=False):
 
     """
 
-    c1 = 0.25 # after Lamb (1932)
+    c1 = 0.25  # after Lamb (1932)
 
     Cd = (0.4 / (1 + np.log(z0 / h)))**2
     u_s = np.sqrt(Cd * U**2)
@@ -1360,6 +1382,7 @@ def stokes(h, U, omega, z0, delta=False, U_star=False):
         return S, u_s
     else:
         return S
+
 
 def dissipation(rho, U, Cd=2.5e-3):
     """
@@ -1403,4 +1426,3 @@ if __name__ == '__main__':
 
     # Run the tests to check things are working OK.
     _tests()
-
