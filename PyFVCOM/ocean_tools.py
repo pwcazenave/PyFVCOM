@@ -51,10 +51,12 @@ Provides functions:
     - dens_jackett : alternative formulation for calculating density from
       temperature and salinity (after Jackett et al. (2005)
     - pea: calculate the potential energy anomaly (stratification index).
-    - simpsonhunter: calculate the Simpson-Hunter parameter to predict frontal
+    - simpsonhunter : calculate the Simpson-Hunter parameter to predict frontal
       locations.
-    - mixedlayerdepth: calculate the mixed layer depth using the ERSEM
+    - mixedlayerdepth : calculate the mixed layer depth using the ERSEM
       definition.
+    - stokes : calculate the Stokes parameter.
+    - dissipation : calculate the tidal dissipation from a current speed.
 
 Pierre Cazenave (Plymouth Marine Laboratory) 2013/06/14
 
@@ -69,7 +71,11 @@ c68 = 1.00024   # conversion constant to T68 temperature scale.
 c90 = 0.99976   # conversion constant to T90 temperature scale.
 
 def _tests():
-    # Put some unit tests in here to make sure the functions work as expected.
+    """
+    Put some (sort of) unit tests in here to make sure the functions work as
+    expected.
+
+    """
 
     test_lat = 30
 
@@ -1287,7 +1293,8 @@ def mixedlayerdepth(rho, depth, thresh=0.03):
     return mld
 
 def stokes(h, U, omega, z0, delta=False, U_star=False):
-    """ Calculate the Stokes number for a given data set.
+    """
+    Calculate the Stokes number for a given data set.
 
     Parameters
     ----------
@@ -1374,7 +1381,7 @@ def dissipation(rho, U, Cd=2.5e-3):
     Returns
     -------
     D : ndarray
-        Tidal dissipation.
+        Tidal dissipation. Units?
 
     References
     ----------
