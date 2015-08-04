@@ -65,7 +65,7 @@ def _test(inLat, inLong, inZone=False):
 
     """
 
-    (z, e, n) = LLtoUTM(23, inLat, inLong, ZoneNumber=inZone)
+    z, e, n = LLtoUTM(23, inLat, inLong, ZoneNumber=inZone)
     outLat, outLong = UTMtoLL(23, n, e, z)
 
     return z, e, n, outLat, outLong
@@ -348,7 +348,7 @@ def UTMtoLL(ReferenceEllipsoid, northing, easting, zone):
         Latitude and longitude values as floating point values. Negative
         coordinates are west and south for longitude and latitude respectively.
 
-    zone : str, optional
+    zone : str, list, optional
         UTM zone number in which the coordinates are referenced.
 
     Reutrns
