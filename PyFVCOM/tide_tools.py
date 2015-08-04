@@ -219,15 +219,15 @@ def addHarmonicResults(db, stationName, constituentName, phase, amplitude, speed
     c = conn.cursor()
 
     # Create the necessary tables if they don't exist already
-    c.execute('CREATE TABLE IF NOT EXISTS TidalConstituents (
-        shortName TEXT COLLATE nocase,
-        amplitude FLOAT(10),
-        phase FLOAT(10),
-        speed FLOAT(10),
-        constituentName TEXT COLLATE nocase,
-        amplitudeUnits TEXT COLLATE nocase,
-        phaseUnits TEXT COLLATE nocase,
-        speedUnits TEXT COLLATE nocase,
+    c.execute('CREATE TABLE IF NOT EXISTS TidalConstituents ( \
+        shortName TEXT COLLATE nocase, \
+        amplitude FLOAT(10), \
+        phase FLOAT(10), \
+        speed FLOAT(10), \
+        constituentName TEXT COLLATE nocase, \
+        amplitudeUnits TEXT COLLATE nocase, \
+        phaseUnits TEXT COLLATE nocase, \
+        speedUnits TEXT COLLATE nocase, \
         inferredConstituent TEXT COLLATE nocase)')
 
     if noisy:
