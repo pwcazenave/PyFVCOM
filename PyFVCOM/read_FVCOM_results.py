@@ -244,8 +244,8 @@ class ncwrite():
 
     Notes
     -----
-    1. Unlimited dimension can only be time and MUST be the 1st dimension in
-       the variable dimensions list (or tuple).
+    1. Unlimited dimension (None) can only be time and MUST be the 1st
+       dimension in the variable dimensions list (or tuple).
     2. Variable dimensions HAVE to BE lists ['time']
 
     Parameters
