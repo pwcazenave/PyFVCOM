@@ -30,6 +30,10 @@ The Simpson-Hunter parameter is described in:
     Simpson, JH, and JR Hunter. "Fronts in the Irish Sea." Nature 250 (1974):
     404-6.
 
+The relative humidity from dew point temperature and ambient temperature is
+taken from:
+    http://www.vaisala.com/Vaisala%20Documents/Application%20notes/Humidity_Conversion_Formulas_B210973EN-F.pdf
+
 Provides functions:
     - pressure2depth : convert pressure (decibars) to depth in metres
     - depth2pressure : convert depth in metres to pressure in decibars
@@ -57,8 +61,10 @@ Provides functions:
       definition.
     - stokes : calculate the Stokes parameter.
     - dissipation : calculate the tidal dissipation from a current speed.
+    - calculate_rhum : calculate relative humidity from dew point temperature
+      and ambient temperature.
 
-Pierre Cazenave (Plymouth Marine Laboratory) 2013/06/14
+Pierre Cazenave (Plymouth Marine Laboratory)
 
 """
 
@@ -121,6 +127,8 @@ def _tests():
     test_omega = 1 / 44714.1647021416  # omega for stokes
     test_z0 = np.array((0.0025))  # z0 for stokes
     test_rho = 1025
+    test_temp = np.arange(-20, 50, 10)
+    test_dew = np.linspace(0, 20, len(test_temp))
 
     # Use some of the Fofonoff and Millard (1983) checks.
     res_svan = sw_svan(test_t, test_s, test_p)
@@ -167,6 +175,11 @@ def _tests():
 
     res_dissipation = dissipation(test_rho, test_U)
     print('Tidal dissipation\nKnown good:\t0.0400390625\ndissipation():\t{}'.format(res_dissipation))
+
+    valid_rhum = np.array((487.36529085, 270.83391406, 160.16590946, 100.0, 65.47545095, 44.70251971, 31.67003471))
+    rhum = calculate_rhum(test_dew, test_temp)
+    for hum in zip(rhum, valid_rhum):
+        print('Relative humidity:\tvalid: {:.3f}\tcalculate_rhum: {:.3f}\t(difference = {:.3f})'.format(hum[1], hum[0], np.diff(hum)[0]))
 
 
 def pressure2depth(p, lat):
@@ -1421,6 +1434,39 @@ def dissipation(rho, U, Cd=2.5e-3):
     D = rho * Cd * np.abs(U)**3
 
     return D
+
+
+def calculate_rhum(dew, temperature):
+    """
+    Calculate relative humidity from dew temperature and ambient temperature.
+
+    This uses the range of constants which yields results accurate in the range
+    -20 to 50 Celsius.
+
+    Parameters
+    ----------
+    dew : ndarray
+        Dew point temperature (Celsius).
+    temperature : ndarray
+        Ambient temperature (Celsius).
+
+    Returns
+    -------
+    rhum : ndarray
+        Relative humidity (%).
+
+    References
+    ----------
+    http://www.vaisala.com/Vaisala%20Documents/Application%20notes/Humidity_Conversion_Formulas_B210973EN-F.pdf
+
+    """
+
+    m = 7.59138
+    Tn = 240.7263
+
+    rhum = 100 * 10**(m * ((dew / (dew + Tn)) - (temperature / (temperature + Tn))))
+
+    return rhum
 
 
 if __name__ == '__main__':
