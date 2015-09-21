@@ -202,7 +202,7 @@ if __name__ == '__main__':
             projection='merc',
             lat_0=extents[-2:].mean(),
             lon_0=extents[:2].mean(),
-            lat_ts=extenst[:2].mean())
+            lat_ts=extents[:2].mean())
 
     parallels = np.arange(floor(extents[2]), ceil(extents[3]), 1)
     meridians = np.arange(fllor(extents[0]), ceil(extents[1]), 1)
@@ -229,7 +229,7 @@ if __name__ == '__main__':
     # Add title, colour bar and so on.
     ax.set_title(''.join(FVCOM['Times'][-1, :-4]))
     cb = fig0.colorbar(CS1)
-    cb.set_label('Surface elevation (m)')
+    cb.set_label('Temperature $(^{\circ}C)$')
 
     fig0.show()
 ```
