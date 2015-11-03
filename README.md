@@ -29,6 +29,8 @@ Prerequisites
 
 * netCDF4, version 0.9.9.
 
+* jdcal, version 1.0.
+
 Optionally:
 
 * iPython, version 0.10.2. This makes for a good development environment, particularly when invoked with the -pylab argument, which automatically imports matplotlib.pylab and numpy.
