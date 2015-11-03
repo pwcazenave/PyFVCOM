@@ -1,5 +1,6 @@
 """
-Convert from a range of input coastline file types to a CST file compatible with SMS.
+Convert from a range of input coastline file types to a CST file compatible
+with SMS.
 
 CST (FVCOM) format is a text file structured as:
 
@@ -55,7 +56,10 @@ def readESRIShapeFile(file, fileOut):
         fileWrite.write('{}\t{}\n'.format(arcLength, float(z)))
         # Add the actual arc
         for arcPos in shapes[arc].points:
-            fileWrite.write('\t{}\t{}\t{}\n'.format(float(arcPos[0]), float(arcPos[1]), float(z)))
+            fileWrite.write('\t{}\t{}\t{}\n'.format(
+                float(arcPos[0]),
+                float(arcPos[1]),
+                float(z)))
 
     fileWrite.close()
 
@@ -115,7 +119,10 @@ def readArcMIKE(file, fileOut):
             # number of nodes and z
             fileWrite.write('{}\t{}\n'.format(int(n), float(z)))
             for arcPos in arc:
-                fileWrite.write('\t{}\t{}\t{}\n'.format(float(arcPos[0]), float(arcPos[1]), float(z)))
+                fileWrite.write('\t{}\t{}\t{}\n'.format(
+                    float(arcPos[0]),
+                    float(arcPos[1]),
+                    float(z)))
             # Reset n and arc for new arc
             n = 1
             arc = []
@@ -161,9 +168,9 @@ def readCST(cst):
                 # Number of nodes within a single arc. Store the current index
                 # and use as the key for the dict.
                 nv = int(line[0])
-                id = str(c) # dict key
-                vert[id] = [] # initialise the vert list
-                c += 1 # arc counter
+                id = str(c)    # dict key
+                vert[id] = []  # initialise the vert list
+                c += 1         # arc counter
 
             elif len(line) == 3:
                 coords = [float(x) for x in line[:-1]]
@@ -205,7 +212,7 @@ def writeCST(obc, file, sort=False):
         f.write('COAST\n')
         f.write('{:d}\n'.format(nb))
 
-        for _, bb in obc.iteritems(): # each boundary
+        for _, bb in obc.iteritems():  # each boundary
             nn = len(bb)
 
             # The current arc's header
@@ -219,5 +226,3 @@ def writeCST(obc, file, sort=False):
                 f.write('\t{:.6f}\t{:.6f}\t0.0\n'.format(xy[0], xy[1]))
 
         f.close
-
-

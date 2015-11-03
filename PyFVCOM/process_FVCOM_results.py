@@ -7,9 +7,6 @@ NetCDF file.
 import numpy as np
 import matplotlib.pyplot as plt
 
-from sys import argv
-
-from read_FVCOM_results import readFVCOM
 from grid_tools import parseUnstructuredGridFVCOM
 
 
@@ -37,20 +34,16 @@ def calculateTotalCO2(FVCOM, varPlot, startIdx, layerIdx, leakIdx, dt, noisy=Fal
     for i in range(startIdx, Z.shape[0]):
         if i > 0:
             if len(np.shape(Z)) == 3:
-                TCO2[i] = TCO2[i-1] + (Z[i,layerIdx,leakIdx].squeeze() * dt)
+                TCO2[i] = TCO2[i-1] + (Z[i, layerIdx, leakIdx].squeeze() * dt)
             else:
-                TCO2[i] = TCO2[i-1] + (Z[i,leakIdx].squeeze() * dt)
-
-            # Maybe a little too noisy...
-            #if noisy:
-            #    print "Total " + varPlot + ": " + str(TCO2[i]) + "\n\t" + varPlot + ": " + str(Z[i,0,leakIdx].squeeze())
+                TCO2[i] = TCO2[i-1] + (Z[i, leakIdx].squeeze() * dt)
 
     # Scale to daily input. Input rate begins two days into model run
     nDays = FVCOM['time'].max()-FVCOM['time'].min()-2
     TCO2Scaled = TCO2/nDays
 
     # Get the total CO2 in the system at the end of the simulation
-    totalCO2inSystem = np.sum(Z[np.isfinite(Z)]) # skip NaNs
+    totalCO2inSystem = np.sum(Z[np.isfinite(Z)])  # skip NaNs
 
     # Some results
     if noisy:
@@ -60,13 +53,13 @@ def calculateTotalCO2(FVCOM, varPlot, startIdx, layerIdx, leakIdx, dt, noisy=Fal
         print("Total in the system per day:\t{:.2f}".format(totalCO2inSystem / nDays))
 
     # Make a pretty picture
-    #plt.figure(100)
-    #plt.clf()
-    ##plt.plot(FVCOM['time'],TCO2,'r-x')
-    #plt.plot(xrange(Z.shape[0]),np.squeeze(Z[:,layerIdx,leakIdx]),'r-x')
-    #plt.xlabel('Time')
-    #plt.ylabel(varPlot + ' input')
-    #plt.show()
+    # plt.figure(100)
+    # plt.clf()
+    # #plt.plot(FVCOM['time'],TCO2,'r-x')
+    # plt.plot(xrange(Z.shape[0]),np.squeeze(Z[:,layerIdx,leakIdx]),'r-x')
+    # plt.xlabel('Time')
+    # plt.ylabel(varPlot + ' input')
+    # plt.show()
 
     return totalCO2inSystem
 
@@ -96,12 +89,12 @@ def CO2LeakBudget(FVCOM, leakIdx, startDay):
     CO2Leak = np.ones(np.shape(CO2))*np.nan
 
     for i, tt in enumerate(timeSteps):
-        dump = FVCOM['h']+FVCOM['zeta'][tt,:]
+        dump = FVCOM['h'] + FVCOM['zeta'][tt, :]
         dz = np.abs(np.diff(FVCOM['siglev'], axis=0))
-        data = FVCOM['DYE'][tt,:,:]*dz
+        data = FVCOM['DYE'][tt, :, :]*dz
         data = np.sum(data, axis=0)
-        CO2[i] = np.sum(data*FVCOM['art1']*dump)
-        CO2Leak[i] = np.sum(data[leakIdx]*FVCOM['art1'][leakIdx])
+        CO2[i] = np.sum(data*FVCOM['art1'] * dump)
+        CO2Leak[i] = np.sum(data[leakIdx] * FVCOM['art1'][leakIdx])
 
     maxCO2 = np.max(CO2)
 
@@ -111,7 +104,7 @@ def CO2LeakBudget(FVCOM, leakIdx, startDay):
 def dataAverage(data, **args):
     """ Depth average a given FVCOM output data set along a specified axis """
 
-    dataMask = np.ma.masked_array(data,np.isnan(data))
+    dataMask = np.ma.masked_array(data, np.isnan(data))
     dataMeaned = np.ma.filled(dataMask.mean(**args), fill_value=np.nan).squeeze()
 
     return dataMeaned
@@ -143,99 +136,13 @@ def unstructuredGridVolume(FVCOM):
     elemThickness = np.abs(np.diff(FVCOM['siglev'], axis=0))
 
     # Get volumes for each cell at each time step to include tidal changes
-    tt, xx = FVCOM['zeta'].shape # time, node
-    ll = FVCOM['siglev'].shape[0] - 1 # layers = levels - 1
-    allVolumes = ((
-        elemDepths + np.tile(elemTides, [ll, 1, 1]).transpose(1, 0, 2)
-        ) * np.tile(elemThickness, [tt, 1, 1])) * elemAreas
+    tt, xx = FVCOM['zeta'].shape  # time, node
+    ll = FVCOM['siglev'].shape[0] - 1  # layers = levels - 1
+    allVolumes = ((elemDepths
+        + np.tile(elemTides, [ll, 1, 1]).transpose(1, 0, 2))
+        * np.tile(elemThickness, [tt, 1, 1])) * elemAreas
 
     return allVolumes
-
-
-def animateModelOutput(FVCOM, varPlot, startIdx, skipIdx, layerIdx, meshFile, addVectors=False, noisy=False):
-    """
-    Animated model output (for use in ipython).
-
-    Give a NetCDF object as the first input (i.e. the output of readFVCOM()).
-    Specify the variable of interest as a string (e.g. 'DYE'). This is case
-    sensitive. Specify a starting index, a skip index of n to skip n time steps
-    in the animation. The layerIdx is either the sigma layer to plot or, if
-    negative, means the depth averaged value is calculated. Supply an
-    unstructured grid file (FVCOM format).
-
-    Optionally add current vectors to the plot with addVectors=True which will
-    be colour coded by their magnitude.
-
-    Noisy, if True, turns on printing of various bits of potentially
-    relevant information to the console.
-
-    """
-
-    try:
-        [triangles, nodes, x, y, z] = parseUnstructuredGridFVCOM(meshFile)
-    except:
-        print('Couldn''t import unstructured grid. Check specified file is the correct format')
-
-    Z = FVCOM[varPlot]
-
-    if layerIdx < 0:
-        # Depth average the input data
-        Z = dataAverage(Z, axis=1)
-
-    plt.figure(200)
-    plt.clf()
-
-    # Initialise the plot
-    plt.tripcolor(
-        FVCOM['x'],
-        FVCOM['y'],
-        triangles,
-        np.zeros(np.shape(FVCOM['x'])),
-        shading='interp')
-    plt.axes().set_aspect('equal', 'datalim')
-    plt.colorbar()
-    #plt.clim(-10, 10)
-    plt.draw()
-
-    # len(FVCOM['time'])+1 so range goes upto the length so that when i-1 is
-    # called we get the last time step included in the animation.
-    for i in range(startIdx, len(FVCOM['time'])+1, skipIdx):
-        # Start animation at the beginning of the array or at startIdx-1
-        # (i.e. i-2), whichever is larger.
-        if i == startIdx:
-            getIdx = np.max([startIdx-1, 0])
-        else:
-            getIdx = i-1
-
-        if len(np.shape(Z)) == 3: # dim1=time, dim2=sigma, dim3=dye
-            plotZ = np.squeeze(Z[getIdx,layerIdx,:])
-        else: # dim1=time, dim2=dye (depth averaged)
-            # Can't do difference here because we've depth averaged
-            plotZ = np.squeeze(Z[getIdx,:])
-
-        # Update the plot
-        plt.clf()
-        plt.tripcolor(FVCOM['x'], FVCOM['y'], triangles, plotZ, shading='interp')
-        plt.colorbar()
-        #plt.clim(-2, 2)
-        # Add the vectors
-        plt.hold('on')
-        if addVectors:
-            UU = np.squeeze(FVCOM['u'][i,layerIdx,:])
-            VV = np.squeeze(FVCOM['v'][i,layerIdx,:])
-            CC = np.sqrt(UU**2 + VV**2)
-            Q = plt.quiver(FVCOM['xc'], FVCOM['yc'], UU, VV, CC, scale=10)
-            plt.quiverkey(Q, 0.5, 0.92, 1, r'$1 ms^{-1}$', labelpos='W')
-        plt.axes().set_aspect('equal', 'datalim')
-        plt.draw()
-        plt.show()
-
-        # Some useful output
-        if noisy:
-            print('{} of {} (date {.2f})'.format(i, len(FVCOM['time']), FVCOM['time'][i-1]))
-            print('Min: {} Max: {} Range: {} Standard deviation: {}'.format(plotZ.min(), plotZ.max(), plotZ.max()-plotZ.min(), plotZ.std()))
-        else:
-            print()
 
 
 def residualFlow(FVCOM, idxRange=False, checkPlot=False, noisy=False):
@@ -289,7 +196,7 @@ def residualFlow(FVCOM, idxRange=False, checkPlot=False, noisy=False):
 
     # Some tidal assumptions. This will need to change in areas in which the
     # diurnal tide dominates over the semidiurnal.
-    tideCycle =  (12.0 + (25.0 / 60)) / 24.0
+    tideCycle = (12.0 + (25.0 / 60)) / 24.0
     # The number of values in the output file which covers a tidal cycle
     tideWindow = np.ceil(tideCycle / dt)
 
@@ -297,10 +204,11 @@ def residualFlow(FVCOM, idxRange=False, checkPlot=False, noisy=False):
     # idxRange). If it's spring-neap, use 14.4861 days; daily is one day,
     # obviously.
 
-    startIdx = np.ceil(3 / dt) # start at the third day to skip the warm up period
+    startIdx = np.ceil(3 / dt)  # start at the third day to skip the warm up period
 
     if idxRange == 'spring-neap':
-        endIdx = startIdx + tideWindow + np.ceil(14.4861 / dt) # to the end of the spring-neap cycle
+        # To the end of the spring-neap cycle
+        endIdx = startIdx + tideWindow + np.ceil(14.4861 / dt)
     elif idxRange == 'daily':
         endIdx = startIdx + tideWindow + np.ceil(1 / dt)
     elif idxRange is False:
@@ -361,8 +269,8 @@ def residualFlow(FVCOM, idxRange=False, checkPlot=False, noisy=False):
     vDiff = vEnd - vStart
 
     # Calculate direction and magnitude.
-    rDir = np.arctan2(uDiff, vDiff) * (180 / np.pi); # in degrees.
-    rMag = np.sqrt(uDiff**2 + vDiff**2) / tideDuration; # in units/s.
+    rDir = np.arctan2(uDiff, vDiff) * (180 / np.pi)  # in degrees.
+    rMag = np.sqrt(uDiff**2 + vDiff**2) / tideDuration  # in units/s.
 
     # Plot to check everything's OK
     if checkPlot:
@@ -386,4 +294,3 @@ def residualFlow(FVCOM, idxRange=False, checkPlot=False, noisy=False):
         fig.show()
 
     return uRes, vRes, rDir, rMag
-

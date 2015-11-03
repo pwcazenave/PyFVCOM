@@ -11,6 +11,12 @@ Some of the tidal analysis functions require TAPPy to be installed and in
 
 from __future__ import print_function
 
+try:
+    import jdcal
+except ImportError:
+    raise ImportError('Cannot import jdcal (for calendar operations).')
+
+
 def julianDay(gregorianDateTime, mjd=False):
     """
     For a given gregorian date format (YYYY,MM,DD,hh,mm,ss) get the
@@ -40,15 +46,7 @@ def julianDay(gregorianDateTime, mjd=False):
     Julian Day epoch: 12:00 January 1, 4713 BC, Monday
     Modified Julain Day epoch: 00:00 November 17, 1858, Wednesday
 
-    Modified after code at http://paste.lisp.org/display/73536 and
-    http://home.online.no/~pjacklam/matlab/software/util/timeutil/date2jd.m
-
     """
-
-    try:
-        import numpy as np
-    except ImportError:
-        raise ImportError('Failed to import NumPy')
 
     try:
         nr, nc = np.shape(gregorianDateTime)
@@ -69,31 +67,31 @@ def julianDay(gregorianDateTime, mjd=False):
                 gregorianDateTime = np.hstack([gregorianDateTime, extraCols])
 
     if nr > 1:
-        year   = gregorianDateTime[:, 0]
-        month  = gregorianDateTime[:, 1]
-        day    = gregorianDateTime[:, 2]
-        hour   = gregorianDateTime[:, 3]
+        year = gregorianDateTime[:, 0]
+        month = gregorianDateTime[:, 1]
+        day = gregorianDateTime[:, 2]
+        hour = gregorianDateTime[:, 3]
         minute = gregorianDateTime[:, 4]
         second = gregorianDateTime[:, 5]
     else:
-        year   = gregorianDateTime[0]
-        month  = gregorianDateTime[1]
-        day    = gregorianDateTime[2]
-        hour   = gregorianDateTime[3]
+        year = gregorianDateTime[0]
+        month = gregorianDateTime[1]
+        day = gregorianDateTime[2]
+        hour = gregorianDateTime[3]
         minute = gregorianDateTime[4]
         second = gregorianDateTime[5]
 
-    timeut = hour + (minute / 60.0) + (second / 3600.0)
-
-    # For common era (CE), anno domini (AD). From the MATLAB function greg2julian.
-    jd = (367.0 * year) - np.floor(7.0 * (year + np.floor((month + 9.0) / 12.0)) / 4.0) - \
-                      np.floor(3.0 * (np.floor((year + (month - 9.0) / 7.0) / 100.0) + 1.0) / 4.0) + \
-                      np.floor((275.0 * month) / 9.0) + day + 1721028.5 + (timeut / 24.0)
+    julian, modified = np.empty((nr, nc)), np.empty((nr, nc))
+    for ii, tt in enumerate(gregorianDateTime):
+        julian[ii], modified[ii] = jdcal.gcal2jd(tt[0], tt[1], tt[2])
+        julian[ii] += (hour + (minute / 60.0) + (second / 3600.0)) / 24.0
+        modified[ii] += (hour + (minute / 60.0) + (second / 3600.0)) / 24.0
 
     if mjd:
-        return jd - 2400000.5
+        return modified
     else:
-        return jd
+        return julian
+
 
 def gregorianDate(julianDay, mjd=False):
     """
@@ -119,7 +117,7 @@ def gregorianDate(julianDay, mjd=False):
     -------
     >>> greg = gregorianDate(np.array([53583.00390625, 55895.9765625]), mjd=True)
     >>> greg.astype(int)
-    array([[2005,    8,    1,    0,    5,   38],
+    array([[2005,    8,    1,    0,    5,   37],
            [2011,   11,   30,   23,   26,   15])
 
     """
@@ -129,50 +127,32 @@ def gregorianDate(julianDay, mjd=False):
     except ImportError:
         raise ImportError('Failed to import NumPy')
 
-    if mjd:
+    if not mjd:
+        # It's easier to use jdcal in Modified Julian Day
         julianDay = julianDay + 2400000.5
 
-    I = np.floor(julianDay + 0.5)
-    Fr = np.abs(I - (julianDay + 0.5))
-
-    if np.any(I < 2299160):
-        B = I
+    greg = np.empty((len(julianDay), 6))
+    if np.shape(julianDay)[0] == 1:
+        ymdf = jdcal.jd2gcal(2400000.5, julianDay)
+        fractionalday = ymdf[-1]
+        hours = int(fractionalday * 24)
+        minutes = int(((fractionalday * 24) - hours) * 60)
+        seconds = ((((fractionalday * 24) - hours) * 60) - minutes) * 60
+        greg = np.asarray((ymdf[0], ymdf[1], ymdf[2], hours, minutes, seconds))
     else:
-        A = np.floor((I - 1867216.25) / 36524.25)
-        a4 = np.floor(A / 4)
-        B = I + 1.0 + A - a4
-
-    C = B + 1524.0
-    D = np.floor((C - 122.1) / 365.25)
-    E = np.floor(365.25 * D)
-    G = np.floor((C - E) / 30.6001)
-    day = np.floor(C - E + Fr - np.floor(30.6001 * G))
-
-    if np.any(G > 13.5):
-        month = G - 13
-    else:
-        month = G - 1
-
-    if np.any(month <= 2.5):
-        year = D - 4715
-    else:
-        year = D - 4716
-
-    hour = np.floor(Fr * 24)
-    minu = np.floor(np.abs(hour - (Fr * 24)) * 60)
-    minufrac = (np.abs(hour - (Fr * 24)) * 60)
-    sec = np.ceil(np.abs(minu - minufrac) * 60)
-
-    # Fix some months being negative. This only happens if the input is larger
-    # than ~30 elements in the array. No idea why.
-    if month.min() < 1:
-        month[month < 1] = month[month < 1] + 12
-
-    greg = np.column_stack((year, month, day, hour, minu, sec))
+        for ii, jj in enumerate(julianDay):
+            ymdf = jdcal.jd2gcal(2400000.5, jj)
+            greg[ii, :3] = ymdf[:3]
+            fractionalday = ymdf[-1]
+            hours = int(fractionalday * 24)
+            minutes = int(((fractionalday * 24) - hours) * 60)
+            seconds = ((((fractionalday * 24) - hours) * 60) - minutes) * 60
+            greg[ii, 3:] = [hours, minutes, seconds]
 
     return greg
 
-def addHarmonicResults(db, stationName, constituentName, phase, amplitude, speed, inferred, noisy=False):
+
+def addHarmonicResults(db, stationName, constituentName, phase, amplitude, speed, inferred, ident=None, noisy=False):
     """
     Add data to an SQLite database.
 
@@ -194,6 +174,9 @@ def addHarmonicResults(db, stationName, constituentName, phase, amplitude, speed
         'true' or 'false' indicating whether the values are inferred
         (i.e. the time series is too short to perform a robust harmonic
         analysis).
+    ident : str
+        Optional prefix for the table names in the SQLite database. Usage of
+        this option means you can store both u and v data in the same database.
     noisy : bool
         Set to True to enable verbose output.
 
@@ -204,32 +187,36 @@ def addHarmonicResults(db, stationName, constituentName, phase, amplitude, speed
     except ImportError:
         raise ImportError('Failed to import the SQLite3 module')
 
+    if not ident:
+        ident = ''
+    else:
+        ident = '_' + ident
+
     conn = sqlite3.connect(db)
     c = conn.cursor()
 
-
     # Create the necessary tables if they don't exist already
-    c.execute('CREATE TABLE IF NOT EXISTS TidalConstituents (\
-        shortName TEXT COLLATE nocase,\
-        amplitude FLOAT(10),\
-        phase FLOAT(10),\
-        speed FLOAT(10),\
-        constituentName TEXT COLLATE nocase,\
-        amplitudeUnits TEXT COLLATE nocase,\
-        phaseUnits TEXT COLLATE nocase,\
-        speedUnits TEXT COLLATE nocase,\
-        inferredConstituent TEXT COLLATE nocase\
-        )')
+    c.execute('CREATE TABLE IF NOT EXISTS TidalConstituents ( \
+        shortName TEXT COLLATE nocase, \
+        amplitude FLOAT(10), \
+        phase FLOAT(10), \
+        speed FLOAT(10), \
+        constituentName TEXT COLLATE nocase, \
+        amplitudeUnits TEXT COLLATE nocase, \
+        phaseUnits TEXT COLLATE nocase, \
+        speedUnits TEXT COLLATE nocase, \
+        inferredConstituent TEXT COLLATE nocase)')
 
     if noisy:
         print('amplitude, phase and speed.', end=' ')
     for item in range(len(inferred)):
-        c.execute('INSERT INTO TidalConstituents VALUES (?,?,?,?,?,?,?,?,?)',\
-            (stationName, amplitude[item], phase[item], speed[item], constituentName[item], 'metres', 'degrees', 'degrees per mean solar hour', inferred[item]))
+        c.execute('INSERT INTO TidalConstituents VALUES (?,?,?,?,?,?,?,?,?)',
+            (stationName + ident, amplitude[item], phase[item], speed[item], constituentName[item], 'metres', 'degrees', 'degrees per mean solar hour', inferred[item]))
 
     conn.commit()
 
     conn.close()
+
 
 def getObservedData(db, table, startYear=False, endYear=False, noisy=False):
     """
@@ -283,18 +270,18 @@ def getObservedData(db, table, startYear=False, endYear=False, noisy=False):
                 if startYear == endYear:
                     # We have the same start and end dates, so just do a
                     # simpler version
-                    c.execute('SELECT * FROM ' + table + ' WHERE ' + \
-                    table + '.year == ' + str(startYear) + \
+                    c.execute('SELECT * FROM ' + table + ' WHERE ' +
+                    table + '.year == ' + str(startYear) +
                     ' ORDER BY year, month, day, hour, minute, second')
                 else:
                     # We have a date range
-                    c.execute('SELECT * FROM ' + table + ' WHERE ' + \
-                    table + '.year > ' + str(startYear) + \
-                    ' AND ' + table + '.year < ' + str(endYear) + \
+                    c.execute('SELECT * FROM ' + table + ' WHERE ' +
+                    table + '.year > ' + str(startYear) +
+                    ' AND ' + table + '.year < ' + str(endYear) +
                     ' ORDER BY year, month, day, hour, minute, second')
             else:
                 # Return all data
-                c.execute('SELECT * FROM ' + table + \
+                c.execute('SELECT * FROM ' + table +
                     ' ORDER BY year, month, day, hour, minute, second')
             # Now get the data in a format we might actually want to use
             data = c.fetchall()
@@ -312,11 +299,12 @@ def getObservedData(db, table, startYear=False, endYear=False, noisy=False):
 
     return data
 
-def getObservedMetadata(db, originator=False):
+
+def getObservedMetadata(db, originator=False, obsdepth=None):
     """
-    Extracts the meta data from the tidal elevations database. If the
-    supplied originator is False (default), then information from all
-    stations is returned.
+    Extracts the meta data from the supplied database. If the supplied
+    originator is False (default), then information from all stations is
+    returned.
 
     Parameters
     ----------
@@ -325,6 +313,9 @@ def getObservedMetadata(db, originator=False):
     originator : str, optional
         Specify an originator (e.g. 'NTSLF', 'NSTD', 'REFMAR') to
         extract only that data. Defaults to all data.
+    obsdepth : bool, optional
+        Set to True to return the observation depth (useful for current meter
+        data). Defaults to False.
 
     Returns
     -------
@@ -334,6 +325,8 @@ def getObservedMetadata(db, originator=False):
         Short names (e.g. 'AVO' for 'Avonmouth') of the tide stations.
     longName : list
         Long names of the tide stations (e.g. 'Avonmouth').
+    depth : list
+        If obsdepth=True on input, then depths are returned, otherwise omitted.
 
     """
 
@@ -348,8 +341,10 @@ def getObservedMetadata(db, originator=False):
         c = con.cursor()
 
         if originator is not False:
-            out = c.execute('SELECT * from Stations where originatorName is ? or originatorLongName is ?',\
-                [originator, originator])
+            out = c.execute(
+                    'SELECT * from Stations where originatorName is ? or originatorLongName is ?',
+                    [originator, originator]
+                    )
         else:
             out = c.execute('SELECT * from Stations')
 
@@ -359,14 +354,22 @@ def getObservedMetadata(db, originator=False):
         lon = [float(m[1]) for m in metadata]
         site = [str(m[2]) for m in metadata]
         longName = [str(m[3]) for m in metadata]
+        if len(m) > 4:
+            depth = [str(m[4]) for m in metadata]
+        else:
+            depth = None
 
     except sqlite3.Error as e:
         if con:
             con.close()
             print('Error {}:'.format(e.args[0]))
-            lat, lon, site, longName = [False, False, False, False]
+            lat, lon, site, longName, depth = False, False, False, False, False
 
-    return lat, lon, site, longName
+    if not obsdepth:
+        return lat, lon, site, longName
+    else:
+        return lat, lon, site, longName, depth
+
 
 def cleanObservedData(data, removeResidual=False):
     """
@@ -408,8 +411,8 @@ def cleanObservedData(data, removeResidual=False):
     npObsData = []
     npFlagData = []
     for row in data:
-        npObsData.append(row[0:-1]) # eliminate the flag from the numeric data
-        npFlagData.append(row[-1]) # save the flag separately
+        npObsData.append(row[0:-1])  # eliminate the flag from the numeric data
+        npFlagData.append(row[-1])   # save the flag separately
 
     # For the tidal data, convert the numbers to floats to avoid issues
     # with truncation.
@@ -417,16 +420,16 @@ def cleanObservedData(data, removeResidual=False):
     npFlagData = np.asarray(npFlagData)
 
     # Extract the time and tide data
-    allObsTideData = np.asarray(npObsData[:,6])
+    allObsTideData = np.asarray(npObsData[:, 6])
     allObsTideResidual = np.asarray(npObsData[:, 7])
-    allDateTimes = np.asarray(npObsData[:,0:6], dtype=float)
+    allDateTimes = np.asarray(npObsData[:, 0:6], dtype=float)
 
     dateMJD = julianDay(allDateTimes, mjd=True)
 
     # Apply a correction (of sorts) from LAT to MSL by calculating the
     # mean (excluding nodata values (-99 for NTSLF, -9999 for SHOM))
     # and removing that from the elevation.
-    tideDataMSL = allObsTideData - np.mean(allObsTideData[allObsTideData>-99])
+    tideDataMSL = allObsTideData - np.mean(allObsTideData[allObsTideData > -99])
 
     if removeResidual:
         # Replace the residuals to remove with zeros where they're -99
@@ -436,6 +439,7 @@ def cleanObservedData(data, removeResidual=False):
         tideDataMSL = tideDataMSL - allObsTideResidual
 
     return dateMJD, tideDataMSL, npFlagData, allDateTimes
+
 
 def TAPPy(data, noisy=False):
     """
@@ -499,9 +503,8 @@ def TAPPy(data, noisy=False):
     include_inferred = True
 
     # Create a tappy object.
-    x = tappy.tappy(
-        outputts = outputts,
-        outputxml = outputxml,
+    x = tappy.tappy(outputts=outputts,
+        outputxml=outputxml,
         quiet=quiet,
         debug=debug,
         ephemeris=ephemeris,
@@ -513,8 +516,7 @@ def TAPPy(data, noisy=False):
         zero_ts=zero_ts,
         filter=filter,
         pad_filters=pad_filters,
-        include_inferred=include_inferred,
-        )
+        include_inferred=include_inferred)
 
     # Add the time series to the TAPPy object
     x.dates = []
@@ -536,9 +538,9 @@ def TAPPy(data, noisy=False):
         ray = 1.0
     (x.speed_dict, x.key_list) = x.which_constituents(len(x.dates),
                                                       package,
-                                                      rayleigh_comp = ray)
+                                                      rayleigh_comp=ray)
 
-    x.constituents() # the analysis
+    x.constituents()  # the analysis
 
     # Format output to match that returned by runTAPPy().
     cName = []
@@ -572,6 +574,7 @@ def TAPPy(data, noisy=False):
         cInference.append(True)
 
     return cName, cSpeed, cPhase, cAmplitude, cInference
+
 
 def runTAPPy(data, sparseDef=False, noisy=False, deleteFile=True, tappy='/usr/bin/tappy.py'):
     """
@@ -653,7 +656,6 @@ def runTAPPy(data, sparseDef=False, noisy=False, deleteFile=True, tappy='/usr/bi
         else:
             print('Saving to temporary file...', end=' ')
 
-
     np.savetxt(tFile.name, data, fmt='%4i/%02i/%02i %02i:%02i:%02i %.3f')
 
     if noisy:
@@ -669,6 +671,7 @@ def runTAPPy(data, sparseDef=False, noisy=False, deleteFile=True, tappy='/usr/bi
         print('done.')
 
     return cName, cSpeed, cPhase, cAmplitude, cInference
+
 
 def parseTAPPyXML(file):
     """
@@ -731,6 +734,7 @@ def parseTAPPyXML(file):
 
     return constituentName, constituentSpeed, constituentPhase, constituentAmplitude, constituentInference
 
+
 def getHarmonics(db, stationName, noisy=False):
     """
     Use the harmonics database to extract the results of the harmonic analysis
@@ -790,7 +794,6 @@ def getHarmonics(db, stationName, noisy=False):
             print('extraction failed.')
 
     # Convert data to a dict of value pairs
-    dictNames = ['amplitude', 'phase', 'speed', 'constituentName', 'inferredConstituent']
     siteHarmonics = {}
     tAmp = np.empty(np.shape(data)[0])
     tPhase = np.empty(np.shape(data)[0])
@@ -816,6 +819,7 @@ def getHarmonics(db, stationName, noisy=False):
         print('done.')
 
     return siteHarmonics
+
 
 def readPOLPRED(harmonics, noisy=False):
     """
@@ -886,6 +890,7 @@ def readPOLPRED(harmonics, noisy=False):
 
     return header, values
 
+
 def gridPOLPRED(values, noisy=False):
     """
     The POLPRED data are stored as a 2D array, with a single row for each
@@ -946,8 +951,8 @@ def gridPOLPRED(values, noisy=False):
     import numpy as np
 
     # Create rectangular arrays of the coordinates in the POLCOMS domain.
-    px = np.unique(values[:,1])
-    py = np.unique(values[:,0])
+    px = np.unique(values[:, 1])
+    py = np.unique(values[:, 0])
     PX, PY = np.meshgrid(px, py)
 
     # I think appending to a list is faster than a NumPy array.
@@ -966,6 +971,7 @@ def gridPOLPRED(values, noisy=False):
         PZ[yidx, xidx, :] = values[idx, :]
 
     return PX, PY, PZ
+
 
 def getHarmonicsPOLPRED(harmonics, constituents, lon, lat, stations, noisy=False, distThresh=0.5):
     """
@@ -1073,6 +1079,5 @@ def getHarmonicsPOLPRED(harmonics, constituents, lon, lat, stations, noisy=False
             if noisy:
                 print('done.')
                 sys.stdout.flush()
-
 
     return out

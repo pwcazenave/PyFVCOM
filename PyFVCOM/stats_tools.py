@@ -8,6 +8,7 @@ import numpy as np
 
 from scipy import stats, polyfit, polyval
 
+
 def calculateRegression(x, y, type):
     """
     Calculate three types of regression:
@@ -30,10 +31,9 @@ def calculateRegression(x, y, type):
         print('Scaling y-data to improve numerical stability')
         y, yFactor, yFactorFix = fixRange(y)
 
-
     if type is 'lin0':
         xf = x
-        x = x[:,np.newaxis] # make a singleton extra dimension
+        x = x[:, np.newaxis]  # make a singleton extra dimension
         m, _, _, _ = np.linalg.lstsq(x, y)
         c, r, p = 0, np.nan, np.nan
     elif type is 'lin':
@@ -41,10 +41,10 @@ def calculateRegression(x, y, type):
         m, c, r, p, std_err = stats.linregress(x, y)
         xf = x
     elif type is 'log':
-        m, c, r, p, std_err = stats.linregress(np.log10(x),y)
+        m, c, r, p, std_err = stats.linregress(np.log10(x), y)
         xf = np.log10(x)
     elif type is 'exp':
-        m, c, r, p, std_err = stats.linregress(x,np.log10(y))
+        m, c, r, p, std_err = stats.linregress(x, np.log10(y))
         xf = x
     else:
         raise ValueError('Unknown regression type')
@@ -78,7 +78,6 @@ def calculatePolyfit(x, y):
     if minY < 2e-7:
         y, yFactor, yFactorFix = fixRange(y)
 
-
     (ar, br) = polyfit(x, y, 1)
     yf = polyval([ar, br], x)
     xf = x
@@ -94,10 +93,64 @@ def calculatePolyfit(x, y):
 def coefficientOfDetermination(obs, model):
     """ Calculate the coefficient of determination for a modelled function """
     obsBar = np.mean(obs)
-    modelBar = np.mean(model)
 
     SStot = np.sum((obs - obsBar)**2)
     SSreg = np.sum((model - obsBar)**2)
     R2 = SSreg / SStot
 
     return R2
+
+
+def fixRange(a, nmin, nmax):
+    """
+    Given an array of values `a', scale the values within in to the range
+    specified by `nmin' and `nmax'.
+
+    Parameters
+    ----------
+    a : ndarray
+        Array of values to scale.
+    nmin, nmax : float
+        New minimum and maximum values for the new range.
+
+    Returns
+    -------
+    b : ndarray
+        Scaled array.
+
+    """
+
+    A = a.min()
+    B = a.max()
+    C = nmin
+    D = nmax
+
+    b = (((D - C) * (a - A)) / (B - A)) + C
+
+    return b
+
+
+def rmse(a, b, axis=0):
+    """
+    Calculate the Root Mean Square Error (RMSE) between two identically sized
+    arrays.
+
+    RMSE = np.sqrt(np.mean((A - B)**2, axis=2))
+
+    Parameters
+    ----------
+    a, b : ndarray
+        Array of values to calculate RMSE.
+    axis : int, optional
+        Axis along which to calculate the mean. Defaults to the zeroth axis.
+
+    Returns
+    -------
+    rmse: ndarray
+        RMSE of `a' and `b'.
+
+    """
+
+    rmse = np.sqrt(np.mean((a - b)**2, axis=axis))
+
+    return rmse

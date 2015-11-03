@@ -1,5 +1,6 @@
 """
-Functions to interrogate and extract buoy data from the buoys.db SQLite3 database.
+Functions to interrogate and extract buoy data from the buoys.db SQLite3
+database.
 
 """
 
@@ -28,7 +29,7 @@ def getBuoyMetadata(db):
 
     def _dict_factory(cursor, row):
         d = {}
-        for idx,col in enumerate(cursor.description):
+        for idx, col in enumerate(cursor.description):
             d[col[0]] = row[idx]
         return d
 
@@ -54,6 +55,7 @@ def getBuoyMetadata(db):
             con.close()
 
     return meta_info
+
 
 def getBuoyData(db, table, fields, noisy=False):
     """
@@ -89,7 +91,8 @@ def getBuoyData(db, table, fields, noisy=False):
     """
 
     if noisy:
-        print('Getting data for {} from the database...'.format(table), end=' ')
+        print('Getting data for {} from the database...'.format(table),
+              end=' ')
 
     try:
         con = sqlite3.connect(db)
