@@ -49,6 +49,7 @@ import numpy as np
 import datetime
 from scipy.optimize import leastsq
 
+import tappy_lib
 import sparser
 import astronomia.calendar as cal
 import astronomia.util as uti
