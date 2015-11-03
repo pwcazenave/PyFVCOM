@@ -1,3 +1,57 @@
+20151103
+--------
+
+Some new functions (see below) and a general tidy up of the code formatting.
+
+buoy_tools:
+    * Miscellaneous code clean ups.
+cst_tools:
+    * Miscellaneous code clean ups.
+ctd_tools:
+    * Miscellaneous code clean ups.
+current_tools:
+    * Miscellaneous code clean ups.
+    * scalar2vector: New function to takae a direction and speed and return
+    the vector components of those values.
+    * vector2scalar: New function to reverse scalar2vector and return speed
+    and direction from a given pair of vector components.
+grid_tools:
+    * Miscellaneous code clean ups.
+    * surrounders: Find the node IDs surrounding a given node.
+    * heron: New function to calculate the area of a triangle given its corner
+    coordines.
+ll2utm:
+    * Miscellaneous code clean ups.
+ocean_tools:
+    * Miscellaneous code clean ups.
+    * dissipation: New function to calculate tidal dissipation for a given
+    tidal harmonic.
+    * calculate_rhum: New function to calculate relative humidity from dew
+    temperature and ambient temperature.
+process_FVCOM_results:
+    * Miscellaneous code clean ups.
+read_FVCOM_results:
+    * Miscellaneous code clean ups.
+stats_tools:
+    * Miscellaneous code clean ups.
+    * fixRange: New function to scale a set of values between a specified
+    minimum and maximum.
+    * rmse: New function to calculate the Root Mean Squared Error of a given
+    data set.
+tappy:
+    * Miscellaneous code clean ups.
+    * Don't assume where python lives.
+tidal_ellipse:
+    * Miscellaneous code clean ups.
+tide_tools:
+    * Miscellaneous code clean ups.
+    * julianDay: Convert the function to use an external library (jdcal)
+    instead of a slightly fragile and not particularly clean implementation.
+    * gregorianDate: Use the same jdcal library for the conversion.
+README.md:
+    * Add new dependency (jdcal).
+
+
 20150122
 --------
 
