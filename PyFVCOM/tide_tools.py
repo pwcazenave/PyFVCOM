@@ -11,6 +11,11 @@ Some of the tidal analysis functions require TAPPy to be installed and in
 
 from __future__ import print_function
 
+try:
+    import jdcal
+except ImportError:
+    raise ImportError('Cannot import jdcal (for calendar operations).')
+
 
 def julianDay(gregorianDateTime, mjd=False):
     """
@@ -41,15 +46,7 @@ def julianDay(gregorianDateTime, mjd=False):
     Julian Day epoch: 12:00 January 1, 4713 BC, Monday
     Modified Julain Day epoch: 00:00 November 17, 1858, Wednesday
 
-    Modified after code at http://paste.lisp.org/display/73536 and
-    http://home.online.no/~pjacklam/matlab/software/util/timeutil/date2jd.m
-
     """
-
-    try:
-        import numpy as np
-    except ImportError:
-        raise ImportError('Failed to import NumPy')
 
     try:
         nr, nc = np.shape(gregorianDateTime)
@@ -84,17 +81,16 @@ def julianDay(gregorianDateTime, mjd=False):
         minute = gregorianDateTime[4]
         second = gregorianDateTime[5]
 
-    timeut = hour + (minute / 60.0) + (second / 3600.0)
-
-    # For common era (CE), anno domini (AD). From the MATLAB function greg2julian.
-    jd = (367.0 * year) - np.floor(7.0 * (year + np.floor((month + 9.0) / 12.0)) / 4.0) - \
-                      np.floor(3.0 * (np.floor((year + (month - 9.0) / 7.0) / 100.0) + 1.0) / 4.0) + \
-                      np.floor((275.0 * month) / 9.0) + day + 1721028.5 + (timeut / 24.0)
+    julian, modified = np.empty((nr, nc)), np.empty((nr, nc))
+    for ii, tt in enumerate(gregorianDateTime):
+        julian[ii], modified[ii] = jdcal.gcal2jd(tt[0], tt[1], tt[2])
+        julian[ii] += (hour + (minute / 60.0) + (second / 3600.0)) / 24.0
+        modified[ii] += (hour + (minute / 60.0) + (second / 3600.0)) / 24.0
 
     if mjd:
-        return jd - 2400000.5
+        return modified
     else:
-        return jd
+        return julian
 
 
 def gregorianDate(julianDay, mjd=False):
@@ -121,7 +117,7 @@ def gregorianDate(julianDay, mjd=False):
     -------
     >>> greg = gregorianDate(np.array([53583.00390625, 55895.9765625]), mjd=True)
     >>> greg.astype(int)
-    array([[2005,    8,    1,    0,    5,   38],
+    array([[2005,    8,    1,    0,    5,   37],
            [2011,   11,   30,   23,   26,   15])
 
     """
@@ -131,46 +127,27 @@ def gregorianDate(julianDay, mjd=False):
     except ImportError:
         raise ImportError('Failed to import NumPy')
 
-    if mjd:
+    if not mjd:
+        # It's easier to use jdcal in Modified Julian Day
         julianDay = julianDay + 2400000.5
 
-    I = np.floor(julianDay + 0.5)
-    Fr = np.abs(I - (julianDay + 0.5))
-
-    if np.any(I < 2299160):
-        B = I
+    greg = np.empty((len(julianDay), 6))
+    if np.shape(julianDay)[0] == 1:
+        ymdf = jdcal.jd2gcal(2400000.5, julianDay)
+        fractionalday = ymdf[-1]
+        hours = int(fractionalday * 24)
+        minutes = int(((fractionalday * 24) - hours) * 60)
+        seconds = ((((fractionalday * 24) - hours) * 60) - minutes) * 60
+        greg = np.asarray((ymdf[0], ymdf[1], ymdf[2], hours, minutes, seconds))
     else:
-        A = np.floor((I - 1867216.25) / 36524.25)
-        a4 = np.floor(A / 4)
-        B = I + 1.0 + A - a4
-
-    C = B + 1524.0
-    D = np.floor((C - 122.1) / 365.25)
-    E = np.floor(365.25 * D)
-    G = np.floor((C - E) / 30.6001)
-    day = np.floor(C - E + Fr - np.floor(30.6001 * G))
-
-    if np.any(G > 13.5):
-        month = G - 13
-    else:
-        month = G - 1
-
-    if np.any(month <= 2.5):
-        year = D - 4715
-    else:
-        year = D - 4716
-
-    hour = np.floor(Fr * 24)
-    minu = np.floor(np.abs(hour - (Fr * 24)) * 60)
-    minufrac = (np.abs(hour - (Fr * 24)) * 60)
-    sec = np.ceil(np.abs(minu - minufrac) * 60)
-
-    # Fix some months being negative. This only happens if the input is larger
-    # than ~30 elements in the array. No idea why.
-    if month.min() < 1:
-        month[month < 1] = month[month < 1] + 12
-
-    greg = np.column_stack((year, month, day, hour, minu, sec))
+        for ii, jj in enumerate(julianDay):
+            ymdf = jdcal.jd2gcal(2400000.5, jj)
+            greg[ii, :3] = ymdf[:3]
+            fractionalday = ymdf[-1]
+            hours = int(fractionalday * 24)
+            minutes = int(((fractionalday * 24) - hours) * 60)
+            seconds = ((((fractionalday * 24) - hours) * 60) - minutes) * 60
+            greg[ii, 3:] = [hours, minutes, seconds]
 
     return greg
 
