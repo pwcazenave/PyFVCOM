@@ -49,6 +49,11 @@ def julianDay(gregorianDateTime, mjd=False):
     """
 
     try:
+        import numpy as np
+    except ImportError:
+        raise ImportError('Failed to import NumPy')
+
+    try:
         nr, nc = np.shape(gregorianDateTime)
     except:
         nc = np.shape(gregorianDateTime)[0]
