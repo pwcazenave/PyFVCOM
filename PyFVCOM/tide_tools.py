@@ -87,10 +87,15 @@ def julianDay(gregorianDateTime, mjd=False):
         second = gregorianDateTime[5]
 
     julian, modified = np.empty((nr, nc)), np.empty((nr, nc))
-    for ii, tt in enumerate(gregorianDateTime):
-        julian[ii], modified[ii] = jdcal.gcal2jd(tt[0], tt[1], tt[2])
-        julian[ii] += (hour + (minute / 60.0) + (second / 3600.0)) / 24.0
-        modified[ii] += (hour + (minute / 60.0) + (second / 3600.0)) / 24.0
+    if nr == 1:
+        julian, modified = jdcal.gcal2jd(year, month, day)
+        julian += (hour + (minute / 60.0) + (second / 3600.0)) / 24.0
+        modified += (hour + (minute / 60.0) + (second / 3600.0)) / 24.0
+    else:
+        for ii, tt in enumerate(gregorianDateTime):
+            julian[ii], modified[ii] = jdcal.gcal2jd(tt[0], tt[1], tt[2])
+            julian[ii] += (hour + (minute / 60.0) + (second / 3600.0)) / 24.0
+            modified[ii] += (hour + (minute / 60.0) + (second / 3600.0)) / 24.0
 
     if mjd:
         return modified
