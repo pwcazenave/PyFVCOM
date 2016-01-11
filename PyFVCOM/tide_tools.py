@@ -93,8 +93,7 @@ def julianDay(gregorianDateTime, mjd=False):
         modified += (hour + (minute / 60.0) + (second / 3600.0)) / 24.0
     else:
         for ii, tt in enumerate(gregorianDateTime):
-            year, month, day, hour, minute, second = tt
-            julian[ii], modified[ii] = jdcal.gcal2jd(year, month, day)
+            julian[ii], modified[ii] = jdcal.gcal2jd(tt[0], tt[1], tt[2])
             julian[ii] += (hour + (minute / 60.0) + (second / 3600.0)) / 24.0
             modified[ii] += (hour + (minute / 60.0) + (second / 3600.0)) / 24.0
 
