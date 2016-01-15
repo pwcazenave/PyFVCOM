@@ -1317,9 +1317,9 @@ def lineSample(x, y, positions, num=0, noisy=False):
 
             # First things first, clip the coordinates to a rectangle defined
             # by the start and end coordinates. We'll use a buffer based on the
-            # size of the elements which surround the first and last nodes. The
-            # ensures we'll get relatively sensible results if the profile is
-            # relatively flat or vertical. Use the six closest nodes as the
+            # size of the elements which surround the first and last nodes.
+            # This ensures we'll get relatively sensible results if the profile
+            # is relatively flat or vertical. Use the six closest nodes as the
             # definition of surrounding elements.
             bstart = np.mean(np.sort(np.sqrt((x - start[0])**2 +
                                              (y - start[1])**2))[:6])
@@ -1355,7 +1355,7 @@ def lineSample(x, y, positions, num=0, noisy=False):
                 m2 = -1 / m1
                 c2 = ys - (m2 * xs)
 
-                # Now find the intersection of the sample line and the all the
+                # Now find the intersection of the sample line and then all the
                 # lines which go through the nodes.
                 #   1a. y1 = (m1 * x1) + c1 # sample line
                 #   2a. y2 = (m2 * x2) + c2 # line normal to it
