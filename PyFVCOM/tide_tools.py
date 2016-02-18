@@ -86,7 +86,7 @@ def julianDay(gregorianDateTime, mjd=False):
         minute = gregorianDateTime[4]
         second = gregorianDateTime[5]
 
-    julian, modified = np.empty((nr, nc)), np.empty((nr, nc))
+    julian, modified = np.empty((nr, 1)), np.empty((nr, 1))
     if nr == 1:
         julian, modified = jdcal.gcal2jd(year, month, day)
         julian += (hour + (minute / 60.0) + (second / 3600.0)) / 24.0
