@@ -141,8 +141,13 @@ def gregorianDate(julianDay, mjd=False):
         # It's easier to use jdcal in Modified Julian Day
         julianDay = julianDay + 2400000.5
 
-    greg = np.empty((len(julianDay), 6))
-    if np.shape(julianDay)[0] == 1:
+    try:
+        nt = len(julianDay)
+    except TypeError:
+        nt = 1
+
+    greg = np.empty((nt, 6))
+    if nt == 1:
         ymdf = jdcal.jd2gcal(2400000.5, julianDay)
         fractionalday = ymdf[-1]
         hours = int(fractionalday * 24)
