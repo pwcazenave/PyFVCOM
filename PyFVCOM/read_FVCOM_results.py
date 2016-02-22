@@ -598,7 +598,7 @@ def elems2nodes(elems, tri, nvert=None):
 
     # Now calculate the average for each node based on the number of
     # elements of which it is a part.
-    nodes = nodes / count
+    nodes /= count
 
     return nodes
 
