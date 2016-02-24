@@ -463,7 +463,7 @@ def readProbes(files, noisy=False, locations=False):
         return times, values
 
 
-def writeProbes(file, mjd, timeseries, datatype, site, depth, sigma=(-1, -1), lonlat=(0, 0), xy=(0, 0)):
+def writeProbes(file, mjd, timeseries, datatype, site, depth, sigma=(-1, -1), lonlat=(0, 0), xy=(0, 0), datestr=None):
     """
     Writes out an FVCOM-formatted time series at a specific location.
 
@@ -488,6 +488,11 @@ def writeProbes(file, mjd, timeseries, datatype, site, depth, sigma=(-1, -1), lo
         Coordinates (spherical)
     xy : ndarray, list, optional
         Coordinates (cartesian)
+    datestr : str, optional
+        Date at which the model was run (contained in the main FVCOM netCDF
+        output in the history global variable). If omitted, uses the current
+        local date and time. Format is ISO 8601 (YYYY-MM-DDThh:mm:ss.mmmmmm)
+        (e.g. 2005-05-25T12:09:56.553467).
 
     See Also
     --------
@@ -496,15 +501,12 @@ def writeProbes(file, mjd, timeseries, datatype, site, depth, sigma=(-1, -1), lo
 
     """
 
-    from tide_tools import gregorianDate
+    if not datestr:
+        from datetime import datetime
+        datestr = datetime.now().isoformat()
 
     day = np.floor(mjd[0])
     usec = (mjd[0] - day) * 24.0 * 3600.0 * 1000.0 * 1000.0
-
-    datetime = gregorianDate(mjd[0], mjd=True)
-    YYYY, MM, DD, hh, mm, ss = [int(i) for i in datetime[:-1]] + [datetime[-1]]
-    datestr = '{:04d}-{:02d}-{:02d}T{:02d}:{:02d}:{:02.6f}Z'.format(
-        YYYY, MM, DD, hh, mm, ss)
 
     with open(file, 'w') as f:
         # Write the header.
@@ -514,7 +516,7 @@ def writeProbes(file, mjd, timeseries, datatype, site, depth, sigma=(-1, -1), lo
         f.write(' !========MODEL START DATE==========\n')
         f.write(' !    Day #    :                 57419\n'.format(day))
         f.write(' ! MicroSecond #:           {}\n'.format(usec))
-        f.write(' ! (Date Time={})\n'.format(datestr))
+        f.write(' ! (Date Time={}Z)\n'.format(datestr))
         f.write(' !==========================\n')
         f.write(' \n')
         f.write('          K1            K2\n'.format())
