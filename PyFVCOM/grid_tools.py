@@ -1038,12 +1038,12 @@ def mesh2grid(meshX, meshY, meshZ, nx, ny, thresh=None, noisy=False):
 
     if noisy:
         if isinstance(nx, int) and isinstance(ny, int):
-            print('Resampling unstructured to regular ({} by {}).'.format(nx, ny), end='')
-            print('Be patient...', end='')
+            print('Resampling unstructured to regular ({} by {}). '.format(nx, ny), end='')
+            print('Be patient...')
         else:
             _nx, _ny = len(nx[:, 1]), len(ny[0, :])
-            print('Resampling unstructured to regular ({} by {}).'.format(_nx, _ny), end='')
-            print('Be patient...', end='')
+            print('Resampling unstructured to regular ({} by {}). '.format(_nx, _ny), end='')
+            print('Be patient...')
 
         sys.stdout.flush()
 
