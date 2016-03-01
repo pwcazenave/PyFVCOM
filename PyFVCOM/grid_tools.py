@@ -1251,9 +1251,9 @@ def lineSample(x, y, positions, num=0, return_distance=False, noisy=False):
             if noisy:
                 done = 100 - ((tdist / length) * 100)
                 if len(sidx) == 1:
-                    print('Found {} node ({:.2f})'.format(len(sidx), done))
+                    print('Found {} node ({:.2f}%)'.format(len(sidx), done))
                 else:
-                    print('Found {} nodes ({:.2f})'.format(len(sidx), done))
+                    print('Found {} nodes ({:.2f}%)'.format(len(sidx), done))
 
             # Check if we've gone beyond the end of the line (by checking the
             # length of the sampled line), and if so, break out of the loop.
