@@ -1139,7 +1139,7 @@ def lineSample(x, y, positions, num=0, return_distance=False, noisy=False):
 
     """
 
-    if type(num) is not int:
+    if not isinstance(num, int):
         raise TypeError('num must be an int')
 
     def __nodes_on_line__(xs, ys, start, end, pdist, noisy=False):
@@ -1236,7 +1236,7 @@ def lineSample(x, y, positions, num=0, return_distance=False, noisy=False):
                                         ).min()
                         c += 1
                     except IndexError:
-                        # Eh, we've run out of indicies for some reason. Let's
+                        # Eh, we've run out of indices for some reason. Let's
                         # just go with whatever we had as the last set of
                         # values.
                         break
@@ -1314,7 +1314,7 @@ def lineSample(x, y, positions, num=0, return_distance=False, noisy=False):
                              np.cos(np.radians(dcn)))
             [line.append(xy) for xy in zip([xx, yy])]
 
-            # For each positions in the line array, find the nearest indices in
+            # For each position in the line array, find the nearest indices in
             # the supplied unstructured grid. We'll use our existing function
             # findNearestPoint for this.
             _, _, _, tidx = findNearestPoint(x, y, xx, yy, noisy=noisy)
@@ -1368,14 +1368,14 @@ def lineSample(x, y, positions, num=0, return_distance=False, noisy=False):
 
                 # Now find the intersection of the sample line and then all the
                 # lines which go through the nodes.
-                #   1a. y1 = (m1 * x1) + c1 # sample line
-                #   2a. y2 = (m2 * x2) + c2 # line normal to it
+                #   1a. y1 = (m1 * x1) + c1  # sample line
+                #   2a. y2 = (m2 * x2) + c2  # line normal to it
                 # Rearrange 1a for x.
                 #   1b. x1 = (y1 - c1) / m1
 
                 # Substitute equation 1a (y1) into 2a and solve for x.
                 xx = (c2 - c1) / (m1 - m2)
-                # Substitue xx into 2a to solve for y.
+                # Substitute xx into 2a to solve for y.
                 yy = (m2 * xx) + c2
 
             # Find the distance from the original nodes to their corresponding
