@@ -1092,7 +1092,7 @@ def mesh2grid(meshX, meshY, meshZ, nx, ny, thresh=None, noisy=False):
     return xx, yy, zz
 
 
-def lineSample(x, y, positions, num=0, noisy=False):
+def lineSample(x, y, positions, num=0, return_distance=False, noisy=False):
     """
     Function to take an unstructured grid of positions x and y and find the
     points which fall closest to a line defined by the coordinate pairs start
@@ -1119,6 +1119,9 @@ def lineSample(x, y, positions, num=0, noisy=False):
         Optionally specify a number of points to sample along the line
         described in `positions'. If no number is given, then the sampling of
         the line is based on the closest nodes to that line.
+    return_distance : bool, optional
+        Set to True to return the distance along the sampling line. Defaults
+        to False.
     noisy : bool, optional
         Set to True to enable verbose output.
 
@@ -1130,6 +1133,9 @@ def lineSample(x, y, positions, num=0, noisy=False):
         List of positions which fall along the line described by (start, end).
         These are the projected positions of the nodes which fall closest to
         the line (not the positions of the nodes themselves).
+    distance : ndarray, optional
+        If `return_distance' is True, return the distance along the line
+        described by the nodes in idx.
 
     """
 
@@ -1271,6 +1277,8 @@ def lineSample(x, y, positions, num=0, noisy=False):
 
     idx = []
     line = []
+    if return_distance:
+        dist = []
 
     for xy in range(1, nlocations):
         # Make the first segment.
@@ -1375,15 +1383,43 @@ def lineSample(x, y, positions, num=0, noisy=False):
             # line.
             tidx, tline = __nodes_on_line__(xs, ys, start, end, noisy=noisy)
 
+            # Now, if we're being asked to return the distance along the
+            # profile line (rather than the distance along the line
+            # connecting the positions in xs and ys together), generate that
+            # for this segment here.
+            if return_distance:
+                # Make the distances relative to the first node we've found.
+                # Doing this, instead of using the coordinates given in start
+                # means we don't end up with negative distances, which means
+                # we don't have to worry about signed distance functions and
+                # other fun things to get proper distance along the transect.
+                xdist = xx[tidx] - xx[tidx[0]]
+                ydist = yy[tidx] - yy[tidx[0]]
+                tdist = np.sqrt(xdist**2 + ydist**2)
+                # Make distances relative to the end of the last segment,
+                # if we have one.
+                if not dist:
+                    distmax = 0
+                else:
+                    distmax = np.max(dist)
+                [dist.append(i + distmax) for i in tdist.tolist()]
+
             [line.append(i) for i in tline.tolist()]
             # Return the indices in the context of the original input arrays so
             # we can more easily extract them from the main data arrays.
             [idx.append(i) for i in ss[tidx]]
 
+    # Return the distance as a numpy array rather than a list.
+    if return_distance:
+        dist = np.asarray(dist)
+
     # Make the line list an array for easier plotting.
     line = np.asarray(line)
 
-    return idx, line
+    if return_distance:
+        return idx, line, dist
+    else:
+        return idx, line
 
 
 def OSGB36toWGS84(eastings, northings):
