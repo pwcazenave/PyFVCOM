@@ -1142,7 +1142,7 @@ def lineSample(x, y, positions, num=0, return_distance=False, noisy=False):
     if type(num) is not int:
         raise TypeError('num must be an int')
 
-    def __nodes_on_line__(xs, ys, start, end, noisy=False):
+    def __nodes_on_line__(xs, ys, start, end, pdist, noisy=False):
         """
         Child function to find all the points within the coordinates in sx and
         sy which fall along the line described by the coordinate pairs start
@@ -1154,6 +1154,9 @@ def lineSample(x, y, positions, num=0, return_distance=False, noisy=False):
             Node position arrays.
         start, end : ndarray
             Coordinate pairs for the start and end of the sample line.
+        pdist : ndarray
+            Distance of the nodes in xs and ys from the line defined by
+            `start' and `end'.
 
         Returns
         -------
@@ -1381,7 +1384,10 @@ def lineSample(x, y, positions, num=0, return_distance=False, noisy=False):
 
             # Now we need to start our loop until we get beyond the end of the
             # line.
-            tidx, tline = __nodes_on_line__(xs, ys, start, end, noisy=noisy)
+            tidx, tline = __nodes_on_line__(xs, ys,
+                                            start, end,
+                                            pdist,
+                                            noisy=noisy)
 
             # Now, if we're being asked to return the distance along the
             # profile line (rather than the distance along the line
