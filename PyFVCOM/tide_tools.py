@@ -560,19 +560,19 @@ def TAPPy(data, noisy=False):
 
     # Create a tappy object.
     x = tappy.tappy(outputts=outputts,
-        outputxml=outputxml,
-        quiet=quiet,
-        debug=debug,
-        ephemeris=ephemeris,
-        rayleigh=rayleigh,
-        print_vau_table=print_vau_table,
-        missing_data=missing_data,
-        linear_trend=linear_trend,
-        remove_extreme=remove_extreme,
-        zero_ts=zero_ts,
-        filter=filter,
-        pad_filters=pad_filters,
-        include_inferred=include_inferred)
+                    outputxml=outputxml,
+                    quiet=quiet,
+                    debug=debug,
+                    ephemeris=ephemeris,
+                    rayleigh=rayleigh,
+                    print_vau_table=print_vau_table,
+                    missing_data=missing_data,
+                    linear_trend=linear_trend,
+                    remove_extreme=remove_extreme,
+                    zero_ts=zero_ts,
+                    filter=filter,
+                    pad_filters=pad_filters,
+                    include_inferred=include_inferred)
 
     # Add the time series to the TAPPy object
     x.dates = []
