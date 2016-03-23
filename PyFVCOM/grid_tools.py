@@ -1761,8 +1761,8 @@ def heron(v0, v1, v2):
     Parameters
     ----------
     v0, v1, v2 : ndarray
-        Coordinates of the three vertices of a triangle. Can be a 1D array of
-        positions.
+        Coordinate pairs (x, y) of the three vertices of a triangle. Can be 1D
+        arrays of positions.
 
     Returns
     -------
