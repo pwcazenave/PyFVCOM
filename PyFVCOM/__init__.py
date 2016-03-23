@@ -26,3 +26,7 @@ import read_FVCOM_results
 import stats_tools
 import tidal_ellipse
 import tide_tools
+# External TAPPY now instead of my bundled version. Requires my forked version
+# of TAPPY from https://github.com/pwcazenave/tappy or
+# http://gitlab.em.pml.ac.uk/pica/tappy.
+from tappy import tappy

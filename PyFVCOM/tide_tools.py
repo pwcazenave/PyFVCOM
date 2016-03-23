@@ -491,7 +491,7 @@ def TAPPy(data, noisy=False):
         raise ImportError('Failed to import NumPy')
 
     try:
-        import tappy
+        from tappy import tappy
     except:
         raise ImportError('Failed to import TAPPy')
 
