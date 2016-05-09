@@ -5,6 +5,7 @@ import sys
 import numpy as np
 
 from netCDF4 import Dataset, MFDataset
+from datetime import datetime
 
 
 def readFVCOM(file, varList=None, clipDims=False, noisy=False, atts=False):
@@ -502,7 +503,6 @@ def writeProbes(file, mjd, timeseries, datatype, site, depth, sigma=(-1, -1), lo
     """
 
     if not datestr:
-        from datetime import datetime
         datestr = datetime.now().isoformat()
 
     day = np.floor(mjd[0])
