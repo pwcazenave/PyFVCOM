@@ -11,11 +11,18 @@ Some of the tidal analysis functions require TAPPy to be installed and in
 
 from __future__ import print_function
 
-try:
-    import jdcal
-except ImportError:
-    raise ImportError('Cannot import jdcal (for calendar operations).')
+import sys
+import jdcal
+import sqlite3
+import datetime
+import tempfile
+import subprocess
+import numpy as np
 
+from lxml import etree
+from tappy import tappy
+
+from PyFVCOM.grid_tools import findNearestPoint
 
 def julianDay(gregorianDateTime, mjd=False):
     """
@@ -47,11 +54,6 @@ def julianDay(gregorianDateTime, mjd=False):
     Modified Julain Day epoch: 00:00 November 17, 1858, Wednesday
 
     """
-
-    try:
-        import numpy as np
-    except ImportError:
-        raise ImportError('Failed to import NumPy')
 
     try:
         nr, nc = np.shape(gregorianDateTime)
@@ -132,11 +134,6 @@ def gregorianDate(julianDay, mjd=False):
 
     """
 
-    try:
-        import numpy as np
-    except ImportError:
-        raise ImportError('Failed to import NumPy')
-
     if not mjd:
         # It's easier to use jdcal in Modified Julian Day
         julianDay = julianDay + 2400000.5
@@ -196,11 +193,6 @@ def addHarmonicResults(db, stationName, constituentName, phase, amplitude, speed
         Set to True to enable verbose output.
 
     """
-
-    try:
-        import sqlite3
-    except ImportError:
-        raise ImportError('Failed to import the SQLite3 module')
 
     if not ident:
         ident = ''
@@ -266,11 +258,6 @@ def getObservedData(db, table, startYear=False, endYear=False, noisy=False):
     Search is case insensitive, however.
 
     """
-
-    try:
-        import sqlite3
-    except ImportError:
-        raise ImportError('Failed to import the SQLite3 module')
 
     if noisy:
         print('Getting data for {} from the database...'.format(table), end=' ')
@@ -346,11 +333,6 @@ def getObservedMetadata(db, originator=False, obsdepth=None):
     """
 
     try:
-        import sqlite3
-    except ImportError:
-        raise ImportError('Failed to import the SQLite3 module')
-
-    try:
         con = sqlite3.connect(db)
 
         c = con.cursor()
@@ -417,11 +399,6 @@ def cleanObservedData(data, removeResidual=False):
         Original date data in [YYYY, MM, DD, hh, mm, ss] format.
 
     """
-
-    try:
-        import numpy as np
-    except:
-        raise ImportError('Failed to import NumPy')
 
     npObsData = []
     npFlagData = []
@@ -525,21 +502,6 @@ def TAPPy(data, noisy=False):
         short time series for the given constituent (True/False).
 
     """
-
-    try:
-        import numpy as np
-    except ImportError:
-        raise ImportError('Failed to import NumPy')
-
-    try:
-        from tappy import tappy
-    except:
-        raise ImportError('Failed to import TAPPy')
-
-    try:
-        import datetime
-    except:
-        raise ImportError('Failed to import datetime')
 
     # Set up the bits needed for TAPPy. This is mostly lifted from
     # tappy.py in the baker function "analysis" (around line 1721).
@@ -687,21 +649,6 @@ def runTAPPy(data, sparseDef=False, noisy=False, deleteFile=True, tappy='/usr/bi
 
     """
 
-    try:
-        import subprocess
-    except ImportError:
-        raise ImportError('Failed to import the subprocess module')
-
-    try:
-        import tempfile
-    except ImportError:
-        raise ImportError('Failed to import the tempfile module')
-
-    try:
-        import numpy as np
-    except:
-        raise ImportError('Failed to import NumPy')
-
     if not sparseDef:
         sparseDef = '/users/modellers/pica/Data/proc/tides/sparse.def'
 
@@ -756,11 +703,6 @@ def parseTAPPyXML(file):
         short time series for the given constituent.
 
     """
-
-    try:
-        from lxml import etree
-    except ImportError:
-        raise ImportError('Failed to load the lxml library')
 
     tree = etree.parse(open(file, 'r'))
 
@@ -817,16 +759,6 @@ def getHarmonics(db, stationName, noisy=False):
             - 'inferredConstituent' ('true'|'false')
 
     """
-
-    try:
-        import sqlite3
-    except ImportError:
-        raise ImportError('Failed to import the SQLite3 module')
-
-    try:
-        import numpy as np
-    except:
-        raise ImportError('Failed to import NumPy')
 
     if noisy:
         print('Getting harmonics data for site {}...'.format(stationName), end=' ')
@@ -907,8 +839,6 @@ def readPOLPRED(harmonics, noisy=False):
         gridded data set with values of -999.9 outside the POLPRED domain.
 
     """
-
-    import numpy as np
 
     # Open the harmonics file
     f = open(harmonics, 'r')
@@ -1004,8 +934,6 @@ def gridPOLPRED(values, noisy=False):
 
     """
 
-    import numpy as np
-
     # Create rectangular arrays of the coordinates in the POLCOMS domain.
     px = np.unique(values[:, 1])
     py = np.unique(values[:, 0])
@@ -1081,12 +1009,6 @@ def getHarmonicsPOLPRED(harmonics, constituents, lon, lat, stations, noisy=False
         coordinates to a specified point or set of points.
 
     """
-
-    import sys
-
-    import numpy as np
-
-    from grid_tools import findNearestPoint
 
     header, values = readPOLPRED(harmonics, noisy=noisy)
 
