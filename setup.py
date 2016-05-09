@@ -23,7 +23,7 @@ setup(
     author_email = "pica@pml.ac.uk",
     description = ("PyFVCOM is a collection of various tools and utilities which can be used to extract, analyse and plot input and output files from FVCOM."),
     license = "MIT",
-    keywords = "fvcom",
+    keywords = "fvcom, unstructured grid, mesh",
     platforms = "any",
     url = "https://gitlab.ecosystem-modelling.pml.ac.uk/pica/PyFVCOM",
     packages=['PyFVCOM'],
