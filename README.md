@@ -153,7 +153,11 @@ Provides
 Installing
 ----------
 
-In principle, python setup.py should install PyFVCOM, though it is untested. Alternatively, download the PyFVCOM directory, and add its contents to your PYTHONPATH.
+Easiest way is to install with pip/pip3:
+
+```python
+pip install PyFVCOM
+```
 
 Examples
 --------
