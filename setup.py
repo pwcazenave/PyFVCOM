@@ -18,7 +18,7 @@ Topic :: Software Development :: Libraries :: Python Modules
 
 setup(
     name = "PyFVCOM",
-    version = "1.0",
+    version = "1.2",
     author = "Pierre Cazenave",
     author_email = "pica@pml.ac.uk",
     description = ("PyFVCOM is a collection of various tools and utilities which can be used to extract, analyse and plot input and output files from FVCOM."),
