@@ -7,8 +7,6 @@ NetCDF file.
 import numpy as np
 import matplotlib.pyplot as plt
 
-from grid_tools import parseUnstructuredGridFVCOM
-
 
 def calculateTotalCO2(FVCOM, varPlot, startIdx, layerIdx, leakIdx, dt, noisy=False):
     """

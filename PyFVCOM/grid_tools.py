@@ -1038,12 +1038,12 @@ def mesh2grid(meshX, meshY, meshZ, nx, ny, thresh=None, noisy=False):
 
     if noisy:
         if isinstance(nx, int) and isinstance(ny, int):
-            print('Resampling unstructured to regular ({} by {}).'.format(nx, ny), end='')
-            print('Be patient...', end='')
+            print('Resampling unstructured to regular ({} by {}). '.format(nx, ny), end='')
+            print('Be patient...')
         else:
             _nx, _ny = len(nx[:, 1]), len(ny[0, :])
-            print('Resampling unstructured to regular ({} by {}).'.format(_nx, _ny), end='')
-            print('Be patient...', end='')
+            print('Resampling unstructured to regular ({} by {}). '.format(_nx, _ny), end='')
+            print('Be patient...')
 
         sys.stdout.flush()
 
@@ -1092,7 +1092,7 @@ def mesh2grid(meshX, meshY, meshZ, nx, ny, thresh=None, noisy=False):
     return xx, yy, zz
 
 
-def lineSample(x, y, positions, num=0, noisy=False):
+def lineSample(x, y, positions, num=0, return_distance=False, noisy=False):
     """
     Function to take an unstructured grid of positions x and y and find the
     points which fall closest to a line defined by the coordinate pairs start
@@ -1119,6 +1119,9 @@ def lineSample(x, y, positions, num=0, noisy=False):
         Optionally specify a number of points to sample along the line
         described in `positions'. If no number is given, then the sampling of
         the line is based on the closest nodes to that line.
+    return_distance : bool, optional
+        Set to True to return the distance along the sampling line. Defaults
+        to False.
     noisy : bool, optional
         Set to True to enable verbose output.
 
@@ -1130,13 +1133,16 @@ def lineSample(x, y, positions, num=0, noisy=False):
         List of positions which fall along the line described by (start, end).
         These are the projected positions of the nodes which fall closest to
         the line (not the positions of the nodes themselves).
+    distance : ndarray, optional
+        If `return_distance' is True, return the distance along the line
+        described by the nodes in idx.
 
     """
 
-    if type(num) is not int:
+    if not isinstance(num, int):
         raise TypeError('num must be an int')
 
-    def __nodes_on_line__(xs, ys, start, end, noisy=False):
+    def __nodes_on_line__(xs, ys, start, end, pdist, noisy=False):
         """
         Child function to find all the points within the coordinates in sx and
         sy which fall along the line described by the coordinate pairs start
@@ -1148,6 +1154,9 @@ def lineSample(x, y, positions, num=0, noisy=False):
             Node position arrays.
         start, end : ndarray
             Coordinate pairs for the start and end of the sample line.
+        pdist : ndarray
+            Distance of the nodes in xs and ys from the line defined by
+            `start' and `end'.
 
         Returns
         -------
@@ -1227,7 +1236,7 @@ def lineSample(x, y, positions, num=0, noisy=False):
                                         ).min()
                         c += 1
                     except IndexError:
-                        # Eh, we've run out of indicies for some reason. Let's
+                        # Eh, we've run out of indices for some reason. Let's
                         # just go with whatever we had as the last set of
                         # values.
                         break
@@ -1242,9 +1251,9 @@ def lineSample(x, y, positions, num=0, noisy=False):
             if noisy:
                 done = 100 - ((tdist / length) * 100)
                 if len(sidx) == 1:
-                    print('Found {} node ({:.2f})'.format(len(sidx), done))
+                    print('Found {} node ({:.2f}%)'.format(len(sidx), done))
                 else:
-                    print('Found {} nodes ({:.2f})'.format(len(sidx), done))
+                    print('Found {} nodes ({:.2f}%)'.format(len(sidx), done))
 
             # Check if we've gone beyond the end of the line (by checking the
             # length of the sampled line), and if so, break out of the loop.
@@ -1271,6 +1280,8 @@ def lineSample(x, y, positions, num=0, noisy=False):
 
     idx = []
     line = []
+    if return_distance:
+        dist = []
 
     for xy in range(1, nlocations):
         # Make the first segment.
@@ -1303,7 +1314,7 @@ def lineSample(x, y, positions, num=0, noisy=False):
                              np.cos(np.radians(dcn)))
             [line.append(xy) for xy in zip([xx, yy])]
 
-            # For each positions in the line array, find the nearest indices in
+            # For each position in the line array, find the nearest indices in
             # the supplied unstructured grid. We'll use our existing function
             # findNearestPoint for this.
             _, _, _, tidx = findNearestPoint(x, y, xx, yy, noisy=noisy)
@@ -1317,9 +1328,9 @@ def lineSample(x, y, positions, num=0, noisy=False):
 
             # First things first, clip the coordinates to a rectangle defined
             # by the start and end coordinates. We'll use a buffer based on the
-            # size of the elements which surround the first and last nodes. The
-            # ensures we'll get relatively sensible results if the profile is
-            # relatively flat or vertical. Use the six closest nodes as the
+            # size of the elements which surround the first and last nodes.
+            # This ensures we'll get relatively sensible results if the profile
+            # is relatively flat or vertical. Use the six closest nodes as the
             # definition of surrounding elements.
             bstart = np.mean(np.sort(np.sqrt((x - start[0])**2 +
                                              (y - start[1])**2))[:6])
@@ -1355,16 +1366,16 @@ def lineSample(x, y, positions, num=0, noisy=False):
                 m2 = -1 / m1
                 c2 = ys - (m2 * xs)
 
-                # Now find the intersection of the sample line and the all the
+                # Now find the intersection of the sample line and then all the
                 # lines which go through the nodes.
-                #   1a. y1 = (m1 * x1) + c1 # sample line
-                #   2a. y2 = (m2 * x2) + c2 # line normal to it
+                #   1a. y1 = (m1 * x1) + c1  # sample line
+                #   2a. y2 = (m2 * x2) + c2  # line normal to it
                 # Rearrange 1a for x.
                 #   1b. x1 = (y1 - c1) / m1
 
                 # Substitute equation 1a (y1) into 2a and solve for x.
                 xx = (c2 - c1) / (m1 - m2)
-                # Substitue xx into 2a to solve for y.
+                # Substitute xx into 2a to solve for y.
                 yy = (m2 * xx) + c2
 
             # Find the distance from the original nodes to their corresponding
@@ -1373,17 +1384,48 @@ def lineSample(x, y, positions, num=0, noisy=False):
 
             # Now we need to start our loop until we get beyond the end of the
             # line.
-            tidx, tline = __nodes_on_line__(xs, ys, start, end, noisy=noisy)
+            tidx, tline = __nodes_on_line__(xs, ys,
+                                            start, end,
+                                            pdist,
+                                            noisy=noisy)
+
+            # Now, if we're being asked to return the distance along the
+            # profile line (rather than the distance along the line
+            # connecting the positions in xs and ys together), generate that
+            # for this segment here.
+            if return_distance:
+                # Make the distances relative to the first node we've found.
+                # Doing this, instead of using the coordinates given in start
+                # means we don't end up with negative distances, which means
+                # we don't have to worry about signed distance functions and
+                # other fun things to get proper distance along the transect.
+                xdist = xx[tidx] - xx[tidx[0]]
+                ydist = yy[tidx] - yy[tidx[0]]
+                tdist = np.sqrt(xdist**2 + ydist**2)
+                # Make distances relative to the end of the last segment,
+                # if we have one.
+                if not dist:
+                    distmax = 0
+                else:
+                    distmax = np.max(dist)
+                [dist.append(i + distmax) for i in tdist.tolist()]
 
             [line.append(i) for i in tline.tolist()]
             # Return the indices in the context of the original input arrays so
             # we can more easily extract them from the main data arrays.
             [idx.append(i) for i in ss[tidx]]
 
+    # Return the distance as a numpy array rather than a list.
+    if return_distance:
+        dist = np.asarray(dist)
+
     # Make the line list an array for easier plotting.
     line = np.asarray(line)
 
-    return idx, line
+    if return_distance:
+        return idx, line, dist
+    else:
+        return idx, line
 
 
 def OSGB36toWGS84(eastings, northings):
@@ -1719,8 +1761,8 @@ def heron(v0, v1, v2):
     Parameters
     ----------
     v0, v1, v2 : ndarray
-        Coordinates of the three vertices of a triangle. Can be a 1D array of
-        positions.
+        Coordinate pairs (x, y) of the three vertices of a triangle. Can be 1D
+        arrays of positions.
 
     Returns
     -------

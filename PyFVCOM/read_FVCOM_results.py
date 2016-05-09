@@ -5,6 +5,7 @@ import sys
 import numpy as np
 
 from netCDF4 import Dataset, MFDataset
+from datetime import datetime
 
 
 def readFVCOM(file, varList=None, clipDims=False, noisy=False, atts=False):
@@ -463,6 +464,87 @@ def readProbes(files, noisy=False, locations=False):
         return times, values
 
 
+def writeProbes(file, mjd, timeseries, datatype, site, depth, sigma=(-1, -1), lonlat=(0, 0), xy=(0, 0), datestr=None):
+    """
+    Writes out an FVCOM-formatted time series at a specific location.
+
+    Parameters
+    ----------
+    mjd : ndarray, list, tuple
+        Date/time in Modified Julian Day
+    timeseries : ndarray
+        Data to write out (vector/array for 1D/2D). Shape should be
+        [time, values], where values can be 1D or 2D.
+    datatype : tuple, list, tuple
+        List with the metadata. Give the long name (e.g. `Temperature') and the
+        units (e.g. `Celsius').
+    site : str
+        Name of the output location.
+    depth : float
+        Depth at the time series location.
+    sigma : ndarray, list, tupel, optional
+        Start and end indices of the sigma layer of time series (if
+        depth-resolved, -1 otherwise).
+    lonlat : ndarray, list, optional
+        Coordinates (spherical)
+    xy : ndarray, list, optional
+        Coordinates (cartesian)
+    datestr : str, optional
+        Date at which the model was run (contained in the main FVCOM netCDF
+        output in the history global variable). If omitted, uses the current
+        local date and time. Format is ISO 8601 (YYYY-MM-DDThh:mm:ss.mmmmmm)
+        (e.g. 2005-05-25T12:09:56.553467).
+
+    See Also
+    --------
+    readProbes : read in FVCOM probes output.
+    readFVCOM : read in FVCOM netCDF output.
+
+    """
+
+    if not datestr:
+        datestr = datetime.now().isoformat()
+
+    day = np.floor(mjd[0])
+    usec = (mjd[0] - day) * 24.0 * 3600.0 * 1000.0 * 1000.0
+
+    with open(file, 'w') as f:
+        # Write the header.
+        f.write('{} at {}\n'.format(datatype[0], site))
+        f.write('{} ({})\n'.format(datatype[0], datatype[1]))
+        f.write('\n')
+        f.write(' !========MODEL START DATE==========\n')
+        f.write(' !    Day #    :                 57419\n'.format(day))
+        f.write(' ! MicroSecond #:           {}\n'.format(usec))
+        f.write(' ! (Date Time={}Z)\n'.format(datestr))
+        f.write(' !==========================\n')
+        f.write(' \n')
+        f.write('          K1            K2\n'.format())
+        f.write('           {}             {}\n'.format(*sigma))
+        f.write('      X(M)          Y(M)            DEPTH(M)\n')
+        f.write('  {:.3f}    {:.3f}         {z:.3f}\n'.format(*xy, z=depth))
+        f.write('      LON           LAT               DEPTH(M)\n')
+        f.write('      {:.3f}         {:.3f}         {z:.3f}\n'.format(*lonlat, z=depth))
+        f.write('\n')
+        f.write(' DATA FOLLOWS:\n')
+        f.write(' Time(days)    Data...\n')
+
+        # Generate the line format based on the data we've got.
+        if np.max(sigma) < 0 or np.min(sigma) - np.max(sigma) == 0:
+            # 1D data, so simple time, value format.
+            fmt = '{:.5f} {:.3f}\n'
+        else:
+            # 2D data, so build the string to match the vertical layers.
+            fmt = '{:.5f} '
+            for sig in range(np.shape(timeseries)[-1]):
+                fmt += '{:.3f} '
+            fmt = fmt.strip() + '\n'
+
+        # Dump the data (this may be slow).
+        for line in np.column_stack((mjd, timeseries)):
+            f.write(fmt.format(*line))
+
+
 def elems2nodes(elems, tri, nvert=None):
     """
     Calculate a nodal value based on the average value for the elements
@@ -518,7 +600,7 @@ def elems2nodes(elems, tri, nvert=None):
 
     # Now calculate the average for each node based on the number of
     # elements of which it is a part.
-    nodes = nodes / count
+    nodes /= count
 
     return nodes
 
