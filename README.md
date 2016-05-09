@@ -5,9 +5,9 @@ Table of contents
 -----------------
 
 - [Introduction](#introduction)
+- [Installing](#installing)
 - [Prerequisites](#prerequisites)
 - [Provides](#provides)
-- [Installing](#installing)
 - [Examples](#examples)
 
 Introduction
@@ -15,6 +15,14 @@ Introduction
 
 PyFVCOM is a collection of various tools and utilities which can be used to extract, analyse and plot input and output files from FVCOM.
 
+Installing
+----------
+
+Easiest way is to install with pip/pip3:
+
+```python
+pip install PyFVCOM
+```
 
 Prerequisites
 -------------
@@ -149,15 +157,6 @@ Provides
     - gridPOLPRED
     - getHarmonicsPOLPRED
 
-
-Installing
-----------
-
-Easiest way is to install with pip/pip3:
-
-```python
-pip install PyFVCOM
-```
 
 Examples
 --------
