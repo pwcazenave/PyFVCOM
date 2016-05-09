@@ -1,5 +1,5 @@
 """
-The FVCOM Python toolbox (pyfvcom)
+The FVCOM Python toolbox (PyFvcom)
 
 """
 
