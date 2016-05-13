@@ -747,7 +747,7 @@ def element_side_lengths(triangles, x, y):
 
 def fix_coordinates(FVCOM, UTMZone, inVars=['x', 'y']):
     """
-    Use the UTMtoLL function to convert the grid from UTM to Lat/Long. Returns
+    Use the UTM_to_LL function to convert the grid from UTM to Lat/Long. Returns
     longitude and latitude in the range -180 to 180.
 
     By default, the variables which will be converted from UTM to Lat/Long are
@@ -791,7 +791,7 @@ def fix_coordinates(FVCOM, UTMZone, inVars=['x', 'y']):
         posY = posXY[1]
 
         # 23 is the WGS84 ellipsoid
-        tmpLat, tmpLon = UTMtoLL(23, posY, posX, UTMZone)
+        tmpLat, tmpLon = UTM_to_LL(23, posY, posX, UTMZone)
 
         Y[count] = tmpLat
         X[count] = tmpLon
@@ -1907,8 +1907,3 @@ def OSGB36toWGS84(*args, **kwargs):
     warn('{} is deprecated. Use {} instead.'.format(inspect.stack()[0][3],
                                                     inspect.stack()[1][3]))
     return OSGB36_to_WGS84(*args, **kwargs)
-
-def UTMtoLL(*args, **kwargs):
-    warn('{} is deprecated. Use {} instead.'.format(inspect.stack()[0][3],
-                                                    inspect.stack()[1][3]))
-    return UTM_to_LL(*args, **kwargs)
