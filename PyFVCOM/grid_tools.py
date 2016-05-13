@@ -1814,98 +1814,82 @@ def heron(v0, v1, v2):
 
 # For backwards compatibility.
 def parseUnstructuredGridSMS(*args, **kwargs):
-    warn('{} is deprecated. Use {} instead.'.format(inspect.stack()[0][3],
-                                                    inspect.stack()[1][3]))
+    warn('{} is deprecated. Use read_sms_mesh instead.'.format(inspect.stack()[0][3]))
     return read_sms_mesh(*args, **kwargs)
 
 
 def parseUnstructuredGridFVCOM(*args, **kwargs):
-    warn('{} is deprecated. Use {} instead.'.format(inspect.stack()[0][3],
-                                                    inspect.stack()[1][3]))
+    warn('{} is deprecated. Use read_fvcom_mesh instead.'.format(inspect.stack()[0][3]))
     return read_fvcom_mesh(*args, **kwargs)
 
 
 def parseUnstructuredGridMIKE(*args, **kwargs):
-    warn('{} is deprecated. Use {} instead.'.format(inspect.stack()[0][3],
-                                                    inspect.stack()[1][3]))
+    warn('{} is deprecated. Use read_mike_mesh instead.'.format(inspect.stack()[0][3]))
     return read_mike_mesh(*args, **kwargs)
 
 
 def parseUnstructuredGridGMSH(*args, **kwargs):
-    warn('{} is deprecated. Use {} instead.'.format(inspect.stack()[0][3],
-                                                    inspect.stack()[1][3]))
+    warn('{} is deprecated. Use read_gmsh_mesh instead.'.format(inspect.stack()[0][3]))
     return read_gmsh_mesh(*args, **kwargs)
 
 
 def writeUnstructuredGridSMS(*args, **kwargs):
-    warn('{} is deprecated. Use {} instead.'.format(inspect.stack()[0][3],
-                                                    inspect.stack()[1][3]))
+    warn('{} is deprecated. Use write_sms_mesh instead.'.format(inspect.stack()[0][3]))
     return write_sms_mesh(*args, **kwargs)
 
 
 def writeUnstructuredGridSMSBathy(*args, **kwargs):
-    warn('{} is deprecated. Use {} instead.'.format(inspect.stack()[0][3],
-                                                    inspect.stack()[1][3]))
+    warn('{} is deprecated. Use write_sms_bathy instead.'.format(inspect.stack()[0][3]))
     return write_sms_bathy(*args, **kwargs)
 
 
 def writeUnstructuredGridMIKE(*args, **kwargs):
-    warn('{} is deprecated. Use {} instead.'.format(inspect.stack()[0][3],
-                                                    inspect.stack()[1][3]))
+    warn('{} is deprecated. Use write_mike_mesh instead.'.format(inspect.stack()[0][3]))
     return write_mike_mesh(*args, **kwargs)
 
 
 def findNearestPoint(*args, **kwargs):
-    warn('{} is deprecated. Use {} instead.'.format(inspect.stack()[0][3],
-                                                    inspect.stack()[1][3]))
+    warn('{} is deprecated. Use find_nearest_point instead.'.format(inspect.stack()[0][3]))
     return find_nearest_point(*args, **kwargs)
 
 
 def elementSideLengths(*args, **kwargs):
-    warn('{} is deprecated. Use {} instead.'.format(inspect.stack()[0][3],
-                                                    inspect.stack()[1][3]))
+    warn('{} is deprecated. Use element_side_lengths instead.'.format(inspect.stack()[0][3]))
     return element_side_lengths(*args, **kwargs)
 
 
 def fixCoordinates(*args, **kwargs):
-    warn('{} is deprecated. Use {} instead.'.format(inspect.stack()[0][3],
-                                                    inspect.stack()[1][3]))
+    warn('{} is deprecated. Use fix_coordinates instead.'.format(inspect.stack()[0][3]))
     return fix_coordinates(*args, **kwargs)
 
 
 def clipTri(*args, **kwargs):
-    warn('{} is deprecated. Use {} instead.'.format(inspect.stack()[0][3],
-                                                    inspect.stack()[1][3]))
+    warn('{} is deprecated. Use clip_triangulation instead.'.format(inspect.stack()[0][3]))
     return clip_triangulation(*args, **kwargs)
 
 
 def getRiverConfig(*args, **kwargs):
-    warn('{} is deprecated. Use {} instead.'.format(inspect.stack()[0][3],
-                                                    inspect.stack()[1][3]))
+    warn('{} is deprecated. Use get_river_config instead.'.format(inspect.stack()[0][3]))
     return get_river_config(*args, **kwargs)
 
 
 def getRivers(*args, **kwargs):
-    warn('{} is deprecated. Use {} instead.'.format(inspect.stack()[0][3],
-                                                    inspect.stack()[1][3]))
+    warn('{} is deprecated. Use get_rivers instead.'.format(inspect.stack()[0][3]))
     return get_rivers(*args, **kwargs)
 
 
 def lineSample(*args, **kwargs):
-    warn('{} is deprecated. Use {} instead.'.format(inspect.stack()[0][3],
-                                                    inspect.stack()[1][3]))
+    warn('{} is deprecated. Use line_sample instead.'.format(inspect.stack()[0][3]))
     return line_sample(*args, **kwargs)
 
 
 def clipDomain(*args, **kwargs):
-    warn('{} is deprecated. Use {} instead.'.format(inspect.stack()[0][3],
-                                                    inspect.stack()[1][3]))
+    warn('{} is deprecated. Use clip_domain instead.'.format(inspect.stack()[0][3]))
     return clip_domain(*args, **kwargs)
 
 
 def OSGB36toWGS84(*args, **kwargs):
-    warn('{} is deprecated. Use {} instead.'.format(inspect.stack()[0][3],
-                                                    inspect.stack()[1][3]))
+    warn('{} is deprecated. Use OSGB36_to_WGS84 instead.'.format(inspect.stack()[0][3]))
     return OSGB36_to_WGS84(*args, **kwargs)
 
 

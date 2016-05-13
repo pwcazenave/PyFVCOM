@@ -187,19 +187,17 @@ def get_ferrybox_data(db, fields, table='PrideOfBilbao', noisy=False):
     return data
 
 
+# Add for backwards compatibility.
 def getCTDMetadata(*args, **kwargs):
-    warn('{} is deprecated. Use {} instead.'.format(inspect.stack()[0][3],
-                                                    inspect.stack()[1][3]))
+    warn('{} is deprecated. Use get_CTD_metadata instead.'.format(inspect.stack()[0][3]))
     return get_CTD_metadata(*args, **kwargs)
 
 
 def getCTDData(*args, **kwargs):
-    warn('{} is deprecated. Use {} instead.'.format(inspect.stack()[0][3],
-                                                    inspect.stack()[1][3]))
+    warn('{} is deprecated. Use get_CTD_data instead.'.format(inspect.stack()[0][3]))
     return get_CTD_data(*args, **kwargs)
 
 
 def getFerryBoxData(*args, **kwargs):
-    warn('{} is deprecated. Use {} instead.'.format(inspect.stack()[0][3],
-                                                    inspect.stack()[1][3]))
+    warn('{} is deprecated. Use get_ferrybox_data instead.'.format(inspect.stack()[0][3]))
     return get_ferrybox_data(*args, **kwargs)

@@ -573,18 +573,15 @@ def nodes2elems(nodes, tri):
 
 # For backwards compatibility.
 def readFVCOM(*args, **kwargs):
-    warn('{} is deprecated. Use {} instead.'.format(inspect.stack()[0][3],
-                                                    inspect.stack()[1][3]))
+    warn('{} is deprecated. Use ncread instead.'.format(inspect.stack()[0][3]))
     return ncread(*args, **kwargs)
 
 
 def readProbes(*args, **kwargs):
-    warn('{} is deprecated. Use {} instead.'.format(inspect.stack()[0][3],
-                                                    inspect.stack()[1][3]))
+    warn('{} is deprecated. Use read_probes instead.'.format(inspect.stack()[0][3]))
     return read_probes(*args, **kwargs)
 
 
 def writeProbes(*args, **kwargs):
-    warn('{} is deprecated. Use {} instead.'.format(inspect.stack()[0][3],
-                                                    inspect.stack()[1][3]))
+    warn('{} is deprecated. Use write_probes instead.'.format(inspect.stack()[0][3]))
     return write_probes(*args, **kwargs)

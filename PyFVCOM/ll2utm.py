@@ -452,21 +452,13 @@ def UTM_to_LL(ReferenceEllipsoid, northing, easting, zone):
     return Lat, Long
 
 # For backwards-compatibility.
-def _UTMLetterDesignator(*args, **kwargs):
-    warn('{} is deprecated. Use {} instead.'.format(inspect.stack()[0][3],
-                                                    inspect.stack()[1][3]))
-    return _UTM_letter_designator(*args, **kwargs)
-
-
 def LLtoUTM(*args, **kwargs):
-    warn('{} is deprecated. Use {} instead.'.format(inspect.stack()[0][3],
-                                                    inspect.stack()[1][3]))
+    warn('{} is deprecated. Use LL_to_UTM instead.'.format(inspect.stack()[0][3]))
     return LL_to_UTM(*args, **kwargs)
 
 
 def UTMtoLL(*args, **kwargs):
-    warn('{} is deprecated. Use {} instead.'.format(inspect.stack()[0][3],
-                                                    inspect.stack()[1][3]))
+    warn('{} is deprecated. Use UTM_to_LL instead.'.format(inspect.stack()[0][3]))
     return UTM_to_LL(*args, **kwargs)
 
 

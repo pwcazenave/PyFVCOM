@@ -126,13 +126,12 @@ def get_buoy_data(db, table, fields, noisy=False):
     return data.astype(float)
 
 
+# Add for backwards compatibility.
 def getBuoyMetadata(*args, **kwargs):
-    warn('{} is deprecated. Use {} instead.'.format(inspect.stack()[0][3],
-                                                    inspect.stack()[1][3]))
+    warn('{} is deprecated. Use get_buoy_metadata instead.'.format(inspect.stack()[0][3]))
     return get_buoy_metadata(*args, **kwargs)
 
 
 def getBuoyData(*args, **kwargs):
-    warn('{} is deprecated. Use {} instead.'.format(inspect.stack()[0][3],
-                                                    inspect.stack()[1][3]))
+    warn('{} is deprecated. Use get_buoy_data instead.'.format(inspect.stack()[0][3]))
     return get_buoy_data(*args, **kwargs)

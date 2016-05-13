@@ -299,32 +299,27 @@ def residual_flow(FVCOM, idxRange=False, checkPlot=False, noisy=False):
 
 # For backwards compatibility.
 def calculateTotalCO2(*args, **kwargs):
-    warn('{} is deprecated. Use {} instead.'.format(inspect.stack()[0][3],
-                                                    inspect.stack()[1][3]))
+    warn('{} is deprecated. Use calculate_total_CO2 instead.'.format(inspect.stack()[0][3]))
     return calculate_total_CO2(*args, **kwargs)
 
 
 def CO2LeakBudget(*args, **kwargs):
-    warn('{} is deprecated. Use {} instead.'.format(inspect.stack()[0][3],
-                                                    inspect.stack()[1][3]))
+    warn('{} is deprecated. Use calculate_CO2_leak_budget instead.'.format(inspect.stack()[0][3]))
     return calculate_CO2_leak_budget(*args, **kwargs)
 
 
 def dataAverage(*args, **kwargs):
-    warn('{} is deprecated. Use {} instead.'.format(inspect.stack()[0][3],
-                                                    inspect.stack()[1][3]))
+    warn('{} is deprecated. Use data_average instead.'.format(inspect.stack()[0][3]))
     return data_average(*args, **kwargs)
 
 
 def unstructuredGridVolume(*args, **kwargs):
-    warn('{} is deprecated. Use {} instead.'.format(inspect.stack()[0][3],
-                                                    inspect.stack()[1][3]))
+    warn('{} is deprecated. Use unstructured_grid_volume instead.'.format(inspect.stack()[0][3]))
     return unstructured_grid_volume(*args, **kwargs)
 
 
 def residualFlow(*args, **kwargs):
-    warn('{} is deprecated. Use {} instead.'.format(inspect.stack()[0][3],
-                                                    inspect.stack()[1][3]))
+    warn('{} is deprecated. Use residual_flow instead.'.format(inspect.stack()[0][3]))
     return residual_flow(*args, **kwargs)
 
 

@@ -161,27 +161,23 @@ def rmse(a, b, axis=0):
 
 # For backwards compatibility.
 def calculateRegression(*args, **kwargs):
-    warn('{} is deprecated. Use {} instead.'.format(inspect.stack()[0][3],
-                                                    inspect.stack()[1][3]))
+    warn('{} is deprecated. Use calculate_regression instead.'.format(inspect.stack()[0][3]))
     return calculate_regression(*args, **kwargs)
 
 
 # For backwards compatibility.
 def calculatePolyfit(*args, **kwargs):
-    warn('{} is deprecated. Use {} instead.'.format(inspect.stack()[0][3],
-                                                    inspect.stack()[1][3]))
+    warn('{} is deprecated. Use calculate_polyfit instead.'.format(inspect.stack()[0][3]))
     return calculate_polyfit(*args, **kwargs)
 
 
 # For backwards compatibility.
 def coefficientOfDetermination(*args, **kwargs):
-    warn('{} is deprecated. Use {} instead.'.format(inspect.stack()[0][3],
-                                                    inspect.stack()[1][3]))
+    warn('{} is deprecated. Use coefficient_of_determination instead.'.format(inspect.stack()[0][3]))
     return coefficient_of_determination(*args, **kwargs)
 
 
 # For backwards compatibility.
 def fixRange(*args, **kwargs):
-    warn('{} is deprecated. Use {} instead.'.format(inspect.stack()[0][3],
-                                                    inspect.stack()[1][3]))
+    warn('{} is deprecated. Use fix_range instead.'.format(inspect.stack()[0][3]))
     return fix_range(*args, **kwargs)
