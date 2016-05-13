@@ -5,12 +5,15 @@ Functions to interrogate and extract CTD data from the ctd.db SQLite3 database.
 
 from __future__ import print_function
 
+import inspect
 import sqlite3
 
 import numpy as np
 
+from warnings import warn
 
-def getCTDMetadata(db):
+
+def get_CTD_metadata(db):
     """
     Extracts the meta data from the CTD database.
 
@@ -57,7 +60,7 @@ def getCTDMetadata(db):
     return meta_info
 
 
-def getCTDData(db, table, fields, noisy=False):
+def get_CTD_data(db, table, fields, noisy=False):
     """
     Extract the CTD from the SQLite database for a given site. Specify the
     database (db), the table name (table) of the station of interest.
@@ -122,7 +125,7 @@ def getCTDData(db, table, fields, noisy=False):
     return data
 
 
-def getFerryBoxData(db, fields, table='PrideOfBilbao', noisy=False):
+def get_ferrybox_data(db, fields, table='PrideOfBilbao', noisy=False):
     """
     Extract the Ferry Box data from the SQLite database for a given route
     (defaults to PrideOfBilbao). Specify the database (db), the table name
@@ -182,3 +185,21 @@ def getFerryBoxData(db, fields, table='PrideOfBilbao', noisy=False):
             con.close()
 
     return data
+
+
+def getCTDMetadata(*args, **kwargs):
+    warn('{} is deprecated. Use {} instead.'.format(inspect.stack()[0][3],
+                                                    inspect.stack()[1][3]))
+    return get_CTD_metadata(*args, **kwargs)
+
+
+def getCTDData(*args, **kwargs):
+    warn('{} is deprecated. Use {} instead.'.format(inspect.stack()[0][3],
+                                                    inspect.stack()[1][3]))
+    return get_CTD_data(*args, **kwargs)
+
+
+def getFerryBoxData(*args, **kwargs):
+    warn('{} is deprecated. Use {} instead.'.format(inspect.stack()[0][3],
+                                                    inspect.stack()[1][3]))
+    return get_ferrybox_data(*args, **kwargs)

@@ -1,14 +1,161 @@
 from __future__ import print_function
 
 import sys
+import inspect
 
 import numpy as np
 
-from netCDF4 import Dataset, MFDataset
+from warnings import warn
 from datetime import datetime
+from netCDF4 import Dataset, MFDataset
 
 
-def readFVCOM(file, varList=None, clipDims=False, noisy=False, atts=False):
+class ncwrite():
+    """
+    Save data in a dict to a netCDF file.
+
+    Notes
+    -----
+    1. Unlimited dimension (None) can only be time and MUST be the 1st
+       dimension in the variable dimensions list (or tuple).
+    2. Variable dimensions HAVE to BE lists ['time']
+
+    Parameters
+    ----------
+    data : dict
+        Dict of dicts with keys 'dimension', 'variables' and
+        'global_attributes'.
+    file : str
+        Path to output file name.
+
+    Author(s)
+    ---------
+    Stephane Saux-Picart
+    Pierre Cazenave
+
+    Examples
+    --------
+    >>> lon = np.arange(-10, 10)
+    >>> lat = np.arange(50, 60)
+    >>> Times = ['2010-02-11 00:10:00.000000', '2010-02-21 00:10:00.000000']
+    >>> p90 = np.sin(400).reshape(20, 10, 2)
+    >>> data = {}
+    >>> data['dimensions'] = {
+    ...     'lat': np.size(lat),
+    ...     'lon':np.size(lon),
+    ...     'time':np.shape(timeStr)[1],
+    ...     'DateStrLen':26
+    ... }
+    >>> data['variables'] = {
+    ... 'latitude':{'data':lat,
+    ...     'dimensions':['lat'],
+    ...     'attributes':{'units':'degrees north'}
+    ... },
+    ... 'longitude':{
+    ...     'data':lon,
+    ...     'dimensions':['lon'],
+    ...     'attributes':{'units':'degrees east'}
+    ... },
+    ... 'Times':{
+    ...     'data':timeStr,
+    ...     'dimensions':['time','DateStrLen'],
+    ...     'attributes':{'units':'degrees east'},
+    ...     'fill_value':-999.0,
+    ...     'data_type':'c'
+    ... },
+    ... 'p90':{'data':data,
+    ...     'dimensions':['lat','lon'],
+    ...     'attributes':{'units':'mgC m-3'}}}
+    ... data['global attributes'] = {
+    ...     'description': 'P90 chlorophyll',
+    ...     'source':'netCDF3 python',
+    ...     'history':'Created {}'.format(time.ctime(time.time()))
+    ... }
+    >>> ncwrite(data, 'test.nc')
+
+    """
+
+    def __init__(self, input_dict, filename_out, Quiet=False):
+        self.filename_out = filename_out
+        self.input_dict = input_dict
+        self.Quiet = Quiet
+        self.createNCDF()
+
+    def createNCDF(self):
+        """
+        Function to create and write the data to the specified netCDF file.
+
+        """
+
+        rootgrp = Dataset(self.filename_out, 'w', format='NETCDF3_CLASSIC', clobber=True)
+
+        # Create dimensions.
+        if 'dimensions' in self.input_dict:
+            for k, v in self.input_dict['dimensions'].iteritems():
+                rootgrp.createDimension(k, v)
+        else:
+            if not self.Quiet:
+                print('No netCDF created:')
+                print('  No dimension key found (!! has to be \"dimensions\"!!!)')
+            return()
+
+        # Create global attributes.
+        if 'global attributes' in self.input_dict:
+            for k, v in self.input_dict['global attributes'].iteritems():
+                rootgrp.setncattr(k, v)
+        else:
+            if not self.Quiet:
+                print('  No global attribute key found (!! has to be \"global attributes\"!!!)')
+
+        # Create variables.
+        for k, v in self.input_dict['variables'].iteritems():
+            dims = self.input_dict['variables'][k]['dimensions']
+            data = v['data']
+            # Create correct data type if provided
+            if 'data_type' in self.input_dict['variables'][k]:
+                data_type = self.input_dict['variables'][k]['data_type']
+            else:
+                data_type = 'f4'
+            # Check whether we've been given a fill value.
+            if 'fill_value' in self.input_dict['variables'][k]:
+                fill_value = self.input_dict['variables'][k]['fill_value']
+            else:
+                fill_value = None
+            # Create ncdf variable
+            if not self.Quiet:
+                print('  Creating variable: {} {} {}'.format(k, data_type, dims))
+            var = rootgrp.createVariable(k, data_type, dims, fill_value=fill_value)
+            if len(dims) > np.ndim(data):
+                # If number of dimensions given to netCDF is greater than the
+                # number of dimension of the data, then  fill the netCDF
+                # variable accordingly.
+                if 'time' in dims:
+                    # Check for presence of time dimension (which can be
+                    # unlimited variable: defined by None).
+                    try:
+                        var[:] = data
+                    except IndexError:
+                        raise(IndexError(('Supplied data shape {} does not match the specified'
+                        ' dimensions {}, for variable \'{}\'.'.format(data.shape, var.shape, k))))
+                else:
+                    if not self.Quiet:
+                        print('Problem in the number of dimensions')
+            else:
+                try:
+                    var[:] = data
+                except IndexError:
+                    raise(IndexError(('Supplied data shape {} does not match the specified'
+                    ' dimensions {}, for variable \'{}\'.'.format(data.shape, var.shape, k))))
+
+            # Create attributes for variables
+            if 'attributes' in self.input_dict['variables'][k]:
+                for ka, va in self.input_dict['variables'][k]['attributes'].iteritems():
+                    var.setncattr(ka, va)
+
+        rootgrp.close()
+
+
+def ncread(file, vars=None, dims=False, noisy=False, atts=False):
     """
     Read in the FVCOM results file and spit out numpy arrays for each of the
     variables specified in the varList list.
@@ -170,221 +317,7 @@ def readFVCOM(file, varList=None, clipDims=False, noisy=False, atts=False):
         return FVCOM
 
 
-def ncread(file, vars=None, dims=False, noisy=False, atts=False):
-    """
-    Read in a netCDF file and return numpy arrays for each of the variables
-    specified in the vars list.
-
-    Optionally specify a dict with keys whose names match the dimension names
-    in the NetCDF file and whose values are strings specifying alternative
-    ranges or lists of indices. For example, to extract the first hundred time
-    steps, supply clipDims as:
-
-        dims = {'time':'0:100'}
-
-    To extract the first, 400th and 10,000th values of any array with nodes:
-
-        dims = {'node':'[0, 3999, 9999]'}
-
-    Any dimension not given in dims will be extracted in full.
-
-    Specify atts=True to extract attributes.
-
-    Parameters
-    ----------
-    file : str, list
-        If a string, the full path to an FVCOM NetCDF output file. If a list,
-        a series of files to be loaded. Data will be concatenated into a single
-        dict.
-    vars : list, optional
-        List of variable names to be extracted. If omitted, all variables are
-        returned.
-    dims : dict, optional
-        Dict whose keys are dimensions and whose values are a string of either
-        a range (e.g. {'time':'0:100'}) or a list of individual indices (e.g.
-        {'time':'[0, 1, 80, 100]'}). Slicing is supported (::5 for every fifth
-        value) but it is not possible to extract data from the end of the array
-        with a negative index (e.g. 0:-4).
-    noisy : bool, optional
-        Set to True to enable verbose output.
-    atts : bool, optional
-        Set to True to enable output of the attributes (defaults to False).
-
-    Returns
-    -------
-    nc : dict
-        Dict of data extracted from the NetCDF file. Keys are those given in
-        varList and the data are stored as ndarrays.
-    attributes : dict, optional
-        If True, returns the attributes as a dict for each variable in varList.
-        The key 'dims' contains the array dimensions (each variable contains
-        the names of its dimensions) as well as the shape of the dimensions
-        defined in the NetCDF file.
-
-    Notes
-    -----
-    This is actually a wrapper for the readFVCOM function, but since that
-    function is actually not specific to FVCOM, it seemed sensible to have this
-    generic function. Eventually I imagine this will be the underlying version
-    and the readFVCOM function will call this one i.e. the roles will be
-    swapped.
-
-    """
-
-    if atts:
-        nc, attributes = readFVCOM(file, varList=vars, clipDims=dims, noisy=noisy, atts=atts)
-        return nc, attributes
-    else:
-        nc = readFVCOM(file, varList=vars, clipDims=dims, noisy=noisy, atts=atts)
-        return nc
-
-
-class ncwrite():
-    """
-    Save data in a dict to a netCDF file.
-
-    Notes
-    -----
-    1. Unlimited dimension (None) can only be time and MUST be the 1st
-       dimension in the variable dimensions list (or tuple).
-    2. Variable dimensions HAVE to BE lists ['time']
-
-    Parameters
-    ----------
-    data : dict
-        Dict of dicts with keys 'dimension', 'variables' and
-        'global_attributes'.
-    file : str
-        Path to output file name.
-
-    Author(s)
-    ---------
-    Stephane Saux-Picart
-    Pierre Cazenave
-
-    Examples
-    --------
-    >>> lon = np.arange(-10, 10)
-    >>> lat = np.arange(50, 60)
-    >>> Times = ['2010-02-11 00:10:00.000000', '2010-02-21 00:10:00.000000']
-    >>> p90 = np.sin(400).reshape(20, 10, 2)
-    >>> data = {}
-    >>> data['dimensions'] = {
-    ...     'lat': np.size(lat),
-    ...     'lon':np.size(lon),
-    ...     'time':np.shape(timeStr)[1],
-    ...     'DateStrLen':26
-    ... }
-    >>> data['variables'] = {
-    ... 'latitude':{'data':lat,
-    ...     'dimensions':['lat'],
-    ...     'attributes':{'units':'degrees north'}
-    ... },
-    ... 'longitude':{
-    ...     'data':lon,
-    ...     'dimensions':['lon'],
-    ...     'attributes':{'units':'degrees east'}
-    ... },
-    ... 'Times':{
-    ...     'data':timeStr,
-    ...     'dimensions':['time','DateStrLen'],
-    ...     'attributes':{'units':'degrees east'},
-    ...     'fill_value':-999.0,
-    ...     'data_type':'c'
-    ... },
-    ... 'p90':{'data':data,
-    ...     'dimensions':['lat','lon'],
-    ...     'attributes':{'units':'mgC m-3'}}}
-    ... data['global attributes'] = {
-    ...     'description': 'P90 chlorophyll',
-    ...     'source':'netCDF3 python',
-    ...     'history':'Created {}'.format(time.ctime(time.time()))
-    ... }
-    >>> ncwrite(data, 'test.nc')
-
-    """
-
-    def __init__(self, input_dict, filename_out, Quiet=False):
-        self.filename_out = filename_out
-        self.input_dict = input_dict
-        self.Quiet = Quiet
-        self.createNCDF()
-
-    def createNCDF(self):
-        """
-        Function to create and write the data to the specified netCDF file.
-
-        """
-
-        rootgrp = Dataset(self.filename_out, 'w', format='NETCDF3_CLASSIC', clobber=True)
-
-        # Create dimensions.
-        if 'dimensions' in self.input_dict:
-            for k, v in self.input_dict['dimensions'].iteritems():
-                rootgrp.createDimension(k, v)
-        else:
-            if not self.Quiet:
-                print('No netCDF created:')
-                print('  No dimension key found (!! has to be \"dimensions\"!!!)')
-            return()
-
-        # Create global attributes.
-        if 'global attributes' in self.input_dict:
-            for k, v in self.input_dict['global attributes'].iteritems():
-                rootgrp.setncattr(k, v)
-        else:
-            if not self.Quiet:
-                print('  No global attribute key found (!! has to be \"global attributes\"!!!)')
-
-        # Create variables.
-        for k, v in self.input_dict['variables'].iteritems():
-            dims = self.input_dict['variables'][k]['dimensions']
-            data = v['data']
-            # Create correct data type if provided
-            if 'data_type' in self.input_dict['variables'][k]:
-                data_type = self.input_dict['variables'][k]['data_type']
-            else:
-                data_type = 'f4'
-            # Check whether we've been given a fill value.
-            if 'fill_value' in self.input_dict['variables'][k]:
-                fill_value = self.input_dict['variables'][k]['fill_value']
-            else:
-                fill_value = None
-            # Create ncdf variable
-            if not self.Quiet:
-                print('  Creating variable: {} {} {}'.format(k, data_type, dims))
-            var = rootgrp.createVariable(k, data_type, dims, fill_value=fill_value)
-            if len(dims) > np.ndim(data):
-                # If number of dimensions given to netCDF is greater than the
-                # number of dimension of the data, then  fill the netCDF
-                # variable accordingly.
-                if 'time' in dims:
-                    # Check for presence of time dimension (which can be
-                    # unlimited variable: defined by None).
-                    try:
-                        var[:] = data
-                    except IndexError:
-                        raise(IndexError(('Supplied data shape {} does not match the specified'
-                        ' dimensions {}, for variable \'{}\'.'.format(data.shape, var.shape, k))))
-                else:
-                    if not self.Quiet:
-                        print('Problem in the number of dimensions')
-            else:
-                try:
-                    var[:] = data
-                except IndexError:
-                    raise(IndexError(('Supplied data shape {} does not match the specified'
-                    ' dimensions {}, for variable \'{}\'.'.format(data.shape, var.shape, k))))
-
-            # Create attributes for variables
-            if 'attributes' in self.input_dict['variables'][k]:
-                for ka, va in self.input_dict['variables'][k]['attributes'].iteritems():
-                    var.setncattr(ka, va)
-
-        rootgrp.close()
-
-
-def readProbes(files, noisy=False, locations=False):
+def read_probes(files, noisy=False, locations=False):
     """
     Read in FVCOM probes output files. Reads both 1 and 2D outputs. Currently
     only sensible to import a single station with this function since all data
@@ -459,12 +392,14 @@ def readProbes(files, noisy=False, locations=False):
     values = values[sidx, ...]  # support both 1 and 2D data
 
     if locations:
+        times, values, positions = read_probes(files, noisy, locations)
         return times, values, positions
     else:
+        times, values = read_probes(files, noisy)
         return times, values
 
 
-def writeProbes(file, mjd, timeseries, datatype, site, depth, sigma=(-1, -1), lonlat=(0, 0), xy=(0, 0), datestr=None):
+def write_probes(file, mjd, timeseries, datatype, site, depth, sigma=(-1, -1), lonlat=(0, 0), xy=(0, 0), datestr=None):
     """
     Writes out an FVCOM-formatted time series at a specific location.
 
@@ -636,3 +571,22 @@ def nodes2elems(nodes, tri):
         raise Exception('Too many dimensions (maximum of two)')
 
     return elems
+
+
+# For backwards compatibility.
+def readFVCOM(*args, **kwargs):
+    warn('{} is deprecated. Use {} instead.'.format(inspect.stack()[0][3],
+                                                    inspect.stack()[1][3]))
+    return ncread(*args, **kwargs)
+
+
+def readProbes(*args, **kwargs):
+    warn('{} is deprecated. Use {} instead.'.format(inspect.stack()[0][3],
+                                                    inspect.stack()[1][3]))
+    return read_probes(*args, **kwargs)
+
+
+def writeProbes(*args, **kwargs):
+    warn('{} is deprecated. Use {} instead.'.format(inspect.stack()[0][3],
+                                                    inspect.stack()[1][3]))
+    return write_probes(*args, **kwargs)

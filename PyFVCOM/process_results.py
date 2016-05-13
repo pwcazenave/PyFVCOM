@@ -4,11 +4,14 @@ NetCDF file.
 
 """
 
+import inspect
+
 import numpy as np
 import matplotlib.pyplot as plt
 
+from warnings import warn
 
-def calculateTotalCO2(FVCOM, varPlot, startIdx, layerIdx, leakIdx, dt, noisy=False):
+def calculate_total_CO2(FVCOM, varPlot, startIdx, layerIdx, leakIdx, dt, noisy=False):
     """
     Calculates total CO2 input and plots accordingly. Nothing too fancy.
 
@@ -62,7 +65,7 @@ def calculateTotalCO2(FVCOM, varPlot, startIdx, layerIdx, leakIdx, dt, noisy=Fal
     return totalCO2inSystem
 
 
-def CO2LeakBudget(FVCOM, leakIdx, startDay):
+def calculate_CO2_leak_budget(FVCOM, leakIdx, startDay):
     """
     Replicate Riqui's CO2leak_budget.m code.
 
@@ -99,7 +102,7 @@ def CO2LeakBudget(FVCOM, leakIdx, startDay):
     return CO2, CO2Leak, maxCO2
 
 
-def dataAverage(data, **args):
+def data_average(data, **args):
     """ Depth average a given FVCOM output data set along a specified axis """
 
     dataMask = np.ma.masked_array(data, np.isnan(data))
@@ -108,7 +111,7 @@ def dataAverage(data, **args):
     return dataMeaned
 
 
-def unstructuredGridVolume(FVCOM):
+def unstructured_grid_volume(FVCOM):
     """
     Calculate the volume for every cell in the unstructured grid.
 
@@ -143,7 +146,7 @@ def unstructuredGridVolume(FVCOM):
     return allVolumes
 
 
-def residualFlow(FVCOM, idxRange=False, checkPlot=False, noisy=False):
+def residual_flow(FVCOM, idxRange=False, checkPlot=False, noisy=False):
     """
     Calculate the residual flow. By default, the calculation will take place
     over the entire duration of FVCOM['Times']. To limit the calculation to a
@@ -292,3 +295,36 @@ def residualFlow(FVCOM, idxRange=False, checkPlot=False, noisy=False):
         fig.show()
 
     return uRes, vRes, rDir, rMag
+
+
+# For backwards compatibility.
+def calculateTotalCO2(*args, **kwargs):
+    warn('{} is deprecated. Use {} instead.'.format(inspect.stack()[0][3],
+                                                    inspect.stack()[1][3]))
+    return calculate_total_CO2(*args, **kwargs)
+
+
+def CO2LeakBudget(*args, **kwargs):
+    warn('{} is deprecated. Use {} instead.'.format(inspect.stack()[0][3],
+                                                    inspect.stack()[1][3]))
+    return calculate_CO2_leak_budget(*args, **kwargs)
+
+
+def dataAverage(*args, **kwargs):
+    warn('{} is deprecated. Use {} instead.'.format(inspect.stack()[0][3],
+                                                    inspect.stack()[1][3]))
+    return data_average(*args, **kwargs)
+
+
+def unstructuredGridVolume(*args, **kwargs):
+    warn('{} is deprecated. Use {} instead.'.format(inspect.stack()[0][3],
+                                                    inspect.stack()[1][3]))
+    return unstructured_grid_volume(*args, **kwargs)
+
+
+def residualFlow(*args, **kwargs):
+    warn('{} is deprecated. Use {} instead.'.format(inspect.stack()[0][3],
+                                                    inspect.stack()[1][3]))
+    return residual_flow(*args, **kwargs)
+
+

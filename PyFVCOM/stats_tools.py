@@ -4,12 +4,15 @@ functions.
 
 """
 
+import inspect
+
 import numpy as np
 
+from warnings import warn
 from scipy import stats, polyfit, polyval
 
 
-def calculateRegression(x, y, type):
+def calculate_regression(x, y, type):
     """
     Calculate three types of regression:
         1. Linear (lin)
@@ -59,7 +62,7 @@ def calculateRegression(x, y, type):
     return xf, yf, m, c, r
 
 
-def calculatePolyfit(x, y):
+def calculate_polyfit(x, y):
     """ Calculate a linear regression using polyfit instead """
 
     # FIXME(pica) This doesn't work for large ranges (tens of orders of
@@ -90,7 +93,7 @@ def calculatePolyfit(x, y):
     return xf, yf
 
 
-def coefficientOfDetermination(obs, model):
+def coefficient_of_determination(obs, model):
     """ Calculate the coefficient of determination for a modelled function """
     obsBar = np.mean(obs)
 
@@ -101,7 +104,7 @@ def coefficientOfDetermination(obs, model):
     return R2
 
 
-def fixRange(a, nmin, nmax):
+def fix_range(a, nmin, nmax):
     """
     Given an array of values `a', scale the values within in to the range
     specified by `nmin' and `nmax'.
@@ -154,3 +157,31 @@ def rmse(a, b, axis=0):
     rmse = np.sqrt(np.mean((a - b)**2, axis=axis))
 
     return rmse
+
+
+# For backwards compatibility.
+def calculateRegression(*args, **kwargs):
+    warn('{} is deprecated. Use {} instead.'.format(inspect.stack()[0][3],
+                                                    inspect.stack()[1][3]))
+    return calculate_regression(*args, **kwargs)
+
+
+# For backwards compatibility.
+def calculatePolyfit(*args, **kwargs):
+    warn('{} is deprecated. Use {} instead.'.format(inspect.stack()[0][3],
+                                                    inspect.stack()[1][3]))
+    return calculate_polyfit(*args, **kwargs)
+
+
+# For backwards compatibility.
+def coefficientOfDetermination(*args, **kwargs):
+    warn('{} is deprecated. Use {} instead.'.format(inspect.stack()[0][3],
+                                                    inspect.stack()[1][3]))
+    return coefficient_of_determination(*args, **kwargs)
+
+
+# For backwards compatibility.
+def fixRange(*args, **kwargs):
+    warn('{} is deprecated. Use {} instead.'.format(inspect.stack()[0][3],
+                                                    inspect.stack()[1][3]))
+    return fix_range(*args, **kwargs)

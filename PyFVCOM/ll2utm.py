@@ -4,7 +4,11 @@
 
 # Adjusted for use with NumPy by Pierre Cazenave <pica {at} pml.ac.uk>
 
+import inspect
+
 import numpy as np
+
+from warnings import warn
 
 # LatLong- UTM conversion..h
 # definitions for lat/long to UTM and UTM to lat/lng conversions
@@ -65,13 +69,13 @@ def _test(inLat, inLong, inZone=False):
 
     """
 
-    z, e, n = LLtoUTM(23, inLat, inLong, ZoneNumber=inZone)
-    outLat, outLong = UTMtoLL(23, n, e, z)
+    z, e, n = LL_to_UTM(23, inLat, inLong, ZoneNumber=inZone)
+    outLat, outLong = UTM_to_LL(23, n, e, z)
 
     return z, e, n, outLat, outLong
 
 
-def _UTMLetterDesignator(Lat):
+def _UTM_letter_designator(Lat):
     # This routine determines the correct UTM letter designator for the given
     # latitude. Returns 'Z' if latitude is outside the UTM limits of 84N to 80S
     # Written by Chuck Gantz: chuck.gantz@globalstar.com
@@ -119,12 +123,12 @@ def _UTMLetterDesignator(Lat):
     else:
         return 'Z'    # if the Latitude is outside the UTM limits
 
-    # void UTMtoLL(int ReferenceEllipsoid, const double UTMNorthing,
+    # void UTM_to_LL(int ReferenceEllipsoid, const double UTMNorthing,
     #             const double UTMEasting, const char* UTMZone,
     #             double& Lat,  double& Long )
 
 
-def LLtoUTM(ReferenceEllipsoid, Lat, Long, ZoneNumber=False):
+def LL_to_UTM(ReferenceEllipsoid, Lat, Long, ZoneNumber=False):
     """ Converts lat/long to UTM coords. Equations from USGS Bulletin 1532.
 
     East Longitudes are positive, west longitudes are negative. North latitudes
@@ -232,7 +236,7 @@ def LLtoUTM(ReferenceEllipsoid, Lat, Long, ZoneNumber=False):
             LongOriginRad = np.deg2rad(LongOrigin)
 
             # Compute the UTM Zone from the latitude and longitude
-            UTMZone = "%d%c" % (ZoneNumberTemp, _UTMLetterDesignator(ll[1]))
+            UTMZone = "%d%c" % (ZoneNumberTemp, _UTM_letter_designator(ll[1]))
 
             Zone.append(UTMZone)
     else:
@@ -262,7 +266,7 @@ def LLtoUTM(ReferenceEllipsoid, Lat, Long, ZoneNumber=False):
         LongOriginRad = np.deg2rad(LongOrigin)
 
         # Compute the UTM Zone from the latitude and longitude
-        UTMZone = "%d%c" % (ZoneNumber, _UTMLetterDesignator(ll[1]))
+        UTMZone = "%d%c" % (ZoneNumber, _UTM_letter_designator(ll[1]))
 
         Zone = UTMZone
 
@@ -309,7 +313,7 @@ def LLtoUTM(ReferenceEllipsoid, Lat, Long, ZoneNumber=False):
     return Zone, UTMEasting, UTMNorthing
 
 
-def UTMtoLL(ReferenceEllipsoid, northing, easting, zone):
+def UTM_to_LL(ReferenceEllipsoid, northing, easting, zone):
     """ Converts UTM coords to lat/long. Equations from USGS Bulletin 1532.
 
     East Longitudes are positive, west longitudes are negative. North latitudes
@@ -446,6 +450,24 @@ def UTMtoLL(ReferenceEllipsoid, northing, easting, zone):
     Long = LongOrigin + np.rad2deg(Long)
 
     return Lat, Long
+
+# For backwards-compatibility.
+def _UTMLetterDesignator(*args, **kwargs):
+    warn('{} is deprecated. Use {} instead.'.format(inspect.stack()[0][3],
+                                                    inspect.stack()[1][3]))
+    return _UTM_letter_designator(*args, **kwargs)
+
+
+def LLtoUTM(*args, **kwargs):
+    warn('{} is deprecated. Use {} instead.'.format(inspect.stack()[0][3],
+                                                    inspect.stack()[1][3]))
+    return LL_to_UTM(*args, **kwargs)
+
+
+def UTMtoLL(*args, **kwargs):
+    warn('{} is deprecated. Use {} instead.'.format(inspect.stack()[0][3],
+                                                    inspect.stack()[1][3]))
+    return UTM_to_LL(*args, **kwargs)
 
 
 if __name__ == '__main__':

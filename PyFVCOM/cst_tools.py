@@ -25,7 +25,7 @@ import shapefile
 import numpy as np
 
 
-def readESRIShapeFile(file, fileOut):
+def read_ESRI_shapefile(file, fileOut):
     """
     Convert ESRI ShapeFiles to SMS-compatible CST files.
 
@@ -64,7 +64,7 @@ def readESRIShapeFile(file, fileOut):
     fileWrite.close()
 
 
-def readArcMIKE(file, fileOut):
+def read_arc_MIKE(file, fileOut):
     """
     Read in a set of MIKE arc files and export to CST format compatible with
     FVCOM.
@@ -130,7 +130,7 @@ def readArcMIKE(file, fileOut):
     fileWrite.close()
 
 
-def readCST(cst):
+def read_CST(cst):
     """
     Read a CST file and store the vertices in a dict.
 
@@ -190,7 +190,7 @@ def readCST(cst):
     return vert
 
 
-def writeCST(obc, file, sort=False):
+def write_CST(obc, file, sort=False):
     """
     Read a CST file and store the vertices in a dict.
 
@@ -226,3 +226,29 @@ def writeCST(obc, file, sort=False):
                 f.write('\t{:.6f}\t{:.6f}\t0.0\n'.format(xy[0], xy[1]))
 
         f.close
+
+
+def readESRIShapeFile(*args, **kwargs):
+    warn('{} is deprecated. Use {} instead.'.format(inspect.stack()[0][3],
+                                                    inspect.stack()[1][3]))
+    return read_ESRI_shapefile(*args, **kwargs)
+
+
+def readArcMIKE(*args, **kwargs):
+    warn('{} is deprecated. Use {} instead.'.format(inspect.stack()[0][3],
+                                                    inspect.stack()[1][3]))
+    return read_arc_MIKE(*args, **kwargs)
+
+
+def readCST(*args, **kwargs):
+    warn('{} is deprecated. Use {} instead.'.format(inspect.stack()[0][3],
+                                                    inspect.stack()[1][3]))
+    return read_CST(*args, **kwargs)
+
+
+def writeCST(*args, **kwargs):
+    warn('{} is deprecated. Use {} instead.'.format(inspect.stack()[0][3],
+                                                    inspect.stack()[1][3]))
+    return write_CST(*args, **kwargs)
+
+

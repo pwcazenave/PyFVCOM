@@ -6,11 +6,15 @@ database.
 
 from __future__ import print_function
 
+import inspect
+
 import numpy as np
 import sqlite3
 
+from warnings import warn
 
-def getBuoyMetadata(db):
+
+def get_buoy_metadata(db):
     """
     Extracts the meta data from the buoy database.
 
@@ -57,7 +61,7 @@ def getBuoyMetadata(db):
     return meta_info
 
 
-def getBuoyData(db, table, fields, noisy=False):
+def get_buoy_data(db, table, fields, noisy=False):
     """
     Extract the buoy from the SQLite database for a given site.  Specify the
     database (db), the table name (table) of the station of interest.
@@ -120,3 +124,15 @@ def getBuoyData(db, table, fields, noisy=False):
             con.close()
 
     return data.astype(float)
+
+
+def getBuoyMetadata(*args, **kwargs):
+    warn('{} is deprecated. Use {} instead.'.format(inspect.stack()[0][3],
+                                                    inspect.stack()[1][3]))
+    return get_buoy_metadata(*args, **kwargs)
+
+
+def getBuoyData(*args, **kwargs):
+    warn('{} is deprecated. Use {} instead.'.format(inspect.stack()[0][3],
+                                                    inspect.stack()[1][3]))
+    return get_buoy_data(*args, **kwargs)

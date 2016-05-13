@@ -112,20 +112,18 @@ Provides
     - mixedlayerdepth
     - stokes
 
-* process_FVCOM_results - perform some analyses on FVCOM data read in using read_FVCOM_results.
+* process_results - perform some analyses on FVCOM data read in using read_FVCOM_results.
     - calculateTotalCO2
     - CO2LeakBudget
     - dataAverage
     - unstructuredGridVolume
     - residualFlow
 
-* read_FVCOM_results - parse the netCDF model output and extract a subset of the variables.
-    - readFVCOM
-    - ncread (wrapper around readFVCOM)
-    - readProbes
+* read_results - parse the netCDF model output and extract a subset of the variables.
+    - ncread
+    - read_probes
     - elems2nodes
     - nodes2elems
-    - getSurfaceElevation
 
 * stats_tools - some basic statistics tools.
     - calculateRegression

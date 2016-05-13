@@ -8,11 +8,13 @@ from __future__ import print_function
 import matplotlib.delaunay as triang
 import numpy as np
 import sys
+import inspect
+from warnings import warn
 
-from PyFVCOM.ll2utm import UTMtoLL
+from PyFVCOM.ll2utm import UTM_to_LL
 
 
-def parseUnstructuredGridSMS(mesh):
+def read_sms_mesh(mesh):
     """
     Reads in the SMS unstructured grid format. Also creates IDs for output to
     MIKE unstructured grid format.
@@ -104,7 +106,7 @@ def parseUnstructuredGridSMS(mesh):
     return triangle, nodes, X, Y, Z, types
 
 
-def parseUnstructuredGridFVCOM(mesh):
+def read_fvcom_mesh(mesh):
     """
     Reads in the FVCOM unstructured grid format.
 
@@ -160,7 +162,7 @@ def parseUnstructuredGridFVCOM(mesh):
     return triangle, nodes, X, Y, Z
 
 
-def parseUnstructuredGridMIKE(mesh, flipZ=True):
+def read_mike_mesh(mesh, flipZ=True):
     """
     Reads in the MIKE unstructured grid format.
 
@@ -234,7 +236,7 @@ def parseUnstructuredGridMIKE(mesh, flipZ=True):
     return triangle, nodes, X, Y, Z, types
 
 
-def parseUnstructuredGridGMSH(mesh):
+def read_gmsh_mesh(mesh):
     """
     Reads in the GMSH unstructured grid format (version 2.2).
 
@@ -345,7 +347,7 @@ def parseUnstructuredGridGMSH(mesh):
     return triangles, nodes, x, y, z
 
 
-def writeUnstructuredGridSMS(triangles, nodes, x, y, z, types, mesh):
+def write_sms_mesh(triangles, nodes, x, y, z, types, mesh):
     """
     Takes appropriate triangle, node, boundary type and coordinate data and
     writes out an SMS formatted grid file (mesh). The footer is largely static,
@@ -487,7 +489,7 @@ def writeUnstructuredGridSMS(triangles, nodes, x, y, z, types, mesh):
     fileWrite.close()
 
 
-def writeUnstructuredGridSMSBathy(triangles, nodes, z, PTS):
+def write_sms_bathy(triangles, nodes, z, PTS):
     """
     Writes out the additional bathymetry file sometimes output by SMS. Not sure
     why this is necessary as it's possible to put the depths in the other file,
@@ -537,7 +539,7 @@ def writeUnstructuredGridSMSBathy(triangles, nodes, z, PTS):
     filePTS.close()
 
 
-def writeUnstructuredGridMIKE(triangles, nodes, x, y, z, types, mesh):
+def write_mike_mesh(triangles, nodes, x, y, z, types, mesh):
     """
     Write out a DHI MIKE unstructured grid (mesh) format file. This
     assumes the input coordinates are in longitude and latitude. If they
@@ -612,7 +614,7 @@ def writeUnstructuredGridMIKE(triangles, nodes, x, y, z, types, mesh):
     fileWrite.close()
 
 
-def findNearestPoint(FX, FY, x, y, maxDistance=np.inf, noisy=False):
+def find_nearest_point(FX, FY, x, y, maxDistance=np.inf, noisy=False):
     """
     Given some point(s) x and y, find the nearest grid node in FX and
     FY.
@@ -705,7 +707,7 @@ def findNearestPoint(FX, FY, x, y, maxDistance=np.inf, noisy=False):
     return nearestX, nearestY, distance, index
 
 
-def elementSideLengths(triangles, x, y):
+def element_side_lengths(triangles, x, y):
     """
     Given a list of triangle nodes, calculate the length of each side of each
     triangle and return as an array of lengths. Units are in the original input
@@ -743,7 +745,7 @@ def elementSideLengths(triangles, x, y):
     return elemSides
 
 
-def fixCoordinates(FVCOM, UTMZone, inVars=['x', 'y']):
+def fix_coordinates(FVCOM, UTMZone, inVars=['x', 'y']):
     """
     Use the UTMtoLL function to convert the grid from UTM to Lat/Long. Returns
     longitude and latitude in the range -180 to 180.
@@ -801,7 +803,7 @@ def fixCoordinates(FVCOM, UTMZone, inVars=['x', 'y']):
     return X, Y
 
 
-def clipTri(MODEL, sideLength, keys=['xc', 'yc']):
+def clip_triangulation(MODEL, sideLength, keys=['xc', 'yc']):
     """
     Make a new triangulation of the element centres and clip according
     to a maximum length.
@@ -854,7 +856,7 @@ def clipTri(MODEL, sideLength, keys=['xc', 'yc']):
     return triClip
 
 
-def getRiverConfig(fileName, noisy=False):
+def get_river_config(fileName, noisy=False):
     """
     Parse the rivers namelist to extract the parameters and their values.
     Returns a dict of the parameters with the associated values for all the
@@ -896,7 +898,7 @@ def getRiverConfig(fileName, noisy=False):
     return rivers
 
 
-def getRivers(discharge, positions, noisy=False):
+def get_rivers(discharge, positions, noisy=False):
     """
     Extract the modified POLCOMS positions and the discharge data.
 
@@ -1092,7 +1094,7 @@ def mesh2grid(meshX, meshY, meshZ, nx, ny, thresh=None, noisy=False):
     return xx, yy, zz
 
 
-def lineSample(x, y, positions, num=0, return_distance=False, noisy=False):
+def line_sample(x, y, positions, num=0, return_distance=False, noisy=False):
     """
     Function to take an unstructured grid of positions x and y and find the
     points which fall closest to a line defined by the coordinate pairs start
@@ -1428,7 +1430,7 @@ def lineSample(x, y, positions, num=0, return_distance=False, noisy=False):
         return idx, line
 
 
-def OSGB36toWGS84(eastings, northings):
+def OSGB36_to_WGS84(eastings, northings):
     """
     Converts British National Grid coordinates to latitude and longitude on the
     WGS84 spheriod.
@@ -1677,7 +1679,7 @@ def connectivity(p, t):
     return e, te, e2t, bnd
 
 
-def clipDomain(x, y, extents, noisy=False):
+def clip_domain(x, y, extents, noisy=False):
     """
     Function to find the indices for the positions in pos which fall within the
     bounding box defined in extents.
@@ -1807,3 +1809,105 @@ def heron(v0, v1, v2):
                         ))
 
     return A
+
+
+# For backwards compatibility.
+def parseUnstructuredGridSMS(*args, **kwargs):
+    warn('{} is deprecated. Use {} instead.'.format(inspect.stack()[0][3],
+                                                    inspect.stack()[1][3]))
+    return read_sms_mesh(*args, **kwargs)
+
+
+def parseUnstructuredGridFVCOM(*args, **kwargs):
+    warn('{} is deprecated. Use {} instead.'.format(inspect.stack()[0][3],
+                                                    inspect.stack()[1][3]))
+    return read_fvcom_mesh(*args, **kwargs)
+
+
+def parseUnstructuredGridMIKE(*args, **kwargs):
+    warn('{} is deprecated. Use {} instead.'.format(inspect.stack()[0][3],
+                                                    inspect.stack()[1][3]))
+    return read_mike_mesh(*args, **kwargs)
+
+
+def parseUnstructuredGridGMSH(*args, **kwargs):
+    warn('{} is deprecated. Use {} instead.'.format(inspect.stack()[0][3],
+                                                    inspect.stack()[1][3]))
+    return read_gmsh_mesh(*args, **kwargs)
+
+
+def writeUnstructuredGridSMS(*args, **kwargs):
+    warn('{} is deprecated. Use {} instead.'.format(inspect.stack()[0][3],
+                                                    inspect.stack()[1][3]))
+    return write_sms_mesh(*args, **kwargs)
+
+
+def writeUnstructuredGridSMSBathy(*args, **kwargs):
+    warn('{} is deprecated. Use {} instead.'.format(inspect.stack()[0][3],
+                                                    inspect.stack()[1][3]))
+    return write_sms_bathy(*args, **kwargs)
+
+
+def writeUnstructuredGridMIKE(*args, **kwargs):
+    warn('{} is deprecated. Use {} instead.'.format(inspect.stack()[0][3],
+                                                    inspect.stack()[1][3]))
+    return write_mike_mesh(*args, **kwargs)
+
+
+def findNearestPoint(*args, **kwargs):
+    warn('{} is deprecated. Use {} instead.'.format(inspect.stack()[0][3],
+                                                    inspect.stack()[1][3]))
+    return find_nearest_point(*args, **kwargs)
+
+
+def elementSideLengths(*args, **kwargs):
+    warn('{} is deprecated. Use {} instead.'.format(inspect.stack()[0][3],
+                                                    inspect.stack()[1][3]))
+    return element_side_lengths(*args, **kwargs)
+
+
+def fixCoordinates(*args, **kwargs):
+    warn('{} is deprecated. Use {} instead.'.format(inspect.stack()[0][3],
+                                                    inspect.stack()[1][3]))
+    return fix_coordinates(*args, **kwargs)
+
+
+def clipTri(*args, **kwargs):
+    warn('{} is deprecated. Use {} instead.'.format(inspect.stack()[0][3],
+                                                    inspect.stack()[1][3]))
+    return clip_triangulation(*args, **kwargs)
+
+
+def getRiverConfig(*args, **kwargs):
+    warn('{} is deprecated. Use {} instead.'.format(inspect.stack()[0][3],
+                                                    inspect.stack()[1][3]))
+    return get_river_config(*args, **kwargs)
+
+
+def getRivers(*args, **kwargs):
+    warn('{} is deprecated. Use {} instead.'.format(inspect.stack()[0][3],
+                                                    inspect.stack()[1][3]))
+    return get_rivers(*args, **kwargs)
+
+
+def lineSample(*args, **kwargs):
+    warn('{} is deprecated. Use {} instead.'.format(inspect.stack()[0][3],
+                                                    inspect.stack()[1][3]))
+    return line_sample(*args, **kwargs)
+
+
+def clipDomain(*args, **kwargs):
+    warn('{} is deprecated. Use {} instead.'.format(inspect.stack()[0][3],
+                                                    inspect.stack()[1][3]))
+    return clip_domain(*args, **kwargs)
+
+
+def OSGB36toWGS84(*args, **kwargs):
+    warn('{} is deprecated. Use {} instead.'.format(inspect.stack()[0][3],
+                                                    inspect.stack()[1][3]))
+    return OSGB36_to_WGS84(*args, **kwargs)
+
+def UTMtoLL(*args, **kwargs):
+    warn('{} is deprecated. Use {} instead.'.format(inspect.stack()[0][3],
+                                                    inspect.stack()[1][3]))
+    return UTM_to_LL(*args, **kwargs)
