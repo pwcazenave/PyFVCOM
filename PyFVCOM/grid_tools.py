@@ -1907,3 +1907,9 @@ def OSGB36toWGS84(*args, **kwargs):
     warn('{} is deprecated. Use {} instead.'.format(inspect.stack()[0][3],
                                                     inspect.stack()[1][3]))
     return OSGB36_to_WGS84(*args, **kwargs)
+
+
+def UTMtoLL(*args, **kwargs):
+    warn('{} is deprecated. Use UTM_to_LL instead.'.format(inspect.stack()[0][3]))
+    return UTM_to_LL(*args, **kwargs)
+
