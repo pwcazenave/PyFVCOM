@@ -12,8 +12,6 @@ __email__ = 'pica@pml.ac.uk'
 
 import inspect
 from warnings import warn
-# Import numpy so we have it across the board.
-import numpy as np
 
 # Import everything!
 from PyFVCOM import buoy_tools
