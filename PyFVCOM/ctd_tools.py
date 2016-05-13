@@ -85,7 +85,7 @@ def get_CTD_data(db, table, fields, noisy=False):
 
     See Also
     --------
-    ctd_tools.getObservedMetadata : extract metadata for a CTD cast.
+    ctd_tools.get_observed_metadata : extract metadata for a CTD cast.
 
     Notes
     -----

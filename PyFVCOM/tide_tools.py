@@ -253,7 +253,7 @@ def get_observed_data(db, table, startYear=False, endYear=False, noisy=False):
 
     See Also
     --------
-    tide_tools.getObservedMetadata : extract metadata for a tide station.
+    tide_tools.get_observed_metadata : extract metadata for a tide station.
 
     Notes
     -----
@@ -797,7 +797,7 @@ def read_POLPRED(harmonics, noisy=False):
 
     See Also
     --------
-    tide_tools.gridPOLPRED : Converts the POLPRED data into a rectangular
+    tide_tools.grid_POLPRED : Converts the POLPRED data into a rectangular
         gridded data set with values of -999.9 outside the POLPRED domain.
 
     """
@@ -871,7 +871,7 @@ def grid_POLPRED(values, noisy=False):
     Parameters
     ----------
     values : ndarray
-        Output from readPOLPRED(). See `tide_tools.readPOLPRED'.
+        Output from read_POLPRED(). See `tide_tools.read_POLPRED'.
     noisy : bool, optional
         Set to True to enable verbose output.
 
@@ -890,8 +890,8 @@ def grid_POLPRED(values, noisy=False):
 
     See Also
     --------
-    tide_tools.readPOLPRED : Reads in the POLPRED ASCII data.
-    tide_tools.getHarmonicsPOLPRED : Extract tidal harmonics within a
+    tide_tools.read_POLPRED : Reads in the POLPRED ASCII data.
+    tide_tools.get_harmonics_POLPRED : Extract tidal harmonics within a
         threshold distance of a supplied coordinate.
 
     """
@@ -965,7 +965,7 @@ def get_harmonics_POLPRED(harmonics, constituents, lon, lat, stations, noisy=Fal
 
     See Also
     --------
-    tide_tools.readPOLPRED : Read in the POLPRED data to split the ASCII
+    tide_tools.read_POLPRED : Read in the POLPRED data to split the ASCII
         file into a header dict and an ndarray of values.
     grid_tools.find_nearest_point : Find the closest point in one set of
         coordinates to a specified point or set of points.

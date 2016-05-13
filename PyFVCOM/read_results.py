@@ -209,7 +209,7 @@ def ncread(file, vars=None, dims=False, noisy=False, atts=False):
 
     See Also
     --------
-    readProbes : read in FVCOM ASCII probes output files.
+    read_probes : read in FVCOM ASCII probes output files.
 
     """
 
@@ -344,7 +344,7 @@ def read_probes(files, noisy=False, locations=False):
 
     See Also
     --------
-    readFVCOM : read in FVCOM netCDF output.
+    ncread : read in FVCOM netCDF output.
 
     TODO
     ----
@@ -430,8 +430,8 @@ def write_probes(file, mjd, timeseries, datatype, site, depth, sigma=(-1, -1), l
 
     See Also
     --------
-    readProbes : read in FVCOM probes output.
-    readFVCOM : read in FVCOM netCDF output.
+    read_probes : read in FVCOM probes output.
+    ncread : read in FVCOM netCDF output.
 
     """
 

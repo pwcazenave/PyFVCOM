@@ -86,7 +86,7 @@ def get_buoy_data(db, table, fields, noisy=False):
 
     See Also
     --------
-    buoy_tools.getObservedMetadata : extract metadata for a buoy time series.
+    buoy_tools.get_observed_metadata : extract metadata for a buoy time series.
 
     Notes
     -----
