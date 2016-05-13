@@ -39,6 +39,8 @@ Prerequisites
 
 * jdcal, version 1.0 to 1.2.
 
+* pyshp, version 1.2.3.
+
 Optionally:
 
 * iPython, version 0.10.2 to 3.2.1. This makes for a good development environment, particularly when invoked with the -pylab argument, which automatically imports matplotlib.pylab and numpy, amongst others.
