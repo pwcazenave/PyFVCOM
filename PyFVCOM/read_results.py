@@ -392,10 +392,8 @@ def read_probes(files, noisy=False, locations=False):
     values = values[sidx, ...]  # support both 1 and 2D data
 
     if locations:
-        times, values, positions = read_probes(files, noisy, locations)
         return times, values, positions
     else:
-        times, values = read_probes(files, noisy)
         return times, values
 
 
