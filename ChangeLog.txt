@@ -1,3 +1,94 @@
+1.3.1
+-----
+
+This minor version adds a better error message if TAPPY is not found
+(including a link to where to get it).
+
+The bulk of the changes is a correction of the deprecation warnings.
+
+The setup.py also includes a list of dependencies which should be
+automatically resolved at installation time.
+
+Specific changes:
+
+grid_tools:
+    * Update the triangulation tool to the not deprecated version in
+    matplotlib.
+
+
+1.3
+---
+
+The major aspect of this release is a harmonisation of the naming scheme for
+the functions in the toolbox. The new naming more closely follows the PEP8
+recommendation of lower case function names (ome old functions used camel
+case). The old function names are retained as wrappers around the new
+functions with a warning that they are deprecated.
+
+Along the same lines, the redundant FVCOM in the process_FVCOM_results and
+read_FVCOM_results files have been removed. Again, the old names exist for
+backwards compatibility but will be removed in the future.
+
+This release also removes a (slightly dodgy) function called img2xyz which
+attempted to convert an RGB array to xyz data. It was far from perfect, so
+it's now gone.
+
+README.md:
+    * Add the new function names to the README (and add some missing ones).
+    * Updated with accurate installation instructions (pip vs. setup.py).
+    * Also updated the version numbers for the dependencies against which
+    PyFVCOM has been tested.
+    * The examples section has been removed and a note about the notebooks put
+    in its place instead.
+
+
+1.2.1
+-----
+
+Fix version number and links in the setup.py.
+
+
+1.2
+---
+
+Since PyFVCOM is on PyPI (and can therefore be installed with pip), the
+version scheme has changed from date to major.minor.release.
+
+Rather than bundling TAPPY within this toolbox, this version imports my forked
+version of TAPPY, available from:
+
+    https://github.com/pwcazenave/tappy
+    http://gitlab.em.pml.ac.uk/pica/tappy
+
+- The print statements have been replaced by the print function as a move
+towards Python 3 compatibility.
+
+- Added a new examples directory with Jupyter (iPython) notebooks of the
+examples in the README.
+
+- Update setup.py and add setup.cfg and the MIT licence so PyFVCOM can be
+uploaded to PyPI.
+
+Other changes:
+
+grid_tools:
+    * lineSample can now return the distance along the line (for better
+    plotting).
+
+process_FVCOM_results:
+    * Remove unused import.
+
+read_FVCOM_results:
+    * writeProbes: new function to export data in FVCOM probes format.
+
+tide_tools:
+    * Move the imports to the top of the file.
+    * julianDay now better support single values and arrays.
+    * gregorianDate now also works with single values.
+    * New wrapper around TAPPy called TAPPY to maintain backwards
+    compatibility with existing scripts.
+
+
 20151103
 --------
 
@@ -11,7 +102,7 @@ ctd_tools:
     * Miscellaneous code clean ups.
 current_tools:
     * Miscellaneous code clean ups.
-    * scalar2vector: New function to takae a direction and speed and return
+    * scalar2vector: New function to take a direction and speed and return
     the vector components of those values.
     * vector2scalar: New function to reverse scalar2vector and return speed
     and direction from a given pair of vector components.
