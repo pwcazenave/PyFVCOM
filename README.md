@@ -27,21 +27,21 @@ pip install PyFVCOM
 Prerequisites
 -------------
 
-* Python. This has been written against Python 2.7, so in principle anything newer than that (in the 2.x series) should be OK.
+* Python. This has been written against Python 2.7.11 and tentatively against Python 3.4.3, so in principle anything newer than those should be OK.
 
-* numpy, again, this has been tested with numpy versions 1.4.1 and 1.6.2.
+* numpy, again, this has been tested with numpy version 1.4.1 to 1.10.4.
 
-* scipy, versions 0.7.2 and 0.10.1.
+* scipy, versions 0.7.2 to 0.14.1.
 
-* matplotlib, versions 1.0.1 and 1.2.1.
+* matplotlib, versions 1.0.1 to 1.5.1.
 
-* netCDF4, version 0.9.9.
+* netCDF4, version 0.9.9 to 1.1.5.
 
-* jdcal, version 1.0.
+* jdcal, version 1.0 to 1.2.
 
 Optionally:
 
-* iPython, version 0.10.2. This makes for a good development environment, particularly when invoked with the -pylab argument, which automatically imports matplotlib.pylab and numpy.
+* iPython, version 0.10.2 to 3.2.1. This makes for a good development environment, particularly when invoked with the -pylab argument, which automatically imports matplotlib.pylab and numpy, amongst others.
 
 
 Provides
