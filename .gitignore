@@ -6,3 +6,9 @@
 *.swo
 .nfs*
 .idea
+
+# Installation directories and PyPI junk
+build
+dist
+MANIFEST
+PyFVCOM.egg-info
