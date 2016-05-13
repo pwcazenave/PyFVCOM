@@ -20,9 +20,12 @@ the end.
 """
 
 
+import inspect
 import shapefile
 
 import numpy as np
+
+from warnings import warn
 
 
 def read_ESRI_shapefile(file, fileOut):
