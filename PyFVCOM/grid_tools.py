@@ -8,7 +8,7 @@ from __future__ import print_function
 import sys
 import inspect
 import numpy as np
-import matplotlib.delaunay as triang
+from matplotlib.tri.triangulation import Triangulation
 from warnings import warn
 
 from PyFVCOM.ll2utm import UTM_to_LL
@@ -828,7 +828,7 @@ def clip_triangulation(MODEL, sideLength, keys=['xc', 'yc']):
 
     """
 
-    _, _, tri, _ = triang.delaunay(MODEL[keys[0]], MODEL[keys[1]])
+    tri = Triangulation(MODEL[keys[0]], MODEL[keys[1]]).triangles
 
     # Get the length of all element edges
     xx, yy = MODEL[keys[0]][tri], MODEL[keys[1]][tri]
