@@ -160,7 +160,6 @@ Provides
     - clean_observed_data
     - TAPPY
     - run_TAPPY
-    - analysis
     - parse_TAPPY_XML
     - get_harmonics
     - read_POLPRED
