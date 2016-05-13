@@ -29,7 +29,11 @@ from PyFVCOM import read_results
 # External TAPPY now instead of my bundled version. Requires my forked version
 # of TAPPY from https://github.com/pwcazenave/tappy or
 # http://gitlab.em.pml.ac.uk/pica/tappy.
-from tappy import tappy
+try:
+    from tappy import tappy
+except ImportError:
+    raise ImportError('TAPPY not found. Please install it from http://gitlab.em.pml.ac.uk/pica/tappy or https://github.com/pwcazenave/tappy.')
+
 
 # For backwards-compatibility.
 process_FVCOM_results = process_results
