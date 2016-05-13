@@ -158,20 +158,20 @@ class ncwrite():
 def ncread(file, vars=None, dims=False, noisy=False, atts=False):
     """
     Read in the FVCOM results file and spit out numpy arrays for each of the
-    variables specified in the varList list.
+    variables specified in the vars list.
 
     Optionally specify a dict with keys whose names match the dimension names
     in the NetCDF file and whose values are strings specifying alternative
     ranges or lists of indices. For example, to extract the first hundred time
-    steps, supply clipDims as:
+    steps, supply dims as:
 
-        clipDims = {'time':'0:100'}
+        dims = {'time':'0:100'}
 
     To extract the first, 400th and 10,000th values of any array with nodes:
 
-        clipDims = {'node':'[0, 3999, 9999]'}
+        dims = {'node':'[0, 3999, 9999]'}
 
-    Any dimension not given in clipDims will be extracted in full.
+    Any dimension not given in dims will be extracted in full.
 
     Specify atts=True to extract the variable attributes.
 
@@ -181,10 +181,10 @@ def ncread(file, vars=None, dims=False, noisy=False, atts=False):
         If a string, the full path to an FVCOM NetCDF output file. If a list,
         a series of files to be loaded. Data will be concatenated into a single
         dict.
-    varList : list, optional
+    vars : list, optional
         List of variable names to be extracted. If omitted, all variables are
         returned.
-    clipDims : dict, optional
+    dims : dict, optional
         Dict whose keys are dimensions and whose values are a string of either
         a range (e.g. {'time':'0:100'}) or a list of individual indices (e.g.
         {'time':'[0, 1, 80, 100]'}). Slicing is supported (::5 for every fifth
@@ -199,10 +199,10 @@ def ncread(file, vars=None, dims=False, noisy=False, atts=False):
     -------
     FVCOM : dict
         Dict of data extracted from the NetCDF file. Keys are those given in
-        varList and the data are stored as ndarrays.
+        vars and the data are stored as ndarrays.
     attributes : dict, optional
         If atts=True, returns the attributes as a dict for each
-        variable in varList. The key 'dims' contains the array dimensions (each
+        variable in vars. The key 'dims' contains the array dimensions (each
         variable contains the names of its dimensions) as well as the shape of
         the dimensions defined in the NetCDF file. The key 'global' contains
         the global attributes.
@@ -240,16 +240,16 @@ def ncread(file, vars=None, dims=False, noisy=False, atts=False):
     # Compare the dimensions in the NetCDF file with those provided. If we've
     # been given a dict of dimensions which differs from those in the NetCDF
     # file, then use those.
-    if clipDims:
-        commonKeys = set(dims).intersection(list(clipDims.keys()))
+    if dims:
+        commonKeys = set(dims).intersection(list(dims.keys()))
         for k in commonKeys:
-            dims[k] = clipDims[k]
+            dims[k] = dims[k]
 
     if noisy:
         print("File format: {}".format(rootgrp.file_format))
 
-    if not varList:
-        varList = iter(list(rootgrp.variables.keys()))
+    if not vars:
+        vars = iter(list(rootgrp.variables.keys()))
 
     FVCOM = {}
 
@@ -266,7 +266,7 @@ def ncread(file, vars=None, dims=False, noisy=False, atts=False):
             print('Found ' + key, end=' ')
             sys.stdout.flush()
 
-        if key in varList:
+        if key in vars:
             vDims = rootgrp.variables[key].dimensions
 
             toExtract = [dims[d] for d in vDims]
