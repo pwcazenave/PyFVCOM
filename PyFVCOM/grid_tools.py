@@ -5,10 +5,10 @@ Tools for manipulating and converting unstructured grids in a range of formats.
 
 from __future__ import print_function
 
-import matplotlib.delaunay as triang
-import numpy as np
 import sys
 import inspect
+import numpy as np
+import matplotlib.delaunay as triang
 from warnings import warn
 
 from PyFVCOM.ll2utm import UTM_to_LL
@@ -1789,9 +1789,10 @@ def heron(v0, v1, v2):
 
     Examples
     --------
-    >>> v0 = numpy.array((4, 0))
-    >>> v1 = numpy.array((10, -3))
-    >>> v2 = numpy.array((7, 9))
+    >>> import numpy as np
+    >>> v0 = np.array((4, 0))
+    >>> v1 = np.array((10, -3))
+    >>> v2 = np.array((7, 9))
     >>> a = heron(v0, v1, v2)
     >>> print(a)
     31.5
