@@ -20,7 +20,6 @@ from PyFVCOM import buoy_tools
 from PyFVCOM import cst_tools
 from PyFVCOM import ctd_tools
 from PyFVCOM import grid_tools
-from PyFVCOM import img2xyz
 from PyFVCOM import ll2utm
 from PyFVCOM import ocean_tools
 from PyFVCOM import stats_tools
