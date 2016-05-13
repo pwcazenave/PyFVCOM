@@ -572,9 +572,12 @@ def nodes2elems(nodes, tri):
 
 
 # For backwards compatibility.
-def readFVCOM(*args, **kwargs):
+def readFVCOM(file, varList=None, clipDims=False, noisy=False, atts=False):
     warn('{} is deprecated. Use ncread instead.'.format(inspect.stack()[0][3]))
-    return ncread(*args, **kwargs)
+
+    F = ncread(file, vars=varList, dims=clipDims, noisy=noisy, atts=atts)
+
+    return F
 
 
 def readProbes(*args, **kwargs):
