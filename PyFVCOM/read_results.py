@@ -7,7 +7,7 @@ import numpy as np
 
 from warnings import warn
 from datetime import datetime
-from netCDF4 import Dataset, MFDataset
+from netCDF4 import Dataset, MFDataset, num2date
 
 
 class ncwrite():
@@ -155,7 +155,7 @@ class ncwrite():
         rootgrp.close()
 
 
-def ncread(file, vars=None, dims=False, noisy=False, atts=False):
+def ncread(file, vars=None, dims=False, noisy=False, atts=False, datetimes=False):
     """
     Read in the FVCOM results file and spit out numpy arrays for each of the
     variables specified in the vars list.
@@ -194,6 +194,13 @@ def ncread(file, vars=None, dims=False, noisy=False, atts=False):
         Set to True to enable verbose output.
     atts : bool, optional
         Set to True to enable output of the attributes (defaults to False).
+    datetimes : bool, optional
+        Set to True to convert FVCOM Modified Julian Days to Python datetime
+        objects. Only applies if the vars includes either the `Times' or
+        `time' variables. Note: if FVCOM has been run with single precision
+        output, then the conversion of the `time' value to a datetime object
+        suffers rounding errors. It's best to either run FVCOM in double
+        precision or specify only the `Times' data in the `vars' list.
 
     Returns
     -------
@@ -213,6 +220,16 @@ def ncread(file, vars=None, dims=False, noisy=False, atts=False):
 
     """
 
+    # Set to True when we've converted from Modified Julian Day so we don't
+    # end up doing the conversion twice, once for `Times' and again for
+    # `time' if both variables have been requested in `vars'.
+    done_datetimes = False
+    # Check whether we'll be able to fulfill the datetime request.
+    if datetimes and vars and not list(set(vars) & set(('Times', 'time'))):
+        raise ValueError("Conversion from Modified Julian Day to python "
+                         "datetimes has been requested but no time variable "
+                         "(`Times' or `time') has been requested in vars.")
+
     # If we have a list, assume it's lots of files and load them all.
     if isinstance(file, list):
         try:
@@ -221,7 +238,8 @@ def ncread(file, vars=None, dims=False, noisy=False, atts=False):
             except IOError as msg:
                 raise IOError('Unable to open file {} ({}). Aborting.'.format(file, msg))
         except:
-            # Try aggregating along a 'time' dimension (for POLCOMS, for example)
+            # Try aggregating along a 'time' dimension (for POLCOMS,
+            # for example).
             try:
                 rootgrp = MFDataset(file, 'r', aggdim='time')
             except IOError as msg:
@@ -298,6 +316,20 @@ def ncread(file, vars=None, dims=False, noisy=False, atts=False):
                     attributes[key]['dims'] = rootgrp.variables[key].dimensions
                 except:
                     pass
+
+            if datetimes and key in ('Times', 'time') and not done_datetimes:
+                # Convert the time data to datetime objects. How we do this
+                # depends on which we hit first - `Times' or `time'. For the
+                # former, we need to parse the strings, for the latter we can
+                # leverage num2date from the netCDF4 module and use the time
+                # units attribute.
+                if key == 'Times':
+                    FVCOM['datetimes'] = [datetime.strptime(''.join(i), '%Y-%m-%dT%H:%M:%S.%f') for i in FVCOM[key]]
+                    done_datetimes = True
+                elif key == 'time':
+                    FVCOM['datetimes'] = num2date(FVCOM[key],
+                                                  rootgrp.variables[key].units)
+                    done_datetimes = True
 
             if noisy:
                 if len(str(toExtract)) < 60:
