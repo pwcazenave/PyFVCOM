@@ -231,19 +231,19 @@ def ncread(file, vars=None, dims=False, noisy=False, atts=False):
         rootgrp = Dataset(file, 'r')
 
     # Create a dict of the dimension names and their current sizes
-    dims = {}
+    read_dims = {}
     for key, var in list(rootgrp.dimensions.items()):
         # Make the dimensions ranges so we can use them to extract all the
         # values.
-        dims[key] = '0:' + str(len(var))
+        read_dims[key] = '0:' + str(len(var))
 
     # Compare the dimensions in the NetCDF file with those provided. If we've
     # been given a dict of dimensions which differs from those in the NetCDF
     # file, then use those.
     if dims:
-        commonKeys = set(dims).intersection(list(dims.keys()))
+        commonKeys = set(read_dims).intersection(list(dims.keys()))
         for k in commonKeys:
-            dims[k] = dims[k]
+            read_dims[k] = dims[k]
 
     if noisy:
         print("File format: {}".format(rootgrp.file_format))
@@ -256,7 +256,7 @@ def ncread(file, vars=None, dims=False, noisy=False, atts=False):
     # Save the dimensions in the attributes dict.
     if atts:
         attributes = {}
-        attributes['dims'] = dims
+        attributes['dims'] = read_dims
         attributes['global'] = {}
         for g in rootgrp.ncattrs():
             attributes['global'][g] = getattr(rootgrp, g)
@@ -269,7 +269,7 @@ def ncread(file, vars=None, dims=False, noisy=False, atts=False):
         if key in vars:
             vDims = rootgrp.variables[key].dimensions
 
-            toExtract = [dims[d] for d in vDims]
+            toExtract = [read_dims[d] for d in vDims]
 
             # If we have no dimensions, we must have only a single value, in
             # which case set the dimensions to empty and append the function to
