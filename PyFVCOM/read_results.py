@@ -161,7 +161,7 @@ def ncread(file, vars=None, dims=False, noisy=False, atts=False, datetimes=False
     variables specified in the vars list.
 
     Optionally specify a dict with keys whose names match the dimension names
-    in the NetCDF file and whose values are strings specifying alternative
+    in the netCDF file and whose values are strings specifying alternative
     ranges or lists of indices. For example, to extract the first hundred time
     steps, supply dims as:
 
@@ -178,7 +178,7 @@ def ncread(file, vars=None, dims=False, noisy=False, atts=False, datetimes=False
     Parameters
     ----------
     file : str, list
-        If a string, the full path to an FVCOM NetCDF output file. If a list,
+        If a string, the full path to an FVCOM netCDF output file. If a list,
         a series of files to be loaded. Data will be concatenated into a single
         dict.
     vars : list, optional
@@ -205,13 +205,13 @@ def ncread(file, vars=None, dims=False, noisy=False, atts=False, datetimes=False
     Returns
     -------
     FVCOM : dict
-        Dict of data extracted from the NetCDF file. Keys are those given in
+        Dict of data extracted from the netCDF file. Keys are those given in
         vars and the data are stored as ndarrays.
     attributes : dict, optional
         If atts=True, returns the attributes as a dict for each
-        variable in vars. The key 'dims' contains the array dimensions (each
+        variable in vars. The key `dims' contains the array dimensions (each
         variable contains the names of its dimensions) as well as the shape of
-        the dimensions defined in the NetCDF file. The key 'global' contains
+        the dimensions defined in the netCDF file. The key `global' contains
         the global attributes.
 
     See Also
@@ -255,8 +255,8 @@ def ncread(file, vars=None, dims=False, noisy=False, atts=False, datetimes=False
         # values.
         read_dims[key] = '0:' + str(len(var))
 
-    # Compare the dimensions in the NetCDF file with those provided. If we've
-    # been given a dict of dimensions which differs from those in the NetCDF
+    # Compare the dimensions in the netCDF file with those provided. If we've
+    # been given a dict of dimensions which differs from those in the netCDF
     # file, then use those.
     if dims:
         commonKeys = set(read_dims).intersection(list(dims.keys()))
