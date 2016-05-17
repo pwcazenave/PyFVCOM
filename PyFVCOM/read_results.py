@@ -173,7 +173,8 @@ def ncread(file, vars=None, dims=False, noisy=False, atts=False, datetimes=False
 
     Any dimension not given in dims will be extracted in full.
 
-    Specify atts=True to extract the variable attributes.
+    Specify atts=True to extract the variable attributes. Set datetimes=True
+    to convert the FVCOM Modified Julian Day values to python datetime objects.
 
     Parameters
     ----------
@@ -196,17 +197,20 @@ def ncread(file, vars=None, dims=False, noisy=False, atts=False, datetimes=False
         Set to True to enable output of the attributes (defaults to False).
     datetimes : bool, optional
         Set to True to convert FVCOM Modified Julian Days to Python datetime
-        objects. Only applies if the vars includes either the `Times' or
-        `time' variables. Note: if FVCOM has been run with single precision
-        output, then the conversion of the `time' value to a datetime object
-        suffers rounding errors. It's best to either run FVCOM in double
-        precision or specify only the `Times' data in the `vars' list.
+        objects (creates a new `datetime' key in the output dict. Only
+        applies if `vars' includes either the `Times' or `time' variables.
+        Note: if FVCOM has been run with single precision output, then the
+        conversion of the `time' values to a datetime object suffers rounding
+        errors. It's best to either run FVCOM in double precision or specify
+        only the `Times' data in the `vars' list.
 
     Returns
     -------
     FVCOM : dict
         Dict of data extracted from the netCDF file. Keys are those given in
-        vars and the data are stored as ndarrays.
+        vars and the data are stored as ndarrays. If `datetimes' is True,
+        then this also includes a `datetime' key in which is the FVCOM
+        Modified Julian Day time series converted to Python datetime objects.
     attributes : dict, optional
         If atts=True, returns the attributes as a dict for each
         variable in vars. The key `dims' contains the array dimensions (each
@@ -324,10 +328,10 @@ def ncread(file, vars=None, dims=False, noisy=False, atts=False, datetimes=False
                 # leverage num2date from the netCDF4 module and use the time
                 # units attribute.
                 if key == 'Times':
-                    FVCOM['datetimes'] = [datetime.strptime(''.join(i), '%Y-%m-%dT%H:%M:%S.%f') for i in FVCOM[key]]
+                    FVCOM['datetime'] = [datetime.strptime(''.join(i), '%Y-%m-%dT%H:%M:%S.%f') for i in FVCOM[key]]
                     done_datetimes = True
                 elif key == 'time':
-                    FVCOM['datetimes'] = num2date(FVCOM[key],
+                    FVCOM['datetime'] = num2date(FVCOM[key],
                                                   rootgrp.variables[key].units)
                     done_datetimes = True
 
