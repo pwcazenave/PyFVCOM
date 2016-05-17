@@ -189,8 +189,7 @@ def ncread(file, vars=None, dims=False, noisy=False, atts=False, datetimes=False
         Dict whose keys are dimensions and whose values are a string of either
         a range (e.g. {'time':'0:100'}) or a list of individual indices (e.g.
         {'time':'[0, 1, 80, 100]'}). Slicing is supported (::5 for every fifth
-        value) but it is not possible to extract data from the end of the array
-        with a negative index (e.g. 0:-4).
+        value).
     noisy : bool, optional
         Set to True to enable verbose output.
     atts : bool, optional
