@@ -3,7 +3,7 @@ The FVCOM Python toolbox (PyFVCOM)
 
 """
 
-__version__ = '1.3.3'
+__version__ = '1.3.4'
 __author__ = 'Pierre Cazenave'
 __credits__ = ['Pierre Cazenave']
 __license__ = 'MIT'
