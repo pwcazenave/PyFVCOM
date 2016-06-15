@@ -9,6 +9,7 @@ import sys
 import inspect
 import numpy as np
 from matplotlib.tri.triangulation import Triangulation
+from matplotlib.tri import CubicTriInterpolator
 from warnings import warn
 
 from PyFVCOM.ll2utm import UTM_to_LL
@@ -1852,6 +1853,69 @@ def find_bad_node(nv, node_id):
         was = True
 
     return was
+
+
+def trigradient(x, y, z, t=None):
+    """
+    Returns the gradient of `z' defined on the irregular mesh with Delaunay
+    triangulation `t'. `dx' corresponds to the partial derivative dZ/dX,
+    and `dy' corresponds to the partial derivative dZ/dY.
+
+    Parameters
+    ----------
+    x, y, z : array_like
+        Horizontal (`x' and `y') positions and vertical position (`z').
+    t : array_like, optional
+        Connectivity table for the grid. If omitted, one will be calculated
+        automatically.
+
+    Returns
+    -------
+    dx, dy : ndarray
+        `dx' corresponds to the partial derivative dZ/dX, and `dy'
+        corresponds to the partial derivative dZ/dY.
+
+    Example
+    -------
+
+    >>> import numpy as np
+    >>> import matplotlib.pyplot as plt
+    >>> from PyFVCOM.grid_tools import trigradient
+    >>> from matplotlib.tri.triangulation import Triangulation
+    >>> x, y = np.meshgrid(np.arange(-2, 2, 0.1), np.arange(-2, 2, 0.1))
+    >>> x[1:2:-1, :] = x[1:2:-1, :] + 0.1 / 2
+    >>> tt = Triangulation(x.ravel(), y.ravel())
+    >>> z = x * np.exp(-x**2 - y**2)
+    >>> dx, dy = trigradient(x.ravel(), y.ravel(), z.ravel())
+    >>> dzdx = (1 / x - 2 * x) * z
+    >>> dzdy = -2 * y * z
+    >>> plt.figure(1)
+    >>> plt.quiver(x.ravel(), y.ravel(), dzdx.ravel(), dzdy.ravel(),
+    >>>            color='r', label='Exact')
+    >>> plt.quiver(x.ravel(), y.ravel(), dx, dy,
+    >>>            color='k', label='trigradient', alpha=0.5)
+    >>> tp = plt.tripcolor(x.ravel(), y.ravel(), tt.triangles, z.ravel(),
+    >>>                    zorder=0)
+    >>> plt.colorbar(tp)
+    >>> plt.legend()
+
+    Notes
+    -----
+    Lifted from:
+        http://matplotlib.org/examples/pylab_examples/trigradient_demo.html
+
+    """
+
+    if np.any(t):
+        tt = Triangulation(x.ravel(), y.ravel())
+    else:
+        tt = Triangulation(x.ravel(), y.ravel(), t)
+
+    tci = CubicTriInterpolator(tt, z.ravel())
+    # Gradient requested here at the mesh nodes but could be anywhere else:
+    dx, dy = tci.gradient(tt.x, tt.y)
+
+    return dx, dy
 
 
 # For backwards compatibility.
