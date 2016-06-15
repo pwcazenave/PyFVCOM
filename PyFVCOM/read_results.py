@@ -331,7 +331,7 @@ def ncread(file, vars=None, dims=False, noisy=False, atts=False, datetimes=False
                     done_datetimes = True
                 elif key == 'time':
                     FVCOM['datetime'] = num2date(FVCOM[key],
-                                                  rootgrp.variables[key].units)
+                                                 rootgrp.variables[key].units)
                     done_datetimes = True
 
             if noisy:
