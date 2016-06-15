@@ -284,9 +284,9 @@ def read_gmsh_mesh(mesh):
         if _nodes:
             nn = int(line.strip())
             x, y, z, nodes = np.zeros((nn,)) - 1, \
-                    np.zeros((nn,)) - 1, \
-                    np.zeros((nn,)) - 1, \
-                    np.zeros((nn,)).astype(int) - 1
+                             np.zeros((nn,)) - 1, \
+                             np.zeros((nn,)) - 1, \
+                             np.zeros((nn,)).astype(int) - 1
             _nodes = False
             continue
 
@@ -405,7 +405,7 @@ def write_sms_mesh(triangles, nodes, x, y, z, types, mesh):
     for line in triangles:
 
         # Bump the numbers by one to correct for Python indexing from zero
-        line = line + 1
+        line += 1
         strLine = []
         # Convert the numpy array to a string array
         for value in line:
@@ -498,7 +498,7 @@ def write_sms_bathy(triangles, nodes, z, PTS):
 
     Parameters
     ----------
-    triangle : ndarray
+    triangles : ndarray
         Integer array of shape (ntri, 3). Each triangle is composed of
         three points and this contains the three node numbers (stored in
         nodes) which refer to the coordinates in X and Y (see below).
@@ -913,6 +913,8 @@ def get_rivers(discharge, positions, noisy=False):
     positions : str
         Full path to an ASCII file of the (modified) positions of the POLCOMS
         rivers as lon, lat, name.
+    noisy : bool
+        Set to True to enable verbose output (defaults to False)
 
     Returns
     -------
@@ -1077,9 +1079,10 @@ def mesh2grid(meshX, meshY, meshZ, nx, ny, thresh=None, noisy=False):
             for ri, _ in enumerate(yy[:, 0]):
                 if noisy:
                     if np.mod(c, 1000) == 0 or c == 0:
-                        print('{} of {}'.format(c,
+                        print('{} of {}'.format(
+                            c,
                             len(xx[0, :]) * len(yy[:, 0])
-                        ))
+                            ))
                 c += 1
 
                 dist = np.sqrt(
@@ -2002,4 +2005,3 @@ def OSGB36toWGS84(*args, **kwargs):
 def UTMtoLL(*args, **kwargs):
     warn('{} is deprecated. Use UTM_to_LL instead.'.format(inspect.stack()[0][3]))
     return UTM_to_LL(*args, **kwargs)
-
