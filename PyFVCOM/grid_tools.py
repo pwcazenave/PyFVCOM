@@ -1812,6 +1812,48 @@ def heron(v0, v1, v2):
     return A
 
 
+def find_bad_node(nv, node_id):
+    """
+    Check nodes on the boundary of a grid for nodes connected to a single
+    element only. These elements will always have zero velocities,
+    which means rivers input here will cause the model crash as the water
+    never advects away. It is also computationally wasteful to include these
+    elements.
+
+    Return True if it was bad, False otherwise.
+
+    Parameters
+    ----------
+    nv : ndarray
+        Connectivity table for the grid.
+    node_id : int
+        Node ID to check.
+
+    Returns
+    -------
+    bad : bool
+        Status of the supplied node ID: True is connected to a single element
+        only (bad), False is connected to multiple elements (good).
+
+    Examples
+    --------
+    >>> from PyFVCOM.grid_tools import read_sms_mesh, connectivity
+    >>> nv, nodes, x, y, z, _ = read_sms_mesh('test_mesh.2dm')
+    >>> _, _, _, bnd = connectivity(np.asarray((x, y)).transpose(), nv)
+    >>> coast_nodes = nodes[bnd]
+    >>> bad_nodes = np.empty(coast_nodes.shape).astype(bool)
+    >>> for i, node_id in enumerate(coast_nodes):
+    >>>     bad_nodes[i] = find_bad_node(node_id, nv)
+
+    """
+
+    was = False
+    if len(np.argwhere(nv == node_id)) == 1:
+        was = True
+
+    return was
+
+
 # For backwards compatibility.
 def parseUnstructuredGridSMS(*args, **kwargs):
     warn('{} is deprecated. Use read_sms_mesh instead.'.format(inspect.stack()[0][3]))
