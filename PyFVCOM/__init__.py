@@ -34,7 +34,3 @@ try:
 except ImportError:
     raise ImportError('TAPPY not found. Please install it from http://gitlab.em.pml.ac.uk/pica/tappy or https://github.com/pwcazenave/tappy.')
 
-
-# For backwards-compatibility.
-process_FVCOM_results = process_results
-read_FVCOM_results = read_results
