@@ -327,7 +327,12 @@ def ncread(file, vars=None, dims=False, noisy=False, atts=False, datetimes=False
                 # leverage num2date from the netCDF4 module and use the time
                 # units attribute.
                 if key == 'Times':
-                    FVCOM['datetime'] = [datetime.strptime(''.join(i), '%Y-%m-%dT%H:%M:%S.%f') for i in FVCOM[key]]
+                    try:
+                        FVCOM['datetime'] = [datetime.strptime(''.join(i), '%Y-%m-%dT%H:%M:%S.%f') for i in FVCOM[key]]
+                    except ValueError:
+                        # Try a different format before bailing out.
+                        FVCOM['datetime'] = [datetime.strptime(''.join(i), '%Y/%m/%d %H:%M:%S.%f') for i in    FVCOM[key]]
+
                     done_datetimes = True
                 elif key == 'time':
                     FVCOM['datetime'] = num2date(FVCOM[key],
