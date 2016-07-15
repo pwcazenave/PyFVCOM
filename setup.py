@@ -1,4 +1,4 @@
-from distutils.core import setup
+from setuptools import setup
 
 setup(
     name = 'PyFVCOM',
@@ -12,7 +12,7 @@ setup(
     keywords = ['fvcom', 'unstructured grid', 'mesh'],
     license = 'MIT',
     platforms = 'any',
-    requires = ['pyshp', 'jdcal', 'scipy', 'numpy', 'matplotlib', 'netCDF4', 'lxml', 'sqlite3', 'matplotlib'],
+    install_requires = ['pyshp', 'jdcal', 'scipy', 'numpy', 'matplotlib', 'netCDF4', 'lxml', 'sqlite3', 'matplotlib'],
     classifiers = []
 )
 
