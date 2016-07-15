@@ -3,7 +3,7 @@ from setuptools import setup
 setup(
     name = 'PyFVCOM',
     packages = ['PyFVCOM'],
-    version = '1.3.4',
+    version = '1.4.0',
     description = ("PyFVCOM is a collection of various tools and utilities which can be used to extract, analyse and plot input and output files from FVCOM."),
     author = 'Pierre Cazenave',
     author_email = 'pica@pml.ac.uk',
