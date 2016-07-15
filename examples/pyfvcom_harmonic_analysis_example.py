@@ -17,7 +17,7 @@ from netCDF4 import num2date
 
 from PyFVCOM.read_FVCOM_results import ncread
 from PyFVCOM.tidal_ellipse import ap2ep
-from PyFVCOM.tide_tools import TAPPY
+from tappy import TAPPY
 
 # Load model output.
 fvcom = 'sample.nc'
