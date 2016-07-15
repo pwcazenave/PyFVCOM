@@ -1,3 +1,11 @@
+1.4.1
+-----
+
+Satisfy PyPI packaging rules that mean you can't overwrite an existing
+version. So, we have 1.4.1 which is functionally identical to 1.4.0 but with
+a different version number.
+
+
 1.4.0
 -----
 
