@@ -158,8 +158,6 @@ Provides
     - get_observed_data
     - get_observed_metadata
     - clean_observed_data
-    - TAPPY
-    - run_TAPPY
     - parse_TAPPY_XML
     - get_harmonics
     - read_POLPRED

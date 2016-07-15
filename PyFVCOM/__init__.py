@@ -26,11 +26,3 @@ from PyFVCOM import tidal_ellipse
 from PyFVCOM import process_results
 from PyFVCOM import read_results
 
-# External TAPPY now instead of my bundled version. Requires my forked version
-# of TAPPY from https://github.com/pwcazenave/tappy or
-# http://gitlab.em.pml.ac.uk/pica/tappy.
-try:
-    from tappy import tappy
-except ImportError:
-    raise ImportError('TAPPY not found. Please install it from http://gitlab.em.pml.ac.uk/pica/tappy or https://github.com/pwcazenave/tappy.')
-
