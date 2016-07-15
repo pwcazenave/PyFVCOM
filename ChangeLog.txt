@@ -1,13 +1,21 @@
-1.3.4
+1.4.0
 -----
 
-List of changes:
+Add new flag to ncread to provide python datetimes from FVCOM output.
+Remove the TAPPY functions and transfer them to the main TAPPY project
+(https://gitlab.ecosystem-modelling.pml.ac.uk/pica/tappy or
+https://github.com/pwcazenave/tappy/).
 
 read_results:
     * ncread has a new optional flag (`datetimes') to convert FVCOM Modified
     Julian Days to Python datetime objects. This only occurs if a time
     variable (`Times' or `time') has been requested in `vars' or if no
     specific variables have been requested (i.e. `vars' is empty).
+
+tide_tools:
+    * Remove TAPPY and run_TAPPY since those functions now exist in the main
+    TAPPY project.
+
 
 1.3.3
 -----
