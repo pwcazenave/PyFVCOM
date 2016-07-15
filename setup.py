@@ -8,7 +8,7 @@ setup(
     author = 'Pierre Cazenave',
     author_email = 'pica@pml.ac.uk',
     url = 'https://gitlab.ecosystem-modelling.pml.ac.uk/fvcom/PyFVCOM',
-    download_url = 'http://gitlab.em.pml.ac.uk/fvcom/PyFVCOM/repository/archive.tar.gz?ref=1.2.1',
+    download_url = 'http://gitlab.em.pml.ac.uk/fvcom/PyFVCOM/repository/archive.tar.gz?ref=1.3.4',
     keywords = ['fvcom', 'unstructured grid', 'mesh'],
     license = 'MIT',
     platforms = 'any',
