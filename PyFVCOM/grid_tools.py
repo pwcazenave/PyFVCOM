@@ -857,7 +857,7 @@ def clip_triangulation(MODEL, sideLength, keys=['xc', 'yc']):
     return triClip
 
 
-def get_river_config(fileName, noisy=False):
+def get_river_config(fileName, noisy=False, zeroindex=False):
     """
     Parse the rivers namelist to extract the parameters and their values.
     Returns a dict of the parameters with the associated values for all the
@@ -869,12 +869,21 @@ def get_river_config(fileName, noisy=False):
         Full path to an FVCOM Rivers name list.
     noisy : bool, optional
         Set to True to enable verbose output. Defaults to False.
+    zeroindex : bool, optional
+        Set to True to convert indices from 1-based to 0-based.
 
     Returns
     -------
     rivers : dict
         Dict of the parameters for each river defind in the name list.
         Dictionary keys are the name list parameter names (e.g. RIVER_NAME).
+
+    Notes
+    -----
+
+    The indices returned in RIVER_GRID_LOCATION are 1-based (i.e. read in raw
+    from the nml file). For use in Python, you can either subtract 1 yourself,
+    or pass zeroindex=True to this function.
 
     """
 
@@ -895,6 +904,9 @@ def get_river_config(fileName, noisy=False):
         print('Found {} rivers.'.format(len(rivers['RIVER_NAME'])))
 
     f.close()
+
+    if zeroindex and rivers.has_key('RIVER_GRID_LOCATION'):
+        rivers['RIVER_GRID_LOCATION'] = [i - 1 for i in rivers['RIVER_GRID_LOCATION']]
 
     return rivers
 
