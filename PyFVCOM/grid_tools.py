@@ -893,7 +893,7 @@ def get_river_config(fileName, noisy=False, zeroindex=False):
     for line in lines:
         line = line.strip()
 
-        if not line.startswith('&') and not line.startswith('/'):
+        if line and not line.startswith('&') and not line.startswith('/'):
             param, value = [i.strip(",' ") for i in line.split('=')]
             if param in rivers:
                 rivers[param].append(value)
