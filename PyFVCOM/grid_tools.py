@@ -356,9 +356,9 @@ def write_sms_mesh(triangles, nodes, x, y, z, types, mesh):
 
     Input data is probably best obtained from one of:
 
-        grid_tools.parseUnstructuredGridSMS()
-        grid_tools.parseUnstructuredGridFVCOM()
-        grid_tools.parseUnstructuredGridMIKE()
+        grid_tools.read_sms_mesh()
+        grid_tools.read_fvcom_mesh()
+        grid_tools.read_mike_mesh()
 
     which read in the relevant grids and output the required information for
     this function.
