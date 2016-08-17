@@ -1933,6 +1933,32 @@ def trigradient(x, y, z, t=None):
     return dx, dy
 
 
+def ind2sub(array_shape, index):
+    """
+    Replicate the MATLAB ind2sub function to return the subscript values (row,
+    column) of the index for a matrix shaped `array_shape'.
+
+    Parameters
+    ----------
+    array_shape : list, tuple, ndarray
+        Shape of the array for which to calculate the indices.
+    index : index in the flattened array.
+
+    Returns
+    -------
+    row, column : int
+        Indices of the row and column, respectively, in the array of shape
+        `array_shape'.
+
+    """
+
+    rows = (ind.astype('int') / array_shape[1])
+    # Or numpy.mod(ind.astype('int'), array_shape[1])
+    cols = (ind.astype('int') % array_shape[1])
+
+    return (rows, cols)
+
+
 # For backwards compatibility.
 def parseUnstructuredGridSMS(*args, **kwargs):
     warn('{} is deprecated. Use read_sms_mesh instead.'.format(inspect.stack()[0][3]))
