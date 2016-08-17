@@ -905,7 +905,7 @@ def get_river_config(fileName, noisy=False, zeroindex=False):
 
     f.close()
 
-    if zeroindex and rivers.has_key('RIVER_GRID_LOCATION'):
+    if zeroindex and 'RIVER_GRID_LOCATION' in rivers:
         rivers['RIVER_GRID_LOCATION'] = [int(i) - 1 for i in rivers['RIVER_GRID_LOCATION']]
 
     return rivers
