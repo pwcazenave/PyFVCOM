@@ -167,11 +167,10 @@ def LL_to_UTM(ReferenceEllipsoid, Lat, Long, ZoneNumber=False):
         Latitude and longitude values as floating point values. Negative
         coordinates are west and south for longitude and latitude respectively.
 
-    ZoneNumber : str, optional
+    ZoneNumber : int, optional
         UTM zone number in which the coordinates should be forced. This is
         useful if the spherical coordinates supplied in Lat and Long exceed
-        a single UTM zone. Speficy both number and letter e.g. '30N'. If
-        omitted, it is calculated automatically.
+        a single UTM zone. If omitted, it is calculated automatically.
 
 
     Returns
