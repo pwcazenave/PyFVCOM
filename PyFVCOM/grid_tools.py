@@ -1952,9 +1952,9 @@ def ind2sub(array_shape, index):
 
     """
 
-    rows = (ind.astype('int') / array_shape[1])
+    rows = int(index.astype('int') / array_shape[1])
     # Or numpy.mod(ind.astype('int'), array_shape[1])
-    cols = (ind.astype('int') % array_shape[1])
+    cols = int(index.astype('int') % array_shape[1])
 
     return (rows, cols)
 
