@@ -93,17 +93,6 @@ def calculate_polyfit(x, y):
     return xf, yf
 
 
-def coefficient_of_determination(obs, model):
-    """ Calculate the coefficient of determination for a modelled function """
-    obsBar = np.mean(obs)
-
-    SStot = np.sum((obs - obsBar)**2)
-    SSreg = np.sum((model - obsBar)**2)
-    R2 = SSreg / SStot
-
-    return R2
-
-
 def fix_range(a, nmin, nmax):
     """
     Given an array of values `a', scale the values within in to the range
@@ -169,12 +158,6 @@ def calculateRegression(*args, **kwargs):
 def calculatePolyfit(*args, **kwargs):
     warn('{} is deprecated. Use calculate_polyfit instead.'.format(inspect.stack()[0][3]))
     return calculate_polyfit(*args, **kwargs)
-
-
-# For backwards compatibility.
-def coefficientOfDetermination(*args, **kwargs):
-    warn('{} is deprecated. Use coefficient_of_determination instead.'.format(inspect.stack()[0][3]))
-    return coefficient_of_determination(*args, **kwargs)
 
 
 # For backwards compatibility.
