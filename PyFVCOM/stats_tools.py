@@ -148,6 +148,49 @@ def rmse(a, b, axis=0):
     return rmse
 
 
+def calculate_coefficient(x, y, noisy=False):
+    """
+    Calculate the correlation coefficient and its p-value for two time series.
+
+    Parameters
+    ----------
+
+    x, y : ndarray
+        Time series arrays to correlate.
+    noisy : bool, optional
+        Set to True to enable verbose output (defaults to False).
+
+    Returns
+    -------
+
+    r : ndarray
+        Correlation coefficient.
+    p : ndarray
+        p-value for the corresponding correlation coefficient.
+
+    Notes
+    -----
+
+    Using numpy.ma.corrcoef is ~5 slower than using scipy.stats.pearsonr
+    despite giving the same results. In fact, the latter also gives the
+    p-value.
+    """
+
+    # Timings for np.ma.corrcoef and scipy.stats.pearsonr:
+    #   numpy:  738s
+    #   scipy:  139s
+
+    # Skip data with fewer than nine points.
+    if len(np.ma.compressed(x)) > 9:
+        #r = np.ma.corrcoef(xt, yt)[0, 1]
+        r, p = stats.pearsonr(x, y)
+    else:
+        if noisy:
+            print('Skipping data (all masked or fewer than 9 data points).')
+
+    return r, p
+
+
 # For backwards compatibility.
 def calculateRegression(*args, **kwargs):
     warn('{} is deprecated. Use calculate_regression instead.'.format(inspect.stack()[0][3]))
