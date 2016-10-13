@@ -615,6 +615,43 @@ def write_mike_mesh(triangles, nodes, x, y, z, types, mesh):
     fileWrite.close()
 
 
+def write_fvcom_mesh(triangles, nodes, x, y, z, mesh, extra_depth=None):
+    """
+    Write out an FVCOM unstructured grid (mesh) format file.
+
+    Parameters
+    ----------
+    triangles : ndarray
+        Integer array of shape (ntri, 3). Each triangle is composed of
+        three points and this contains the three node numbers (stored in
+        nodes) which refer to the coordinates in X and Y (see below). Give as
+        a zero-indexed array.
+    nodes : ndarray
+        Integer number assigned to each node.
+    x, y, z : ndarray
+        Coordinates of each grid node and any associated Z value.
+    mesh : str
+        Full path to the output mesh file.
+    extra_depth : str, optional
+        If given, output depths to a separate FVCOM compatible file.
+
+    """
+
+    with open(mesh, 'w') as f:
+        f.write('Node Number = {:d}\n'.format(len(x)))
+        f.write('Cell Number = {:d}\n'.format(np.shape(triangles)[0]))
+        for i, triangle in enumerate(triangles, 1):
+            f.write('{node:d} {:d} {:d} {:d} {node:d}\n'.format(node=i, *triangle + 1))
+        for node in zip(nodes, x, y, z):
+            f.write('{:d} {:.6f} {:.6f} {:.6f}\n'.format(*node))
+
+    if extra_depth:
+        with open(extra_depth, 'w') as f:
+            f.write('Node Number = {:d}\n'.format(len(x)))
+            for node in zip(x, y, z):
+                f.write('{:.6f} {:.6f} {:.6f}\n'.format(*node))
+
+
 def find_nearest_point(FX, FY, x, y, maxDistance=np.inf, noisy=False):
     """
     Given some point(s) x and y, find the nearest grid node in FX and
