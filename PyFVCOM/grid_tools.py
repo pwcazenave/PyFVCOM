@@ -1972,6 +1972,8 @@ def trigradient(x, y, z, t=None):
 
 def ind2sub(array_shape, index):
     """
+    NOTE: Just use numpy.unravel_index!
+
     Replicate the MATLAB ind2sub function to return the subscript values (row,
     column) of the index for a matrix shaped `array_shape'.
 
@@ -1988,6 +1990,8 @@ def ind2sub(array_shape, index):
         `array_shape'.
 
     """
+
+    print('WARNING: Just use numpy.unravel_index!')
 
     rows = int(index.astype('int') / array_shape[1])
     # Or numpy.mod(ind.astype('int'), array_shape[1])
