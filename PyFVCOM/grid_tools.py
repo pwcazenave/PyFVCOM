@@ -1996,6 +1996,44 @@ def ind2sub(array_shape, index):
     return (rows, cols)
 
 
+def rotate_points(x, y, origin, angle):
+    """
+    Rotate the points in `x' and `y' around the point `origin' by `angle'
+    degrees.
+
+    Parameters
+    ----------
+    x, y : ndarray
+        Coordinates to rotate.
+    origin : list, ndarray
+        Point about which to rotate the grid (x, y).
+    angle : float
+        Angle (in degrees) by which to rotate the grid. Positive clockwise.
+
+    Returns
+    -------
+    xr, yr : ndarray
+        Rotated coordinates.
+
+    """
+
+    # Make the x and y values relative to the origin.
+    x -= origin[0]
+    y -= origin[1]
+
+    # Rotate clockwise by some angle `rot'. See
+    # http://stackoverflow.com/questions/29708840 for a faster version on 2D
+    # arrays with np.einsum if necessary in future.
+    xr = np.cos(np.deg2rad(angle)) * x + np.sin(np.deg2rad(angle)) * y
+    yr = -np.sin(np.deg2rad(angle)) * x + np.cos(np.deg2rad(angle)) * y
+
+    # Add the origin back to restore the right coordinates.
+    xr += origin[0]
+    yr += origin[1]
+
+    return xr, yr
+
+
 # For backwards compatibility.
 def parseUnstructuredGridSMS(*args, **kwargs):
     warn('{} is deprecated. Use read_sms_mesh instead.'.format(inspect.stack()[0][3]))
