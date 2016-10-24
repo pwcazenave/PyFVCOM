@@ -736,7 +736,7 @@ def find_nearest_point(FX, FY, x, y, maxDistance=np.inf, noisy=False):
             distance[c] = vectorDistances.min()
             index[c] = vectorDistances.argmin()
             nearestX[c] = FX[int(index[c])]
-            nearestY[c] = FY[int(iindex[c]]
+            nearestY[c] = FY[int(index[c])]
 
     # Convert the indices to ints if we don't have any NaNs.
     if not np.any(np.isnan(index)):
