@@ -306,19 +306,12 @@ def ncread(file, vars=None, dims=False, noisy=False, atts=False, datetimes=False
             getData = 'rootgrp.variables[\'{}\']{}'.format(key, str(toExtract).replace('\'', ''))
             FVCOM[key] = eval(getData)
 
-            # Add the units and dimensions for this variable to the list of
-            # attributes.
+            # Get all attributes for this variable.
             if atts:
                 attributes[key] = {}
-                try:
-                    attributes[key]['units'] = rootgrp.variables[key].units
-                except:
-                    pass
-
-                try:
-                    attributes[key]['dims'] = rootgrp.variables[key].dimensions
-                except:
-                    pass
+                # Grab all the attributes for this variable.
+                for varatt in rootgrp.variables[key].ncattrs():
+                    attributes[key][varatt] = rootgrp.variables[key].getncattr(varatt)
 
             if datetimes and key in ('Times', 'time') and not done_datetimes:
                 # Convert the time data to datetime objects. How we do this
