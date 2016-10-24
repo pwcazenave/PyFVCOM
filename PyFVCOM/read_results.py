@@ -321,10 +321,10 @@ def ncread(file, vars=None, dims=False, noisy=False, atts=False, datetimes=False
                 # units attribute.
                 if key == 'Times':
                     try:
-                        FVCOM['datetime'] = [datetime.strptime(''.join(i), '%Y-%m-%dT%H:%M:%S.%f') for i in FVCOM[key]]
+                        FVCOM['datetime'] = [datetime.strptime(''.join(i), '%Y-%m-%dT%H:%M:%S.%f') for i in FVCOM[key].astype(str)]
                     except ValueError:
                         # Try a different format before bailing out.
-                        FVCOM['datetime'] = [datetime.strptime(''.join(i), '%Y/%m/%d %H:%M:%S.%f') for i in    FVCOM[key]]
+                        FVCOM['datetime'] = [datetime.strptime(''.join(i), '%Y/%m/%d %H:%M:%S.%f') for i in FVCOM[key].astype(str)]
 
                     done_datetimes = True
                 elif key == 'time':
