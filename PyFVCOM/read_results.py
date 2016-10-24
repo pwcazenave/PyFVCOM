@@ -256,7 +256,7 @@ def ncread(file, vars=None, dims=False, noisy=False, atts=False, datetimes=False
     for key, var in list(rootgrp.dimensions.items()):
         # Make the dimensions ranges so we can use them to extract all the
         # values.
-        read_dims[key] = '0:' + str(len(var))
+        read_dims[key] = '0:{}'.format(str(len(var)))
 
     # Compare the dimensions in the netCDF file with those provided. If we've
     # been given a dict of dimensions which differs from those in the netCDF
@@ -284,7 +284,7 @@ def ncread(file, vars=None, dims=False, noisy=False, atts=False, datetimes=False
 
     for key, var in list(rootgrp.variables.items()):
         if noisy:
-            print('Found ' + key, end=' ')
+            print('Found {}'.format(key), end=' ')
             sys.stdout.flush()
 
         if key in vars:
@@ -504,7 +504,7 @@ def write_probes(file, mjd, timeseries, datatype, site, depth, sigma=(-1, -1), l
             fmt = '{:.5f} '
             for sig in range(np.shape(timeseries)[-1]):
                 fmt += '{:.3f} '
-            fmt = fmt.strip() + '\n'
+            fmt = '{}\n'.format(fmt.strip())
 
         # Dump the data (this may be slow).
         for line in np.column_stack((mjd, timeseries)):
