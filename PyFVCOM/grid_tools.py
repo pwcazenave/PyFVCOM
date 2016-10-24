@@ -340,7 +340,7 @@ def read_gmsh_mesh(mesh):
             else:
                 continue
 
-    # Tidy up the triangles array  to remove the empty rows due to the number
+    # Tidy up the triangles array to remove the empty rows due to the number
     # of elements specified in the mesh file including the 1D triangulation.
     # triangles = triangles[triangles[:, 0] != -1, :]
     triangles = triangles[:e, :]
