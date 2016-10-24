@@ -127,7 +127,7 @@ class ncwrite():
             var = rootgrp.createVariable(k, data_type, dims, fill_value=fill_value)
             if len(dims) > np.ndim(data):
                 # If number of dimensions given to netCDF is greater than the
-                # number of dimension of the data, then  fill the netCDF
+                # number of dimension of the data, then fill the netCDF
                 # variable accordingly.
                 if 'time' in dims:
                     # Check for presence of time dimension (which can be
