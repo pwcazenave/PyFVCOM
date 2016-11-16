@@ -407,8 +407,12 @@ def read_probes(files, noisy=False, locations=False):
         data = np.genfromtxt(file, skip_header=18)
 
         if i == 0:
-            times = data[:, 0]
-            values = data[:, 1:]
+            try:
+                times = data[:, 0]
+                values = data[:, 1:]
+            except IndexError:
+                times = data[0]
+                values = data[1:]
             positions = lonlatz
         else:
             times = np.hstack((times, data[:, 0]))
