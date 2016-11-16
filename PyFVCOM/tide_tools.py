@@ -565,7 +565,7 @@ def get_harmonics(db, stationName, noisy=False):
 def read_POLPRED(harmonics, noisy=False):
     """
     Load a POLPRED data file into a NumPy array. This can then be used by
-    getHarmonicsPOLPRED to extract the harmonics at a given loaction, or
+    get_harmonics_POLPRED to extract the harmonics at a given loaction, or
     otherwise can be used to simply extract the positions of the POLCOMS grid.
 
     Parameters
@@ -763,7 +763,7 @@ def get_harmonics_POLPRED(harmonics, constituents, lon, lat, stations, noisy=Fal
 
     """
 
-    header, values = readPOLPRED(harmonics, noisy=noisy)
+    header, values = read_POLPRED(harmonics, noisy=noisy)
 
     # Find the nearest points in the POLCOMS grid to the locations
     # requested.
