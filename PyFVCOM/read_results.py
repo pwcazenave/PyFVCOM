@@ -415,8 +415,13 @@ def read_probes(files, noisy=False, locations=False):
                 values = data[1:]
             positions = lonlatz
         else:
-            times = np.hstack((times, data[:, 0]))
-            values = np.vstack((values, data[:, 1:]))
+            try:
+                times = np.hstack((times, data[:, 0]))
+                values = np.vstack((values, data[:, 1:]))
+            except IndexError:
+                times = np.hstack((times, data[0]))
+                values = np.vstack((values, data[1:]))
+
             positions = np.vstack((positions, lonlatz))
 
         if noisy:
