@@ -262,8 +262,8 @@ def ncread(file, vars=None, dims=False, noisy=False, atts=False, datetimes=False
     # been given a dict of dimensions which differs from those in the netCDF
     # file, then use those.
     if dims:
-        commonKeys = set(read_dims).intersection(list(dims.keys()))
-        for k in commonKeys:
+        common_keys = set(read_dims).intersection(list(dims.keys()))
+        for k in common_keys:
             read_dims[k] = dims[k]
 
     if noisy:
@@ -288,23 +288,23 @@ def ncread(file, vars=None, dims=False, noisy=False, atts=False, datetimes=False
             sys.stdout.flush()
 
         if key in vars:
-            vDims = rootgrp.variables[key].dimensions
+            var_dims = rootgrp.variables[key].dimensions
 
-            toExtract = [read_dims[d] for d in vDims]
+            to_extract = [read_dims[d] for d in var_dims]
 
             # If we have no dimensions, we must have only a single value, in
             # which case set the dimensions to empty and append the function to
             # extract the value.
-            if not toExtract:
-                toExtract = '.getValue()'
+            if not to_extract:
+                to_extract = '.getValue()'
 
             # Thought I'd finally figured out how to replace the eval approach,
             # but I still can't get past the indexing needed to be able to
             # subset the data.
             # FVCOM[key] = rootgrp.variables.get(key)[0:-1]
             # I know, I know, eval() is evil.
-            getData = 'rootgrp.variables[\'{}\']{}'.format(key, str(toExtract).replace('\'', ''))
-            FVCOM[key] = eval(getData)
+            get_data = 'rootgrp.variables[\'{}\']{}'.format(key, str(to_extract).replace('\'', ''))
+            FVCOM[key] = eval(get_data)
 
             # Get all attributes for this variable.
             if atts:
@@ -333,8 +333,8 @@ def ncread(file, vars=None, dims=False, noisy=False, atts=False, datetimes=False
                     done_datetimes = True
 
             if noisy:
-                if len(str(toExtract)) < 60:
-                    print('(extracted {})'.format(str(toExtract).replace('\'', '')))
+                if len(str(to_extract)) < 60:
+                    print('(extracted {})'.format(str(to_extract).replace('\'', '')))
                 else:
                     print('(extracted given indices)')
 
