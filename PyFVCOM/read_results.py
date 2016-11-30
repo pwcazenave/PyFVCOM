@@ -311,7 +311,7 @@ def ncread(file, vars=None, dims=False, noisy=False, atts=False, datetimes=False
                 attributes[key] = {}
                 # Grab all the attributes for this variable.
                 for varatt in rootgrp.variables[key].ncattrs():
-                    attributes[key][varatt] = rootgrp.variables[key].getncattr(varatt)
+                    attributes[key][varatt] = getattr(rootgrp.variables[key], varatt)
 
             if datetimes and key in ('Times', 'time') and not done_datetimes:
                 # Convert the time data to datetime objects. How we do this
