@@ -11,13 +11,20 @@ from __future__ import print_function
 import sys
 import jdcal
 import inspect
-import sqlite3
 import numpy as np
 
 from lxml import etree
 from warnings import warn
 
 from PyFVCOM.grid_tools import find_nearest_point
+
+try:
+    import sqlite3
+    use_sqlite = True
+except ImportError:
+    warn('No sqlite standard library found in this python'
+         ' installation. Some functions will be disabled.')
+    use_sqlite = False
 
 
 def julian_day(gregorianDateTime, mjd=False):
@@ -190,6 +197,11 @@ def add_harmonic_results(db, stationName, constituentName, phase, amplitude, spe
 
     """
 
+    if not use_sqlite:
+        raise RuntimeError('No sqlite standard library found in this python'
+                           ' installation. This function (add_harmonic_results)'
+                           ' is unavailable.')
+
     if not ident:
         ident = ''
     else:
@@ -254,6 +266,11 @@ def get_observed_data(db, table, startYear=False, endYear=False, noisy=False):
     Search is case insensitive, however.
 
     """
+
+    if not use_sqlite:
+        raise RuntimeError('No sqlite standard library found in this python'
+                           ' installation. This function (get_observed_data)'
+                           ' is unavailable.')
 
     if noisy:
         print('Getting data for {} from the database...'.format(table), end=' ')
@@ -327,6 +344,11 @@ def get_observed_metadata(db, originator=False, obsdepth=None):
         If obsdepth=True on input, then depths are returned, otherwise omitted.
 
     """
+
+    if not use_sqlite:
+        raise RuntimeError('No sqlite standard library found in this python'
+                           ' installation. This function (get_observed_metadata)'
+                           ' is unavailable.')
 
     try:
         con = sqlite3.connect(db)
@@ -512,6 +534,11 @@ def get_harmonics(db, stationName, noisy=False):
             - 'inferredConstituent' ('true'|'false')
 
     """
+
+    if not use_sqlite:
+        raise RuntimeError('No sqlite standard library found in this python'
+                           ' installation. This function (get_harmonics) is'
+                           ' unavailable.')
 
     if noisy:
         print('Getting harmonics data for site {}...'.format(stationName), end=' ')

@@ -6,11 +6,18 @@ Functions to interrogate and extract CTD data from the ctd.db SQLite3 database.
 from __future__ import print_function
 
 import inspect
-import sqlite3
 
 import numpy as np
 
 from warnings import warn
+
+try:
+    import sqlite3
+    use_sqlite = True
+except ImportError:
+    warn('No sqlite standard library found in this python '
+         'installation. Some functions will be disabled.')
+    use_sqlite = False
 
 
 def get_CTD_metadata(db):
@@ -29,6 +36,11 @@ def get_CTD_metadata(db):
         table. Returns [False] if there is an error.
 
     """
+
+    if not use_sqlite:
+        raise RuntimeError('No sqlite standard library found in this python'
+                           ' installation. This function (get_CTD_metadata)'
+                           ' is unavailable.')
 
     def _dict_factory(cursor, row):
         d = {}
@@ -92,6 +104,11 @@ def get_CTD_data(db, table, fields, noisy=False):
     Search is case insensitive (b0737327 is equal to B0737327).
 
     """
+
+    if not use_sqlite:
+        raise RuntimeError('No sqlite standard library found in this python'
+                           ' installation. This function (get_CTD_data)'
+                           ' is unavailable.')
 
     if noisy:
         print('Getting data for {} from the database...'.format(table),
