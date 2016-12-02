@@ -91,7 +91,7 @@ class ncwrite():
 
         # Create dimensions.
         if 'dimensions' in self.input_dict:
-            for k, v in self.input_dict['dimensions'].iteritems():
+            for k, v in self.input_dict['dimensions'].items():
                 rootgrp.createDimension(k, v)
         else:
             if not self.Quiet:
@@ -101,14 +101,14 @@ class ncwrite():
 
         # Create global attributes.
         if 'global attributes' in self.input_dict:
-            for k, v in self.input_dict['global attributes'].iteritems():
+            for k, v in self.input_dict['global attributes'].items():
                 rootgrp.setncattr(k, v)
         else:
             if not self.Quiet:
                 print('  No global attribute key found (!! has to be \"global attributes\"!!!)')
 
         # Create variables.
-        for k, v in self.input_dict['variables'].iteritems():
+        for k, v in self.input_dict['variables'].items():
             dims = self.input_dict['variables'][k]['dimensions']
             data = v['data']
             # Create correct data type if provided
@@ -149,7 +149,7 @@ class ncwrite():
 
             # Create attributes for variables
             if 'attributes' in self.input_dict['variables'][k]:
-                for ka, va in self.input_dict['variables'][k]['attributes'].iteritems():
+                for ka, va in self.input_dict['variables'][k]['attributes'].items():
                     var.setncattr(ka, va)
 
         rootgrp.close()
