@@ -412,7 +412,7 @@ def clean_observed_data(data, removeResidual=False):
     allObsTideResidual = np.asarray(npObsData[:, 7])
     allDateTimes = np.asarray(npObsData[:, 0:6], dtype=float)
 
-    dateMJD = julianDay(allDateTimes, mjd=True)
+    dateMJD = julian_day(allDateTimes, mjd=True)
 
     # Apply a correction (of sorts) from LAT to MSL by calculating the
     # mean (excluding nodata values (-99 for NTSLF, -9999 for SHOM))
