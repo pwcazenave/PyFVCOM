@@ -27,6 +27,11 @@ class ncwrite():
         'global_attributes'.
     file : str
         Path to output file name.
+    Quiet : bool
+        Set to True for verbose output. Defaults to False.
+    format : str
+        Pick the netCDF file format. Defaults to 'NETCDF3_CLASSIC'. See
+        `Dataset` for more types.
 
     Author(s)
     ---------
@@ -75,10 +80,11 @@ class ncwrite():
 
     """
 
-    def __init__(self, input_dict, filename_out, Quiet=False):
+    def __init__(self, input_dict, filename_out, Quiet=False, format='NETCDF3_CLASSIC'):
         self.filename_out = filename_out
         self.input_dict = input_dict
         self.Quiet = Quiet
+        self.format = format
         self.createNCDF()
 
     def createNCDF(self):
@@ -87,7 +93,7 @@ class ncwrite():
 
         """
 
-        rootgrp = Dataset(self.filename_out, 'w', format='NETCDF3_CLASSIC', clobber=True)
+        rootgrp = Dataset(self.filename_out, 'w', format=self.format, clobber=True)
 
         # Create dimensions.
         if 'dimensions' in self.input_dict:
