@@ -2038,6 +2038,42 @@ def rotate_points(x, y, origin, angle):
     return xr, yr
 
 
+def make_water_column(zeta, h, siglay):
+    """
+    Make a time varying water column array with the surface elevation at the
+    surface and depth negative down.
+
+    Parameters
+    ----------
+    siglay : ndarray
+        Sigma layers [lay, nodes]
+    h : ndarray
+        Water depth [nodes]
+    zeta : ndarray
+        Surface elevation [time, nodes]
+
+    Returns
+    -------
+    depth : ndarray
+        Time-varying water depth (with the surface depth varying rather than
+        the seabed) [time, lay, nodes].
+
+    Todo
+    ----
+    Tidy up the try/excepth block with an actual error.
+
+    """
+
+    # We may have a single node, in which case we don't need the newaxis,
+    # otherwise, we do.
+    try:
+        z = (zeta + h) * -siglay
+    except:
+        z = (zeta + h)[:, np.newaxis, :] * -siglay[np.newaxis, ...]
+
+    return z - h
+
+
 # For backwards compatibility.
 def parseUnstructuredGridSMS(*args, **kwargs):
     warn('{} is deprecated. Use read_sms_mesh instead.'.format(inspect.stack()[0][3]))
