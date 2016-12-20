@@ -361,6 +361,36 @@ def read_gmsh_mesh(mesh):
     return triangles, nodes, x, y, z
 
 
+def read_fvcom_obc(obc):
+    """
+    Read in an FVCOM open boundary file.
+
+    Parameters
+    ----------
+    obc : str
+        Path to the casename_obc.dat file from FVCOM.
+
+    Returns
+    -------
+    nodes : ndarray
+        Node IDs (zero-indexed) for the open boundary.
+    types : ndarray
+        Open boundary node types (see the FVCOM manual for more information on
+        what these values mean).
+    count : ndarray
+        Open boundary node number.
+
+
+    """
+
+    obcs = np.genfromtxt(obc, skip_header=1).astype(int)
+    count = obcs[:, 0]
+    nodes = obcs[:, 1] - 1
+    types = obcs[:, 2]
+
+    return nodes, types, count
+
+
 def write_sms_mesh(triangles, nodes, x, y, z, types, mesh):
     """
     Takes appropriate triangle, node, boundary type and coordinate data and
