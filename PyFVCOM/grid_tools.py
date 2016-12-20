@@ -15,7 +15,7 @@ from warnings import warn
 from PyFVCOM.ll2utm import UTM_to_LL
 
 
-def read_sms_mesh(mesh):
+def read_sms_mesh(mesh, nodestrings=False):
     """
     Reads in the SMS unstructured grid format. Also creates IDs for output to
     MIKE unstructured grid format.
@@ -24,13 +24,16 @@ def read_sms_mesh(mesh):
     ----------
     mesh : str
         Full path to an SMS unstructured grid (.2dm) file.
+    nodestrings : bool, optional
+        Set to True to return the IDs of the node strings as a dictionary.
 
     Returns
     -------
     triangle : ndarray
-        Integer array of shape (ntri, 3). Each triangle is composed of
+        Integer array of shape (nele, 3). Each triangle is composed of
         three points and this contains the three node numbers (stored in
-        nodes) which refer to the coordinates in X and Y (see below).
+        nodes) which refer to the coordinates in X and Y (see below). Values
+        are python-indexed.
     nodes : ndarray
         Integer number assigned to each node.
     X, Y, Z : ndarray
@@ -41,6 +44,9 @@ def read_sms_mesh(mesh):
         grid format to DHI MIKE21 .mesh format since the latter requires
         unique IDs for each boundary (with 0 and 1 reserved for land and
         sea nodes).
+    nodestrings : list, optional (see nodestrings above)
+        Optional list of lists containing the node IDs (python-indexed) of the
+        node strings in the SMS grid.
 
     """
 
@@ -52,6 +58,7 @@ def read_sms_mesh(mesh):
     nodes = []
     types = []
     nodeStrings = []
+    nstring = []
     x = []
     y = []
     z = []
@@ -89,7 +96,11 @@ def read_sms_mesh(mesh):
 
             for nodeID in allTypes[2:]:
                 types[np.abs(int(nodeID)) - 1] = typeCount
-                nodeStrings.append(int(nodeID))
+                if int(nodeID) > 0:
+                    nstring.append(int(nodeID) - 1)
+                else:
+                    nodeStrings.append(nstring)
+                    nstring = []
 
                 # Count the number of node strings, and output that to types.
                 # Nodes in the node strings are stored in nodeStrings.
@@ -103,8 +114,10 @@ def read_sms_mesh(mesh):
     X = np.asarray(x)
     Y = np.asarray(y)
     Z = np.asarray(z)
-
-    return triangle, nodes, X, Y, Z, types
+    if nodestrings:
+        return triangle, nodes, X, Y, Z, types, nodeStrings
+    else:
+        return triangle, nodes, X, Y, Z, types
 
 
 def read_fvcom_mesh(mesh):
