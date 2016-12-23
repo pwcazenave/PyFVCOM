@@ -1818,12 +1818,17 @@ def surrounders(n, triangles):
     n : int
         Node ID around which to find the connected nodes.
     triangles : ndarray
-        Triangulation matrix to find the connected nodes.
+        Triangulation matrix to find the connected nodes. Shape is [nele,
+        3].
 
     Returns
     -------
     surroundingidx : ndarray
         Indices of the surrounding nodes.
+
+    See Also
+    --------
+    PyFVCOM.grid_tools.find_connected_elements().
 
     Notes
     -----
