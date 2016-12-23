@@ -99,6 +99,7 @@ def read_sms_mesh(mesh, nodestrings=False):
                 if int(nodeID) > 0:
                     nstring.append(int(nodeID) - 1)
                 else:
+                    nstring.append(np.abs(int(nodeID)) - 1)
                     nodeStrings.append(nstring)
                     nstring = []
 
