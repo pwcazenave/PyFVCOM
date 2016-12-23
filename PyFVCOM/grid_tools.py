@@ -1859,6 +1859,43 @@ def surrounders(n, triangles):
     return surroundingidx
 
 
+def find_connected_elements(n, triangles):
+    """
+    Return the IDs of the elements connected to node number `n'.
+
+    Parameters
+    ----------
+    n : int or iterable
+        Node ID(s) around which to find the connected elements. If more than
+        one node is given, the unique elements for all nodes are returned.
+        Order of results is not maintained.
+    triangles : ndarray
+        Triangulation matrix to find the connected elements. Shape is [nele,
+        3].
+
+    Returns
+    -------
+    surroundingidx : ndarray
+        Indices of the surrounding elements.
+
+    See Also
+    --------
+    PyFVCOM.grid_tools.surrounders().
+
+    """
+
+    if len(n) == 1:
+        surroundingidx = np.argwhere(triangles == n)[:, 0]
+    else:
+        surroundingidx = []
+        for ni in n:
+            surroundingidx.append(np.argwhere(triangles == ni)[:, 0])
+        surroundingidx = np.asarray([item for sublist in surroundingidx for item in sublist])
+        surroundingidx = np.unique(surroundingidx)
+
+    return surroundingidx
+
+
 def heron(v0, v1, v2):
     """ Calculate the area of a triangle using Heron's formula.
 
