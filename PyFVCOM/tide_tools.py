@@ -399,7 +399,8 @@ def clean_observed_data(data, removeResidual=False):
         getObservedData().
     removeResidual : bool, optional
         If True, remove any residual values. Where such data are absent
-        (marked by values of -9999 or -99.0), no removal is performed.
+        (marked by values of -9999 or -99.0), no removal is performed. Defaults
+        to False.
 
     Returns
     -------
