@@ -422,7 +422,7 @@ def clean_observed_data(data, removeResidual=False):
     npObsData = []
     npFlagData = []
     for row in data:
-        npObsData.append(row[0:-1])  # eliminate the flag from the numeric data
+        npObsData.append(row[:-1])  # eliminate the flag from the numeric data
         npFlagData.append(row[-1])   # save the flag separately
 
     # For the tidal data, convert the numbers to floats to avoid issues
@@ -433,7 +433,7 @@ def clean_observed_data(data, removeResidual=False):
     # Extract the time and tide data
     allObsTideData = np.asarray(npObsData[:, 6])
     allObsTideResidual = np.asarray(npObsData[:, 7])
-    allDateTimes = np.asarray(npObsData[:, 0:6], dtype=float)
+    allDateTimes = np.asarray(npObsData[:, :6], dtype=float)
 
     dateMJD = julian_day(allDateTimes, mjd=True)
 
