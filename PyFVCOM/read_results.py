@@ -239,8 +239,9 @@ def ncread(file, vars=None, dims=False, noisy=False, atts=False, datetimes=False
                          "datetimes has been requested but no time variable "
                          "(`Times' or `time') has been requested in vars.")
 
-    # If we have a list, assume it's lots of files and load them all.
-    if isinstance(file, list):
+    # If we have a list, assume it's lots of files and load them all. Only use
+    # MFDataset on lists of more than 1 file.
+    if isinstance(file, list) and len(file) > 1:
         try:
             try:
                 rootgrp = MFDataset(file, 'r')
@@ -253,7 +254,8 @@ def ncread(file, vars=None, dims=False, noisy=False, atts=False, datetimes=False
                 rootgrp = MFDataset(file, 'r', aggdim='time')
             except IOError as msg:
                 raise IOError('Unable to open file {} ({}). Aborting.'.format(file, msg))
-
+    elif isinstance(file, list) and len(file) == 1:
+        rootgrp = Dataset(file[0], 'r')
     else:
         rootgrp = Dataset(file, 'r')
 
