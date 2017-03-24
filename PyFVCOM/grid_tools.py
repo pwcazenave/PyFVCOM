@@ -2134,7 +2134,7 @@ def make_water_column(zeta, h, siglay):
     siglay : ndarray
         Sigma layers [lay, nodes]
     h : ndarray
-        Water depth [nodes]
+        Water depth [nodes] or [time, nodes]
     zeta : ndarray
         Surface elevation [time, nodes]
 
@@ -2157,7 +2157,12 @@ def make_water_column(zeta, h, siglay):
     except:
         z = (zeta + h)[:, np.newaxis, :] * -siglay[np.newaxis, ...]
 
-    return z - h
+    try:
+        z = z - h
+    except ValueError:
+        z = z - h[:, np.newaxis, :]
+
+    return z
 
 
 # For backwards compatibility.
