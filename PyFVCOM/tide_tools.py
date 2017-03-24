@@ -457,7 +457,7 @@ def parse_TAPPY_XML(file):
     Extract values from an XML file created by TAPPY.
 
     TODO: Allow a list of constituents to be specified when calling
-    parseTAPPYXML.
+    parse_TAPPY_XML.
 
     Parameters
     ----------
