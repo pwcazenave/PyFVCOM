@@ -1498,9 +1498,9 @@ def line_sample(x, y, positions, num=0, return_distance=False, noisy=False):
                 # means we don't end up with negative distances, which means
                 # we don't have to worry about signed distance functions and
                 # other fun things to get proper distance along the transect.
-                xdist = xx[tidx] - xx[tidx[0]]
-                ydist = yy[tidx] - yy[tidx[0]]
-                tdist = np.sqrt(xdist**2 + ydist**2)
+                xdist = np.diff(xx[tidx])
+                ydist = np.diff(xx[tidx])
+                tdist = np.hstack((0, np.cumsum(np.sqrt(xdist**2 + ydist**2))))
                 # Make distances relative to the end of the last segment,
                 # if we have one.
                 if not dist:
