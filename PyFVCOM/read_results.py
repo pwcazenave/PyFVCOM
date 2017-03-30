@@ -201,13 +201,13 @@ def ncread(file, vars=None, dims=False, noisy=False, atts=False, datetimes=False
     atts : bool, optional
         Set to True to enable output of the attributes (defaults to False).
     datetimes : bool, optional
-        Set to True to convert FVCOM Modified Julian Days to Python datetime
-        objects (creates a new `datetime' key in the output dict. Only
-        applies if `vars' includes either the `Times' or `time' variables.
-        Note: if FVCOM has been run with single precision output, then the
-        conversion of the `time' values to a datetime object suffers rounding
-        errors. It's best to either run FVCOM in double precision or specify
-        only the `Times' data in the `vars' list.
+        Set to True to convert FVCOM time to Python datetime objects (creates
+        a new `datetime' key in the output dict. Only applies if `vars'
+        includes either the `Times' or `time' variables. Note: if FVCOM has
+        been run with single precision output, then the conversion of the
+        `time' values to a datetime object suffers rounding errors. It's
+        best to either run FVCOM in double precision or specify only the
+        `Times' data in the `vars' list.
 
     Returns
     -------
@@ -215,7 +215,7 @@ def ncread(file, vars=None, dims=False, noisy=False, atts=False, datetimes=False
         Dict of data extracted from the netCDF file. Keys are those given in
         vars and the data are stored as ndarrays. If `datetimes' is True,
         then this also includes a `datetime' key in which is the FVCOM
-        Modified Julian Day time series converted to Python datetime objects.
+        time series converted to Python datetime objects.
     attributes : dict, optional
         If atts=True, returns the attributes as a dict for each
         variable in vars. The key `dims' contains the array dimensions (each
@@ -235,9 +235,9 @@ def ncread(file, vars=None, dims=False, noisy=False, atts=False, datetimes=False
     done_datetimes = False
     # Check whether we'll be able to fulfill the datetime request.
     if datetimes and vars and not list(set(vars) & set(('Times', 'time'))):
-        raise ValueError("Conversion from Modified Julian Day to python "
-                         "datetimes has been requested but no time variable "
-                         "(`Times' or `time') has been requested in vars.")
+        raise ValueError("Conversion to python datetimes has been requested "
+                         "but no time variable (`Times' or `time') has been "
+                         "requested in vars.")
 
     # If we have a list, assume it's lots of files and load them all. Only use
     # MFDataset on lists of more than 1 file.
@@ -333,7 +333,6 @@ def ncread(file, vars=None, dims=False, noisy=False, atts=False, datetimes=False
                     except ValueError:
                         # Try a different format before bailing out.
                         FVCOM['datetime'] = np.asarray([datetime.strptime(''.join(i).strip(), '%Y/%m/%d %H:%M:%S.%f') for i in FVCOM[key].astype(str)])
-
                     done_datetimes = True
                 elif key == 'time':
                     FVCOM['datetime'] = num2date(FVCOM[key],
