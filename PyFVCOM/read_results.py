@@ -329,10 +329,19 @@ def ncread(file, vars=None, dims=False, noisy=False, atts=False, datetimes=False
                 # units attribute.
                 if key == 'Times':
                     try:
-                        FVCOM['datetime'] = np.asarray([datetime.strptime(''.join(i).strip(), '%Y-%m-%dT%H:%M:%S.%f') for i in FVCOM[key].astype(str)])
+                        # Check if we've only extracted a single time step, in
+                        # which case we don't need to use a list comprehension
+                        # to get the datetimes.
+                        if isinstance(FVCOM[key][0], list):
+                            FVCOM['datetime'] = np.asarray([datetime.strptime(''.join(i).strip(), '%Y-%m-%dT%H:%M:%S.%f') for i in FVCOM[key].astype(str)])
+                        else:
+                            FVCOM['datetime'] = np.asarray(datetime.strptime(''.join(FVCOM[key].astype(str)).strip(), '%Y-%m-%dT%H:%M:%S.%f'))
                     except ValueError:
                         # Try a different format before bailing out.
-                        FVCOM['datetime'] = np.asarray([datetime.strptime(''.join(i).strip(), '%Y/%m/%d %H:%M:%S.%f') for i in FVCOM[key].astype(str)])
+                        if isinstance(FVCOM[key][0], list):
+                            FVCOM['datetime'] = np.asarray([datetime.strptime(''.join(i).strip(), '%Y/%m/%d %H:%M:%S.%f') for i in FVCOM[key].astype(str)])
+                        else:
+                            FVCOM['datetime'] = np.asarray(datetime.strptime(''.join(FVCOM[key].astype(str)).strip(), '%Y/%m/%d %H:%M:%S.%f'))
                     done_datetimes = True
                 elif key == 'time':
                     FVCOM['datetime'] = num2date(FVCOM[key],
