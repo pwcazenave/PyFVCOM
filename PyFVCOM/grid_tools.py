@@ -1263,7 +1263,7 @@ def line_sample(x, y, positions, num=0, return_distance=False, noisy=False):
             List of indices for the nodes used in the line sample.
         line : ndarray
             List of positions which fall along the line described by (start,
-            end).  These are the projected positions of the nodes which fall
+            end). These are the projected positions of the nodes which fall
             closest to the line (not the positions of the nodes themselves).
 
 
@@ -1372,7 +1372,7 @@ def line_sample(x, y, positions, num=0, return_distance=False, noisy=False):
         return sidx, line
 
     # To do multi-segment lines, we'll break each one down into a separate
-    # line, and do those sequentially. This means I don't have to rewrite
+    # line and do those sequentially. This means I don't have to rewrite
     # masses of the existing code and it's still pretty easy to understand (for
     # me at least!).
     nlocations = len(positions)
