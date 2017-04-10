@@ -366,7 +366,7 @@ def ncread(file, vars=None, dims=False, noisy=False, atts=False, datetimes=False
         return FVCOM
 
 
-def read_probes(files, noisy=False, locations=False):
+def read_probes(files, noisy=False, locations=False, datetimes=False):
     """
     Read in FVCOM probes output files. Reads both 1 and 2D outputs. Currently
     only sensible to import a single station with this function since all data
@@ -380,6 +380,9 @@ def read_probes(files, noisy=False, locations=False):
         Set to True to enable verbose output.
     locations : bool, optional
         Set to True to export position and depth data for the sites.
+    datetimes : bool, optional
+        Set to True to convert times to datetimes. Defaults to False (returns
+        modified Julian Days).
 
     Returns
     -------
@@ -442,6 +445,9 @@ def read_probes(files, noisy=False, locations=False):
 
         if noisy:
             print('done.')
+
+    if datetimes:
+        times = num2date(times, "days since 1858-11-17 00:00:00")
 
     # It may be the case that the files have been supplied in a random order,
     # so sort the values by time here.
