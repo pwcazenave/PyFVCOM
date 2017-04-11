@@ -1416,7 +1416,7 @@ def line_sample(x, y, positions, num=0, return_distance=False, noisy=False):
             # For each position in the line array, find the nearest indices in
             # the supplied unstructured grid. We'll use our existing function
             # findNearestPoint for this.
-            _, _, _, tidx = findNearestPoint(x, y, xx, yy, noisy=noisy)
+            _, _, _, tidx = find_nearest_point(x, y, xx, yy, noisy=noisy)
             [idx.append(i) for i in tidx.tolist()]
 
         else:
