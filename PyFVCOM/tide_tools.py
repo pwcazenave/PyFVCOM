@@ -349,11 +349,10 @@ def get_observed_metadata(db, originator=False, obsdepth=None):
 
         c = con.cursor()
 
-        if originator is not False:
-            out = c.execute(
-                    'SELECT * from Stations where originatorName is ? or originatorLongName is ?',
-                    [originator, originator]
-                    )
+        if not originator:
+            out = c.execute('SELECT * from Stations where originatorName '
+                            'is ? or originatorLongName is ?',
+                            [originator, originator])
         else:
             out = c.execute('SELECT * from Stations')
 
@@ -371,8 +370,8 @@ def get_observed_metadata(db, originator=False, obsdepth=None):
     except sqlite3.Error as e:
         if con:
             con.close()
-            print('Error {}:'.format(e.args[0]))
             lat, lon, site, longName, depth = False, False, False, False, False
+            raise Exception('SQLite error: {}'.format(e.args[0]))
 
     if not obsdepth:
         return lat, lon, site, longName
