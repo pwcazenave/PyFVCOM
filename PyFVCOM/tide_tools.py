@@ -285,19 +285,13 @@ def get_observed_data(db, table, startYear=False, endYear=False, noisy=False):
                 if startYear == endYear:
                     # We have the same start and end dates, so just do a
                     # simpler version
-                    c.execute('SELECT * FROM ' + table + ' WHERE ' +
-                    table + '.year == ' + str(startYear) +
-                    ' ORDER BY year, month, day, hour, minute, second')
+                    c.execute('SELECT * FROM {t} WHERE {t}.year == {sy} ORDER BY year, month, day, hour, minute, second'.format(t=table, sy=startYear))
                 else:
                     # We have a date range
-                    c.execute('SELECT * FROM ' + table + ' WHERE ' +
-                    table + '.year > ' + str(startYear) +
-                    ' AND ' + table + '.year < ' + str(endYear) +
-                    ' ORDER BY year, month, day, hour, minute, second')
+                    c.execute('SELECT * FROM {t} WHERE {t}.year >= {sy} AND {t}.year <= {ey} ORDER BY year, month, day, hour, minute, second'.format(t=table, sy=startYear, ey=endYear))
             else:
                 # Return all data
-                c.execute('SELECT * FROM ' + table +
-                    ' ORDER BY year, month, day, hour, minute, second')
+                c.execute('SELECT * FROM {} ORDER BY year, month, day, hour, minute, second'.format(table))
             # Now get the data in a format we might actually want to use
             data = c.fetchall()
 
