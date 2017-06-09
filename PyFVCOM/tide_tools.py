@@ -344,6 +344,7 @@ def get_observed_metadata(db, originator=False, obsdepth=None):
                            ' installation. This function (get_observed_metadata)'
                            ' is unavailable.')
 
+    con = None
     try:
         con = sqlite3.connect(db)
 
