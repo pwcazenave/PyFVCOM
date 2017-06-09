@@ -1243,9 +1243,10 @@ def line_sample(x, y, positions, num=0, return_distance=False, noisy=False):
 
     def __nodes_on_line__(xs, ys, start, end, pdist, noisy=False):
         """
-        Child function to find all the points within the coordinates in sx and
-        sy which fall along the line described by the coordinate pairs start
-        and end.
+        Child function to find all the points within the coordinates in xs and
+        ys which fall along the line described by the coordinate pairs start
+        and end. Uses pdist (distance of all coordinates from the line [start,
+        end]) to select nodes.
 
         Parameters
         ----------
@@ -1265,7 +1266,6 @@ def line_sample(x, y, positions, num=0, return_distance=False, noisy=False):
             List of positions which fall along the line described by (start,
             end). These are the projected positions of the nodes which fall
             closest to the line (not the positions of the nodes themselves).
-
 
         """
 
@@ -1314,12 +1314,12 @@ def line_sample(x, y, positions, num=0, return_distance=False, noisy=False):
                 # Haven't found any points yet.
                 oldtdist = tdist
 
-            if fdist > length:
+            if fdist >= length:
                 # We've gone beyond the end of the line, so don't bother trying
                 # to find another node.  Leave the if block so we actually add
                 # the current index and position to sidx and line. We'll break
                 # out of the main while loop a bit later.
-                pass
+                break
 
             elif tdist > oldtdist:
                 # We're moving away from the end point. Find the closest point
@@ -1357,17 +1357,18 @@ def line_sample(x, y, positions, num=0, return_distance=False, noisy=False):
             # Check if we've gone beyond the end of the line (by checking the
             # length of the sampled line), and if so, break out of the loop.
             # Otherwise, carry on.
-            if beg.tolist() == start.tolist() or fdist < length:
+            if beg.tolist() == start.tolist() or fdist <= length:
                 # Reset the beginning point for the next iteration if we're at
                 # the start or within the line extent.
                 beg = np.array(([xx[tidx], yy[tidx]]))
             else:
-                # Convert the list to an array before we leave.
-                line = np.asarray(line)
                 if noisy:
                     print('Reached the end of the line segment')
 
                 break
+
+        # Convert the list to an array before we leave.
+        line = np.asarray(line)
 
         return sidx, line
 
