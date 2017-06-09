@@ -840,6 +840,29 @@ def get_harmonics_POLPRED(harmonics, constituents, lon, lat, stations, noisy=Fal
     return out
 
 
+def overlap(t1start, t1end, t2start, t2end):
+    """
+    Find if two date ranges overlap.
+
+    Parameters
+    ----------
+    datastart, dataend : datetime
+        Observation start and end datetimes.
+    modelstart, modelend :
+        Observation start and end datetimes.
+
+    Returns
+    -------
+    overlap : bool
+        True if the two periods overlap at all, False otherwise.
+
+    """
+
+    # Shamelessly copied from http://stackoverflow.com/questions/3721249
+
+    return (t1start <= t2start <= t1end) or (t2start <= t1start <= t2end)
+
+
 # Add for backwards compatibility.
 def julianDay(*args, **kwargs):
     warn('{} is deprecated. Use julian_day instead.'.format(inspect.stack()[0][3]))
