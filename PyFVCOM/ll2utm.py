@@ -29,8 +29,8 @@ def __test(inLat, inLong, inZone=False):
         Input latitude and longitude pair.
 
     """
-    e, n, z = utm_from_latlon(inLong, inLat, inZone)
-    lon, lat = latlon_from_utm(e, n, z)
+    e, n, z = utm_from_lonlat(inLong, inLat, inZone)
+    lon, lat = lonlat_from_utm(e, n, z)
 
     return z, e, n, lon, lat
 
@@ -81,7 +81,7 @@ def __convert(args):
 def _get_zone_number(longitude, latitude):
     """
     Calculate the UTM zone number from the given coordinate. Shamelessly lifted
-    from the utm.latlon_to_zone_number function.
+    from the utm.lonlat_to_zone_number function.
 
     Parameters
     ----------
@@ -136,7 +136,7 @@ def _get_zone_letter(latitude):
         return None
 
 
-def utm_from_latlon(lon, lat, zone=None, ellipsoid='WGS84', datum='WGS84'):
+def utm_from_lonlat(lon, lat, zone=None, ellipsoid='WGS84', datum='WGS84'):
     """
     Converts lat/long to UTM for the specified zone.
 
@@ -210,7 +210,7 @@ def utm_from_latlon(lon, lat, zone=None, ellipsoid='WGS84', datum='WGS84'):
     return np.asarray(lon), np.asarray(lat), np.asarray(zone)
 
 
-def latlon_from_utm(eastings, northings, zone, ellipsoid='WGS84', datum='WGS84'):
+def lonlat_from_utm(eastings, northings, zone, ellipsoid='WGS84', datum='WGS84'):
     """
     Converts UTM coordinates to lat/long.
 
@@ -346,7 +346,7 @@ def LL_to_UTM(ReferenceEllipsoid, Lat, Long, ZoneNumber=None):
         else:
             zone = _get_zone_number(Long[0], Lat[0])
 
-    UTMEasting, UTMNorthing, Zone = utm_from_latlon(Long, Lat, zone, ellipsoid=_ellipsoid[ReferenceEllipsoid])
+    UTMEasting, UTMNorthing, Zone = utm_from_lonlat(Long, Lat, zone, ellipsoid=_ellipsoid[ReferenceEllipsoid])
 
     return Zone, UTMEasting, UTMNorthing
 
@@ -408,7 +408,7 @@ def UTM_to_LL(ReferenceEllipsoid, northing, easting, zone):
     for ee, ellipsoid in enumerate(['WGS60', 'WGS66', 'WGS72', 'WGS84'][::-1]):
         _ellipsoid[23 - ee] = ellipsoid
 
-    Long, Lat = latlon_from_utm(easting, northing, zone, ellipsoid=_ellipsoid[ReferenceEllipsoid])
+    Long, Lat = lonlat_from_utm(easting, northing, zone, ellipsoid=_ellipsoid[ReferenceEllipsoid])
 
     return Lat, Long
 
