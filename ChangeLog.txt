@@ -1,3 +1,29 @@
+1.6
+---
+
+Fairly major overhaul. This includes a complete rewrite of the coordinate
+conversion utilites as well as the inclusion of a new module to facilitate
+plotting FVCOM outputs.
+
+grid_tools:
+	* Improve the quality of the calculated area (fewer floating point
+	precision issues). Add compatibility function following the rename.
+
+ll2utm:
+	* This function has been completely rewritten to (hopefully) speed up
+	conversions of large numbers of positions. All the existing functionality
+	remains (including compatibility functions).
+
+plot:
+	* New function to provide a nice plotting class (`Plotter') which can
+	plot:
+		- FVCOM 2D fields
+		- FVCOM 2D vectors as quivers
+		- Time varying arrays of lines (e.g. particle trajectories)
+		- Scatter data on a map
+	This function has been subsumed from PyLag-tools.
+
+
 1.5.1
 -----
 
