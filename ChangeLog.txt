@@ -1,3 +1,8 @@
+1.6.1
+-----
+
+Fix version numbers. Eventually I'll get this right.
+
 1.6
 ---
 

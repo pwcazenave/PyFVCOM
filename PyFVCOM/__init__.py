@@ -3,7 +3,7 @@ The FVCOM Python toolbox (PyFVCOM)
 
 """
 
-__version__ = '1.4.1'
+__version__ = '1.6.1'
 __author__ = 'Pierre Cazenave'
 __credits__ = ['Pierre Cazenave']
 __license__ = 'MIT'
@@ -26,4 +26,5 @@ from PyFVCOM import tide_tools
 from PyFVCOM import tidal_ellipse
 from PyFVCOM import process_results
 from PyFVCOM import read_results
+from PyFVCOM import plot
 
