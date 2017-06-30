@@ -9,6 +9,7 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 from PyFVCOM.ll2utm import lonlat_from_utm
 
+import numpy as np
 
 class Plotter:
     """ Create plot objects based on output from the FVCOM.
