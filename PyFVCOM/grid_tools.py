@@ -86,7 +86,7 @@ def read_sms_mesh(mesh, nodestrings=False):
             nodes.append(int(xy[1]))
             # Although MIKE keeps zero and one reserved for normal nodes and
             # land nodes, SMS doesn't. This means it's not straightforward
-            # to determine this information from the SMS file alone. It woud
+            # to determine this information from the SMS file alone. It would
             # require finding nodes which are edge nodes and assigning their
             # ID to one. All other nodes would be zero until they were
             # overwritten when examining the node strings below.
