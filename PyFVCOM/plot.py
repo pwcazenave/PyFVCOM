@@ -240,7 +240,7 @@ class Plotter:
             self.m.drawparallels(parallels, labels=[1, 0, 0, 0], fontsize=self.fs, linewidth=0, ax=self.axes)
             self.m.drawmeridians(meridians, labels=[0, 0, 0, 1], fontsize=self.fs, linewidth=0, ax=self.axes)
 
-        # Add colobar scaled to axis width
+        # Add colorbar scaled to axis width
         divider = make_axes_locatable(self.axes)
         cax = divider.append_axes("right", size="5%", pad=0.05)
         self.cbar = self.figure.colorbar(self.tripcolor_plot, cax=cax)
