@@ -7,7 +7,7 @@ from mpl_toolkits.basemap import Basemap
 from matplotlib.tri.triangulation import Triangulation
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
-from ll2utm import UTM_to_LL
+from PyFVCOM.ll2utm import lonlat_from_utm
 
 
 class Plotter:
@@ -287,7 +287,7 @@ class Plotter:
 
         return
 
-    def plot_lines(self, x, y, group_name='Default', colour='r', ref_ellipsoid=23,
+    def plot_lines(self, x, y, group_name='Default', colour='r',
                    zone_number='30N'):
         """ Plot path lines.
 
@@ -310,9 +310,6 @@ class Plotter:
 
             Default `r'
 
-        ref_ellipsoid : int, optional
-            See PyFVCOM documentation for a full list of supported codes.
-
         zone_number : string, optional
             See PyFVCOM documentation for a full list of supported codes.
 
@@ -326,7 +323,7 @@ class Plotter:
             if self.line_plot[group_name]:
                 self.remove_line_plots(group_name)
 
-        lat, lon = UTM_to_LL(ref_ellipsoid, y, x, zone_number)
+        lon, lat = lonlat_from_utm(x, y, zone_number)
         mx, my = self.m(lon, lat)
         self.line_plot[group_name] = self.axes.plot(mx, my, color=colour,
                                                     linewidth=self.linewidth, alpha=0.25, zorder=2)
@@ -344,7 +341,7 @@ class Plotter:
             while self.line_plot[group_name]:
                 self.line_plot[group_name].pop(0).remove()
 
-    def plot_scatter(self, x, y, group_name='Default', colour='r', ref_ellipsoid=23,
+    def plot_scatter(self, x, y, group_name='Default', colour='r',
                      zone_number='30N'):
         """ Plot scatter.
 
@@ -367,11 +364,6 @@ class Plotter:
 
             Default `r'
 
-        ref_ellipsoid : int, optional
-            See PyFVCOM documentation for a full list of supported codes.
-
-            Default `23'
-
         zone_number : string, optional
             See PyFVCOM documentation for a full list of supported codes.
 
@@ -381,7 +373,7 @@ class Plotter:
         if not self.scat_plot:
             self.scat_plot = dict()
 
-        lat, lon = UTM_to_LL(ref_ellipsoid, y, x, zone_number)
+        lon, lat = lonlat_from_utm(x, y, zone_number)
         mx, my = self.m(lon, lat)
 
         try:
