@@ -88,7 +88,7 @@ Provides
     - connectivity
     - clip_domain
     - surrounders
-    - heron
+    - get_area
 
 * ll2utm - convert from spherical to cartesian UTM coordinates and back. Available from <http://robotics.ai.uiuc.edu/~hyoon24/LatLongUTMconversion.py>. 
     - LL_to_UTM
