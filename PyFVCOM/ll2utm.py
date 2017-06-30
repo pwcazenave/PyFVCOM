@@ -30,7 +30,7 @@ def __test(inLat, inLong, inZone=False):
 
     """
     e, n, z = utm_from_latlon(inLong, inLat, inZone)
-    lon, lat = latlon_from_utm(e, n, z)
+    lon, lat = lonlat_from_utm(e, n, z)
 
     return z, e, n, lon, lat
 
@@ -210,7 +210,7 @@ def utm_from_latlon(lon, lat, zone=None, ellipsoid='WGS84', datum='WGS84'):
     return np.asarray(lon), np.asarray(lat), np.asarray(zone)
 
 
-def latlon_from_utm(eastings, northings, zone, ellipsoid='WGS84', datum='WGS84'):
+def lonlat_from_utm(eastings, northings, zone, ellipsoid='WGS84', datum='WGS84'):
     """
     Converts UTM coordinates to lat/long.
 
@@ -408,7 +408,7 @@ def UTM_to_LL(ReferenceEllipsoid, northing, easting, zone):
     for ee, ellipsoid in enumerate(['WGS60', 'WGS66', 'WGS72', 'WGS84'][::-1]):
         _ellipsoid[23 - ee] = ellipsoid
 
-    Long, Lat = latlon_from_utm(easting, northing, zone, ellipsoid=_ellipsoid[ReferenceEllipsoid])
+    Long, Lat = lonlat_from_utm(easting, northing, zone, ellipsoid=_ellipsoid[ReferenceEllipsoid])
 
     return Lat, Long
 
