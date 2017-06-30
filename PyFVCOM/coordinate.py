@@ -122,7 +122,7 @@ def _get_zone_letter(latitude):
         return None
 
 
-def utm_from_lonlat(lon, lat, zone=None, ellipsoid='WGS84', datum='WGS84', parallel=False):
+def utm_from_lonlat(lon, lat, zone=None, ellipsoid='WGS84', datum='WGS84'):
     """
     Converts lat/long to UTM for the specified zone.
 
@@ -328,7 +328,22 @@ def british_national_grid_to_lonlat(eastings, northings):
     crs_wgs84 = pyproj.Proj(init='EPSG:4326')
     lon, lat = pyproj.transform(crs_british, crs_wgs84, eastings, northings)
 
-    return lon, lat
+    Long = to_list(Long)
+    Lat = to_list(Lat)
+
+    if ZoneNumber:
+        zone = re.sub('\D', '', str(ZoneNumber))
+    else:
+        if len(Lat) > 1:
+            zone = []
+            for longlat in zip(Long, Lat):
+                zone.append(_get_zone_number(*longlat))
+        else:
+            zone = _get_zone_number(Long[0], Lat[0])
+
+    UTMEasting, UTMNorthing, Zone = utm_from_lonlat(Long, Lat, zone, ellipsoid=_ellipsoid[ReferenceEllipsoid])
+
+    return Zone, UTMEasting, UTMNorthing
 
 
 def lonlat_decimal_from_degminsec(lon_degminsec, lat_degminsec):
