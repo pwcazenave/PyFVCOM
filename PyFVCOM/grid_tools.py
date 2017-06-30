@@ -2233,3 +2233,9 @@ def OSGB36toWGS84(*args, **kwargs):
 def UTMtoLL(*args, **kwargs):
     warn('{} is deprecated. Use UTM_to_LL instead.'.format(inspect.stack()[0][3]))
     return UTM_to_LL(*args, **kwargs)
+
+
+def heron(*args):
+    warn('{} is deprecated. Use get_area instead.'.format(inspect.stack()[0][3]))
+    return get_area(*args)
+
