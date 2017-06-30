@@ -170,7 +170,6 @@ class Plotter:
             self.axes = self.figure.add_subplot(1, 1, 1)
             if self.axis_position:
                 self.axes.set_position(self.axis_position)
-        # self.axes.set_axis_bgcolor('gray')
 
         # If plot extents were not given, use min/max lat/lon values
         if self.extents is None:
@@ -248,9 +247,6 @@ class Plotter:
         self.cbar.ax.tick_params(labelsize=self.fs)
         if self.cb_label:
             self.cbar.set_label(self.cb_label)
-
-        # Make the figure sit nicely in its frame.
-        self.figure.tight_layout()
 
         return
 
