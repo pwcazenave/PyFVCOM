@@ -156,6 +156,8 @@ class Plotter:
         self.lonc = self.ds.variables['lonc'][:]
         self.latc = self.ds.variables['latc'][:]
         self.nv = self.ds.variables['nv'][:]
+        if self.nv.min() == 1:
+            self.nv -= 1
 
         # Triangles
         self.triangles = self.nv.transpose()
