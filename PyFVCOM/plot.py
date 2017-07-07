@@ -16,7 +16,7 @@ class Plotter:
 
     Class to assist in the creation of plots and animations based on output
     from the FVCOM.
-    
+
     Provides
     --------
     plot_field
@@ -24,7 +24,7 @@ class Plotter:
     plot_lines
     plot_scatter
     remove_line_plots (N.B., this is mostly specific to PyLag-tools)
-    
+
     Author(s)
     ---------
     James Clark (Plymouth Marine Laboratory)
@@ -73,15 +73,15 @@ class Plotter:
 
         figure : Figure, optional
             Maplotplotlib Figure object. A figure object is created if not
-            provided.      
+            provided.
 
         figsize : tuple(float), optional
-            Figure size in cm. This is only used if a new Figure object is 
+            Figure size in cm. This is only used if a new Figure object is
             created.
 
         axes : Axes, optional
             Maplotplotlib Axes object. An Axes object is created if not
-            provided.          
+            provided.
 
         axis_position : 1D array, optional
             Array giving axis dimensions
@@ -269,7 +269,7 @@ class Plotter:
 
         scale : float, optional
             Scaling to be provided to arrows with scale_units of inches.
-            
+
         label : str, optional
             Give label to use for the quiver key (defaults to "`scale' ms^{-1}").
 
@@ -392,11 +392,11 @@ class Plotter:
 
 
 def cm2inch(value):
-    """ 
+    """
     Convert centimetres to inches.
-    
-    :param value: 
-    :return: 
-    
+
+    :param value:
+    :return:
+
     """
     return value / 2.54
