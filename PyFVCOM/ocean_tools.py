@@ -1130,7 +1130,6 @@ def zbar(data, levels):
 
     Notes
     -----
-
     This is a naive implementation using a for-loop. A faster version is almost
     certainly possible.
 
@@ -1156,9 +1155,9 @@ def zbar(data, levels):
             raise IndexError('Unable to use the number of dimensions provided in the levels data.')
 
     if nd == 2:
-        databar = (1.0 / np.sum(levels, axis=0)) * databar
+        databar /= np.sum(levels, axis=0)
     elif nd == 3:
-        databar = (1.0 / np.sum(levels, axis=1)) * databar
+        databar /= np.sum(levels, axis=1)
     else:
         raise IndexError('Unable to use the number of dimensions provided in the levels data.')
 

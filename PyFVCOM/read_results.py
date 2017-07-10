@@ -201,13 +201,13 @@ def ncread(file, vars=None, dims=False, noisy=False, atts=False, datetimes=False
     atts : bool, optional
         Set to True to enable output of the attributes (defaults to False).
     datetimes : bool, optional
-        Set to True to convert FVCOM Modified Julian Days to Python datetime
-        objects (creates a new `datetime' key in the output dict. Only
-        applies if `vars' includes either the `Times' or `time' variables.
-        Note: if FVCOM has been run with single precision output, then the
-        conversion of the `time' values to a datetime object suffers rounding
-        errors. It's best to either run FVCOM in double precision or specify
-        only the `Times' data in the `vars' list.
+        Set to True to convert FVCOM time to Python datetime objects (creates
+        a new `datetime' key in the output dict. Only applies if `vars'
+        includes either the `Times' or `time' variables. Note: if FVCOM has
+        been run with single precision output, then the conversion of the
+        `time' values to a datetime object suffers rounding errors. It's
+        best to either run FVCOM in double precision or specify only the
+        `Times' data in the `vars' list.
 
     Returns
     -------
@@ -215,7 +215,7 @@ def ncread(file, vars=None, dims=False, noisy=False, atts=False, datetimes=False
         Dict of data extracted from the netCDF file. Keys are those given in
         vars and the data are stored as ndarrays. If `datetimes' is True,
         then this also includes a `datetime' key in which is the FVCOM
-        Modified Julian Day time series converted to Python datetime objects.
+        time series converted to Python datetime objects.
     attributes : dict, optional
         If atts=True, returns the attributes as a dict for each
         variable in vars. The key `dims' contains the array dimensions (each
@@ -235,12 +235,13 @@ def ncread(file, vars=None, dims=False, noisy=False, atts=False, datetimes=False
     done_datetimes = False
     # Check whether we'll be able to fulfill the datetime request.
     if datetimes and vars and not list(set(vars) & set(('Times', 'time'))):
-        raise ValueError("Conversion from Modified Julian Day to python "
-                         "datetimes has been requested but no time variable "
-                         "(`Times' or `time') has been requested in vars.")
+        raise ValueError("Conversion to python datetimes has been requested "
+                         "but no time variable (`Times' or `time') has been "
+                         "requested in vars.")
 
-    # If we have a list, assume it's lots of files and load them all.
-    if isinstance(file, list):
+    # If we have a list, assume it's lots of files and load them all. Only use
+    # MFDataset on lists of more than 1 file.
+    if isinstance(file, list) and len(file) > 1:
         try:
             try:
                 rootgrp = MFDataset(file, 'r')
@@ -253,7 +254,8 @@ def ncread(file, vars=None, dims=False, noisy=False, atts=False, datetimes=False
                 rootgrp = MFDataset(file, 'r', aggdim='time')
             except IOError as msg:
                 raise IOError('Unable to open file {} ({}). Aborting.'.format(file, msg))
-
+    elif isinstance(file, list) and len(file) == 1:
+        rootgrp = Dataset(file[0], 'r')
     else:
         rootgrp = Dataset(file, 'r')
 
@@ -327,11 +329,19 @@ def ncread(file, vars=None, dims=False, noisy=False, atts=False, datetimes=False
                 # units attribute.
                 if key == 'Times':
                     try:
-                        FVCOM['datetime'] = [datetime.strptime(''.join(i).strip(), '%Y-%m-%dT%H:%M:%S.%f') for i in FVCOM[key].astype(str)]
+                        # Check if we've only extracted a single time step, in
+                        # which case we don't need to use a list comprehension
+                        # to get the datetimes.
+                        if isinstance(FVCOM[key][0], np.ndarray):
+                            FVCOM['datetime'] = np.asarray([datetime.strptime(''.join(i).strip(), '%Y-%m-%dT%H:%M:%S.%f') for i in FVCOM[key].astype(str)])
+                        else:
+                            FVCOM['datetime'] = np.asarray(datetime.strptime(''.join(FVCOM[key].astype(str)).strip(), '%Y-%m-%dT%H:%M:%S.%f'))
                     except ValueError:
                         # Try a different format before bailing out.
-                        FVCOM['datetime'] = [datetime.strptime(''.join(i).strip(), '%Y/%m/%d %H:%M:%S.%f') for i in FVCOM[key].astype(str)]
-
+                        if isinstance(FVCOM[key][0], np.ndarray):
+                            FVCOM['datetime'] = np.asarray([datetime.strptime(''.join(i).strip(), '%Y/%m/%d %H:%M:%S.%f') for i in FVCOM[key].astype(str)])
+                        else:
+                            FVCOM['datetime'] = np.asarray(datetime.strptime(''.join(FVCOM[key].astype(str)).strip(), '%Y/%m/%d %H:%M:%S.%f'))
                     done_datetimes = True
                 elif key == 'time':
                     FVCOM['datetime'] = num2date(FVCOM[key],
@@ -356,7 +366,7 @@ def ncread(file, vars=None, dims=False, noisy=False, atts=False, datetimes=False
         return FVCOM
 
 
-def read_probes(files, noisy=False, locations=False):
+def read_probes(files, noisy=False, locations=False, datetimes=False):
     """
     Read in FVCOM probes output files. Reads both 1 and 2D outputs. Currently
     only sensible to import a single station with this function since all data
@@ -370,6 +380,9 @@ def read_probes(files, noisy=False, locations=False):
         Set to True to enable verbose output.
     locations : bool, optional
         Set to True to export position and depth data for the sites.
+    datetimes : bool, optional
+        Set to True to convert times to datetimes. Defaults to False (returns
+        modified Julian Days).
 
     Returns
     -------
@@ -432,6 +445,9 @@ def read_probes(files, noisy=False, locations=False):
 
         if noisy:
             print('done.')
+
+    if datetimes:
+        times = num2date(times, "days since 1858-11-17 00:00:00")
 
     # It may be the case that the files have been supplied in a random order,
     # so sort the values by time here.

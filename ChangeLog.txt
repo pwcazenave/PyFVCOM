@@ -1,3 +1,89 @@
+1.6.1
+-----
+
+Fix version numbers. Eventually I'll get this right.
+
+1.6
+---
+
+Fairly major overhaul. This includes a complete rewrite of the coordinate
+conversion utilites as well as the inclusion of a new module to facilitate
+plotting FVCOM outputs.
+
+grid_tools:
+	* Improve the quality of the calculated area (fewer floating point
+	precision issues). Add compatibility function following the rename.
+
+ll2utm:
+	* This function has been completely rewritten to (hopefully) speed up
+	conversions of large numbers of positions. All the existing functionality
+	remains (including compatibility functions).
+
+plot:
+	* New function to provide a nice plotting class (`Plotter') which can
+	plot:
+		- FVCOM 2D fields
+		- FVCOM 2D vectors as quivers
+		- Time varying arrays of lines (e.g. particle trajectories)
+		- Scatter data on a map
+	This function has been subsumed from PyLag-tools.
+
+
+1.5.1
+-----
+
+Fix version numbers in setup.py.
+
+1.5
+---
+
+Add better support for using datetime objects with netCDF and FVCOM ASCII
+outputs. Improve the behaviour of a number of routines to offer more robust
+behaviour. Ensure code works with Python 3.
+
+buoy_tools:
+    * Make SQLite3 an optional dependency and quit if we try and use it.
+
+ctd_tools:
+    * Make SQLite3 an optional dependency and quit if we try and use it.
+
+grid_tools:
+    * read_sms_mesh: Add support for returning the node strings (if any).
+    * read_fvcom_obc: New function to read FVCOM formatted open boundary
+    files.
+    * write_fvcom_mesh: New function to write FVCOM formatted mesh files.
+    * line_sample: Tweak the algorithm to be a bit more robust.
+    * find_connected_elements: New function to find the elements connected to
+    a specific node(s).
+    * ind2sub: Replicate the MATLAB ind2sub function in Python.
+    * rotate_points: Given a set of points and an origin, rotate by a certain
+    angle.
+    * make_water_column: Make a depth-resolved, time varying water column.
+
+ll2utm:
+    * Improve documentation.
+
+ocean_tools:
+    * Miscellaneous code tweaks.
+
+read_results:
+    * ncwrite: Add the option of specifying a certain netCDF format.
+    * ncread: Improve support for converting times to datetime objects. Also
+    read in all attributes for the requested variables.
+    * read_probes: Add option to convert times to datetime objects.
+
+stats_tools:
+    * coefficient_of_determination: Removed.
+    * calculate_coefficient: Added new function to calculate pearson's R and
+    p-values.
+
+tide_tools:
+    * Make SQLite3 an optional dependency and quit if we try and use it.
+    * overlap: New function to tell whether two time ranges overlap one
+    another.
+    * Improve documentation.
+
+
 1.4.1
 -----
 

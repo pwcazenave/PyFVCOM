@@ -285,19 +285,13 @@ def get_observed_data(db, table, startYear=False, endYear=False, noisy=False):
                 if startYear == endYear:
                     # We have the same start and end dates, so just do a
                     # simpler version
-                    c.execute('SELECT * FROM ' + table + ' WHERE ' +
-                    table + '.year == ' + str(startYear) +
-                    ' ORDER BY year, month, day, hour, minute, second')
+                    c.execute('SELECT * FROM {t} WHERE {t}.year == {sy} ORDER BY year, month, day, hour, minute, second'.format(t=table, sy=startYear))
                 else:
                     # We have a date range
-                    c.execute('SELECT * FROM ' + table + ' WHERE ' +
-                    table + '.year > ' + str(startYear) +
-                    ' AND ' + table + '.year < ' + str(endYear) +
-                    ' ORDER BY year, month, day, hour, minute, second')
+                    c.execute('SELECT * FROM {t} WHERE {t}.year >= {sy} AND {t}.year <= {ey} ORDER BY year, month, day, hour, minute, second'.format(t=table, sy=startYear, ey=endYear))
             else:
                 # Return all data
-                c.execute('SELECT * FROM ' + table +
-                    ' ORDER BY year, month, day, hour, minute, second')
+                c.execute('SELECT * FROM {} ORDER BY year, month, day, hour, minute, second'.format(table))
             # Now get the data in a format we might actually want to use
             data = c.fetchall()
 
@@ -350,16 +344,16 @@ def get_observed_metadata(db, originator=False, obsdepth=None):
                            ' installation. This function (get_observed_metadata)'
                            ' is unavailable.')
 
+    con = None
     try:
         con = sqlite3.connect(db)
 
         c = con.cursor()
 
-        if originator is not False:
-            out = c.execute(
-                    'SELECT * from Stations where originatorName is ? or originatorLongName is ?',
-                    [originator, originator]
-                    )
+        if not originator:
+            out = c.execute('SELECT * from Stations where originatorName '
+                            'is ? or originatorLongName is ?',
+                            [originator, originator])
         else:
             out = c.execute('SELECT * from Stations')
 
@@ -377,8 +371,8 @@ def get_observed_metadata(db, originator=False, obsdepth=None):
     except sqlite3.Error as e:
         if con:
             con.close()
-            print('Error {}:'.format(e.args[0]))
             lat, lon, site, longName, depth = False, False, False, False, False
+            raise Exception('SQLite error: {}'.format(e.args[0]))
 
     if not obsdepth:
         return lat, lon, site, longName
@@ -399,7 +393,8 @@ def clean_observed_data(data, removeResidual=False):
         getObservedData().
     removeResidual : bool, optional
         If True, remove any residual values. Where such data are absent
-        (marked by values of -9999 or -99.0), no removal is performed.
+        (marked by values of -9999 or -99.0), no removal is performed. Defaults
+        to False.
 
     Returns
     -------
@@ -421,7 +416,7 @@ def clean_observed_data(data, removeResidual=False):
     npObsData = []
     npFlagData = []
     for row in data:
-        npObsData.append(row[0:-1])  # eliminate the flag from the numeric data
+        npObsData.append(row[:-1])  # eliminate the flag from the numeric data
         npFlagData.append(row[-1])   # save the flag separately
 
     # For the tidal data, convert the numbers to floats to avoid issues
@@ -432,7 +427,7 @@ def clean_observed_data(data, removeResidual=False):
     # Extract the time and tide data
     allObsTideData = np.asarray(npObsData[:, 6])
     allObsTideResidual = np.asarray(npObsData[:, 7])
-    allDateTimes = np.asarray(npObsData[:, 0:6], dtype=float)
+    allDateTimes = np.asarray(npObsData[:, :6], dtype=float)
 
     dateMJD = julian_day(allDateTimes, mjd=True)
 
@@ -456,7 +451,7 @@ def parse_TAPPY_XML(file):
     Extract values from an XML file created by TAPPY.
 
     TODO: Allow a list of constituents to be specified when calling
-    parseTAPPYXML.
+    parse_TAPPY_XML.
 
     Parameters
     ----------
@@ -843,6 +838,29 @@ def get_harmonics_POLPRED(harmonics, constituents, lon, lat, stations, noisy=Fal
                 sys.stdout.flush()
 
     return out
+
+
+def overlap(t1start, t1end, t2start, t2end):
+    """
+    Find if two date ranges overlap.
+
+    Parameters
+    ----------
+    datastart, dataend : datetime
+        Observation start and end datetimes.
+    modelstart, modelend :
+        Observation start and end datetimes.
+
+    Returns
+    -------
+    overlap : bool
+        True if the two periods overlap at all, False otherwise.
+
+    """
+
+    # Shamelessly copied from http://stackoverflow.com/questions/3721249
+
+    return (t1start <= t2start <= t1end) or (t2start <= t1start <= t2end)
 
 
 # Add for backwards compatibility.
