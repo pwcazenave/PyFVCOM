@@ -1121,8 +1121,7 @@ def zbar(data, levels):
         Values to be depth-averaged. Shape is [t, z, x] where t is time, z is
         vertical and x is space (unstructured).
     levels : ndarray
-        Array of vertical layer thicknesses (fraction in the range 0-1). Shape
-        is [z, x] or [t, z, x].
+        Array of vertical layer thicknesses. Shape is [z, x] or [t, z, x].
 
     Returns
     -------
