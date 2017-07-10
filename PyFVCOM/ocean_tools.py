@@ -1148,10 +1148,10 @@ def zbar(data, levels):
     for i in range(nz):
         if nd == 2:
             # Depth, space only.
-            databar = databar + (data[:, i, :] * levels[i, :])
+            databar += data[:, i, :] * levels[i, :]
         elif nd == 3:
             # Time, depth, space.
-            databar = databar + (data[:, i, :] * levels[:, i, :])
+            databar += data[:, i, :] * levels[:, i, :]
         else:
             raise IndexError('Unable to use the number of dimensions provided in the levels data.')
 
