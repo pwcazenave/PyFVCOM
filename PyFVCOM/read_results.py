@@ -7,7 +7,550 @@ import numpy as np
 
 from warnings import warn
 from datetime import datetime
-from netCDF4 import Dataset, MFDataset, num2date
+from netCDF4 import Dataset, MFDataset, num2date, date2num
+
+from PyFVCOM.ll2utm import lonlat_from_utm, utm_from_lonlat
+
+
+class FVCOM:
+    """ Load FVCOM model output.
+
+    Class simplifies the preparation of FVCOM model output for analysis with PyFVCOM.
+
+    Author(s)
+    ---------
+    Pierre Cazenave (Plymouth Marine Laboratory)
+
+    Credits
+    -------
+    This code leverages ideas (and in some cases, code) from PySeidon (https://github.com/GrumpyNounours/PySeidon)
+    and PyLag-tools (https://gitlab.em.pml.ac.uk/PyLag/PyLag-tools).
+
+    """
+
+    def __init__(self, fvcom=None, variables=[], dims=[], zone='30N', debug=False):
+        """
+        Parameters
+        ----------
+        fvcom : str
+            Path to an FVCOM netCDF.
+        variables : list-like
+            List of variables to extract. If omitted, no variables are extracted, which means you won't be able to
+            add this object to another one which has variables in it.
+        dims : dict
+            Dictionary of dimension names along which to subsample e.g. dims={'time': [0, 100], 'nele': [0, 10, 100],
+            'node': 100}. Only certain combinations are possible:
+                - all dimensions
+                - all time, all layers, single/many point(s)
+                - all time, single layer, single/many point(s)
+                - all time, single layer, all points
+                - single time, all layers, all points
+                - single time, single layer, all points
+                - all time, single layer, all points
+                - single time, single layer, all points
+            To summarise, they include everything except subsetting in all three dimensions i.e. a single point from
+            a single layer at a single time, although now I write that, I can't see why we can't do that too.
+        zone : str, list-like
+            UTM zones (defaults to '30N') for conversion of UTM to spherical coordinates.
+        debug : bool
+            Set to True to enable debug output. Defaults to False.
+
+        Author(s):
+        ----------
+        Pierre Cazenave (Plymouth Marine Laboratory)
+
+        """
+        self._debug = debug
+        self._fvcom = fvcom
+        self._zone = zone
+        self._dims = dims
+        self._variables = variables
+
+        # Prepare this object with all the objects we'll need later on (data, dims, time, grid).
+        self._prep()
+
+        self.ds = Dataset(self._fvcom, 'r')
+
+        # Load dimensions only at this point.
+        for dim in self.ds.dimensions:
+            setattr(self.dims, dim, self.ds.dimensions[dim].size)
+
+        # Load the time and grid data.
+        self._load_time()
+        self._load_grid()
+
+        # Load the variables if we've been given any.
+        if variables:
+            try:
+                self._load_data(self._variables)
+            except MemoryError:
+                raise MemoryError("Data too large for RAM. Use `dims' to load subsets in space or time or "
+                                  "`variables' to request only certain variables.")
+
+    def __eq__(self, other):
+        # For easy comparison of classes.
+        return self.__dict__ == other.__dict__
+
+    def __add__(self, FVCOM, debug=False):
+        """ This special method means we can stack two FVCOM objects in time through a simple addition (e.g. fvcom1 +=
+        fvcom2)
+
+        Parameters
+        ----------
+        FVCOM : PyFVCOM.FVCOM
+            Previous time to which to add ourselves.
+
+        Returns
+        -------
+        NEW : PyFVCOM.FVCOM
+            Concatenated (in time and space) `PyFVCOM.FVCOM' class.
+
+        Notes
+        -----
+        - fvcom1 and fvcom2 have to cover the exact same spatial domain
+        - last time step of fvcom1 must be <= to the first time step of fvcom2
+        - if data have not been loaded, then subsequent loads will load only the data from the first netCDF. Make
+        sure you load all your data before you merge objects.
+
+        History
+        -------
+
+        This is a reimplementation of the FvcomClass.__add__ method of `PySeidon'. Modified by Pierre Cazenave for
+        use in `PyFVCOM', mainly because PySeidon isn't compatible with python 3 (yet).
+
+        """
+
+        # Get the things to iterate over for a given object. This is a bit hacky, but until I create separate classes
+        # for the dims, time, grid and data objects, this'll have to do.
+        obj_iter = lambda x: [a for a in dir(x) if not a.startswith('__')]
+
+        # debug = debug or self._debug
+        # # Define bounding box
+        # if debug:
+        #     print("Computing bounding box...")
+        # if not (hasattr(self.grid, 'lon') and hasattr(self.grid, 'lat')):
+        #     if debug:
+        #         print("Loading grid data")
+        #     self.load_grid()
+        # bbox = (self.grid.lon.min(), self.grid.lon.max(), self.grid.lat.min(), self.grid.lat.max())
+
+        # We need to load the times for ourselves/FVCOM if not already done.
+        if not hasattr(self.time, 'time'):
+            self.load_time()
+
+        if not hasattr(FVCOM.time, 'time'):
+            FVCOM.load_time()
+
+        # Compare our current grid and time with the supplied one to make sure we're dealing with the same model
+        # configuration. We also need to make sure we've got the same set of data (if any). We'll warn if we've got
+        # no data loaded that we can't do subsequent data loads.
+        node_compare = self.dims.nele == FVCOM.dims.nele
+        nele_compare = self.dims.node == FVCOM.dims.node
+        siglay_compare = self.dims.siglay == FVCOM.dims.siglay
+        siglev_compare = self.dims.siglev == FVCOM.dims.siglev
+        time_compare = self.time.time[-1] <= FVCOM.time.time[0]
+        data_compare = obj_iter(self.data) == obj_iter(FVCOM.data)
+        if not (node_compare and nele_compare):
+            raise ValueError('Horizontal spatial regions are incompatible.')
+        if not (siglay_compare and siglev_compare):
+            raise ValueError('Vertical spatial regions are incompatible.')
+        if not time_compare:
+            raise ValueError("Time periods are incompatible (`fvcom2' must be greater than or equal to `fvcom').")
+        if not data_compare:
+            raise ValueError('Loaded data sets for each FVCOM class must match.')
+        if not (obj_iter(self.data) or obj_iter(FVCOM.data)):
+            warn('Subsequent attempts to load data for this merged object will only load data from the first object. '
+                 'Load data into each object before merging them.')
+
+        # Copy ourselves to a new version for concatenation. self is the old so we get appended to the new.
+        idem = copy.copy(self)
+
+        # Go through all the parts of the data with a time dependency and concatenate them. Leave the grid alone.
+        for var in obj_iter(idem.data):
+            setattr(idem.data, var, np.concatenate((getattr(idem.data, var), getattr(FVCOM.data, var))))
+        for time in obj_iter(idem.time):
+            setattr(idem.time, time, np.concatenate((getattr(idem.time, time), getattr(FVCOM.time, time))))
+
+        # Remove duplicate times.
+        dupes = np.argwhere(np.diff(idem.time.time) == 0)
+        for var in obj_iter(idem.data):
+            setattr(idem.data, var, np.delete(getattr(idem.data, var), dupes, axis=0))
+        for time in obj_iter(idem.time):
+            setattr(idem.time, time, np.delete(getattr(idem.time, time), dupes, axis=0))
+
+        # Update dimensions accordingly.
+        idem.dims.time = len(idem.time.time)
+
+        return idem
+
+    def _prep(self):
+        # Create empty object for the grid, dimension, data and time data.
+        self.grid = type('grid', (object,), {})()
+        self.dims = type('dims', (object,), {})()
+        self.data = type('data', (object,), {})()
+        self.time = type('time', (object,), {})()
+
+        # Add docstrings for the relevant objects.
+        self.data.__doc__ = "This object will contain data as loaded from the netCDFs specified. Use " \
+                            "`FVCOM.load_variable', `FVCOM.load_variable_at_layer', `FVCOM.load_variable_at_time' and " \
+                            "`FVCOM.load_variable_at_time_at_layer' to get specific data. "
+        self.dims.__doc__ = "This contains the dimensions of the data from the given netCDFs. "
+        self.grid.__doc__ = "Use `FVCOM.load_grid' to populate this with the FVCOM grid information. Missing " \
+                            "spherical or cartesian coordinates are automatically created depending on which is " \
+                            "missing."
+        self.time.__doc__ = "This contains the time data for the given netCDFs. Missing standard FVCOM time variables " \
+                            "are automatically created. "
+
+    def _load_time(self):
+        """ Populate a time object with additional useful time representations from the netCDF time data.
+        """
+
+        time_variables = ('time', 'Times', 'Itime', 'Itime2')
+        got_time, missing_time = [], []
+        for time in time_variables:
+            # Since not all of the time_variables specified above are required, only try to load the data if they
+            # exist. We'll raise an error if we don't find any of them though.
+            if time in self.ds.variables:
+                setattr(self.time, time, self.ds.variables[time][:])
+                got_time.append(time)
+            else:
+                missing_time.append(time)
+
+        if len(missing_time) == len(time_variables):
+            raise ValueError('No time variables found in the netCDF.')
+
+        if 'Times' in got_time:
+            # Overwrite the existing Times array with a more sensibly shaped one.
+            self.time.Times = np.asarray([''.join(t.astype(str)).strip() for t in self.time.Times])
+
+        # Make whatever we got into datetime objects and use those to make everything else. Note: the `time' variable
+        # is often the one with the lowest precision, so use the others preferentially over that.
+        if 'Times' not in got_time:
+            if 'time' in got_time:
+                _dates = num2date(self.time, units=getattr(self.ds.variables['time'], 'units'))
+            elif 'Itime' in got_time and 'Itime2' in got_time:
+                _dates = num2date(self.Itime + self.Itime2 / 1000.0 / 60 / 60, units=getattr(self.ds.variables['Itime'], 'units'))
+            try:
+                self.time.Times = [datetime.strftime(d, '%Y-%m-%dT%H:%M:%S.%f') for d in _dates]
+            except ValueError:
+                self.time.Times = [datetime.strftime(d, '%Y/%m/%d %H:%M:%S.%f') for d in _dates]
+
+        if 'time' not in got_time:
+            if 'Times' in got_time:
+                try:
+                    _dates = [datetime.strptime(''.join(t.astype(str)).strip(), '%Y-%m-%dT%H:%M:%S.%f') for t in self.time.Times]
+                except ValueError:
+                    _dates = [datetime.strptime(''.join(t.astype(str)).strip(), '%Y/%m/%d %H:%M:%S.%f') for t in self.time.Times]
+            elif 'Itime' in got_time and 'Itime2' in got_time:
+                _dates = num2date(self.Itime + self.Itime2 / 1000.0 / 60 / 60, units=getattr(self.ds.variables['Itime'], 'units'))
+            self.time.time = date2num(_dates, units=getattr(self.ds.variables['Times']))
+
+        if 'Itime' not in got_time and 'Itime2' not in got_time:
+            if 'Times' in got_time:
+                try:
+                    _dates = [datetime.strptime(''.join(t.astype(str)).strip(), '%Y-%m-%dT%H:%M:%S.%f') for t in self.time.Times]
+                except ValueError:
+                    _dates = [datetime.strptime(''.join(t.astype(str)).strip(), '%Y/%m/%d %H:%M:%S.%f') for t in self.time.Times]
+            elif 'time' in got_time:
+                _dates = num2date(self.time, units=getattr(self.ds.variables['time'], 'units'))
+            _datenum = date2num(_dates, units=getattr(self.ds.variables['Times']))
+            self.time.Itime = np.floor(_datenum)
+            self.time.Itime = (_datenum - np.floor(_datenum)) * 1000 * 60 * 60  # microseconds since midnight
+
+        # Additional nice-to-have time representations.
+        if 'Times' in got_time:
+            try:
+                self.time.datetime = [datetime.strptime(d, '%Y-%m-%dT%H:%M:%S.%f') for d in self.time.Times]
+            except ValueError:
+                self.time.datetime = [datetime.strptime(d, '%Y/%m/%d %H:%M:%S.%f') for d in self.time.Times]
+        else:
+            self.time.datetime = _dates
+        self.time.datenum = date2num(self.time.datetime, units=getattr(self.ds.variables['time'], 'units'))
+        self.time.matlabtime = self.time.time + 678942.0  # convert to MATLAB-indexed times from Modified Julian Date.
+
+    def _load_grid(self):
+        """ Load the grid data.
+
+        Convert from UTM to spherical if we haven't got those data in the existing output file.
+
+        """
+
+        _range = lambda x: x.max() - x.min()
+
+        self.grid.nv = self.ds.variables['nv'][:]
+        self.grid.triangles = self.grid.nv.T - 1  # zero-indexed for python
+
+        # Get the grid data.
+        # TODO: If we have a subset in nodes/elems, we need to adjust the coordinate ranges here.
+        # if self._subset:
+        #     for grid in (lon, lat, x, y):
+        #         setattr(self.grid, grid, getattr(self.grid, grid)[idx]
+        for grid in ('lon', 'lat', 'x', 'y', 'lonc', 'latc', 'xc', 'yc', 'h', 'siglay', 'siglev'):
+            setattr(self.grid, grid, self.ds.variables[grid][:])
+
+        # Add compatibility for FVCOM3 (these variables are only specified on the element centres in FVCOM4+ output
+        # files).
+        if 'h_center' in self.ds.variables:
+            self.grid.h_center = self.ds.variables['h_center'][:]
+        else:
+            self.grid.h_center = nodes2elems(self.grid.triangles, self.grid.h)
+
+        if 'siglay_center' in self.ds.variables:
+            self.grid.siglay_center = self.ds.variables['siglay_center'][:]
+        else:
+            self.grid.siglay_center = nodes2elems(self.grid.triangles, self.grid.siglay)
+
+        if 'siglev_center' in self.ds.variables:
+            self.grid.siglev_center = self.ds.variables['siglev_center'][:]
+        else:
+            self.grid.siglev_center = nodes2elems(self.grid.triangles, self.grid.siglev)
+
+        # Check ranges and if zero assume we're missing that particular type, so convert from the other accordingly.
+        self.grid.lon_range = _range(self.grid.lon)
+        self.grid.lat_range = _range(self.grid.lat)
+        self.grid.lonc_range = _range(self.grid.lonc)
+        self.grid.latc_range = _range(self.grid.latc)
+        self.grid.x_range = _range(self.grid.x)
+        self.grid.y_range = _range(self.grid.y)
+        self.grid.xc_range = _range(self.grid.xc)
+        self.grid.yc_range = _range(self.grid.yc)
+
+        if self.grid.lon_range == 0 and self.grid.lat_range == 0:
+            self.grid.lon, self.grid.lat = lonlat_from_utm(self.grid.x, self.grid.y, zone=self._zone)
+        if self.grid.lonc_range == 0 and self.grid.latc_range == 0:
+            self.grid.lonc, self.grid.latc = lonlat_from_utm(self.grid.xc, self.grid.yc, zone=self._zone)
+        if self.grid.lon_range == 0 and self.grid.lat_range == 0:
+            self.grid.x, self.grid.y = utm_from_lonlat(self.grid.lon, self.grid.lat)
+        if self.grid.lonc_range == 0 and self.grid.latc_range == 0:
+            self.grid.xc, self.grid.yc = utm_from_lonlat(self.grid.lonc, self.grid.latc)
+
+    def _load_data(self, variables=None):
+        """ Wrapper to load the relevant parts of the data in the netCDFs we have been given.
+
+        TODO: This could really do with a decent set of tests to make sure what I'm trying to do is actually what's
+        being done.
+
+        """
+
+        # Get a list of all the variables from the netCDF dataset.
+        if not variables:
+            variables = list(self.ds.variables.keys())
+
+        if 'siglay' in self._dims and 'time' not in self._dims:
+            # All time, specific layer, everywhere
+            self.load_variable_at_layer(variables, self._dims['siglay'])
+        elif 'siglay' in self._dims and 'time' in self._dims:
+            # Given time(s), specific layer, everywhere
+            self.load_variable_at_time_at_layer(variables,
+                                                start=self._dims['time'][0],
+                                                end=self._dims['time'][1],
+                                                layer=self._dims['siglay'])
+        elif 'siglay' in self._dims and 'time' not in self._dims and ('node' in self._dims or 'nele' in self._dims):
+            for var in variables:
+                if 'nele' in self.ds.variables[var].dimensions:
+                    horizontal_dim = 'nele'
+                else:
+                    horizontal_dim = 'node'
+                if 'siglay' in self.ds.variables[var].dimensions:
+                    vertical_dim = 'siglay'
+                else:
+                    vertical_dim = 'siglev'
+                # All times, specific layer, given location(s)
+                if isinstance(self._dims[horizontal_dim], int):
+                    self.load_variable_at_point_at_layer(var,
+                                                         idx=self._dims[horizontal_dim],
+                                                         layer=self._dims[vertical_dim])
+                else:
+                    # For consistency, this should be a separate function like load_variable_at_point and
+                    # load_variable_at_many_points are.
+                    for point in self._dims[horizontal_dim]:
+                        self.load_variable_at_point_at_layer(var,
+                                                             idx=point,
+                                                             layer=self._dims[vertical_dim])
+        elif 'siglay' not in self._dims and 'time' in self._dims:
+            # Given time(s), all layers, everywhere
+            self.load_variable_at_time(variables, start=self._dims['time'][0], end=self._dims['time'][1])
+        elif 'node' in self._dims or 'nele' in self._dims:
+            for var in variables:
+                if 'nele' in self.ds.variables[var].dimensions:
+                    dim = 'nele'
+                else:
+                    dim = 'node'
+                # All time, all layers, given location(s)
+                if isinstance(self._dims[dim], int):
+                    self.load_variable_at_point(var, self._dims[dim])
+                else:
+                    self.load_variable_at_many_points(var, self._dims[dim])
+        else:
+            # All time, all layers, all location(s)
+            self.load_variable(variables)
+
+    def load_variable(self, var):
+        """ Add a given variable/variables at all time and in all space to the data object. """
+
+        # Check if we've got an interable and make one if not.
+        try:
+            var = iter(var)
+        except TypeError:
+            var = [var]
+        else:
+            pass
+
+        for v in var:
+            setattr(self.data, v, self.ds.variables[v][:])
+
+    def load_variable_at_point(self, var, idx):
+        """ Add a given variable/variables to the data object for a specific location. """
+        if isinstance(var, list) or isinstance(var, tuple) or isinstance(var, np.ndarray):
+            for v in var:
+                setattr(self.data, v, self.ds.variables[v][..., idx])
+        else:
+            setattr(self.data, var, self.ds.variables[var][..., idx])
+
+    def load_variable_at_point_at_layer(self, var, idx, layer):
+        """ Add a given variable/variables to the data object for a specific location at a specific layer. """
+        if isinstance(var, list) or isinstance(var, tuple) or isinstance(var, np.ndarray):
+            for v in var:
+                setattr(self.data, v, self.ds.variables[v][..., layer, idx])
+        else:
+            setattr(self.data, var, self.ds.variables[var][..., layer, idx])
+
+    def load_variable_at_many_points(self, var, idx):
+        """ Add a given variable/variables to the data object for specific horizontal indices at all times/depths. """
+        if isinstance(var, list) or isinstance(var, tuple) or isinstance(var, np.ndarray):
+            for v in var:
+                if 'siglay' in self.ds.variables[v].dimensions:
+                    # 3D
+                    setattr(self.data, v, np.zeros((self.dims.time, self.dims.siglev, len(idx))))
+                elif 'siglev' in self.ds.variables[v].dimensions:
+                    # 3D
+                    setattr(self.data, v, np.zeros((self.dims.time, self.dims.siglev, len(idx))))
+                else:
+                    # 2D
+                    setattr(self.data, v, np.zeros((self.dims.time, len(idx))))
+                for i in idx:
+                    getattr(self.data, v)[..., i] = self.load_variable_at_point(self, v, i)
+        else:
+            if 'siglay' in self.ds.variables[var].dimensions:
+                # 3D
+                setattr(self.data, var, np.zeros((self.dims.time, self.dims.siglev, len(idx))))
+            elif 'siglev' in self.ds.variables[var].dimensions:
+                # 3D
+                setattr(self.data, var, np.zeros((self.dims.time, self.dims.siglev, len(idx))))
+            else:
+                # 2D
+                setattr(self.data, var, np.zeros((self.dims.time, len(idx))))
+            for i in idx:
+                getattr(self.data, var)[..., i] = self.load_variable_at_point(self, var, i)
+
+    def load_variable_at_many_points_at_layer(self, var, idx, layer):
+        """ Add a given variable/variables to the data object for specific horizontal indices at all times and a
+        specific depths. """
+        if isinstance(var, list) or isinstance(var, tuple) or isinstance(var, np.ndarray):
+            for v in var:
+                if 'siglay' in self.ds.variables[v].dimensions:
+                    # 3D
+                    setattr(self.data, v, np.zeros((self.dims.time, len(idx))))
+                elif 'siglev' in self.ds.variables[v].dimensions:
+                    # 3D
+                    setattr(self.data, v, np.zeros((self.dims.time, len(idx))))
+                else:
+                    # 2D
+                    setattr(self.data, v, np.zeros((self.dims.time, len(idx))))
+                for i in idx:
+                    getattr(self.data, v)[..., i] = self.load_variable_at_point_at_layer(self, v, i, layer)
+        else:
+            if 'siglay' in self.ds.variables[var].dimensions:
+                # 3D
+                setattr(self.data, var, np.zeros((self.dims.time, len(idx))))
+            elif 'siglev' in self.ds.variables[var].dimensions:
+                # 3D
+                setattr(self.data, var, np.zeros((self.dims.time, len(idx))))
+            else:
+                # 2D
+                setattr(self.data, var, np.zeros((self.dims.time, len(idx))))
+            for i in idx:
+                getattr(self.data, var)[..., i] = self.load_variable_at_point_at_layer(self, var, i, layer)
+
+    def load_variable_at_layer(self, var, layer=0):
+        """ Add a given variable/variables from a given depth to the data object at all times. """
+        if isinstance(var, list) or isinstance(var, tuple) or isinstance(var, np.ndarray):
+            for v in var:
+                if 'siglay' in self.ds.variables[v].dimensions or 'siglev' in self.ds.variables[v].dimensions:
+                    setattr(self.data, v, self.ds.variables[v][:, layer, :])
+                else:
+                    # This variable has no depth, just return the whole thing.
+                    setattr(self.data, v, self.ds.variables[v][:])
+
+        else:
+            if 'siglay' in self.ds.variables[var].dimensions or 'siglev' in self.ds.variables[var].dimensions:
+                setattr(self.data, var, self.ds.variables[var][:, layer, :])
+            else:
+                # This variable has no depth, just return the whole thing.
+                setattr(self.data, var, self.ds.variables[var][:])
+
+    def load_variable_at_time(self, var, start=0, end=-1):
+        """ Add a variable/variables from a specific time period (start:end) to the data object at all
+        positions/layers. """
+        if isinstance(var, list) or isinstance(var, tuple) or isinstance(var, np.ndarray):
+            for v in var:
+                setattr(self.data, v, self.ds.variables[v][start:end, ...])
+        else:
+            setattr(self.data, var, self.ds.variables[var][start:end, ...])
+
+    def load_variable_at_time_at_layer(self, var, start=0, end=-1, layer=0):
+        """ Add a given variable/variables at a given time (start:end) and depth layer to the data object for all
+        positions. """
+        if isinstance(var, list) or isinstance(var, tuple) or isinstance(var, np.ndarray):
+            for v in var:
+                if 'siglay' in self.ds.variables[v].dimensions or 'siglev' in self.ds.variables[v].dimensions:
+                    setattr(self.data, v, self.ds.variables[v][start:end, layer, ...])
+                else:
+                    # This variable has no depth, just return the time range specified.
+                    setattr(self.data, v, self.ds.variables[v][start:end, ...])
+        else:
+            if 'siglay' in self.ds.variables[var].dimensions or 'siglev' in self.ds.variables[var].dimensions:
+                setattr(self.data, var, self.ds.variables[var][start:end, layer, ...])
+            else:
+                setattr(self.data, var, self.ds.variables[var][start:end, ...])
+
+    def closest_time(self, when):
+        """ Find the index of the closest time to the supplied time (datetime object). """
+        try:
+            return np.argwhere(np.abs(self.time.datetime - when))
+        except AttributeError:
+            self.load_time()
+            return np.argwhere(np.abs(self.time.datetime - when))
+
+    def closest_node(self, where, cartesian=False):
+        """ Find the index of the closest node to the supplied position (x, y). Set `cartesian' to True for cartesian 
+        coordinates (defaults to spherical). """
+
+        # Make sure we have the grid data loaded.
+        try:
+            _test = self.grid.x
+        except AttributeError:
+            self.load_grid(zone=self._zone)
+
+        if cartesian:
+            return np.argwhere(np.sqrt((self.grid.x - where[0])**2 + (self.grid.x - where[1])**2))
+        else:
+            return np.argwhere(np.sqrt((self.grid.y - where[0])**2 + (self.grid.y - where[1])**2))
+
+    def closest_element(self, where, cartesian=False):
+        """ Find the index of the closest element to the supplied position (x, y). Set `cartesian' to True for cartesian 
+        coordinates (defaults to spherical). """
+
+        # Make sure we have the grid data loaded.
+        try:
+            _test = self.grid.x
+        except AttributeError:
+            self.load_grid(zone=self._zone)
+
+        if cartesian:
+            return np.argwhere(np.sqrt((self.grid.x - where[0])**2 + (self.grid.x - where[1])**2))
+        else:
+            return np.argwhere(np.sqrt((self.grid.y - where[0])**2 + (self.grid.y - where[1])**2))
 
 
 class ncwrite():
