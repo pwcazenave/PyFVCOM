@@ -401,14 +401,24 @@ class FileReader:
             start, end = False, False  # load everything
 
         nodes, elements, layers, levels = False, False, False, False
+        # Make sure we don't have single values for the dimensions otherwise everything gets squeezed and figuring out
+        # what dimension is where gets difficult.
         if 'node' in self._dims:
             nodes = self._dims['node']
+            if isinstance(nodes, int):
+                nodes = [nodes]
         if 'nele' in self._dims:
             elements = self._dims['nele']
+            if isinstance(elements, int):
+                elements = [elements]
         if 'siglay' in self._dims:
             layers = self._dims['siglay']
+            if isinstance(layers, int):
+                layers = [layers]
         if 'siglev' in self._dims:
             levels = self._dims['siglev']
+            if isinstance(levels, int):
+                levels = [levels]
         self.load_timeseries(variables, start=start, end=end, node=nodes, nele=elements, layer=layers, level=levels)
 
         # Update the dimensions to match the data.
