@@ -58,9 +58,14 @@ class FileReader:
         debug : bool
             Set to True to enable debug output. Defaults to False.
 
-        Author(s):
-        ----------
+        Author(s)
+        ---------
         Pierre Cazenave (Plymouth Marine Laboratory)
+
+        Todo
+        ----
+        - Add support for specifying a subset in space with a bounding box (w/e/s/n)
+        - Add support for specifying a time period with datetime objects (start:end)
 
         """
         self._debug = debug
@@ -80,15 +85,13 @@ class FileReader:
         self.obj_iter = lambda x: [a for a in dir(x) if not a.startswith('__')]
 
         self.ds = Dataset(self._fvcom, 'r')
-        # Load dimensions only at this point.
+
         for dim in self.ds.dimensions:
             setattr(self.dims, dim, self.ds.dimensions[dim].size)
 
-        # Load the time and grid data.
         self._load_time()
         self._load_grid()
 
-        # Load the variables if we've been given any.
         if variables:
             try:
                 self._load_data(self._variables)
