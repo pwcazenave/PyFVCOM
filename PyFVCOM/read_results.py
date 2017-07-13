@@ -78,8 +78,8 @@ class FileReader:
         # Get the things to iterate over for a given object. This is a bit hacky, but until I create separate classes
         # for the dims, time, grid and data objects, this'll have to do.
         self.obj_iter = lambda x: [a for a in dir(x) if not a.startswith('__')]
-        self.ds = Dataset(self._fvcom, 'r')
 
+        self.ds = Dataset(self._fvcom, 'r')
         # Load dimensions only at this point.
         for dim in self.ds.dimensions:
             setattr(self.dims, dim, self.ds.dimensions[dim].size)
