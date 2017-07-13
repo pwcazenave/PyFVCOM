@@ -524,6 +524,8 @@ class FileReader:
                 vertical = 'siglay' in var_dim or 'siglev' in var_dim
                 horizontal = 'node' in var_dim or 'nele' in var_dim
                 if temporal and vertical and horizontal:
+                    if self._debug:
+                        print('1: dims {}'.format(self._dims))
                     if 'siglay' in var_dim and 'node' in var_dim:
                         setattr(self.data, v, self.ds.variables[v][time, layer, node])
                     elif 'siglev' in var_dim and 'node' in var_dim:
@@ -533,16 +535,22 @@ class FileReader:
                     elif 'siglev' in var_dim and 'nele' in var_dim:
                         setattr(self.data, v, self.ds.variables[v][time, level, nele])
                 elif temporal and vertical and not horizontal:
+                    if self._debug:
+                        print('2: dims {}'.format(self._dims))
                     if 'siglay' in var_dim:
                         setattr(self.data, v, self.ds.variables[v][time, layer, ...])
                     elif 'siglev' in var_dim:
                         setattr(self.data, v, self.ds.variables[v][time, level, ...])
                 elif temporal and not vertical and horizontal:
+                    if self._debug:
+                        print('3: dims {}'.format(self._dims))
                     if 'node' in var_dim:
                         setattr(self.data, v, self.ds.variables[v][time, node])
                     elif 'nele' in var_dim:
                         setattr(self.data, v, self.ds.variables[v][time, nele])
                 elif not temporal and vertical and horizontal:
+                    if self._debug:
+                        print('4: dims {}'.format(self._dims))
                     if 'siglay' in var_dim and 'node' in var_dim:
                         setattr(self.data, v, self.ds.variables[v][..., layer, node])
                     elif 'siglev' in var_dim and 'node' in var_dim:
@@ -552,15 +560,22 @@ class FileReader:
                     elif 'siglev' in var_dim and 'nele' in var_dim:
                         setattr(self.data, v, self.ds.variables[v][..., level, nele])
                 elif not temporal and vertical and not horizontal:
+                    if self._debug:
+                        print('5: dims {}'.format(self._dims))
                     if 'siglay' in var_dim:
                         setattr(self.data, v, self.ds.variables[v][..., layer, ...])
                     elif 'siglev' in var_dim:
                         setattr(self.data, v, self.ds.variables[v][..., level, ...])
                 elif not temporal and not vertical and horizontal:
+                    if self._debug:
+                        print('6: dims {}'.format(self._dims))
                     if 'node' in var_dim:
                         setattr(self.data, v, self.ds.variables[v][..., node])
                     elif 'nele' in var_dim:
                         setattr(self.data, v, self.ds.variables[v][..., nele])
+                else:
+                    if self._debug:
+                        print('7: dims {}'.format(self._dims))
 
     def closest_time(self, when):
         """ Find the index of the closest time to the supplied time (datetime object). """
