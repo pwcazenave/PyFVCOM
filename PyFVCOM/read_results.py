@@ -167,7 +167,8 @@ class FileReader:
 
         # Go through all the parts of the data with a time dependency and concatenate them. Leave the grid alone.
         for var in self.obj_iter(idem.data):
-            setattr(idem.data, var, np.concatenate((getattr(idem.data, var), getattr(FVCOM.data, var))))
+            if 'time' in idem.ds.variables[var].dimensions:
+                setattr(idem.data, var, np.concatenate((getattr(idem.data, var), getattr(FVCOM.data, var))))
         for time in self.obj_iter(idem.time):
             setattr(idem.time, time, np.concatenate((getattr(idem.time, time), getattr(FVCOM.time, time))))
 
