@@ -1,6 +1,7 @@
 from __future__ import print_function
 
 import sys
+import copy
 import inspect
 
 import numpy as np
@@ -551,6 +552,35 @@ class FileReader:
             return np.argwhere(np.sqrt((self.grid.x - where[0])**2 + (self.grid.x - where[1])**2))
         else:
             return np.argwhere(np.sqrt((self.grid.y - where[0])**2 + (self.grid.y - where[1])**2))
+
+
+def MFileReader(fvcom, *args, **kwargs):
+    """ Wrapper around FileReader for loading multiple files at once.
+
+    Parameters
+    ----------
+    fvcom : list-like, str
+        List of files to load.
+
+    Additional arguments are passed to `PyFVCOM.read_results.FileReader'.
+
+    Returns
+    -------
+    FVCOM : PyFVCOM.read_results.FileReader
+        Concatenated data from the files in `fvcom'.
+
+    """
+
+    if isinstance(fvcom, str):
+        FVCOM = FileReader(fvcom, *args, **kwargs)
+    else:
+        for file in fvcom:
+            if file == fvcom[0]:
+                FVCOM = FileReader(file, *args, **kwargs)
+            else:
+                FVCOM += FileReader(file, *args, **kwargs)
+
+    return FVCOM
 
 
 class ncwrite():
