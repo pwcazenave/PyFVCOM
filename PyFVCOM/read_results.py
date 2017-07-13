@@ -37,18 +37,20 @@ class FileReader:
             Path to an FVCOM netCDF.
         variables : list-like
             List of variables to extract. If omitted, no variables are extracted, which means you won't be able to
-            add this object to another one which has variables in it.
+            add this object to another one which does have variables in it.
         dims : dict
             Dictionary of dimension names along which to subsample e.g. dims={'time': [0, 100], 'nele': [0, 10, 100],
-            'node': 100}. Only certain combinations are possible:
+            'node': 100}. Times are specified as ranges; horizontal and vertical dimensions (siglay, siglev, node,
+            nele) can be list-like.
+
+            Only certain combinations are possible:
                 - all dimensions
                 - all time, all layers, single/many point(s)
                 - all time, single layer, single/many point(s)
                 - all time, single layer, all points
                 - single time, all layers, all points
                 - single time, single layer, all points
-                - all time, single layer, all points
-                - single time, single layer, all points
+
             To summarise, they include everything except subsetting in all three dimensions i.e. a single point from
             a single layer at a single time, although now I write that, I can't see why we can't do that too.
         zone : str, list-like
