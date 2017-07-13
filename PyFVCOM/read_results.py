@@ -112,7 +112,7 @@ class FileReader:
         Returns
         -------
         NEW : PyFVCOM.FVCOM
-            Concatenated (in time and space) `PyFVCOM.FVCOM' class.
+            Concatenated (in time) `PyFVCOM.FVCOM' class.
 
         Notes
         -----
