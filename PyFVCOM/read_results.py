@@ -476,6 +476,8 @@ class FileReader:
             time = np.arange(self.dims.time)
 
         for v in var:
+            if self._debug:
+                print('Loading: {}'.format(v))
             # Get this variable's dimensions
             var_dim = self.ds.variables[v].dimensions
             if 'time' not in var_dim:
