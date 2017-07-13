@@ -173,10 +173,14 @@ class FileReader:
             setattr(idem.time, time, np.concatenate((getattr(idem.time, time), getattr(FVCOM.time, time))))
 
         # Remove duplicate times.
-        dupes = np.argwhere(np.diff(idem.time.time) == 0)
-            setattr(idem.data, var, np.delete(getattr(idem.data, var), dupes, axis=0))
-            setattr(idem.time, time, np.delete(getattr(idem.time, time), dupes, axis=0))
+        time_indices = np.arange(len(idem.time.time))
+        _, dupes = np.unique(idem.time.time, return_index=True)
+        dupe_indices = np.setdiff1d(time_indices, dupes)
         for var in self.obj_iter(idem.data):
+            # Only delete things with a time dimension.
+            if 'time' in idem.ds.variables[var].dimensions:
+                time_axis = idem.ds.variables[var].dimensions.index('time')
+                setattr(idem.data, var, np.delete(getattr(idem.data, var), dupe_indices, axis=time_axis))
         for time in self.obj_iter(idem.time):
 
         # Update dimensions accordingly.
