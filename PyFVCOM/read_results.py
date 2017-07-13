@@ -336,9 +336,9 @@ class FileReader:
                 var_shape = [i for i in np.shape(self.ds.variables[var])]
                 var_shape[node_index] = self.dims.node
                 _temp = np.empty(var_shape)
-                for node in self._dims['node']:
-                    self.ds.variables[var][..., node]
-                setattr(self.data, var, _temp)
+                for ni, node in enumerate(self._dims['node']):
+                    _temp[..., ni] = self.ds.variables[var][..., node]
+                setattr(self.grid, var, _temp)
         if 'nele' in self._dims:
             self.dims.nele = len(self._dims['nele'])
             for var in 'xc', 'yc', 'lonc', 'latc', 'h_center', 'siglay_center', 'siglev_center':
@@ -353,9 +353,9 @@ class FileReader:
                     else:
                         var_shape = [len(self.dims.siglay), len(self._dims['nele'])]
                 _temp = np.empty(var_shape)
-                for nele in self._dims['nele']:
-                    self.ds.variables[var][..., nele]
-                setattr(self.data, var, _temp)
+                for ni, nele in enumerate(self._dims['nele']):
+                    _temp[..., ni] = self.ds.variables[var][..., nele]
+                setattr(self.grid, var, _temp)
 
             # Redo the triangulation here too.
             new_nv = copy.copy(self.grid.nv[self._dims['nele'], :])
