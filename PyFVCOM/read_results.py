@@ -400,83 +400,16 @@ class FileReader:
         else:
             start, end = False, False  # load everything
 
-        if not got_time and not got_horizontal and not got_vertical:
-            # All dimensions by omission
-            if self._debug:
-                print('1: dims {}'.format(self._dims))
-            self.load_timeseries(variables)
-        elif not got_time and got_horizontal and got_vertical:
-            # Horizontal and vertical
-            if self._debug:
-                print('2: dims {}'.format(self._dims))
-            if 'node' in self._dims:
-                horizontal = self._dims['node']
-            elif 'nele' in self._dims:
-                horizontal = self._dims['nele']
-            if 'siglay' in self._dims:
-                vertical=self._dims['siglay']
-            elif 'siglev' in self._dims:
-                vertical = self._dims['siglev']
-            self.load_timeseries(variables, idx=horizontal, layer=vertical)
-        elif got_time and not got_horizontal and got_vertical:
-            # Time and vertical
-            if self._debug:
-                print('3: dims {}'.format(self._dims))
-            if 'siglay' in self._dims:
-                vertical = self._dims['siglay']
-            elif 'siglev' in self._dims:
-                vertical = self._dims['siglev']
-            self.load_timeseries(variables, start=start, end=end, layer=vertical)
-        elif got_time and got_horizontal and not got_vertical:
-            # Time and horizontal
-            if self._debug:
-                print('4: dims {}'.format(self._dims))
-            if 'node' in self._dims:
-                horizontal = self._dims['node']
-            elif 'nele' in self._dims:
-                horizontal = self._dims['nele']
-            self.load_timeseries(variables, start=start, end=end, layer=horizontal)
-        elif not got_time and not got_horizontal and got_vertical:
-            # Vertical only
-            if self._debug:
-                print('5: dims {}'.format(self._dims))
-            if 'siglay' in self._dims:
-                vertical = self._dims['siglay']
-            elif 'siglev' in self._dims:
-                vertical = self._dims['siglev']
-            self.load_timeseries(variables, layer=vertical)
-        elif not got_time and got_horizontal and not got_vertical:
-            # Horizontal only
-            if self._debug:
-                print('6: dims {}'.format(self._dims))
-            if 'node' in self._dims:
-                horizontal = self._dims['node']
-            elif 'nele' in self._dims:
-                horizontal = self._dims['nele']
-            self.load_timeseries(variables, idx=horizontal)
-        elif got_time and not got_horizontal and not got_vertical:
-            # Time only
-            if self._debug:
-                print('7: dims {}'.format(self._dims))
-            self.load_timeseries(variables, start=start, end=end)
-        elif got_time and got_horizontal and got_vertical:
-            # All dimensions specified
-            if self._debug:
-                print('8: dims {}'.format(self._dims))
-            if 'node' in self._dims:
-                horizontal = self._dims['node']
-            elif 'nele' in self._dims:
-                horizontal = self._dims['nele']
-            if 'siglay' in self._dims:
-                vertical = self._dims['siglay']
-            elif 'siglev' in self._dims:
-                vertical = self._dims['siglev']
-            self.load_timeseries(variables, start=start, end=end, idx=horizontal, layer=vertical)
-        else:
-            # Hmmmm, we shouldn't be able to get here.
-            if self._debug:
-                print('8: dims {}'.format(self._dims))
-            raise Exception("Boo! My logic didn't work!")
+        nodes, elements, layers, levels = False, False, False, False
+        if 'node' in self._dims:
+            nodes = self._dims['node']
+        if 'nele' in self._dims:
+            elements = self._dims['nele']
+        if 'siglay' in self._dims:
+            layers = self._dims['siglay']
+        if 'siglev' in self._dims:
+            levels = self._dims['siglev']
+        self.load_timeseries(variables, start=start, end=end, node=nodes, nele=elements, layer=layers, level=levels)
 
         # Update the dimensions to match the data.
         self._update_dimensions(variables)
@@ -495,9 +428,9 @@ class FileReader:
                 print('{}: {} dimension, old/new: {}/{}'.format(self._fvcom, dim, getattr(self.dims, dim), unique_dims[dim]))
             setattr(self.dims, dim, unique_dims[dim])
 
-    def load_timeseries(self, var, start=False, end=False, stride=False, idx=False, layer=False):
-        """ Add a given variable/variables at the given indices. If any indices are omitted, return all data for the
-        missing dimensions.
+    def load_timeseries(self, var, start=False, end=False, stride=False, node=False, nele=False, layer=False, level=False):
+        """ Add a given variable/variables at the given indices. If any indices are omitted or Falsey, return all
+        data for the missing dimensions.
 
         Parameters
         ----------
@@ -506,15 +439,19 @@ class FileReader:
         start, end, stride : int, optional
             Start and end of the time range to load. If given, stride sets the increment in times (defaults to 1). If
             omitted, start and end default to all times.
-        idx : list-like, int, optional
-            Horizontal spatial indices to load (defaults to all positions).
+        node : list-like, int, optional
+            Horizontal node indices to load (defaults to all positions).
+        nele : list-like, int, optional
+            Horizontal element indices to load (defaults to all positions).
         layer : list-like, int, optional
-            Vertical spatial indices to load (defaults to all positions).
+            Vertical layer indices to load (defaults to all positions).
+        layer : list-like, int, optional
+            Vertical level indices to load (defaults to all positions).
 
         """
 
         if self._debug:
-            print('start: {}, end: {}, stride: {}, idx: {}, layer: {}'.format(start, end, stride, idx, layer))
+            print('start: {}, end: {}, stride: {}, node: {}, nele: {}, layer: {}, level: {}'.format(start, end, stride, node, nele, layer, level))
 
         # Check if we've got iterable variables and make one if not.
         try:
@@ -524,8 +461,10 @@ class FileReader:
 
         # Save the inputs so we can loop through the variables without checking the last loop's values (which
         # otherwise leads to difficult to fix behaviour).
-        original_idx = copy.copy(idx)
+        original_node = copy.copy(node)
+        original_nele = copy.copy(nele)
         original_layer = copy.copy(layer)
+        original_level = copy.copy(level)
 
         # Make the time here as it's independent of the variable in question (unlike the horizontal and vertical
         # dimensions).
@@ -544,42 +483,72 @@ class FileReader:
                 raise ValueError('{} does not contain a time dimension.'.format(v))
 
             # We've not been told to subset in any dimension, so just return early with all the data.
-            if not (start or end or stride or original_layer or original_idx):
+            if not (start or end or stride or original_layer or original_level or original_node or original_nele):
                 setattr(self.data, v, self.ds.variables[v][:])
             else:
                 # Populate indices for omitted values.
                 if not isinstance(original_layer, (list, tuple, np.ndarray)):
                     if not original_layer:
-                        if 'siglay' in var_dim:
-                            layer = np.arange(self.dims.siglay)
-                        else:
-                            layer = np.arange(self.dims.siglev)
-                if not isinstance(original_idx, (list, tuple, np.ndarray)):
-                    if not original_idx:
+                        layer = np.arange(self.dims.siglay)
+                if not isinstance(original_level, (list, tuple, np.ndarray)):
+                    if not original_level:
+                        level = np.arange(self.dims.siglev)
+                if not isinstance(original_node, (list, tuple, np.ndarray)):
+                    if not original_node:
                         # I'm not sure if this is a really terrible idea (from a performance perspective).
-                        if 'node' in var_dim:
-                            idx = np.arange(self.dims.node)
-                        else:
-                            idx = np.arange(self.dims.nele)
+                        node = np.arange(self.dims.node)
+                if not isinstance(original_nele, (list, tuple, np.ndarray)):
+                    if not original_nele:
+                        # I'm not sure if this is a really terrible idea (from a performance perspective).
+                        nele = np.arange(self.dims.nele)
+
 
                 # Check what dimensions this variables has an load the indices accordingly. This is probably an ideal
                 # candidate for optimisation of the indexing (see numpy's fancy indexing or ravel()ing the whole
-                # array and using ranges instead: https://stackoverflow.com/questions/14386822).
+                # array and using ranges instead: https://stackoverflow.com/questions/14386822). This also assumes we
+                # will only ever have a 3D array (4D really, x, y, z, t, but unstructured, so (x,y), z,
+                # t). I can imagine a scenario where we have 4D but that isn't yet a requirement.
                 temporal = 'time' in var_dim
                 vertical = 'siglay' in var_dim or 'siglev' in var_dim
                 horizontal = 'node' in var_dim or 'nele' in var_dim
                 if temporal and vertical and horizontal:
-                    setattr(self.data, v, self.ds.variables[v][time, layer, idx])
+                    if 'siglay' in var_dim and 'node' in var_dim:
+                        setattr(self.data, v, self.ds.variables[v][time, layer, node])
+                    elif 'siglev' in var_dim and 'node' in var_dim:
+                        setattr(self.data, v, self.ds.variables[v][time, level, node])
+                    elif 'siglay' in var_dim and 'nele' in var_dim:
+                        setattr(self.data, v, self.ds.variables[v][time, layer, nele])
+                    elif 'siglev' in var_dim and 'nele' in var_dim:
+                        setattr(self.data, v, self.ds.variables[v][time, level, nele])
                 elif temporal and vertical and not horizontal:
-                    setattr(self.data, v, self.ds.variables[v][time, layer, ...])
+                    if 'siglay' in var_dim:
+                        setattr(self.data, v, self.ds.variables[v][time, layer, ...])
+                    elif 'siglev' in var_dim:
+                        setattr(self.data, v, self.ds.variables[v][time, level, ...])
                 elif temporal and not vertical and horizontal:
-                    setattr(self.data, v, self.ds.variables[v][time, idx])
+                    if 'node' in var_dim:
+                        setattr(self.data, v, self.ds.variables[v][time, node])
+                    elif 'nele' in var_dim:
+                        setattr(self.data, v, self.ds.variables[v][time, nele])
                 elif not temporal and vertical and horizontal:
-                    setattr(self.data, v, self.ds.variables[v][..., layer, idx])
+                    if 'siglay' in var_dim and 'node' in var_dim:
+                        setattr(self.data, v, self.ds.variables[v][..., layer, node])
+                    elif 'siglev' in var_dim and 'node' in var_dim:
+                        setattr(self.data, v, self.ds.variables[v][..., level, node])
+                    elif 'siglay' in var_dim and 'nele' in var_dim:
+                        setattr(self.data, v, self.ds.variables[v][..., layer, nele])
+                    elif 'siglev' in var_dim and 'nele' in var_dim:
+                        setattr(self.data, v, self.ds.variables[v][..., level, nele])
                 elif not temporal and vertical and not horizontal:
-                    setattr(self.data, v, self.ds.variables[v][..., layer, ...])
+                    if 'siglay' in var_dim:
+                        setattr(self.data, v, self.ds.variables[v][..., layer, ...])
+                    elif 'siglev' in var_dim:
+                        setattr(self.data, v, self.ds.variables[v][..., level, ...])
                 elif not temporal and not vertical and horizontal:
-                    setattr(self.data, v, self.ds.variables[v][..., idx])
+                    if 'node' in var_dim:
+                        setattr(self.data, v, self.ds.variables[v][..., node])
+                    elif 'nele' in var_dim:
+                        setattr(self.data, v, self.ds.variables[v][..., nele])
 
     def closest_time(self, when):
         """ Find the index of the closest time to the supplied time (datetime object). """
