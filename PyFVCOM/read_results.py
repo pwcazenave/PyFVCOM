@@ -162,7 +162,7 @@ class FileReader:
             warn('Subsequent attempts to load data for this merged object will only load data from the first object. '
                  'Load data into each object before merging them.')
 
-        # Copy ourselves to a new version for concatenation. self is the old so we get appended to the new.
+        # Copy ourselves to a new version for concatenation. self is the old so we get appended to by the new.
         idem = copy.copy(self)
 
         # Go through all the parts of the data with a time dependency and concatenate them. Leave the grid alone.
