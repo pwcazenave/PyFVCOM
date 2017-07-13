@@ -29,7 +29,7 @@ class FileReader:
 
     """
 
-    def __init__(self, fvcom=None, variables=[], dims=[], zone='30N', debug=False):
+    def __init__(self, fvcom, variables=[], dims=[], zone='30N', debug=False):
         """
         Parameters
         ----------
