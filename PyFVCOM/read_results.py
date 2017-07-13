@@ -148,6 +148,8 @@ class FileReader:
         siglev_compare = self.dims.siglev == FVCOM.dims.siglev
         time_compare = self.time.datetime[-1] <= FVCOM.time.datetime[0]
         data_compare = self.obj_iter(self.data) == self.obj_iter(FVCOM.data)
+        old_data = self.obj_iter(self.data)
+        new_data = self.obj_iter(FVCOM.data)
         if not node_compare:
             raise ValueError('Horizontal nodal data are incompatible.')
         if not nele_compare:
@@ -161,7 +163,7 @@ class FileReader:
                              "`fvcom1' has end {} and `fvcom2' has start {}".format(self.time.datetime[-1], FVCOM.time.datetime[0]))
         if not data_compare:
             raise ValueError('Loaded data sets for each FVCOM class must match.')
-        if not (self.obj_iter(self.data) or self.obj_iter(FVCOM.data)):
+        if not (old_data == new_data) and (old_data or new_data):
             warn('Subsequent attempts to load data for this merged object will only load data from the first object. '
                  'Load data into each object before merging them.')
 
