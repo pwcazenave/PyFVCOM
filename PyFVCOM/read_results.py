@@ -129,16 +129,6 @@ class FileReader:
 
         """
 
-        # debug = debug or self._debug
-        # # Define bounding box
-        # if debug:
-        #     print("Computing bounding box...")
-        # if not (hasattr(self.grid, 'lon') and hasattr(self.grid, 'lat')):
-        #     if debug:
-        #         print("Loading grid data")
-        #     self.load_grid()
-        # bbox = (self.grid.lon.min(), self.grid.lon.max(), self.grid.lat.min(), self.grid.lat.max())
-
         # We need to load the times for ourselves/FVCOM if not already done.
         if not hasattr(self.time, 'time'):
             self.load_time()
