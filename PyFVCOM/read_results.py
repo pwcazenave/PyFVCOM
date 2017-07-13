@@ -75,6 +75,9 @@ class FileReader:
         # Prepare this object with all the objects we'll need later on (data, dims, time, grid).
         self._prep()
 
+        # Get the things to iterate over for a given object. This is a bit hacky, but until I create separate classes
+        # for the dims, time, grid and data objects, this'll have to do.
+        self.obj_iter = lambda x: [a for a in dir(x) if not a.startswith('__')]
         self.ds = Dataset(self._fvcom, 'r')
 
         # Load dimensions only at this point.
@@ -126,10 +129,6 @@ class FileReader:
 
         """
 
-        # Get the things to iterate over for a given object. This is a bit hacky, but until I create separate classes
-        # for the dims, time, grid and data objects, this'll have to do.
-        obj_iter = lambda x: [a for a in dir(x) if not a.startswith('__')]
-
         # debug = debug or self._debug
         # # Define bounding box
         # if debug:
@@ -164,7 +163,7 @@ class FileReader:
             raise ValueError("Time periods are incompatible (`fvcom2' must be greater than or equal to `fvcom').")
         if not data_compare:
             raise ValueError('Loaded data sets for each FVCOM class must match.')
-        if not (obj_iter(self.data) or obj_iter(FVCOM.data)):
+        if not (self.obj_iter(self.data) or self.obj_iter(FVCOM.data)):
             warn('Subsequent attempts to load data for this merged object will only load data from the first object. '
                  'Load data into each object before merging them.')
 
@@ -172,17 +171,17 @@ class FileReader:
         idem = copy.copy(self)
 
         # Go through all the parts of the data with a time dependency and concatenate them. Leave the grid alone.
-        for var in obj_iter(idem.data):
+        for var in self.obj_iter(idem.data):
             setattr(idem.data, var, np.concatenate((getattr(idem.data, var), getattr(FVCOM.data, var))))
-        for time in obj_iter(idem.time):
+        for time in self.obj_iter(idem.time):
             setattr(idem.time, time, np.concatenate((getattr(idem.time, time), getattr(FVCOM.time, time))))
 
         # Remove duplicate times.
         dupes = np.argwhere(np.diff(idem.time.time) == 0)
-        for var in obj_iter(idem.data):
             setattr(idem.data, var, np.delete(getattr(idem.data, var), dupes, axis=0))
-        for time in obj_iter(idem.time):
             setattr(idem.time, time, np.delete(getattr(idem.time, time), dupes, axis=0))
+        for var in self.obj_iter(idem.data):
+        for time in self.obj_iter(idem.time):
 
         # Update dimensions accordingly.
         idem.dims.time = len(idem.time.time)
