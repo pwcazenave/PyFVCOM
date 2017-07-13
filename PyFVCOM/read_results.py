@@ -41,18 +41,8 @@ class FileReader:
         dims : dict
             Dictionary of dimension names along which to subsample e.g. dims={'time': [0, 100], 'nele': [0, 10, 100],
             'node': 100}. Times are specified as ranges; horizontal and vertical dimensions (siglay, siglev, node,
-            nele) can be list-like.
-
-            Only certain combinations are possible:
-                - all dimensions
-                - all time, all layers, single/many point(s)
-                - all time, single layer, single/many point(s)
-                - all time, single layer, all points
-                - single time, all layers, all points
-                - single time, single layer, all points
-
-            To summarise, they include everything except subsetting in all three dimensions i.e. a single point from
-            a single layer at a single time, although now I write that, I can't see why we can't do that too.
+            nele) can be list-like. Any combination of dimensions is possible. Omitted dimensions are loaded in their
+            entirety.
         zone : str, list-like
             UTM zones (defaults to '30N') for conversion of UTM to spherical coordinates.
         debug : bool
