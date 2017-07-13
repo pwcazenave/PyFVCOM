@@ -358,7 +358,7 @@ class FileReader:
                 setattr(self.grid, var, _temp)
 
             # Redo the triangulation here too.
-            new_nv = copy.copy(self.grid.nv[self._dims['nele'], :])
+            new_nv = copy.copy(self.grid.nv[:, self._dims['nele']])
             for i, new in enumerate(np.unique(new_nv)):
                 new_nv[new_nv == new] = i
             self.grid.nv = new_nv
