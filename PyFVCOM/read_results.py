@@ -280,6 +280,11 @@ class FileReader:
         self.time.datenum = date2num(self.time.datetime, units=getattr(self.ds.variables['time'], 'units'))
         self.time.matlabtime = self.time.time + 678942.0  # convert to MATLAB-indexed times from Modified Julian Date.
 
+        # Clip everything to the time indices if we've been given them.
+        if 'time' in self._dims:
+            for time in self.obj_iter(self.time):
+                setattr(self.time, time, getattr(self.time, time)[self._dims['time'][0]:self._dims['time'][1]])
+
     def _load_grid(self):
         """ Load the grid data.
 
