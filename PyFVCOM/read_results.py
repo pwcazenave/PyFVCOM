@@ -67,6 +67,9 @@ class FileReader:
         self._fvcom = fvcom
         self._zone = zone
         self._dims = dims
+        # Silently convert a string variable input to an iterable list.
+        if isinstance(variables, str):
+            variables = [variables]
         self._variables = variables
 
         # Prepare this object with all the objects we'll need later on (data, dims, time, grid).
