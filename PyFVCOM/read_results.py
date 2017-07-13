@@ -434,7 +434,7 @@ class FileReader:
                 else:
                     self.load_variable_at_many_points(var, self._dims[dim])
         else:
-            # All time, all layers, all location(s)
+            # All time, all layers, all locations
             self.load_variable(variables)
 
         # Update the dimensions to match the data. Not sure this is strictly necessary here as the dimensions should have been taken care of in _load_data.
