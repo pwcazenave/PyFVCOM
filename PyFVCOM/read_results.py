@@ -457,9 +457,9 @@ class FileReader:
     def load_variable(self, var):
         """ Add a given variable/variables at all time and in all space to the data object. """
 
-        # Check if we've got an interable and make one if not.
+        # Check if we've got an iterable and make one if not.
         try:
-            var = iter(var)
+            _ = (e for e in var)
         except TypeError:
             var = [var]
         else:
