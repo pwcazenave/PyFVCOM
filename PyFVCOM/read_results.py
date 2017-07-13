@@ -468,6 +468,7 @@ class FileReader:
         for v in var:
             setattr(self.data, v, self.ds.variables[v][:])
 
+    # TODO: These next few functions all feel very hacky. There must be a better way of doing this!
     def load_variable_at_point(self, var, idx):
         """ Add a given variable/variables to the data object for a specific location. """
         if isinstance(var, list) or isinstance(var, tuple) or isinstance(var, np.ndarray):
