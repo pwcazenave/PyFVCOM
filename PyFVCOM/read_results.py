@@ -496,6 +496,8 @@ class FileReader:
 
             # We've not been told to subset in any dimension, so just return early with all the data.
             if not (start or end or stride or original_layer or original_level or original_node or original_nele):
+                if self._debug:
+                    print('0: no dims')
                 setattr(self.data, v, self.ds.variables[v][:])
             else:
                 # Populate indices for omitted values.
