@@ -427,7 +427,6 @@ class FileReader:
                 vertical=self._dims['siglay']
             elif 'siglev' in self._dims:
                 vertical = self._dims['siglev']
-            print('test: {}'.format(vertical))
             self.load_timeseries(variables, idx=horizontal, layer=vertical)
         elif got_time and not got_horizontal and got_vertical:
             # Time and vertical
@@ -437,7 +436,6 @@ class FileReader:
                 vertical = self._dims['siglay']
             elif 'siglev' in self._dims:
                 vertical = self._dims['siglev']
-            print('test: {}'.format(vertical))
             self.load_timeseries(variables, start=start, end=end, layer=vertical)
         elif got_time and got_horizontal and not got_vertical:
             # Time and horizontal
@@ -456,7 +454,6 @@ class FileReader:
                 vertical = self._dims['siglay']
             elif 'siglev' in self._dims:
                 vertical = self._dims['siglev']
-            print('test: {}'.format(vertical))
             self.load_timeseries(variables, layer=vertical)
         elif not got_time and got_horizontal and not got_vertical:
             # Horizontal only
@@ -484,7 +481,6 @@ class FileReader:
                 vertical = self._dims['siglay']
             elif 'siglev' in self._dims:
                 vertical = self._dims['siglev']
-            print('test: {}'.format(vertical))
             self.load_timeseries(variables, start=start, end=end, idx=horizontal, layer=vertical)
         else:
             # Hmmmm, we should be able to get here.
