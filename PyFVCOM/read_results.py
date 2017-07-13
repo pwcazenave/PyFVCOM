@@ -209,9 +209,9 @@ class FileReader:
 
         # Add docstrings for the relevant objects.
         self.data.__doc__ = "This object will contain data as loaded from the netCDFs specified. Use " \
-                            "`FVCOM.load_variable', `FVCOM.load_variable_at_layer', `FVCOM.load_variable_at_time' and " \
-                            "`FVCOM.load_variable_at_time_at_layer' to get specific data. "
-        self.dims.__doc__ = "This contains the dimensions of the data from the given netCDFs. "
+                            "`FVCOM.load_timeseries' to get specific data (optionally at specific locations, times and" \
+                            " depths)."
+        self.dims.__doc__ = "This contains the dimensions of the data from the given netCDFs."
         self.grid.__doc__ = "Use `FVCOM.load_grid' to populate this with the FVCOM grid information. Missing " \
                             "spherical or cartesian coordinates are automatically created depending on which is " \
                             "missing."
