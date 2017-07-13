@@ -437,6 +437,23 @@ class FileReader:
             # All time, all layers, all location(s)
             self.load_variable(variables)
 
+        # Update the dimensions to match the data. Not sure this is strictly necessary here as the dimensions should have been taken care of in _load_data.
+        self._update_dimensions(variables)
+
+    def _update_dimensions(self, variables):
+        # Update the dimensions based on variables we've been given. Construct a list of the unique dimensions in all
+        # the given variables and use that to update self.dims.
+        unique_dims = {}  # {dim_name: size}
+        for var in variables:
+            for dim in self.ds.variables[var].dimensions:
+                if dim not in unique_dims:
+                    dim_index = self.ds.variables[var].dimensions.index(dim)
+                    unique_dims[dim] = getattr(self.data, var).shape[dim_index]
+        for dim in unique_dims:
+            if self._debug:
+                print('{}: {} dimension, old/new: {}/{}'.format(self._fvcom, dim, getattr(self.dims, dim), unique_dims[dim]))
+            setattr(self.dims, dim, unique_dims[dim])
+
     def load_variable(self, var):
         """ Add a given variable/variables at all time and in all space to the data object. """
 
