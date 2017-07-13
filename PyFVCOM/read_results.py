@@ -607,12 +607,6 @@ class FileReader:
         """ Find the index of the closest node to the supplied position (x, y). Set `cartesian' to True for cartesian 
         coordinates (defaults to spherical). """
 
-        # Make sure we have the grid data loaded.
-        try:
-            _test = self.grid.x
-        except AttributeError:
-            self.load_grid(zone=self._zone)
-
         if cartesian:
             return np.argwhere(np.sqrt((self.grid.x - where[0])**2 + (self.grid.x - where[1])**2))
         else:
@@ -621,12 +615,6 @@ class FileReader:
     def closest_element(self, where, cartesian=False):
         """ Find the index of the closest element to the supplied position (x, y). Set `cartesian' to True for cartesian 
         coordinates (defaults to spherical). """
-
-        # Make sure we have the grid data loaded.
-        try:
-            _test = self.grid.x
-        except AttributeError:
-            self.load_grid(zone=self._zone)
 
         if cartesian:
             return np.argwhere(np.sqrt((self.grid.x - where[0])**2 + (self.grid.x - where[1])**2))
