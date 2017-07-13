@@ -474,7 +474,7 @@ class FileReader:
     # TODO: These next few functions all feel very hacky. There must be a better way of doing this!
     def load_variable_at_point(self, var, idx):
         """ Add a given variable/variables to the data object for a specific location. """
-        if isinstance(var, list) or isinstance(var, tuple) or isinstance(var, np.ndarray):
+        if isinstance(var, (list, tuple, np.ndarray)):
             for v in var:
                 setattr(self.data, v, self.ds.variables[v][..., idx])
         else:
@@ -482,7 +482,7 @@ class FileReader:
 
     def load_variable_at_point_at_layer(self, var, idx, layer):
         """ Add a given variable/variables to the data object for a specific location at a specific layer. """
-        if isinstance(var, list) or isinstance(var, tuple) or isinstance(var, np.ndarray):
+        if isinstance(var, (list, tuple, np.ndarray)):
             for v in var:
                 setattr(self.data, v, self.ds.variables[v][..., layer, idx])
         else:
@@ -490,7 +490,7 @@ class FileReader:
 
     def load_variable_at_many_points(self, var, idx):
         """ Add a given variable/variables to the data object for specific horizontal indices at all times/depths. """
-        if isinstance(var, list) or isinstance(var, tuple) or isinstance(var, np.ndarray):
+        if isinstance(var, (list, tuple, np.ndarray)):
             for v in var:
                 if 'siglay' in self.ds.variables[v].dimensions:
                     # 3D
@@ -519,7 +519,7 @@ class FileReader:
     def load_variable_at_many_points_at_layer(self, var, idx, layer):
         """ Add a given variable/variables to the data object for specific horizontal indices at all times and a
         specific depths. """
-        if isinstance(var, list) or isinstance(var, tuple) or isinstance(var, np.ndarray):
+        if isinstance(var, (list, tuple, np.ndarray)):
             for v in var:
                 if 'siglay' in self.ds.variables[v].dimensions:
                     # 3D
@@ -547,7 +547,7 @@ class FileReader:
 
     def load_variable_at_layer(self, var, layer=0):
         """ Add a given variable/variables from a given depth to the data object at all times. """
-        if isinstance(var, list) or isinstance(var, tuple) or isinstance(var, np.ndarray):
+        if isinstance(var, (list, tuple, np.ndarray)):
             for v in var:
                 if 'siglay' in self.ds.variables[v].dimensions or 'siglev' in self.ds.variables[v].dimensions:
                     setattr(self.data, v, self.ds.variables[v][:, layer, :])
@@ -565,7 +565,7 @@ class FileReader:
     def load_variable_at_time(self, var, start=0, end=-1):
         """ Add a variable/variables from a specific time period (start:end) to the data object at all
         positions/layers. """
-        if isinstance(var, list) or isinstance(var, tuple) or isinstance(var, np.ndarray):
+        if isinstance(var, (list, tuple, np.ndarray)):
             for v in var:
                 setattr(self.data, v, self.ds.variables[v][start:end, ...])
         else:
@@ -574,7 +574,7 @@ class FileReader:
     def load_variable_at_time_at_layer(self, var, start=0, end=-1, layer=0):
         """ Add a given variable/variables at a given time (start:end) and depth layer to the data object for all
         positions. """
-        if isinstance(var, list) or isinstance(var, tuple) or isinstance(var, np.ndarray):
+        if isinstance(var, (list, tuple, np.ndarray)):
             for v in var:
                 if 'siglay' in self.ds.variables[v].dimensions or 'siglev' in self.ds.variables[v].dimensions:
                     setattr(self.data, v, self.ds.variables[v][start:end, layer, ...])
@@ -1054,7 +1054,7 @@ def read_probes(files, noisy=False, locations=False, datetimes=False):
     if len(files) == 0:
         raise Exception('No files provided.')
 
-    if not (isinstance(files, list) or isinstance(files, tuple)):
+    if not isinstance(files, (list, tuple)):
         files = [files]
 
     for i, file in enumerate(files):
