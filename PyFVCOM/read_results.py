@@ -70,8 +70,8 @@ class FileReader:
         # Prepare this object with all the objects we'll need later on (data, dims, time, grid).
         self._prep()
 
-        # Get the things to iterate over for a given object. This is a bit hacky, but until I create separate classes
-        # for the dims, time, grid and data objects, this'll have to do.
+        # Get the things to iterate over for a given object. This is a bit hacky, but until or if I create separate
+        # classes for the dims, time, grid and data objects, this'll have to do.
         self.obj_iter = lambda x: [a for a in dir(x) if not a.startswith('__')]
 
         self.ds = Dataset(self._fvcom, 'r')
