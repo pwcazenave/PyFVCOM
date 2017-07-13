@@ -211,7 +211,7 @@ class FileReader:
                             "spherical or cartesian coordinates are automatically created depending on which is " \
                             "missing."
         self.time.__doc__ = "This contains the time data for the given netCDFs. Missing standard FVCOM time variables " \
-                            "are automatically created. "
+                            "are automatically created."
 
     def _load_time(self):
         """ Populate a time object with additional useful time representations from the netCDF time data.
