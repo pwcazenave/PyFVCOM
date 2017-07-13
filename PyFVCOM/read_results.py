@@ -322,6 +322,41 @@ class FileReader:
         else:
             self.grid.siglev_center = nodes2elems(self.grid.triangles, self.grid.siglev)
 
+        # If we've been given dimensions to subset in, do that now. Loading the data first and then subsetting
+        # shouldn't be a problem from a memory perspective because if you don't have enough memory for the grid
+        # data, you probably won't have enough for actually working with the outputs.
+        if 'node' in self._dims:
+            for var in ('x', 'y', 'lon', 'lat', 'h', 'siglay', 'siglev'):
+                node_index = self.ds.variables[var].dimensions.index('node')
+                var_shape = [i for i in np.shape(getattr(self.ds.variables[var]))]
+                var_shape[node_index] = len(self._dims['node'])
+                _temp = np.empty(var_shape)
+                for node in self._dims['node']:
+                    self.ds.variables[var][..., node]
+                setattr(self.data, var, _temp)
+        if 'nele' in self._dims:
+            for var in ('xc', 'yc', 'lonc', 'latc', 'h_center', 'siglay_center', 'siglev_center'):
+                try:
+                    nele_index = self.ds.variables[var].dimensions.index('node')
+                    var_shape = [i for i in np.shape(getattr(self.ds.variables[var]))]
+                except KeyError:
+                    # FVCOM3 files don't have h_center, siglay_center and siglev_center, so make var_shape manually.
+                    if var.startswith('siglev'):
+                        var_shape = [self.dims.siglev, len(self._dims['nele'])]
+                    else:
+                        var_shape = [self.dims.siglay, len(self._dims['nele'])]
+                _temp = np.empty(var_shape)
+                for nele in self._dims['nele']:
+                    self.ds.variables[var][..., nele]
+                setattr(self.data, var, _temp)
+
+            # Redo the triangulation here too.
+            new_nv = copy.copy(self.grid.nv[self._dims['nele'], :])
+            for i, new in enumerate(np.unique(new_nv)):
+                new_nv[new_nv == new] = i
+            self.grid.nv = new_nv
+            self.grid.triangles = new_nv.T - 1
+
         # Check ranges and if zero assume we're missing that particular type, so convert from the other accordingly.
         self.grid.lon_range = _range(self.grid.lon)
         self.grid.lat_range = _range(self.grid.lat)
