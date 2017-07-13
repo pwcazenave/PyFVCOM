@@ -143,14 +143,19 @@ class FileReader:
         nele_compare = self.dims.node == FVCOM.dims.node
         siglay_compare = self.dims.siglay == FVCOM.dims.siglay
         siglev_compare = self.dims.siglev == FVCOM.dims.siglev
-        time_compare = self.time.time[-1] <= FVCOM.time.time[0]
-        data_compare = obj_iter(self.data) == obj_iter(FVCOM.data)
-        if not (node_compare and nele_compare):
-            raise ValueError('Horizontal spatial regions are incompatible.')
-        if not (siglay_compare and siglev_compare):
-            raise ValueError('Vertical spatial regions are incompatible.')
+        time_compare = self.time.datetime[-1] <= FVCOM.time.datetime[0]
+        data_compare = self.obj_iter(self.data) == self.obj_iter(FVCOM.data)
+        if not node_compare:
+            raise ValueError('Horizontal nodal data are incompatible.')
+        if not nele_compare:
+            raise ValueError('Horizontal element data are incompatible.')
+        if not siglay_compare:
+            raise ValueError('Vertical sigma layers are incompatible.')
+        if not siglev_compare:
+            raise ValueError('Vertical sigma levels are incompatible.')
         if not time_compare:
-            raise ValueError("Time periods are incompatible (`fvcom2' must be greater than or equal to `fvcom').")
+            raise ValueError("Time periods are incompatible (`fvcom2' must be greater than or equal to `fvcom')."
+                             "`fvcom1' has end {} and `fvcom2' has start {}".format(self.time.datetime[-1], FVCOM.time.datetime[0]))
         if not data_compare:
             raise ValueError('Loaded data sets for each FVCOM class must match.')
         if not (self.obj_iter(self.data) or self.obj_iter(FVCOM.data)):
