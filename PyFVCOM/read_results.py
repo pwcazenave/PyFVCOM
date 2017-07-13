@@ -12,7 +12,7 @@ from netCDF4 import Dataset, MFDataset, num2date, date2num
 from PyFVCOM.ll2utm import lonlat_from_utm, utm_from_lonlat
 
 
-class FVCOM:
+class FileReader:
     """ Load FVCOM model output.
 
     Class simplifies the preparation of FVCOM model output for analysis with PyFVCOM.
