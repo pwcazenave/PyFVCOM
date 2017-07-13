@@ -483,7 +483,7 @@ class FileReader:
                 vertical = self._dims['siglev']
             self.load_timeseries(variables, start=start, end=end, idx=horizontal, layer=vertical)
         else:
-            # Hmmmm, we should be able to get here.
+            # Hmmmm, we shouldn't be able to get here.
             if self._debug:
                 print('8: dims {}'.format(self._dims))
             raise Exception("Boo! My logic didn't work!")
