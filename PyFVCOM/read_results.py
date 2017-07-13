@@ -94,7 +94,7 @@ class FileReader:
 
         if variables:
             try:
-                self._load_data(self._variables)
+                self._load_timeseries(self._variables)
             except MemoryError:
                 raise MemoryError("Data too large for RAM. Use `dims' to load subsets in space or time or "
                                   "`variables' to request only certain variables.")
@@ -385,7 +385,7 @@ class FileReader:
         if self.grid.lonc_range == 0 and self.grid.latc_range == 0:
             self.grid.xc, self.grid.yc = utm_from_lonlat(self.grid.lonc, self.grid.latc)
 
-    def _load_data(self, variables=None):
+    def _load_timeseries(self, variables=None):
         """ Wrapper to load the relevant parts of the data in the netCDFs we have been given.
 
         TODO: This could really do with a decent set of tests to make sure what I'm trying to do is actually what's
@@ -397,56 +397,102 @@ class FileReader:
         if not variables:
             variables = list(self.ds.variables.keys())
 
-        if 'siglay' in self._dims and 'time' not in self._dims:
-            # All time, specific layer, everywhere
-            self.load_variable_at_layer(variables, self._dims['siglay'])
-        elif 'siglay' in self._dims and 'time' in self._dims:
-            # Given time(s), specific layer, everywhere
-            self.load_variable_at_time_at_layer(variables,
-                                                start=self._dims['time'][0],
-                                                end=self._dims['time'][1],
-                                                layer=self._dims['siglay'])
-        elif 'siglay' in self._dims and 'time' not in self._dims and ('node' in self._dims or 'nele' in self._dims):
-            for var in variables:
-                if 'nele' in self.ds.variables[var].dimensions:
-                    horizontal_dim = 'nele'
-                else:
-                    horizontal_dim = 'node'
-                if 'siglay' in self.ds.variables[var].dimensions:
-                    vertical_dim = 'siglay'
-                else:
-                    vertical_dim = 'siglev'
-                # All times, specific layer, given location(s)
-                if isinstance(self._dims[horizontal_dim], int):
-                    self.load_variable_at_point_at_layer(var,
-                                                         idx=self._dims[horizontal_dim],
-                                                         layer=self._dims[vertical_dim])
-                else:
-                    # For consistency, this should be a separate function like load_variable_at_point and
-                    # load_variable_at_many_points are.
-                    for point in self._dims[horizontal_dim]:
-                        self.load_variable_at_point_at_layer(var,
-                                                             idx=point,
-                                                             layer=self._dims[vertical_dim])
-        elif 'siglay' not in self._dims and 'time' in self._dims:
-            # Given time(s), all layers, everywhere
-            self.load_variable_at_time(variables, start=self._dims['time'][0], end=self._dims['time'][1])
-        elif 'node' in self._dims or 'nele' in self._dims:
-            for var in variables:
-                if 'nele' in self.ds.variables[var].dimensions:
-                    dim = 'nele'
-                else:
-                    dim = 'node'
-                # All time, all layers, given location(s)
-                if isinstance(self._dims[dim], int):
-                    self.load_variable_at_point(var, self._dims[dim])
-                else:
-                    self.load_variable_at_many_points(var, self._dims[dim])
-        else:
-            # All time, all layers, all locations
-            self.load_variable(variables)
+        got_time = 'time' in self._dims
+        got_horizontal = 'node' in self._dims or 'nele' in self._dims
+        got_vertical = 'siglay' in self._dims or 'siglev' in self._dims
 
-        # Update the dimensions to match the data. Not sure this is strictly necessary here as the dimensions should have been taken care of in _load_data.
+        if self._debug:
+            print(self._dims.keys())
+            print('time: {} vertical: {} horizontal: {}'.format(got_time, got_vertical, got_horizontal))
+
+        if got_time:
+            start, end = self._dims['time']
+        else:
+            start, end = False, False  # load everything
+
+        if not got_time and not got_horizontal and not got_vertical:
+            # All dimensions by omission
+            if self._debug:
+                print('1: dims {}'.format(self._dims))
+            self.load_timeseries(variables)
+        elif not got_time and got_horizontal and got_vertical:
+            # Horizontal and vertical
+            if self._debug:
+                print('2: dims {}'.format(self._dims))
+            if 'node' in self._dims:
+                horizontal = self._dims['node']
+            elif 'nele' in self._dims:
+                horizontal = self._dims['nele']
+            if 'siglay' in self._dims:
+                vertical=self._dims['siglay']
+            elif 'siglev' in self._dims:
+                vertical = self._dims['siglev']
+            print('test: {}'.format(vertical))
+            self.load_timeseries(variables, idx=horizontal, layer=vertical)
+        elif got_time and not got_horizontal and got_vertical:
+            # Time and vertical
+            if self._debug:
+                print('3: dims {}'.format(self._dims))
+            if 'siglay' in self._dims:
+                vertical = self._dims['siglay']
+            elif 'siglev' in self._dims:
+                vertical = self._dims['siglev']
+            print('test: {}'.format(vertical))
+            self.load_timeseries(variables, start=start, end=end, layer=vertical)
+        elif got_time and got_horizontal and not got_vertical:
+            # Time and horizontal
+            if self._debug:
+                print('4: dims {}'.format(self._dims))
+            if 'node' in self._dims:
+                horizontal = self._dims['node']
+            elif 'nele' in self._dims:
+                horizontal = self._dims['nele']
+            self.load_timeseries(variables, start=start, end=end, layer=horizontal)
+        elif not got_time and not got_horizontal and got_vertical:
+            # Vertical only
+            if self._debug:
+                print('5: dims {}'.format(self._dims))
+            if 'siglay' in self._dims:
+                vertical = self._dims['siglay']
+            elif 'siglev' in self._dims:
+                vertical = self._dims['siglev']
+            print('test: {}'.format(vertical))
+            self.load_timeseries(variables, layer=vertical)
+        elif not got_time and got_horizontal and not got_vertical:
+            # Horizontal only
+            if self._debug:
+                print('6: dims {}'.format(self._dims))
+            if 'node' in self._dims:
+                horizontal = self._dims['node']
+            elif 'nele' in self._dims:
+                horizontal = self._dims['nele']
+            self.load_timeseries(variables, idx=horizontal)
+        elif got_time and not got_horizontal and not got_vertical:
+            # Time only
+            if self._debug:
+                print('7: dims {}'.format(self._dims))
+            self.load_timeseries(variables, start=start, end=end)
+        elif got_time and got_horizontal and got_vertical:
+            # All dimensions specified
+            if self._debug:
+                print('8: dims {}'.format(self._dims))
+            if 'node' in self._dims:
+                horizontal = self._dims['node']
+            elif 'nele' in self._dims:
+                horizontal = self._dims['nele']
+            if 'siglay' in self._dims:
+                vertical = self._dims['siglay']
+            elif 'siglev' in self._dims:
+                vertical = self._dims['siglev']
+            print('test: {}'.format(vertical))
+            self.load_timeseries(variables, start=start, end=end, idx=horizontal, layer=vertical)
+        else:
+            # Hmmmm, we should be able to get here.
+            if self._debug:
+                print('8: dims {}'.format(self._dims))
+            raise Exception("Boo! My logic didn't work!")
+
+        # Update the dimensions to match the data.
         self._update_dimensions(variables)
 
     def _update_dimensions(self, variables):
@@ -463,135 +509,91 @@ class FileReader:
                 print('{}: {} dimension, old/new: {}/{}'.format(self._fvcom, dim, getattr(self.dims, dim), unique_dims[dim]))
             setattr(self.dims, dim, unique_dims[dim])
 
-    def load_variable(self, var):
-        """ Add a given variable/variables at all time and in all space to the data object. """
+    def load_timeseries(self, var, start=False, end=False, stride=False, idx=False, layer=False):
+        """ Add a given variable/variables at the given indices. If any indices are omitted, return all data for the
+        missing dimensions.
 
-        # Check if we've got an iterable and make one if not.
+        Parameters
+        ----------
+        var : list-like, str
+            List of variables to load.
+        start, end, stride : int, optional
+            Start and end of the time range to load. If given, stride sets the increment in times (defaults to 1). If
+            omitted, start and end default to all times.
+        idx : list-like, int, optional
+            Horizontal spatial indices to load (defaults to all positions).
+        layer : list-like, int, optional
+            Vertical spatial indices to load (defaults to all positions).
+
+        """
+
+        if self._debug:
+            print('start: {}, end: {}, stride: {}, idx: {}, layer: {}'.format(start, end, stride, idx, layer))
+
+        # Check if we've got iterable variables and make one if not.
         try:
             _ = (e for e in var)
         except TypeError:
             var = [var]
+
+        # Save the inputs so we can loop through the variables without checking the last loop's values (which
+        # otherwise leads to difficult to fix behaviour).
+        original_idx = copy.copy(idx)
+        original_layer = copy.copy(layer)
+
+        # Make the time here as it's independent of the variable in question (unlike the horizontal and vertical
+        # dimensions).
+        if not stride:
+            stride = 1
+        if start or end:
+            time = np.arange(start, end, stride)
         else:
-            pass
+            time = np.arange(self.dims.time)
 
         for v in var:
-            setattr(self.data, v, self.ds.variables[v][:])
+            # Get this variable's dimensions
+            var_dim = self.ds.variables[v].dimensions
+            if 'time' not in var_dim:
+                # Should we error here or carry on having warned?
+                raise ValueError('{} does not contain a time dimension.'.format(v))
 
-    # TODO: These next few functions all feel very hacky. There must be a better way of doing this!
-    def load_variable_at_point(self, var, idx):
-        """ Add a given variable/variables to the data object for a specific location. """
-        if isinstance(var, (list, tuple, np.ndarray)):
-            for v in var:
-                setattr(self.data, v, self.ds.variables[v][..., idx])
-        else:
-            setattr(self.data, var, self.ds.variables[var][..., idx])
-
-    def load_variable_at_point_at_layer(self, var, idx, layer):
-        """ Add a given variable/variables to the data object for a specific location at a specific layer. """
-        if isinstance(var, (list, tuple, np.ndarray)):
-            for v in var:
-                setattr(self.data, v, self.ds.variables[v][..., layer, idx])
-        else:
-            setattr(self.data, var, self.ds.variables[var][..., layer, idx])
-
-    def load_variable_at_many_points(self, var, idx):
-        """ Add a given variable/variables to the data object for specific horizontal indices at all times/depths. """
-        if isinstance(var, (list, tuple, np.ndarray)):
-            for v in var:
-                if 'siglay' in self.ds.variables[v].dimensions:
-                    # 3D
-                    setattr(self.data, v, np.zeros((self.dims.time, self.dims.siglev, len(idx))))
-                elif 'siglev' in self.ds.variables[v].dimensions:
-                    # 3D
-                    setattr(self.data, v, np.zeros((self.dims.time, self.dims.siglev, len(idx))))
-                else:
-                    # 2D
-                    setattr(self.data, v, np.zeros((self.dims.time, len(idx))))
-                for i in idx:
-                    getattr(self.data, v)[..., i] = self.load_variable_at_point(self, v, i)
-        else:
-            if 'siglay' in self.ds.variables[var].dimensions:
-                # 3D
-                setattr(self.data, var, np.zeros((self.dims.time, self.dims.siglev, len(idx))))
-            elif 'siglev' in self.ds.variables[var].dimensions:
-                # 3D
-                setattr(self.data, var, np.zeros((self.dims.time, self.dims.siglev, len(idx))))
+            # We've not been told to subset in any dimension, so just return early with all the data.
+            if not (start or end or stride or original_layer or original_idx):
+                setattr(self.data, v, self.ds.variables[v][:])
             else:
-                # 2D
-                setattr(self.data, var, np.zeros((self.dims.time, len(idx))))
-            for i in idx:
-                getattr(self.data, var)[..., i] = self.load_variable_at_point(self, var, i)
+                # Populate indices for omitted values.
+                if not isinstance(original_layer, (list, tuple, np.ndarray)):
+                    if not original_layer:
+                        if 'siglay' in var_dim:
+                            layer = np.arange(self.dims.siglay)
+                        else:
+                            layer = np.arange(self.dims.siglev)
+                if not isinstance(original_idx, (list, tuple, np.ndarray)):
+                    if not original_idx:
+                        # I'm not sure if this is a really terrible idea (from a performance perspective).
+                        if 'node' in var_dim:
+                            idx = np.arange(self.dims.node)
+                        else:
+                            idx = np.arange(self.dims.nele)
 
-    def load_variable_at_many_points_at_layer(self, var, idx, layer):
-        """ Add a given variable/variables to the data object for specific horizontal indices at all times and a
-        specific depths. """
-        if isinstance(var, (list, tuple, np.ndarray)):
-            for v in var:
-                if 'siglay' in self.ds.variables[v].dimensions:
-                    # 3D
-                    setattr(self.data, v, np.zeros((self.dims.time, len(idx))))
-                elif 'siglev' in self.ds.variables[v].dimensions:
-                    # 3D
-                    setattr(self.data, v, np.zeros((self.dims.time, len(idx))))
-                else:
-                    # 2D
-                    setattr(self.data, v, np.zeros((self.dims.time, len(idx))))
-                for i in idx:
-                    getattr(self.data, v)[..., i] = self.load_variable_at_point_at_layer(self, v, i, layer)
-        else:
-            if 'siglay' in self.ds.variables[var].dimensions:
-                # 3D
-                setattr(self.data, var, np.zeros((self.dims.time, len(idx))))
-            elif 'siglev' in self.ds.variables[var].dimensions:
-                # 3D
-                setattr(self.data, var, np.zeros((self.dims.time, len(idx))))
-            else:
-                # 2D
-                setattr(self.data, var, np.zeros((self.dims.time, len(idx))))
-            for i in idx:
-                getattr(self.data, var)[..., i] = self.load_variable_at_point_at_layer(self, var, i, layer)
-
-    def load_variable_at_layer(self, var, layer=0):
-        """ Add a given variable/variables from a given depth to the data object at all times. """
-        if isinstance(var, (list, tuple, np.ndarray)):
-            for v in var:
-                if 'siglay' in self.ds.variables[v].dimensions or 'siglev' in self.ds.variables[v].dimensions:
-                    setattr(self.data, v, self.ds.variables[v][:, layer, :])
-                else:
-                    # This variable has no depth, just return the whole thing.
-                    setattr(self.data, v, self.ds.variables[v][:])
-
-        else:
-            if 'siglay' in self.ds.variables[var].dimensions or 'siglev' in self.ds.variables[var].dimensions:
-                setattr(self.data, var, self.ds.variables[var][:, layer, :])
-            else:
-                # This variable has no depth, just return the whole thing.
-                setattr(self.data, var, self.ds.variables[var][:])
-
-    def load_variable_at_time(self, var, start=0, end=-1):
-        """ Add a variable/variables from a specific time period (start:end) to the data object at all
-        positions/layers. """
-        if isinstance(var, (list, tuple, np.ndarray)):
-            for v in var:
-                setattr(self.data, v, self.ds.variables[v][start:end, ...])
-        else:
-            setattr(self.data, var, self.ds.variables[var][start:end, ...])
-
-    def load_variable_at_time_at_layer(self, var, start=0, end=-1, layer=0):
-        """ Add a given variable/variables at a given time (start:end) and depth layer to the data object for all
-        positions. """
-        if isinstance(var, (list, tuple, np.ndarray)):
-            for v in var:
-                if 'siglay' in self.ds.variables[v].dimensions or 'siglev' in self.ds.variables[v].dimensions:
-                    setattr(self.data, v, self.ds.variables[v][start:end, layer, ...])
-                else:
-                    # This variable has no depth, just return the time range specified.
-                    setattr(self.data, v, self.ds.variables[v][start:end, ...])
-        else:
-            if 'siglay' in self.ds.variables[var].dimensions or 'siglev' in self.ds.variables[var].dimensions:
-                setattr(self.data, var, self.ds.variables[var][start:end, layer, ...])
-            else:
-                setattr(self.data, var, self.ds.variables[var][start:end, ...])
+                # Check what dimensions this variables has an load the indices accordingly. This is probably an ideal
+                # candidate for optimisation of the indexing (see numpy's fancy indexing or ravel()ing the whole
+                # array and using ranges instead: https://stackoverflow.com/questions/14386822).
+                temporal = 'time' in var_dim
+                vertical = 'siglay' in var_dim or 'siglev' in var_dim
+                horizontal = 'node' in var_dim or 'nele' in var_dim
+                if temporal and vertical and horizontal:
+                    setattr(self.data, v, self.ds.variables[v][time, layer, idx])
+                elif temporal and vertical and not horizontal:
+                    setattr(self.data, v, self.ds.variables[v][time, layer, ...])
+                elif temporal and not vertical and horizontal:
+                    setattr(self.data, v, self.ds.variables[v][time, idx])
+                elif not temporal and vertical and horizontal:
+                    setattr(self.data, v, self.ds.variables[v][..., layer, idx])
+                elif not temporal and vertical and not horizontal:
+                    setattr(self.data, v, self.ds.variables[v][..., layer, ...])
+                elif not temporal and not vertical and horizontal:
+                    setattr(self.data, v, self.ds.variables[v][..., idx])
 
     def closest_time(self, when):
         """ Find the index of the closest time to the supplied time (datetime object). """
