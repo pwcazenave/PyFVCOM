@@ -122,13 +122,6 @@ class FileReader:
 
         """
 
-        # We need to load the times for ourselves/FVCOM if not already done.
-        if not hasattr(self.time, 'time'):
-            self.load_time()
-
-        if not hasattr(FVCOM.time, 'time'):
-            FVCOM.load_time()
-
         # Compare our current grid and time with the supplied one to make sure we're dealing with the same model
         # configuration. We also need to make sure we've got the same set of data (if any). We'll warn if we've got
         # no data loaded that we can't do subsequent data loads.
