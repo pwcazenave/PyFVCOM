@@ -287,10 +287,6 @@ class FileReader:
         self.grid.triangles = copy.copy(self.grid.nv.T - 1)  # zero-indexed for python
 
         # Get the grid data.
-        # TODO: If we have a subset in nodes/elems, we need to adjust the coordinate ranges here.
-        # if self._subset:
-        #     for grid in lon, lat, x, y:
-        #         setattr(self.grid, grid, getattr(self.grid, grid)[idx]
         for grid in 'lon', 'lat', 'x', 'y', 'lonc', 'latc', 'xc', 'yc', 'h', 'siglay', 'siglev':
             setattr(self.grid, grid, self.ds.variables[grid][:])
 
