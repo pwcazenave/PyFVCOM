@@ -265,7 +265,6 @@ class FileReader:
                 self.time.datetime = [datetime.strptime(d, '%Y/%m/%d %H:%M:%S.%f') for d in self.time.Times]
         else:
             self.time.datetime = _dates
-        self.time.datenum = date2num(self.time.datetime, units=getattr(self.ds.variables['time'], 'units'))
         self.time.matlabtime = self.time.time + 678942.0  # convert to MATLAB-indexed times from Modified Julian Date.
 
         # Clip everything to the time indices if we've been given them.
