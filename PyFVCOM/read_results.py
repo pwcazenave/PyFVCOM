@@ -288,7 +288,14 @@ class FileReader:
 
         # Get the grid data.
         for grid in 'lon', 'lat', 'x', 'y', 'lonc', 'latc', 'xc', 'yc', 'h', 'siglay', 'siglev':
-            setattr(self.grid, grid, self.ds.variables[grid][:])
+            try:
+                setattr(self.grid, grid, self.ds.variables[grid][:])
+            except KeyError:
+                # Make zeros for this missing variable so we can convert from the non-missing data below.
+                if grid.endswith('c'):
+                    setattr(self.grid, grid, np.zeros(self.dims.nele).T)
+                else:
+                    setattr(self.grid, grid, np.zeros(self.dims.node).T)
 
         # Add compatibility for FVCOM3 (these variables are only specified on the element centres in FVCOM4+ output
         # files).
