@@ -482,7 +482,7 @@ class FileReader:
             var_dim = self.ds.variables[v].dimensions
             if 'time' not in var_dim:
                 # Should we error here or carry on having warned?
-                raise ValueError('{} does not contain a time dimension.'.format(v))
+                warn('{} does not contain a time dimension.'.format(v))
 
             # We've not been told to subset in any dimension, so just return early with all the data.
             if not (start or end or stride or original_layer or original_level or original_node or original_nele):
