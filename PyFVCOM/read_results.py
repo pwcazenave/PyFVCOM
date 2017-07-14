@@ -299,17 +299,17 @@ class FileReader:
         if 'h_center' in self.ds.variables:
             self.grid.h_center = self.ds.variables['h_center'][:]
         else:
-            self.grid.h_center = nodes2elems(self.grid.triangles, self.grid.h)
+            self.grid.h_center = nodes2elems(self.grid.h, self.grid.triangles)
 
         if 'siglay_center' in self.ds.variables:
             self.grid.siglay_center = self.ds.variables['siglay_center'][:]
         else:
-            self.grid.siglay_center = nodes2elems(self.grid.triangles, self.grid.siglay)
+            self.grid.siglay_center = nodes2elems(self.grid.siglay, self.grid.triangles)
 
         if 'siglev_center' in self.ds.variables:
             self.grid.siglev_center = self.ds.variables['siglev_center'][:]
         else:
-            self.grid.siglev_center = nodes2elems(self.grid.triangles, self.grid.siglev)
+            self.grid.siglev_center = nodes2elems(self.grid.siglev, self.grid.triangles)
 
         # If we've been given dimensions to subset in, do that now. Loading the data first and then subsetting
         # shouldn't be a problem from a memory perspective because if you don't have enough memory for the grid data,
