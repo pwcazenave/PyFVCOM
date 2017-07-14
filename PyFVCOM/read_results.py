@@ -243,7 +243,8 @@ class FileReader:
                     _dates = [datetime.strptime(''.join(t.astype(str)).strip(), '%Y/%m/%d %H:%M:%S.%f') for t in self.time.Times]
             elif 'Itime' in got_time and 'Itime2' in got_time:
                 _dates = num2date(self.Itime + self.Itime2 / 1000.0 / 60 / 60, units=getattr(self.ds.variables['Itime'], 'units'))
-            self.time.time = date2num(_dates, units=getattr(self.ds.variables['Times']))
+            # We're making Modified Julian Days here to replicate FVCOM's 'time' variable.
+            self.time.time = date2num(_dates, units='days since 1858-11-17 00:00:00')
 
         if 'Itime' not in got_time and 'Itime2' not in got_time:
             if 'Times' in got_time:
@@ -253,7 +254,8 @@ class FileReader:
                     _dates = [datetime.strptime(''.join(t.astype(str)).strip(), '%Y/%m/%d %H:%M:%S.%f') for t in self.time.Times]
             elif 'time' in got_time:
                 _dates = num2date(self.time, units=getattr(self.ds.variables['time'], 'units'))
-            _datenum = date2num(_dates, units=getattr(self.ds.variables['Times']))
+            # We're making Modified Julian Days here to replicate FVCOM's 'time' variable.
+            _datenum = date2num(_dates, units='days since 1858-11-17 00:00:00')
             self.time.Itime = np.floor(_datenum)
             self.time.Itime = (_datenum - np.floor(_datenum)) * 1000 * 60 * 60  # microseconds since midnight
 
