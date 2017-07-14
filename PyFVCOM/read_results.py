@@ -566,8 +566,11 @@ class FileReader:
                     elif 'nele' in var_dim:
                         setattr(self.data, v, self.ds.variables[v][..., nele])
                 else:
+                    # If we've been given dimensions but this variables doesn't have any of those, we'll end up here,
+                    # in which case, just return everything.
                     if self._debug:
-                        print('7: dims {}'.format(self._dims))
+                        print('7: no dims {}'.format(self._dims))
+                    setattr(self.data, v, self.ds.variables[v][:])
 
     def closest_time(self, when):
         """ Find the index of the closest time to the supplied time (datetime object). """
