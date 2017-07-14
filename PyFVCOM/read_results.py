@@ -281,7 +281,7 @@ class FileReader:
 
         """
 
-        _range = lambda x: x.max() - x.min()
+        _range = lambda x: np.max(x) - np.min(x)
 
         self.grid.nv = self.ds.variables['nv'][:]
         self.grid.triangles = self.grid.nv.T - 1  # zero-indexed for python
