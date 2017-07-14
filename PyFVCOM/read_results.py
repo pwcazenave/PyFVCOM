@@ -284,7 +284,7 @@ class FileReader:
         _range = lambda x: np.max(x) - np.min(x)
 
         self.grid.nv = self.ds.variables['nv'][:]
-        self.grid.triangles = self.grid.nv.T - 1  # zero-indexed for python
+        self.grid.triangles = copy.copy(self.grid.nv.T - 1)  # zero-indexed for python
 
         # Get the grid data.
         # TODO: If we have a subset in nodes/elems, we need to adjust the coordinate ranges here.
