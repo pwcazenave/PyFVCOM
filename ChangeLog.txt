@@ -1,3 +1,8 @@
+1.6.2
+-----
+
+Fix broken functionality by using the right name for a function.
+
 1.6.1
 -----
 
