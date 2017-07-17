@@ -289,6 +289,19 @@ class FileReader:
         if self.grid.nv.min() != 1:
             self.grid.nv -= self.grid.nv.min() + 1
             self.grid.triangles -= self.grid.triangles.min()
+        # If we've been given an element dimension to subsample in, fix the triangulation here. We should really
+        # do this for the nodes too.
+        if 'nele' in self._dims:
+            # Redo the triangulation here too.
+            new_nv = copy.copy(self.grid.nv[:, self._dims['nele']])
+            for i, new in enumerate(np.unique(new_nv)):
+                new_nv[new_nv == new] = i
+            self.grid.nv = new_nv
+            self.grid.triangles = new_nv.T - 1
+
+        # Update dimensions to match those we've been given, if any.
+        for dim in self._dims:
+            setattr(self.dims, dim, len(self._dims[dim]))
 
         # Get the grid data.
         for grid in 'lon', 'lat', 'x', 'y', 'lonc', 'latc', 'xc', 'yc', 'h', 'siglay', 'siglev':
@@ -325,12 +338,37 @@ class FileReader:
         if 'node' in self._dims:
             self.dims.node = len(self._dims['node'])
             for var in 'x', 'y', 'lon', 'lat', 'h', 'siglay', 'siglev':
-                node_index = self.ds.variables[var].dimensions.index('node')
-                var_shape = [i for i in np.shape(self.ds.variables[var])]
-                var_shape[node_index] = self.dims.node
-                _temp = np.empty(var_shape)
-                for ni, node in enumerate(self._dims['node']):
-                    _temp[..., ni] = self.ds.variables[var][..., node]
+                try:
+                    node_index = self.ds.variables[var].dimensions.index('node')
+                    var_shape = [i for i in np.shape(self.ds.variables[var])]
+                    var_shape[node_index] = self.dims.node
+                    if 'siglay' in self._dims and 'siglay' in self.ds.variables[var].dimensions:
+                        var_shape[self.ds.variables[var].dimensions.index('siglay')] = self.dims.siglay
+                    elif 'siglev' in self._dims and 'siglev' in self.ds.variables[var].dimensions:
+                        var_shape[self.ds.variables[var].dimensions.index('siglev')] = self.dims.siglay
+                    _temp = np.empty(var_shape)
+                    if 'siglay' in self.ds.variables[var].dimensions:
+                        for ni, node in enumerate(self._dims['node']):
+                            if 'siglay' in self._dims:
+                                _temp[..., ni] = self.ds.variables[var][self._dims['siglay'], node]
+                            else:
+                                _temp[..., ni] = self.ds.variables[var][:, node]
+                    elif 'siglev' in self.ds.variables[var].dimensions:
+                        for ni, node in enumerate(self._dims['node']):
+                            if 'siglev' in self._dims:
+                                _temp[..., ni] = self.ds.variables[var][self._dims['siglev'], node]
+                            else:
+                                _temp[..., ni] = self.ds.variables[var][:, node]
+                    else:
+                        for ni, node in enumerate(self._dims['node']):
+                            _temp[..., ni] = self.ds.variables[var][..., node]
+                except KeyError:
+                    if 'siglay' in var:
+                        _temp = np.empty((self.dims.siglay, self.dims.node))
+                    elif 'siglev' in var:
+                        _temp = np.empty((self.dims.siglev, self.dims.node))
+                    else:
+                        _temp = np.empty(self.dims.node)
                 setattr(self.grid, var, _temp)
         if 'nele' in self._dims:
             self.dims.nele = len(self._dims['nele'])
@@ -339,23 +377,36 @@ class FileReader:
                     nele_index = self.ds.variables[var].dimensions.index('nele')
                     var_shape = [i for i in np.shape(self.ds.variables[var])]
                     var_shape[nele_index] = self.dims.nele
+                    if 'siglay' in self._dims and 'siglay' in self.ds.variables[var].dimensions:
+                        var_shape[self.ds.variables[var].dimensions.index('siglay')] = self.dims.siglay
+                    elif 'siglev' in self._dims and 'siglev' in self.ds.variables[var].dimensions:
+                        var_shape[self.ds.variables[var].dimensions.index('siglev')] = self.dims.siglay
+                    _temp = np.empty(var_shape)
+                    if 'siglay' in self.ds.variables[var].dimensions:
+                        for ni, nele in enumerate(self._dims['nele']):
+                            if 'siglay' in self._dims:
+                                _temp[..., ni] = self.ds.variables[var][self._dims['siglay'], nele]
+                            else:
+                                _temp[..., ni] = self.ds.variables[var][:, nele]
+                    elif 'siglev' in self.ds.variables[var].dimensions:
+                        for ni, nele in enumerate(self._dims['nele']):
+                            if 'siglev' in self._dims:
+                                _temp[..., ni] = self.ds.variables[var][self._dims['siglev'], nele]
+                            else:
+                                _temp[..., ni] = self.ds.variables[var][:, nele]
+                    else:
+                        for ni, nele in enumerate(self._dims['nele']):
+                            _temp[..., ni] = self.ds.variables[var][..., nele]
                 except KeyError:
                     # FVCOM3 files don't have h_center, siglay_center and siglev_center, so make var_shape manually.
                     if var.startswith('siglev'):
-                        var_shape = [len(self.dims.siglev), len(self._dims['nele'])]
+                        var_shape = [self.dims.siglev, self.dims.nele]
+                    elif var.startswith('siglay'):
+                        var_shape = [self.dims.siglay, self.dims.nele]
                     else:
-                        var_shape = [len(self.dims.siglay), len(self._dims['nele'])]
-                _temp = np.empty(var_shape)
-                for ni, nele in enumerate(self._dims['nele']):
-                    _temp[..., ni] = self.ds.variables[var][..., nele]
+                        var_shape = self.dims.nele
+                    _temp = np.zeros(var_shape)
                 setattr(self.grid, var, _temp)
-
-            # Redo the triangulation here too.
-            new_nv = copy.copy(self.grid.nv[:, self._dims['nele']])
-            for i, new in enumerate(np.unique(new_nv)):
-                new_nv[new_nv == new] = i
-            self.grid.nv = new_nv
-            self.grid.triangles = new_nv.T - 1
 
         # Check ranges and if zero assume we're missing that particular type, so convert from the other accordingly.
         self.grid.lon_range = _range(self.grid.lon)
