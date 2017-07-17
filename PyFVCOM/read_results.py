@@ -283,8 +283,12 @@ class FileReader:
 
         _range = lambda x: np.max(x) - np.min(x)
 
-        self.grid.nv = self.ds.variables['nv'][:]
+        self.grid.nv = self.ds.variables['nv'][:].astype(int)  # force integers even though they should already be
         self.grid.triangles = copy.copy(self.grid.nv.T - 1)  # zero-indexed for python
+        # Fix broken triangulations if necessary.
+        if self.grid.nv.min() != 1:
+            self.grid.nv -= self.grid.nv.min() + 1
+            self.grid.triangles -= self.grid.triangles.min()
 
         # Get the grid data.
         for grid in 'lon', 'lat', 'x', 'y', 'lonc', 'latc', 'xc', 'yc', 'h', 'siglay', 'siglev':
