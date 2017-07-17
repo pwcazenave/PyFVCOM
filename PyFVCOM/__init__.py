@@ -20,6 +20,7 @@ from PyFVCOM import ctd_tools
 from PyFVCOM import current_tools
 from PyFVCOM import grid_tools
 from PyFVCOM import ll2utm
+from PyFVCOM import ll2utm as coordinate_tools
 from PyFVCOM import ocean_tools
 from PyFVCOM import stats_tools
 from PyFVCOM import tide_tools

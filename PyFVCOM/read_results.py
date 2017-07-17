@@ -1,13 +1,638 @@
 from __future__ import print_function
 
 import sys
+import copy
 import inspect
 
 import numpy as np
 
 from warnings import warn
 from datetime import datetime
-from netCDF4 import Dataset, MFDataset, num2date
+from netCDF4 import Dataset, MFDataset, num2date, date2num
+
+from PyFVCOM.ll2utm import lonlat_from_utm, utm_from_lonlat
+
+
+class FileReader:
+    """ Load FVCOM model output.
+
+    Class simplifies the preparation of FVCOM model output for analysis with PyFVCOM.
+
+    Author(s)
+    ---------
+    Pierre Cazenave (Plymouth Marine Laboratory)
+
+    Credits
+    -------
+    This code leverages ideas (and in some cases, code) from PySeidon (https://github.com/GrumpyNounours/PySeidon)
+    and PyLag-tools (https://gitlab.em.pml.ac.uk/PyLag/PyLag-tools).
+
+    """
+
+    def __init__(self, fvcom, variables=[], dims=[], zone='30N', debug=False):
+        """
+        Parameters
+        ----------
+        fvcom : str
+            Path to an FVCOM netCDF.
+        variables : list-like
+            List of variables to extract. If omitted, no variables are extracted, which means you won't be able to
+            add this object to another one which does have variables in it.
+        dims : dict
+            Dictionary of dimension names along which to subsample e.g. dims={'time': [0, 100], 'nele': [0, 10, 100],
+            'node': 100}. Times are specified as ranges; horizontal and vertical dimensions (siglay, siglev, node,
+            nele) can be list-like. Any combination of dimensions is possible. Omitted dimensions are loaded in their
+            entirety.
+        zone : str, list-like
+            UTM zones (defaults to '30N') for conversion of UTM to spherical coordinates.
+        debug : bool
+            Set to True to enable debug output. Defaults to False.
+
+        Author(s)
+        ---------
+        Pierre Cazenave (Plymouth Marine Laboratory)
+
+        Todo
+        ----
+        - Add support for specifying a subset in space with a bounding box (w/e/s/n)
+        - Add support for specifying a time period with datetime objects (start:end)
+
+        """
+        self._debug = debug
+        self._fvcom = fvcom
+        self._zone = zone
+        self._dims = dims
+        # Silently convert a string variable input to an iterable list.
+        if isinstance(variables, str):
+            variables = [variables]
+        self._variables = variables
+
+        # Prepare this object with all the objects we'll need later on (data, dims, time, grid).
+        self._prep()
+
+        # Get the things to iterate over for a given object. This is a bit hacky, but until or if I create separate
+        # classes for the dims, time, grid and data objects, this'll have to do.
+        self.obj_iter = lambda x: [a for a in dir(x) if not a.startswith('__')]
+
+        self.ds = Dataset(self._fvcom, 'r')
+
+        for dim in self.ds.dimensions:
+            setattr(self.dims, dim, self.ds.dimensions[dim].size)
+
+        self._load_time()
+        self._load_grid()
+
+        if variables:
+            try:
+                self._load_timeseries(self._variables)
+            except MemoryError:
+                raise MemoryError("Data too large for RAM. Use `dims' to load subsets in space or time or "
+                                  "`variables' to request only certain variables.")
+
+    def __eq__(self, other):
+        # For easy comparison of classes.
+        return self.__dict__ == other.__dict__
+
+    def __add__(self, FVCOM, debug=False):
+        """ This special method means we can stack two FVCOM objects in time through a simple addition (e.g. fvcom1 +=
+        fvcom2)
+
+        Parameters
+        ----------
+        FVCOM : PyFVCOM.FVCOM
+            Previous time to which to add ourselves.
+
+        Returns
+        -------
+        NEW : PyFVCOM.FVCOM
+            Concatenated (in time) `PyFVCOM.FVCOM' class.
+
+        Notes
+        -----
+        - fvcom1 and fvcom2 have to cover the exact same spatial domain
+        - last time step of fvcom1 must be <= to the first time step of fvcom2
+        - if data have not been loaded, then subsequent loads will load only the data from the first netCDF. Make
+        sure you load all your data before you merge objects.
+
+        History
+        -------
+
+        This is a reimplementation of the FvcomClass.__add__ method of `PySeidon'. Modified by Pierre Cazenave for
+        use in `PyFVCOM', mainly because PySeidon isn't compatible with python 3 (yet).
+
+        """
+
+        # Compare our current grid and time with the supplied one to make sure we're dealing with the same model
+        # configuration. We also need to make sure we've got the same set of data (if any). We'll warn if we've got
+        # no data loaded that we can't do subsequent data loads.
+        node_compare = self.dims.nele == FVCOM.dims.nele
+        nele_compare = self.dims.node == FVCOM.dims.node
+        siglay_compare = self.dims.siglay == FVCOM.dims.siglay
+        siglev_compare = self.dims.siglev == FVCOM.dims.siglev
+        time_compare = self.time.datetime[-1] <= FVCOM.time.datetime[0]
+        data_compare = self.obj_iter(self.data) == self.obj_iter(FVCOM.data)
+        old_data = self.obj_iter(self.data)
+        new_data = self.obj_iter(FVCOM.data)
+        if not node_compare:
+            raise ValueError('Horizontal nodal data are incompatible.')
+        if not nele_compare:
+            raise ValueError('Horizontal element data are incompatible.')
+        if not siglay_compare:
+            raise ValueError('Vertical sigma layers are incompatible.')
+        if not siglev_compare:
+            raise ValueError('Vertical sigma levels are incompatible.')
+        if not time_compare:
+            raise ValueError("Time periods are incompatible (`fvcom2' must be greater than or equal to `fvcom')."
+                             "`fvcom1' has end {} and `fvcom2' has start {}".format(self.time.datetime[-1], FVCOM.time.datetime[0]))
+        if not data_compare:
+            raise ValueError('Loaded data sets for each FVCOM class must match.')
+        if not (old_data == new_data) and (old_data or new_data):
+            warn('Subsequent attempts to load data for this merged object will only load data from the first object. '
+                 'Load data into each object before merging them.')
+
+        # Copy ourselves to a new version for concatenation. self is the old so we get appended to by the new.
+        idem = copy.copy(self)
+
+        # Go through all the parts of the data with a time dependency and concatenate them. Leave the grid alone.
+        for var in self.obj_iter(idem.data):
+            if 'time' in idem.ds.variables[var].dimensions:
+                setattr(idem.data, var, np.concatenate((getattr(idem.data, var), getattr(FVCOM.data, var))))
+        for time in self.obj_iter(idem.time):
+            setattr(idem.time, time, np.concatenate((getattr(idem.time, time), getattr(FVCOM.time, time))))
+
+        # Remove duplicate times.
+        time_indices = np.arange(len(idem.time.time))
+        _, dupes = np.unique(idem.time.time, return_index=True)
+        dupe_indices = np.setdiff1d(time_indices, dupes)
+        for var in self.obj_iter(idem.data):
+            # Only delete things with a time dimension.
+            if 'time' in idem.ds.variables[var].dimensions:
+                time_axis = idem.ds.variables[var].dimensions.index('time')
+                setattr(idem.data, var, np.delete(getattr(idem.data, var), dupe_indices, axis=time_axis))
+        for time in self.obj_iter(idem.time):
+            try:
+                time_axis = idem.ds.variables[time].dimensions.index('time')
+                setattr(idem.time, time, np.delete(getattr(idem.time, time), dupe_indices, axis=time_axis))
+            except KeyError:
+                # This is hopefully one of the additional time variable which doesn't exist in the netCDF dataset.
+                # Just delete the relevant indices by assuming that time is the first axis.
+                setattr(idem.time, time, np.delete(getattr(idem.time, time), dupe_indices, axis=0))
+
+        # Update dimensions accordingly.
+        idem.dims.time = len(idem.time.time)
+
+        return idem
+
+    def _prep(self):
+        # Create empty object for the grid, dimension, data and time data.
+        self.grid = type('grid', (object,), {})()
+        self.dims = type('dims', (object,), {})()
+        self.data = type('data', (object,), {})()
+        self.time = type('time', (object,), {})()
+
+        # Add docstrings for the relevant objects.
+        self.data.__doc__ = "This object will contain data as loaded from the netCDFs specified. Use " \
+                            "`FVCOM.load_timeseries' to get specific data (optionally at specific locations, times and" \
+                            " depths)."
+        self.dims.__doc__ = "This contains the dimensions of the data from the given netCDFs."
+        self.grid.__doc__ = "Use `FVCOM.load_grid' to populate this with the FVCOM grid information. Missing " \
+                            "spherical or cartesian coordinates are automatically created depending on which is " \
+                            "missing."
+        self.time.__doc__ = "This contains the time data for the given netCDFs. Missing standard FVCOM time variables " \
+                            "are automatically created."
+
+    def _load_time(self):
+        """ Populate a time object with additional useful time representations from the netCDF time data.
+        """
+
+        time_variables = ('time', 'Times', 'Itime', 'Itime2')
+        got_time, missing_time = [], []
+        for time in time_variables:
+            # Since not all of the time_variables specified above are required, only try to load the data if they
+            # exist. We'll raise an error if we don't find any of them though.
+            if time in self.ds.variables:
+                setattr(self.time, time, self.ds.variables[time][:])
+                got_time.append(time)
+            else:
+                missing_time.append(time)
+
+        if len(missing_time) == len(time_variables):
+            raise ValueError('No time variables found in the netCDF.')
+
+        if 'Times' in got_time:
+            # Overwrite the existing Times array with a more sensibly shaped one.
+            self.time.Times = np.asarray([''.join(t.astype(str)).strip() for t in self.time.Times])
+
+        # Make whatever we got into datetime objects and use those to make everything else. Note: the `time' variable
+        # is often the one with the lowest precision, so use the others preferentially over that.
+        if 'Times' not in got_time:
+            if 'time' in got_time:
+                _dates = num2date(self.time, units=getattr(self.ds.variables['time'], 'units'))
+            elif 'Itime' in got_time and 'Itime2' in got_time:
+                _dates = num2date(self.Itime + self.Itime2 / 1000.0 / 60 / 60, units=getattr(self.ds.variables['Itime'], 'units'))
+            try:
+                self.time.Times = [datetime.strftime(d, '%Y-%m-%dT%H:%M:%S.%f') for d in _dates]
+            except ValueError:
+                self.time.Times = [datetime.strftime(d, '%Y/%m/%d %H:%M:%S.%f') for d in _dates]
+
+        if 'time' not in got_time:
+            if 'Times' in got_time:
+                try:
+                    _dates = [datetime.strptime(''.join(t.astype(str)).strip(), '%Y-%m-%dT%H:%M:%S.%f') for t in self.time.Times]
+                except ValueError:
+                    _dates = [datetime.strptime(''.join(t.astype(str)).strip(), '%Y/%m/%d %H:%M:%S.%f') for t in self.time.Times]
+            elif 'Itime' in got_time and 'Itime2' in got_time:
+                _dates = num2date(self.Itime + self.Itime2 / 1000.0 / 60 / 60, units=getattr(self.ds.variables['Itime'], 'units'))
+            # We're making Modified Julian Days here to replicate FVCOM's 'time' variable.
+            self.time.time = date2num(_dates, units='days since 1858-11-17 00:00:00')
+
+        if 'Itime' not in got_time and 'Itime2' not in got_time:
+            if 'Times' in got_time:
+                try:
+                    _dates = [datetime.strptime(''.join(t.astype(str)).strip(), '%Y-%m-%dT%H:%M:%S.%f') for t in self.time.Times]
+                except ValueError:
+                    _dates = [datetime.strptime(''.join(t.astype(str)).strip(), '%Y/%m/%d %H:%M:%S.%f') for t in self.time.Times]
+            elif 'time' in got_time:
+                _dates = num2date(self.time, units=getattr(self.ds.variables['time'], 'units'))
+            # We're making Modified Julian Days here to replicate FVCOM's 'time' variable.
+            _datenum = date2num(_dates, units='days since 1858-11-17 00:00:00')
+            self.time.Itime = np.floor(_datenum)
+            self.time.Itime = (_datenum - np.floor(_datenum)) * 1000 * 60 * 60  # microseconds since midnight
+
+        # Additional nice-to-have time representations.
+        if 'Times' in got_time:
+            try:
+                self.time.datetime = [datetime.strptime(d, '%Y-%m-%dT%H:%M:%S.%f') for d in self.time.Times]
+            except ValueError:
+                self.time.datetime = [datetime.strptime(d, '%Y/%m/%d %H:%M:%S.%f') for d in self.time.Times]
+        else:
+            self.time.datetime = _dates
+        self.time.matlabtime = self.time.time + 678942.0  # convert to MATLAB-indexed times from Modified Julian Date.
+
+        # Clip everything to the time indices if we've been given them.
+        if 'time' in self._dims:
+            for time in self.obj_iter(self.time):
+                setattr(self.time, time, getattr(self.time, time)[self._dims['time'][0]:self._dims['time'][1]])
+
+    def _load_grid(self):
+        """ Load the grid data.
+
+        Convert from UTM to spherical if we haven't got those data in the existing output file.
+
+        """
+
+        _range = lambda x: np.max(x) - np.min(x)
+
+        self.grid.nv = self.ds.variables['nv'][:]
+        self.grid.triangles = copy.copy(self.grid.nv.T - 1)  # zero-indexed for python
+
+        # Get the grid data.
+        for grid in 'lon', 'lat', 'x', 'y', 'lonc', 'latc', 'xc', 'yc', 'h', 'siglay', 'siglev':
+            try:
+                setattr(self.grid, grid, self.ds.variables[grid][:])
+            except KeyError:
+                # Make zeros for this missing variable so we can convert from the non-missing data below.
+                if grid.endswith('c'):
+                    setattr(self.grid, grid, np.zeros(self.dims.nele).T)
+                else:
+                    setattr(self.grid, grid, np.zeros(self.dims.node).T)
+
+        # Add compatibility for FVCOM3 (these variables are only specified on the element centres in FVCOM4+ output
+        # files).
+        if 'h_center' in self.ds.variables:
+            self.grid.h_center = self.ds.variables['h_center'][:]
+        else:
+            self.grid.h_center = nodes2elems(self.grid.h, self.grid.triangles)
+
+        if 'siglay_center' in self.ds.variables:
+            self.grid.siglay_center = self.ds.variables['siglay_center'][:]
+        else:
+            self.grid.siglay_center = nodes2elems(self.grid.siglay, self.grid.triangles)
+
+        if 'siglev_center' in self.ds.variables:
+            self.grid.siglev_center = self.ds.variables['siglev_center'][:]
+        else:
+            self.grid.siglev_center = nodes2elems(self.grid.siglev, self.grid.triangles)
+
+        # If we've been given dimensions to subset in, do that now. Loading the data first and then subsetting
+        # shouldn't be a problem from a memory perspective because if you don't have enough memory for the grid data,
+        # you probably won't have enough for actually working with the outputs. Also update dimensions to match the
+        # given dimensions.
+        if 'node' in self._dims:
+            self.dims.node = len(self._dims['node'])
+            for var in 'x', 'y', 'lon', 'lat', 'h', 'siglay', 'siglev':
+                node_index = self.ds.variables[var].dimensions.index('node')
+                var_shape = [i for i in np.shape(self.ds.variables[var])]
+                var_shape[node_index] = self.dims.node
+                _temp = np.empty(var_shape)
+                for ni, node in enumerate(self._dims['node']):
+                    _temp[..., ni] = self.ds.variables[var][..., node]
+                setattr(self.grid, var, _temp)
+        if 'nele' in self._dims:
+            self.dims.nele = len(self._dims['nele'])
+            for var in 'xc', 'yc', 'lonc', 'latc', 'h_center', 'siglay_center', 'siglev_center':
+                try:
+                    nele_index = self.ds.variables[var].dimensions.index('nele')
+                    var_shape = [i for i in np.shape(self.ds.variables[var])]
+                    var_shape[nele_index] = self.dims.nele
+                except KeyError:
+                    # FVCOM3 files don't have h_center, siglay_center and siglev_center, so make var_shape manually.
+                    if var.startswith('siglev'):
+                        var_shape = [len(self.dims.siglev), len(self._dims['nele'])]
+                    else:
+                        var_shape = [len(self.dims.siglay), len(self._dims['nele'])]
+                _temp = np.empty(var_shape)
+                for ni, nele in enumerate(self._dims['nele']):
+                    _temp[..., ni] = self.ds.variables[var][..., nele]
+                setattr(self.grid, var, _temp)
+
+            # Redo the triangulation here too.
+            new_nv = copy.copy(self.grid.nv[:, self._dims['nele']])
+            for i, new in enumerate(np.unique(new_nv)):
+                new_nv[new_nv == new] = i
+            self.grid.nv = new_nv
+            self.grid.triangles = new_nv.T - 1
+
+        # Check ranges and if zero assume we're missing that particular type, so convert from the other accordingly.
+        self.grid.lon_range = _range(self.grid.lon)
+        self.grid.lat_range = _range(self.grid.lat)
+        self.grid.lonc_range = _range(self.grid.lonc)
+        self.grid.latc_range = _range(self.grid.latc)
+        self.grid.x_range = _range(self.grid.x)
+        self.grid.y_range = _range(self.grid.y)
+        self.grid.xc_range = _range(self.grid.xc)
+        self.grid.yc_range = _range(self.grid.yc)
+
+        if self.grid.lon_range == 0 and self.grid.lat_range == 0:
+            self.grid.lon, self.grid.lat = lonlat_from_utm(self.grid.x, self.grid.y, zone=self._zone)
+        if self.grid.lonc_range == 0 and self.grid.latc_range == 0:
+            self.grid.lonc, self.grid.latc = lonlat_from_utm(self.grid.xc, self.grid.yc, zone=self._zone)
+        if self.grid.lon_range == 0 and self.grid.lat_range == 0:
+            self.grid.x, self.grid.y = utm_from_lonlat(self.grid.lon, self.grid.lat)
+        if self.grid.lonc_range == 0 and self.grid.latc_range == 0:
+            self.grid.xc, self.grid.yc = utm_from_lonlat(self.grid.lonc, self.grid.latc)
+
+    def _load_timeseries(self, variables=None):
+        """ Wrapper to load the relevant parts of the data in the netCDFs we have been given.
+
+        TODO: This could really do with a decent set of tests to make sure what I'm trying to do is actually what's
+        being done.
+
+        """
+
+        # Get a list of all the variables from the netCDF dataset.
+        if not variables:
+            variables = list(self.ds.variables.keys())
+
+        got_time = 'time' in self._dims
+        got_horizontal = 'node' in self._dims or 'nele' in self._dims
+        got_vertical = 'siglay' in self._dims or 'siglev' in self._dims
+
+        if self._debug:
+            print(self._dims.keys())
+            print('time: {} vertical: {} horizontal: {}'.format(got_time, got_vertical, got_horizontal))
+
+        if got_time:
+            start, end = self._dims['time']
+        else:
+            start, end = False, False  # load everything
+
+        nodes, elements, layers, levels = False, False, False, False
+        # Make sure we don't have single values for the dimensions otherwise everything gets squeezed and figuring out
+        # what dimension is where gets difficult.
+        if 'node' in self._dims:
+            nodes = self._dims['node']
+            if isinstance(nodes, int):
+                nodes = [nodes]
+        if 'nele' in self._dims:
+            elements = self._dims['nele']
+            if isinstance(elements, int):
+                elements = [elements]
+        if 'siglay' in self._dims:
+            layers = self._dims['siglay']
+            if isinstance(layers, int):
+                layers = [layers]
+        if 'siglev' in self._dims:
+            levels = self._dims['siglev']
+            if isinstance(levels, int):
+                levels = [levels]
+        self.load_timeseries(variables, start=start, end=end, node=nodes, nele=elements, layer=layers, level=levels)
+
+        # Update the dimensions to match the data.
+        self._update_dimensions(variables)
+
+    def _update_dimensions(self, variables):
+        # Update the dimensions based on variables we've been given. Construct a list of the unique dimensions in all
+        # the given variables and use that to update self.dims.
+        unique_dims = {}  # {dim_name: size}
+        for var in variables:
+            for dim in self.ds.variables[var].dimensions:
+                if dim not in unique_dims:
+                    dim_index = self.ds.variables[var].dimensions.index(dim)
+                    unique_dims[dim] = getattr(self.data, var).shape[dim_index]
+        for dim in unique_dims:
+            if self._debug:
+                print('{}: {} dimension, old/new: {}/{}'.format(self._fvcom, dim, getattr(self.dims, dim), unique_dims[dim]))
+            setattr(self.dims, dim, unique_dims[dim])
+
+    def load_timeseries(self, var, start=False, end=False, stride=False, node=False, nele=False, layer=False, level=False):
+        """ Add a given variable/variables at the given indices. If any indices are omitted or Falsey, return all
+        data for the missing dimensions.
+
+        Parameters
+        ----------
+        var : list-like, str
+            List of variables to load.
+        start, end, stride : int, optional
+            Start and end of the time range to load. If given, stride sets the increment in times (defaults to 1). If
+            omitted, start and end default to all times.
+        node : list-like, int, optional
+            Horizontal node indices to load (defaults to all positions).
+        nele : list-like, int, optional
+            Horizontal element indices to load (defaults to all positions).
+        layer : list-like, int, optional
+            Vertical layer indices to load (defaults to all positions).
+        layer : list-like, int, optional
+            Vertical level indices to load (defaults to all positions).
+
+        """
+
+        if self._debug:
+            print('start: {}, end: {}, stride: {}, node: {}, nele: {}, layer: {}, level: {}'.format(start, end, stride, node, nele, layer, level))
+
+        # Check if we've got iterable variables and make one if not.
+        try:
+            _ = (e for e in var)
+        except TypeError:
+            var = [var]
+
+        # Save the inputs so we can loop through the variables without checking the last loop's values (which
+        # otherwise leads to difficult to fix behaviour).
+        original_node = copy.copy(node)
+        original_nele = copy.copy(nele)
+        original_layer = copy.copy(layer)
+        original_level = copy.copy(level)
+
+        # Make the time here as it's independent of the variable in question (unlike the horizontal and vertical
+        # dimensions).
+        if not stride:
+            stride = 1
+        if start or end:
+            time = np.arange(start, end, stride)
+        else:
+            time = np.arange(self.dims.time)
+
+        for v in var:
+            if self._debug:
+                print('Loading: {}'.format(v))
+            # Get this variable's dimensions
+            var_dim = self.ds.variables[v].dimensions
+            if 'time' not in var_dim:
+                # Should we error here or carry on having warned?
+                warn('{} does not contain a time dimension.'.format(v))
+
+            # We've not been told to subset in any dimension, so just return early with all the data.
+            if not (start or end or stride or original_layer or original_level or original_node or original_nele):
+                if self._debug:
+                    print('0: no dims')
+                setattr(self.data, v, self.ds.variables[v][:])
+            else:
+                # Populate indices for omitted values.
+                if not isinstance(original_layer, (list, tuple, np.ndarray)):
+                    if not original_layer:
+                        layer = np.arange(self.dims.siglay)
+                if not isinstance(original_level, (list, tuple, np.ndarray)):
+                    if not original_level:
+                        level = np.arange(self.dims.siglev)
+                if not isinstance(original_node, (list, tuple, np.ndarray)):
+                    if not original_node:
+                        # I'm not sure if this is a really terrible idea (from a performance perspective).
+                        node = np.arange(self.dims.node)
+                if not isinstance(original_nele, (list, tuple, np.ndarray)):
+                    if not original_nele:
+                        # I'm not sure if this is a really terrible idea (from a performance perspective).
+                        nele = np.arange(self.dims.nele)
+
+
+                # Check what dimensions this variables has an load the indices accordingly. This is probably an ideal
+                # candidate for optimisation of the indexing (see numpy's fancy indexing or ravel()ing the whole
+                # array and using ranges instead: https://stackoverflow.com/questions/14386822). This also assumes we
+                # will only ever have a 3D array (4D really, x, y, z, t, but unstructured, so (x,y), z,
+                # t). I can imagine a scenario where we have 4D but that isn't yet a requirement.
+                temporal = 'time' in var_dim
+                vertical = 'siglay' in var_dim or 'siglev' in var_dim
+                horizontal = 'node' in var_dim or 'nele' in var_dim
+                if temporal and vertical and horizontal:
+                    if self._debug:
+                        print('1: dims {}'.format(self._dims))
+                    if 'siglay' in var_dim and 'node' in var_dim:
+                        setattr(self.data, v, self.ds.variables[v][time, layer, node])
+                    elif 'siglev' in var_dim and 'node' in var_dim:
+                        setattr(self.data, v, self.ds.variables[v][time, level, node])
+                    elif 'siglay' in var_dim and 'nele' in var_dim:
+                        setattr(self.data, v, self.ds.variables[v][time, layer, nele])
+                    elif 'siglev' in var_dim and 'nele' in var_dim:
+                        setattr(self.data, v, self.ds.variables[v][time, level, nele])
+                elif temporal and vertical and not horizontal:
+                    if self._debug:
+                        print('2: dims {}'.format(self._dims))
+                    if 'siglay' in var_dim:
+                        setattr(self.data, v, self.ds.variables[v][time, layer, ...])
+                    elif 'siglev' in var_dim:
+                        setattr(self.data, v, self.ds.variables[v][time, level, ...])
+                elif temporal and not vertical and horizontal:
+                    if self._debug:
+                        print('3: dims {}'.format(self._dims))
+                    if 'node' in var_dim:
+                        setattr(self.data, v, self.ds.variables[v][time, node])
+                    elif 'nele' in var_dim:
+                        setattr(self.data, v, self.ds.variables[v][time, nele])
+                elif not temporal and vertical and horizontal:
+                    if self._debug:
+                        print('4: dims {}'.format(self._dims))
+                    if 'siglay' in var_dim and 'node' in var_dim:
+                        setattr(self.data, v, self.ds.variables[v][..., layer, node])
+                    elif 'siglev' in var_dim and 'node' in var_dim:
+                        setattr(self.data, v, self.ds.variables[v][..., level, node])
+                    elif 'siglay' in var_dim and 'nele' in var_dim:
+                        setattr(self.data, v, self.ds.variables[v][..., layer, nele])
+                    elif 'siglev' in var_dim and 'nele' in var_dim:
+                        setattr(self.data, v, self.ds.variables[v][..., level, nele])
+                elif not temporal and vertical and not horizontal:
+                    if self._debug:
+                        print('5: dims {}'.format(self._dims))
+                    if 'siglay' in var_dim:
+                        setattr(self.data, v, self.ds.variables[v][..., layer, ...])
+                    elif 'siglev' in var_dim:
+                        setattr(self.data, v, self.ds.variables[v][..., level, ...])
+                elif not temporal and not vertical and horizontal:
+                    if self._debug:
+                        print('6: dims {}'.format(self._dims))
+                    if 'node' in var_dim:
+                        setattr(self.data, v, self.ds.variables[v][..., node])
+                    elif 'nele' in var_dim:
+                        setattr(self.data, v, self.ds.variables[v][..., nele])
+                else:
+                    # If we've been given dimensions but this variables doesn't have any of those, we'll end up here,
+                    # in which case, just return everything.
+                    if self._debug:
+                        print('7: no dims {}'.format(self._dims))
+                    setattr(self.data, v, self.ds.variables[v][:])
+
+    def closest_time(self, when):
+        """ Find the index of the closest time to the supplied time (datetime object). """
+        try:
+            return np.argwhere(np.abs(self.time.datetime - when))
+        except AttributeError:
+            self.load_time()
+            return np.argwhere(np.abs(self.time.datetime - when))
+
+    def closest_node(self, where, cartesian=False):
+        """ Find the index of the closest node to the supplied position (x, y). Set `cartesian' to True for cartesian 
+        coordinates (defaults to spherical). """
+
+        if cartesian:
+            return np.argwhere(np.sqrt((self.grid.x - where[0])**2 + (self.grid.x - where[1])**2))
+        else:
+            return np.argwhere(np.sqrt((self.grid.y - where[0])**2 + (self.grid.y - where[1])**2))
+
+    def closest_element(self, where, cartesian=False):
+        """ Find the index of the closest element to the supplied position (x, y). Set `cartesian' to True for cartesian 
+        coordinates (defaults to spherical). """
+
+        if cartesian:
+            return np.argwhere(np.sqrt((self.grid.x - where[0])**2 + (self.grid.x - where[1])**2))
+        else:
+            return np.argwhere(np.sqrt((self.grid.y - where[0])**2 + (self.grid.y - where[1])**2))
+
+
+def MFileReader(fvcom, *args, **kwargs):
+    """ Wrapper around FileReader for loading multiple files at once.
+
+    Parameters
+    ----------
+    fvcom : list-like, str
+        List of files to load.
+
+    Additional arguments are passed to `PyFVCOM.read_results.FileReader'.
+
+    Returns
+    -------
+    FVCOM : PyFVCOM.read_results.FileReader
+        Concatenated data from the files in `fvcom'.
+
+    """
+
+    if isinstance(fvcom, str):
+        FVCOM = FileReader(fvcom, *args, **kwargs)
+    else:
+        for file in fvcom:
+            if file == fvcom[0]:
+                FVCOM = FileReader(file, *args, **kwargs)
+            else:
+                FVCOM += FileReader(file, *args, **kwargs)
+
+    return FVCOM
 
 
 class ncwrite():
@@ -409,7 +1034,7 @@ def read_probes(files, noisy=False, locations=False, datetimes=False):
     if len(files) == 0:
         raise Exception('No files provided.')
 
-    if not (isinstance(files, list) or isinstance(files, tuple)):
+    if not isinstance(files, (list, tuple)):
         files = [files]
 
     for i, file in enumerate(files):
