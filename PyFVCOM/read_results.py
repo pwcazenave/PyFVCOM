@@ -42,7 +42,8 @@ class FileReader:
             Dictionary of dimension names along which to subsample e.g. dims={'time': [0, 100], 'nele': [0, 10, 100],
             'node': 100}. Times are specified as ranges; horizontal and vertical dimensions (siglay, siglev, node,
             nele) can be list-like. Any combination of dimensions is possible. Omitted dimensions are loaded in their
-            entirety.
+            entirety. N.B. The vertical dimensions can only currently be specified with a range (i.e. [0, 5]) rather
+            than a list of layers/levels to extract.
         zone : str, list-like
             UTM zones (defaults to '30N') for conversion of UTM to spherical coordinates.
         debug : bool
@@ -292,6 +293,7 @@ class FileReader:
                       'should be 1 and 0, respectively.'.format(self.grid.nv.min(), self.grid.triangles.min()))
             self.grid.nv = (self.ds.variables['nv'][:].astype(int) - self.ds.variables['nv'][:].astype(int).min()) + 1
             self.grid.triangles = copy.copy(self.grid.nv.T) - 1
+
         # If we've been given an element dimension to subsample in, fix the triangulation here. We should really do
         # this for the nodes too.
         if 'nele' in self._dims:
