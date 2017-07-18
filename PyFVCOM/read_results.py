@@ -322,21 +322,15 @@ class FileReader:
                     setattr(self.grid, grid, np.zeros(self.dims.node).T)
 
         # Add compatibility for FVCOM3 (these variables are only specified on the element centres in FVCOM4+ output
-        # files).
-        if 'h_center' in self.ds.variables:
-            self.grid.h_center = self.ds.variables['h_center'][:]
-        else:
-            self.grid.h_center = nodes2elems(self.grid.h, self.grid.triangles)
-
-        if 'siglay_center' in self.ds.variables:
-            self.grid.siglay_center = self.ds.variables['siglay_center'][:]
-        else:
-            self.grid.siglay_center = nodes2elems(self.grid.siglay, self.grid.triangles)
-
-        if 'siglev_center' in self.ds.variables:
-            self.grid.siglev_center = self.ds.variables['siglev_center'][:]
-        else:
-            self.grid.siglev_center = nodes2elems(self.grid.siglev, self.grid.triangles)
+        # files). Only create the element centred values if we have the same number of nodes as in the triangulation.
+        # This does not occur if we've been asked to extract a different set of nodes and elements, for whatever
+        # reason (e.g. testing).
+        for var in 'h_center', 'siglay_center', 'siglev_center':
+            try:
+                setattr(self.grid, var, self.ds.variables[var][:])
+            except KeyError:
+                 if self.grid.triangles.max() == len(self.grid.x):
+                    setattr(self.grid, var, nodes2elems(getattr(self.grid, var.split('_')[0]), self.grid.triangles))
 
         # If we've been given dimensions to subset in, do that now. Loading the data first and then subsetting
         # shouldn't be a problem from a memory perspective because if you don't have enough memory for the grid data,
