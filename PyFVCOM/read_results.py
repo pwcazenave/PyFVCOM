@@ -283,21 +283,28 @@ class FileReader:
 
         _range = lambda x: np.max(x) - np.min(x)
 
-        self.grid.nv = self.ds.variables['nv'][:].astype(int)  # force integers even though they should already be
+        self.grid.nv = self.ds.variables['nv'][:].astype(int)  # force integers even though they should already be so
         self.grid.triangles = copy.copy(self.grid.nv.T - 1)  # zero-indexed for python
         # Fix broken triangulations if necessary.
         if self.grid.nv.min() != 1:
-            self.grid.nv -= self.grid.nv.min() + 1
-            self.grid.triangles -= self.grid.triangles.min()
-        # If we've been given an element dimension to subsample in, fix the triangulation here. We should really
-        # do this for the nodes too.
+            if self._debug:
+                print('Fixing broken triangulation. Current minimum for nv is {} and for triangles is {} but they '
+                      'should be 1 and 0, respectively.'.format(self.grid.nv.min(), self.grid.triangles.min()))
+            self.grid.nv = (self.ds.variables['nv'][:].astype(int) - self.ds.variables['nv'][:].astype(int).min()) + 1
+            self.grid.triangles = copy.copy(self.grid.nv.T) - 1
+        # If we've been given an element dimension to subsample in, fix the triangulation here. We should really do
+        # this for the nodes too.
         if 'nele' in self._dims:
+            if self._debug:
+                print('Fix triangulation table as we have been asked for only specific elements.')
+                print('Triangulation table minimum/maximum: {}/{}'.format(self.grid.nv[:, self._dims['nele']].min(),
+                                                                          self.grid.nv[:, self._dims['nele']].max()))
             # Redo the triangulation here too.
             new_nv = copy.copy(self.grid.nv[:, self._dims['nele']])
             for i, new in enumerate(np.unique(new_nv)):
                 new_nv[new_nv == new] = i
-            self.grid.nv = new_nv
-            self.grid.triangles = new_nv.T - 1
+            self.grid.nv = new_nv + 1
+            self.grid.triangles = new_nv.T
 
         # Update dimensions to match those we've been given, if any.
         for dim in self._dims:
