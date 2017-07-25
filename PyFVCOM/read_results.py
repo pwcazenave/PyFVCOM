@@ -333,7 +333,7 @@ class FileReader:
             try:
                 setattr(self.grid, var, self.ds.variables[var][:])
             except KeyError:
-                 if self.grid.triangles.max() == len(self.grid.x):
+                if self.grid.nv.max() == len(self.grid.x):
                     setattr(self.grid, var, nodes2elems(getattr(self.grid, var.split('_')[0]), self.grid.triangles))
 
         # If we've been given dimensions to subset in, do that now. Loading the data first and then subsetting
