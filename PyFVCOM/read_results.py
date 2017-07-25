@@ -327,6 +327,8 @@ class FileReader:
                     setattr(self.grid, grid, np.zeros(self.dims.nele).T)
                 else:
                     setattr(self.grid, grid, np.zeros(self.dims.node).T)
+            except ValueError:
+                setattr(self.grid, grid, [0])
 
         # Add compatibility for FVCOM3 (these variables are only specified on the element centres in FVCOM4+ output
         # files). Only create the element centred values if we have the same number of nodes as in the triangulation.
