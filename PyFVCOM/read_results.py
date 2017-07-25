@@ -42,8 +42,9 @@ class FileReader:
             Dictionary of dimension names along which to subsample e.g. dims={'time': [0, 100], 'nele': [0, 10, 100],
             'node': 100}. Times are specified as ranges; horizontal and vertical dimensions (siglay, siglev, node,
             nele) can be list-like. Any combination of dimensions is possible. Omitted dimensions are loaded in their
-            entirety. N.B. The vertical dimensions can only currently be specified with a range (i.e. [0, 5]) rather
-            than a list of layers/levels to extract.
+            entirety.
+            N.B. The vertical dimensions (siglay, siglev) can only be currently specified with a range (i.e. [0, 5])
+            rather than a list of layers/levels to extract.
         zone : str, list-like
             UTM zones (defaults to '30N') for conversion of UTM to spherical coordinates.
         debug : bool
@@ -112,8 +113,8 @@ class FileReader:
         -----
         - fvcom1 and fvcom2 have to cover the exact same spatial domain
         - last time step of fvcom1 must be <= to the first time step of fvcom2
-        - if data have not been loaded, then subsequent loads will load only the data from the first netCDF. Make
-        sure you load all your data before you merge objects.
+        - if variables have not been loaded, then subsequent loads will load only the data from the first netCDF.
+        Make sure you load all your variables before you merge objects.
 
         History
         -------
@@ -135,7 +136,7 @@ class FileReader:
         old_data = self.obj_iter(self.data)
         new_data = self.obj_iter(FVCOM.data)
         if not node_compare:
-            raise ValueError('Horizontal nodal data are incompatible.')
+            raise ValueError('Horizontal node data are incompatible.')
         if not nele_compare:
             raise ValueError('Horizontal element data are incompatible.')
         if not siglay_compare:
@@ -143,8 +144,9 @@ class FileReader:
         if not siglev_compare:
             raise ValueError('Vertical sigma levels are incompatible.')
         if not time_compare:
-            raise ValueError("Time periods are incompatible (`fvcom2' must be greater than or equal to `fvcom')."
-                             "`fvcom1' has end {} and `fvcom2' has start {}".format(self.time.datetime[-1], FVCOM.time.datetime[0]))
+            raise ValueError("Time periods are incompatible (`fvcom2' must be greater than or equal to `fvcom1')."
+                             "`fvcom1' has end {} and `fvcom2' has start {}".format(self.time.datetime[-1],
+                                                                                    FVCOM.time.datetime[0]))
         if not data_compare:
             raise ValueError('Loaded data sets for each FVCOM class must match.')
         if not (old_data == new_data) and (old_data or new_data):
@@ -308,7 +310,8 @@ class FileReader:
             self.grid.nv = new_nv + 1
             self.grid.triangles = new_nv.T
 
-        # Update dimensions to match those we've been given, if any.
+        # Update dimensions to match those we've been given, if any. Omit time here as we shouldn't be touching that
+        # dimension for any variable in use in here.
         for dim in self._dims:
             setattr(self.dims, dim, len(self._dims[dim]))
 
