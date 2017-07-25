@@ -86,7 +86,7 @@ class FileReader:
 
         if variables:
             try:
-                self._load_timeseries(self._variables)
+                self._load_data(self._variables)
             except MemoryError:
                 raise MemoryError("Data too large for RAM. Use `dims' to load subsets in space or time or "
                                   "`variables' to request only certain variables.")
@@ -195,7 +195,7 @@ class FileReader:
 
         # Add docstrings for the relevant objects.
         self.data.__doc__ = "This object will contain data as loaded from the netCDFs specified. Use " \
-                            "`FVCOM.load_timeseries' to get specific data (optionally at specific locations, times and" \
+                            "`FVCOM.load_data' to get specific data (optionally at specific locations, times and" \
                             " depths)."
         self.dims.__doc__ = "This contains the dimensions of the data from the given netCDFs."
         self.grid.__doc__ = "Use `FVCOM.load_grid' to populate this with the FVCOM grid information. Missing " \
@@ -432,7 +432,7 @@ class FileReader:
         if self.grid.lonc_range == 0 and self.grid.latc_range == 0:
             self.grid.xc, self.grid.yc = utm_from_lonlat(self.grid.lonc, self.grid.latc)
 
-    def _load_timeseries(self, variables=None):
+    def _load_data(self, variables=None):
         """ Wrapper to load the relevant parts of the data in the netCDFs we have been given.
 
         TODO: This could really do with a decent set of tests to make sure what I'm trying to do is actually what's
@@ -476,7 +476,7 @@ class FileReader:
             levels = self._dims['siglev']
             if isinstance(levels, int):
                 levels = [levels]
-        self.load_timeseries(variables, start=start, end=end, node=nodes, nele=elements, layer=layers, level=levels)
+        self.load_data(variables, start=start, end=end, node=nodes, nele=elements, layer=layers, level=levels)
 
         # Update the dimensions to match the data.
         self._update_dimensions(variables)
@@ -495,7 +495,7 @@ class FileReader:
                 print('{}: {} dimension, old/new: {}/{}'.format(self._fvcom, dim, getattr(self.dims, dim), unique_dims[dim]))
             setattr(self.dims, dim, unique_dims[dim])
 
-    def load_timeseries(self, var, start=False, end=False, stride=False, node=False, nele=False, layer=False, level=False):
+    def load_data(self, var, start=False, end=False, stride=False, node=False, nele=False, layer=False, level=False):
         """ Add a given variable/variables at the given indices. If any indices are omitted or Falsey, return all
         data for the missing dimensions.
 
