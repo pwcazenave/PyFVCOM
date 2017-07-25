@@ -220,7 +220,6 @@ class FileReader:
                 missing_time.append(time)
 
         if len(missing_time) == len(time_variables):
-            raise ValueError('No time variables found in the netCDF.')
 
         if 'Times' in got_time:
             # Overwrite the existing Times array with a more sensibly shaped one.
@@ -541,7 +540,10 @@ class FileReader:
         if start or end:
             time = np.arange(start, end, stride)
         else:
-            time = np.arange(self.dims.time)
+            try:
+                time = np.arange(self.dims.time)
+            except AttributeError:
+                warn('No time dimension in this netCDF file.')
 
         for v in var:
             if self._debug:
