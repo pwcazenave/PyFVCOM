@@ -220,61 +220,63 @@ class FileReader:
                 missing_time.append(time)
 
         if len(missing_time) == len(time_variables):
-
-        if 'Times' in got_time:
-            # Overwrite the existing Times array with a more sensibly shaped one.
-            self.time.Times = np.asarray([''.join(t.astype(str)).strip() for t in self.time.Times])
-
-        # Make whatever we got into datetime objects and use those to make everything else. Note: the `time' variable
-        # is often the one with the lowest precision, so use the others preferentially over that.
-        if 'Times' not in got_time:
-            if 'time' in got_time:
-                _dates = num2date(self.time, units=getattr(self.ds.variables['time'], 'units'))
-            elif 'Itime' in got_time and 'Itime2' in got_time:
-                _dates = num2date(self.Itime + self.Itime2 / 1000.0 / 60 / 60, units=getattr(self.ds.variables['Itime'], 'units'))
-            try:
-                self.time.Times = [datetime.strftime(d, '%Y-%m-%dT%H:%M:%S.%f') for d in _dates]
-            except ValueError:
-                self.time.Times = [datetime.strftime(d, '%Y/%m/%d %H:%M:%S.%f') for d in _dates]
-
-        if 'time' not in got_time:
-            if 'Times' in got_time:
-                try:
-                    _dates = [datetime.strptime(''.join(t.astype(str)).strip(), '%Y-%m-%dT%H:%M:%S.%f') for t in self.time.Times]
-                except ValueError:
-                    _dates = [datetime.strptime(''.join(t.astype(str)).strip(), '%Y/%m/%d %H:%M:%S.%f') for t in self.time.Times]
-            elif 'Itime' in got_time and 'Itime2' in got_time:
-                _dates = num2date(self.Itime + self.Itime2 / 1000.0 / 60 / 60, units=getattr(self.ds.variables['Itime'], 'units'))
-            # We're making Modified Julian Days here to replicate FVCOM's 'time' variable.
-            self.time.time = date2num(_dates, units='days since 1858-11-17 00:00:00')
-
-        if 'Itime' not in got_time and 'Itime2' not in got_time:
-            if 'Times' in got_time:
-                try:
-                    _dates = [datetime.strptime(''.join(t.astype(str)).strip(), '%Y-%m-%dT%H:%M:%S.%f') for t in self.time.Times]
-                except ValueError:
-                    _dates = [datetime.strptime(''.join(t.astype(str)).strip(), '%Y/%m/%d %H:%M:%S.%f') for t in self.time.Times]
-            elif 'time' in got_time:
-                _dates = num2date(self.time, units=getattr(self.ds.variables['time'], 'units'))
-            # We're making Modified Julian Days here to replicate FVCOM's 'time' variable.
-            _datenum = date2num(_dates, units='days since 1858-11-17 00:00:00')
-            self.time.Itime = np.floor(_datenum)
-            self.time.Itime = (_datenum - np.floor(_datenum)) * 1000 * 60 * 60  # microseconds since midnight
-
-        # Additional nice-to-have time representations.
-        if 'Times' in got_time:
-            try:
-                self.time.datetime = [datetime.strptime(d, '%Y-%m-%dT%H:%M:%S.%f') for d in self.time.Times]
-            except ValueError:
-                self.time.datetime = [datetime.strptime(d, '%Y/%m/%d %H:%M:%S.%f') for d in self.time.Times]
+            warn('No time variables found in the netCDF.')
         else:
-            self.time.datetime = _dates
-        self.time.matlabtime = self.time.time + 678942.0  # convert to MATLAB-indexed times from Modified Julian Date.
+            if 'Times' in got_time:
+                # Overwrite the existing Times array with a more sensibly shaped one.
+                self.time.Times = np.asarray([''.join(t.astype(str)).strip() for t in self.time.Times])
 
-        # Clip everything to the time indices if we've been given them.
-        if 'time' in self._dims:
-            for time in self.obj_iter(self.time):
-                setattr(self.time, time, getattr(self.time, time)[self._dims['time'][0]:self._dims['time'][1]])
+            # Make whatever we got into datetime objects and use those to make everything else. Note: the `time' variable
+            # is often the one with the lowest precision, so use the others preferentially over that.
+            if 'Times' not in got_time:
+                if 'time' in got_time:
+                    _dates = num2date(self.time, units=getattr(self.ds.variables['time'], 'units'))
+                elif 'Itime' in got_time and 'Itime2' in got_time:
+                    _dates = num2date(self.Itime + self.Itime2 / 1000.0 / 60 / 60, units=getattr(self.ds.variables['Itime'], 'units'))
+                try:
+                    self.time.Times = [datetime.strftime(d, '%Y-%m-%dT%H:%M:%S.%f') for d in _dates]
+                except ValueError:
+                    self.time.Times = [datetime.strftime(d, '%Y/%m/%d %H:%M:%S.%f') for d in _dates]
+
+            if 'time' not in got_time:
+                if 'Times' in got_time:
+                    try:
+                        _dates = [datetime.strptime(''.join(t.astype(str)).strip(), '%Y-%m-%dT%H:%M:%S.%f') for t in self.time.Times]
+                    except ValueError:
+                        _dates = [datetime.strptime(''.join(t.astype(str)).strip(), '%Y/%m/%d %H:%M:%S.%f') for t in self.time.Times]
+                elif 'Itime' in got_time and 'Itime2' in got_time:
+                    _dates = num2date(self.Itime + self.Itime2 / 1000.0 / 60 / 60, units=getattr(self.ds.variables['Itime'], 'units'))
+                # We're making Modified Julian Days here to replicate FVCOM's 'time' variable.
+                self.time.time = date2num(_dates, units='days since 1858-11-17 00:00:00')
+
+            if 'Itime' not in got_time and 'Itime2' not in got_time:
+                if 'Times' in got_time:
+                    try:
+                        _dates = [datetime.strptime(''.join(t.astype(str)).strip(), '%Y-%m-%dT%H:%M:%S.%f') for t in self.time.Times]
+                    except ValueError:
+                        _dates = [datetime.strptime(''.join(t.astype(str)).strip(), '%Y/%m/%d %H:%M:%S.%f') for t in self.time.Times]
+                elif 'time' in got_time:
+                    _dates = num2date(self.time, units=getattr(self.ds.variables['time'], 'units'))
+                # We're making Modified Julian Days here to replicate FVCOM's 'time' variable.
+                _datenum = date2num(_dates, units='days since 1858-11-17 00:00:00')
+                self.time.Itime = np.floor(_datenum)
+                self.time.Itime = (_datenum - np.floor(_datenum)) * 1000 * 60 * 60  # microseconds since midnight
+
+            # Additional nice-to-have time representations.
+            if 'Times' in got_time:
+                try:
+                    self.time.datetime = [datetime.strptime(d, '%Y-%m-%dT%H:%M:%S.%f') for d in self.time.Times]
+                except ValueError:
+                    self.time.datetime = [datetime.strptime(d, '%Y/%m/%d %H:%M:%S.%f') for d in self.time.Times]
+            else:
+                self.time.datetime = _dates
+            self.time.matlabtime = self.time.time + 678942.0  # convert to MATLAB-indexed times from Modified Julian Date.
+
+            # Clip everything to the time indices if we've been given them. Update the time dimension too.
+            if 'time' in self._dims:
+                for time in self.obj_iter(self.time):
+                    setattr(self.time, time, getattr(self.time, time)[self._dims['time'][0]:self._dims['time'][1]])
+            self.dims.time = len(self.time.time)
 
     def _load_grid(self):
         """ Load the grid data.
