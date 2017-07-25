@@ -312,7 +312,8 @@ class FileReader:
         # Update dimensions to match those we've been given, if any. Omit time here as we shouldn't be touching that
         # dimension for any variable in use in here.
         for dim in self._dims:
-            setattr(self.dims, dim, len(self._dims[dim]))
+            if dim != 'time':
+                setattr(self.dims, dim, len(self._dims[dim]))
 
         # Get the grid data.
         for grid in 'lon', 'lat', 'x', 'y', 'lonc', 'latc', 'xc', 'yc', 'h', 'siglay', 'siglev':
