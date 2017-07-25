@@ -579,7 +579,6 @@ class FileReader:
                         # I'm not sure if this is a really terrible idea (from a performance perspective).
                         nele = np.arange(self.dims.nele)
 
-
                 # Check what dimensions this variables has an load the indices accordingly. This is probably an ideal
                 # candidate for optimisation of the indexing (see numpy's fancy indexing or ravel()ing the whole
                 # array and using ranges instead: https://stackoverflow.com/questions/14386822). This also assumes we
