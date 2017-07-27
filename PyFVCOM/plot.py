@@ -395,6 +395,10 @@ class Plotter:
         """ Set the title for the current axis. """
         self.axes.set_title(title, fontsize=self.fs)
 
+    def close(self):
+        """ Close the current figure. """
+        plt.close(self.figure)
+
 
 def cm2inch(value):
     """
