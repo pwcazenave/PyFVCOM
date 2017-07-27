@@ -36,7 +36,7 @@ class Plotter:
                  extents=None, vmin=None, vmax=None, mask=None, res='c', fs=10,
                  title=None, cmap='viridis', figsize=(10., 10.), axis_position=None,
                  edgecolors='none', s_stations=20, s_particles=20, linewidth=1.0,
-                 tick_inc=None, cb_label=None, norm=None):
+                 tick_inc=None, cb_label=None, norm=None, m=None):
         """
         Parameters:
         -----------
@@ -106,6 +106,9 @@ class Plotter:
             Normalise the luminance to 0,1. For example, use from
             matplotlib.colors.LogNorm to do log plots of fields.
 
+        m : mpl_toolkits.basemap.Basemap, optional
+            Pass a Basemap object rather than creating one on each invocation.
+
         Author(s):
         -------
         James Clark (PML)
@@ -134,6 +137,7 @@ class Plotter:
         self.tick_inc = tick_inc
         self.cb_label = cb_label
         self.norm = norm
+        self.m = m
 
         # Plot instances (initialise to None for truthiness test later)
         self.quiver_plot = None
@@ -180,18 +184,19 @@ class Plotter:
                                      self.lat.min(), self.lat.max()])
 
         # Create basemap object
-        self.m = Basemap(llcrnrlon=self.extents[:2].min(),
-                         llcrnrlat=self.extents[-2:].min(),
-                         urcrnrlon=self.extents[:2].max(),
-                         urcrnrlat=self.extents[-2:].max(),
-                         rsphere=(6378137.00, 6356752.3142),
-                         resolution=self.res,
-                         projection='merc',
-                         area_thresh=0.1,
-                         lat_0=self.extents[-2:].mean(),
-                         lon_0=self.extents[:2].mean(),
-                         lat_ts=self.extents[-2:].mean(),
-                         ax=self.axes)
+        if not self.m:
+            self.m = Basemap(llcrnrlon=self.extents[:2].min(),
+                             llcrnrlat=self.extents[-2:].min(),
+                             urcrnrlon=self.extents[:2].max(),
+                             urcrnrlat=self.extents[-2:].max(),
+                             rsphere=(6378137.00, 6356752.3142),
+                             resolution=self.res,
+                             projection='merc',
+                             area_thresh=0.1,
+                             lat_0=self.extents[-2:].mean(),
+                             lon_0=self.extents[:2].mean(),
+                             lat_ts=self.extents[-2:].mean(),
+                             ax=self.axes)
 
         self.m.drawmapboundary()
         self.m.drawcoastlines(zorder=2)
