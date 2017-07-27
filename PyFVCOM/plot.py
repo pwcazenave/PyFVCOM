@@ -51,13 +51,13 @@ class Plotter:
             49.96, 50.44])
 
         vmin : float, optional
-            Lower bound to be used on colour bar
+            Lower bound to be used on colour bar (plot_field only).
 
         vmax : float, optional
-            Upper bound to be used colour bar
+            Upper bound to be used colour bar (plot_field only).
 
         mask : float, optional
-            Mask out values < mask
+            Mask out values < mask (plot_field only).
 
         res : string, optional
             Resolution to use when drawing Basemap object
@@ -69,7 +69,7 @@ class Plotter:
             Title to use when creating the plot
 
         cmap : string, optional
-            Colormap to use when shading field data
+            Colormap to use when shading field data (plot_field only).
 
         figure : Figure, optional
             Maplotplotlib Figure object. A figure object is created if not
@@ -274,10 +274,10 @@ class Plotter:
             cmap, if provided.
 
         add_key : bool, optional
-            Add key for the quiver plot.
+            Add key for the quiver plot. Defaults to True.
 
         scale : float, optional
-            Scaling to be provided to arrows with scale_units of inches.
+            Scaling to be provided to arrows with scale_units of inches. Defaults to 1.0.
 
         label : str, optional
             Give label to use for the quiver key (defaults to "`scale' ms^{-1}").
