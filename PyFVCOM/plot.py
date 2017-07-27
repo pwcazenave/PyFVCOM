@@ -8,6 +8,7 @@ from matplotlib.tri.triangulation import Triangulation
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 from PyFVCOM.ll2utm import lonlat_from_utm
+from PyFVCOM.read_results import FileReader
 
 import numpy as np
 
@@ -41,7 +42,7 @@ class Plotter:
         Parameters:
         -----------
         dataset : Dataset
-            netCDF4 Dataset
+            netCDF4 Dataset or PyFVCOM.read_results.FileReader object.
 
         stations : 2D array, optional
             List of station coordinates to be plotted ([[lons], [lats]])
@@ -148,23 +149,39 @@ class Plotter:
         self.cbar = None
         self.line_plot = None
 
+        # Are we working with a FileReader object or a bog-standard netCDF4 Dataset?
+        self._FileReader = False
+        # Should do a isinstance
+        if isinstance(dataset, FileReader):
+            self._FileReader = True
+
         # Initialise the figure
         self.__init_figure()
 
     def __init_figure(self):
         # Read in required grid variables
-        self.n_nodes = len(self.ds.dimensions['node'])
-        self.n_elems = len(self.ds.dimensions['nele'])
-        self.lon = self.ds.variables['lon'][:]
-        self.lat = self.ds.variables['lat'][:]
-        self.lonc = self.ds.variables['lonc'][:]
-        self.latc = self.ds.variables['latc'][:]
-        self.nv = self.ds.variables['nv'][:]
-        if self.nv.min() == 1:
-            self.nv -= 1
+        if self._FileReader:
+            self.n_nodes = getattr(self.ds.dims, 'node')
+            self.n_elems = getattr(self.ds.dims, 'nele')
+            self.lon = self.ds.grid.lon
+            self.lat = self.ds.grid.lat
+            self.lonc = self.ds.grid.lonc
+            self.latc = self.ds.grid.latc
+            self.nv = self.ds.grid.nv
+        else:
+            self.n_nodes = len(self.ds.dimensions['node'])
+            self.n_elems = len(self.ds.dimensions['nele'])
+            self.lon = self.ds.variables['lon'][:]
+            self.lat = self.ds.variables['lat'][:]
+            self.lonc = self.ds.variables['lonc'][:]
+            self.latc = self.ds.variables['latc'][:]
+            self.nv = self.ds.variables['nv'][:]
+
+        if self.nv.min() != 1:
+            self.nv -= self.nv.min()
 
         # Triangles
-        self.triangles = self.nv.transpose()
+        self.triangles = self.nv.transpose() - 1
 
         # Initialise the figure
         if self.figure is None:
