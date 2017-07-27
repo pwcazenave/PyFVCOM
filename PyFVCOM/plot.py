@@ -34,7 +34,7 @@ class Plotter:
 
     def __init__(self, dataset, figure=None, axes=None, stations=None,
                  extents=None, vmin=None, vmax=None, mask=None, res='c', fs=10,
-                 title=None, cmap='jet', figsize=(10., 10.), axis_position=None,
+                 title=None, cmap='viridis', figsize=(10., 10.), axis_position=None,
                  edgecolors='none', s_stations=20, s_particles=20, linewidth=1.0,
                  tick_inc=None, cb_label=None, norm=None):
         """
