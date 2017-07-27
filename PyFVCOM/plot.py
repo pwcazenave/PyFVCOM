@@ -258,7 +258,7 @@ class Plotter:
 
         return
 
-    def plot_quiver(self, u, v, add_key=True, scale=1.0, label=None):
+    def plot_quiver(self, u, v, field=False, add_key=True, scale=1.0, label=None):
         """ Produce quiver plot using u and v velocity components.
 
         Parameters:
@@ -268,6 +268,10 @@ class Plotter:
 
         v : 1D or 2D array
             v-component of the velocity field
+
+        field : 1D or 2D array
+            velocity magnitude field. Used to colour the vectors. Also adds a colour bar which uses the cb_label and
+            cmap, if provided.
 
         add_key : bool, optional
             Add key for the quiver plot.
@@ -281,7 +285,10 @@ class Plotter:
         """
 
         if self.quiver_plot:
-            self.quiver_plot.set_UVC(u, v)
+            if np.any(field):
+                self.quiver_plot.set_UVC(u, v, field)
+            else:
+                self.quiver_plot.set_UVC(u, v)
             return
 
         if not label:
@@ -289,7 +296,16 @@ class Plotter:
 
         x, y = self.m(self.lonc, self.latc)
 
-        self.quiver_plot = self.axes.quiver(x, y, u, v, units='inches', scale_units='inches', scale=scale)
+        if np.any(field):
+            self.quiver_plot = self.axes.quiver(x, y, u, v, field, units='inches', scale_units='inches', scale=scale)
+            divider = make_axes_locatable(self.axes)
+            cax = divider.append_axes("right", size="5%", pad=0.05)
+            self.cbar = self.figure.colorbar(self.quiver_plot, cax=cax)
+            self.cbar.ax.tick_params(labelsize=self.fs)
+            if self.cb_label:
+                self.cbar.set_label(self.cb_label)
+        else:
+            self.quiver_plot = self.axes.quiver(x, y, u, v, units='inches', scale_units='inches', scale=scale)
         if add_key:
             plt.quiverkey(self.quiver_plot, 0.9, 0.9, scale, label, coordinates='axes')
 
