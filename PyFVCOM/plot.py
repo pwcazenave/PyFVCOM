@@ -324,7 +324,7 @@ class Plotter:
         else:
             self.quiver_plot = self.axes.quiver(x, y, u, v, units='inches', scale_units='inches', scale=scale)
         if add_key:
-            plt.quiverkey(self.quiver_plot, 0.9, 0.9, scale, label, coordinates='axes')
+            self.quiver_key = plt.quiverkey(self.quiver_plot, 0.9, 0.9, scale, label, coordinates='axes')
 
         return
 
