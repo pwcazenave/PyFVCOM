@@ -15,6 +15,7 @@ import numpy as np
 
 from lxml import etree
 from warnings import warn
+from collections import namedtuple
 
 from PyFVCOM.grid_tools import find_nearest_point
 
@@ -862,6 +863,42 @@ def overlap(t1start, t1end, t2start, t2end):
 
     return (t1start <= t2start <= t1end) or (t2start <= t1start <= t2end)
 
+def common_time(times1, times2):
+    """
+    Return the common date rage in two time series. At least three dates are
+    required for a valid overlapping time.
+
+    Neither date range supplied need have the same sampling or number of
+    times.
+
+    Parameters
+    ----------
+    times1 : list-like
+        First time range (datetime objects). At least three values required.
+    times2 : list-like
+        Second time range (formatted as above).
+
+    Returns
+    -------
+    common_time : tuple
+        Start and end times indicating the common period between the two data
+        sets.
+
+    References
+    ----------
+
+    Shamelessly copied from https://stackoverflow.com/questions/9044084.
+
+    """
+    if len(times1) < 3 or len(times2) < 3:
+        raise ValueError('Too few times for an overlap (times1 = {}, times2 = {})'.format(len(times1), len(times2)))
+    Range = namedtuple('Range', ['start', 'end'])
+    r1 = Range(start=times1[0], end=times1[-1])
+    r2 = Range(start=times2[0], end=times2[-1])
+    latest_start = max(r1.start, r2.start)
+    earliest_end = min(r1.end, r2.end)
+
+    return (latest_start, earliest_end)
 
 # Add for backwards compatibility.
 def julianDay(*args, **kwargs):
