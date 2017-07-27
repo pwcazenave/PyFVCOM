@@ -5,12 +5,15 @@ from __future__ import print_function
 from matplotlib import pyplot as plt
 from mpl_toolkits.basemap import Basemap
 from matplotlib.tri.triangulation import Triangulation
+from matplotlib import rcParams
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 from PyFVCOM.ll2utm import lonlat_from_utm
 from PyFVCOM.read_results import FileReader
 
 import numpy as np
+
+rcParams['mathtext.default'] = 'regular'  # use non-LaTeX fonts
 
 class Plotter:
     """ Create plot objects based on output from the FVCOM.
