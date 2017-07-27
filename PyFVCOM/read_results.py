@@ -234,16 +234,16 @@ class FileReader:
                 elif 'Itime' in got_time and 'Itime2' in got_time:
                     _dates = num2date(self.Itime + self.Itime2 / 1000.0 / 60 / 60, units=getattr(self.ds.variables['Itime'], 'units'))
                 try:
-                    self.time.Times = [datetime.strftime(d, '%Y-%m-%dT%H:%M:%S.%f') for d in _dates]
+                    self.time.Times = np.array([datetime.strftime(d, '%Y-%m-%dT%H:%M:%S.%f') for d in _dates])
                 except ValueError:
-                    self.time.Times = [datetime.strftime(d, '%Y/%m/%d %H:%M:%S.%f') for d in _dates]
+                    self.time.Times = np.array([datetime.strftime(d, '%Y/%m/%d %H:%M:%S.%f') for d in _dates])
 
             if 'time' not in got_time:
                 if 'Times' in got_time:
                     try:
-                        _dates = [datetime.strptime(''.join(t.astype(str)).strip(), '%Y-%m-%dT%H:%M:%S.%f') for t in self.time.Times]
+                        _dates = np.array([datetime.strptime(''.join(t.astype(str)).strip(), '%Y-%m-%dT%H:%M:%S.%f') for t in self.time.Times])
                     except ValueError:
-                        _dates = [datetime.strptime(''.join(t.astype(str)).strip(), '%Y/%m/%d %H:%M:%S.%f') for t in self.time.Times]
+                        _dates = np.array([datetime.strptime(''.join(t.astype(str)).strip(), '%Y/%m/%d %H:%M:%S.%f') for t in self.time.Times])
                 elif 'Itime' in got_time and 'Itime2' in got_time:
                     _dates = num2date(self.Itime + self.Itime2 / 1000.0 / 60 / 60, units=getattr(self.ds.variables['Itime'], 'units'))
                 # We're making Modified Julian Days here to replicate FVCOM's 'time' variable.
@@ -252,9 +252,9 @@ class FileReader:
             if 'Itime' not in got_time and 'Itime2' not in got_time:
                 if 'Times' in got_time:
                     try:
-                        _dates = [datetime.strptime(''.join(t.astype(str)).strip(), '%Y-%m-%dT%H:%M:%S.%f') for t in self.time.Times]
+                        _dates = np.array([datetime.strptime(''.join(t.astype(str)).strip(), '%Y-%m-%dT%H:%M:%S.%f') for t in self.time.Times])
                     except ValueError:
-                        _dates = [datetime.strptime(''.join(t.astype(str)).strip(), '%Y/%m/%d %H:%M:%S.%f') for t in self.time.Times]
+                        _dates = np.array([datetime.strptime(''.join(t.astype(str)).strip(), '%Y/%m/%d %H:%M:%S.%f') for t in self.time.Times])
                 elif 'time' in got_time:
                     _dates = num2date(self.time, units=getattr(self.ds.variables['time'], 'units'))
                 # We're making Modified Julian Days here to replicate FVCOM's 'time' variable.
@@ -265,9 +265,9 @@ class FileReader:
             # Additional nice-to-have time representations.
             if 'Times' in got_time:
                 try:
-                    self.time.datetime = [datetime.strptime(d, '%Y-%m-%dT%H:%M:%S.%f') for d in self.time.Times]
+                    self.time.datetime = np.array([datetime.strptime(d, '%Y-%m-%dT%H:%M:%S.%f') for d in self.time.Times])
                 except ValueError:
-                    self.time.datetime = [datetime.strptime(d, '%Y/%m/%d %H:%M:%S.%f') for d in self.time.Times]
+                    self.time.datetime = np.array([datetime.strptime(d, '%Y/%m/%d %H:%M:%S.%f') for d in self.time.Times])
             else:
                 self.time.datetime = _dates
             self.time.matlabtime = self.time.time + 678942.0  # convert to MATLAB-indexed times from Modified Julian Date.
