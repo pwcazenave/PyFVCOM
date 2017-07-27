@@ -657,22 +657,46 @@ class FileReader:
             return np.argwhere(np.abs(self.time.datetime - when))
 
     def closest_node(self, where, cartesian=False):
-        """ Find the index of the closest node to the supplied position (x, y). Set `cartesian' to True for cartesian 
-        coordinates (defaults to spherical). """
+        """
+        Find the index of the closest node to the supplied position (x, y). Set `cartesian' to True for cartesian
+        coordinates (defaults to spherical).
+
+        Parameters
+        ----------
+        where : list-like
+            Arbitrary x, y position for which to find the closest model grid position.
+        cartesian : bool, optional
+            Set to True to use cartesian coordinates. Defaults to False.
+
+        """
 
         if cartesian:
-            return np.argwhere(np.sqrt((self.grid.x - where[0])**2 + (self.grid.x - where[1])**2))
+            x, y = self.grid.x, self.grid.y
         else:
-            return np.argwhere(np.sqrt((self.grid.y - where[0])**2 + (self.grid.y - where[1])**2))
+            x, y = self.grid.lon, self.grid.lat
+
+        return np.argwhere(np.sqrt((x - where[0])**2 + (y - where[1])**2))
 
     def closest_element(self, where, cartesian=False):
-        """ Find the index of the closest element to the supplied position (x, y). Set `cartesian' to True for cartesian 
-        coordinates (defaults to spherical). """
+        """
+        Find the index of the closest element to the supplied position (x, y). Set `cartesian' to True for cartesian
+        coordinates (defaults to spherical).
+
+        Parameters
+        ----------
+        where : list-like
+            Arbitrary x, y position for which to find the closest model grid position.
+        cartesian : bool, optional
+            Set to True to use cartesian coordinates. Defaults to False.
+
+        """
 
         if cartesian:
-            return np.argwhere(np.sqrt((self.grid.x - where[0])**2 + (self.grid.x - where[1])**2))
+            x, y = self.grid.xc, self.grid.yc
         else:
-            return np.argwhere(np.sqrt((self.grid.y - where[0])**2 + (self.grid.y - where[1])**2))
+            x, y = self.grid.lonc, self.grid.latc
+
+        return np.argwhere(np.sqrt((x - where[0])**2 + (y - where[1])**2))
 
 
 def MFileReader(fvcom, *args, **kwargs):
