@@ -260,7 +260,7 @@ class FileReader:
                 # We're making Modified Julian Days here to replicate FVCOM's 'time' variable.
                 _datenum = date2num(_dates, units='days since 1858-11-17 00:00:00')
                 self.time.Itime = np.floor(_datenum)
-                self.time.Itime = (_datenum - np.floor(_datenum)) * 1000 * 60 * 60  # microseconds since midnight
+                self.time.Itime2 = (_datenum - np.floor(_datenum)) * 1000 * 60 * 60  # microseconds since midnight
 
             # Additional nice-to-have time representations.
             if 'Times' in got_time:
