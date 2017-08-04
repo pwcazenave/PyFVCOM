@@ -35,20 +35,34 @@ class FileReader:
         ----------
         fvcom : str
             Path to an FVCOM netCDF.
-        variables : list-like
+        variables : list-like, optional
             List of variables to extract. If omitted, no variables are extracted, which means you won't be able to
             add this object to another one which does have variables in it.
-        dims : dict
+        dims : dict, optional
             Dictionary of dimension names along which to subsample e.g. dims={'time': [0, 100], 'nele': [0, 10, 100],
             'node': 100}. Times are specified as ranges; horizontal and vertical dimensions (siglay, siglev, node,
             nele) can be list-like. Any combination of dimensions is possible. Omitted dimensions are loaded in their
-            entirety.
+            entirety. To extract a single time (e.g. the 9th in python indexing), specify the range as [9, 10].
             N.B. The vertical dimensions (siglay, siglev) can only be currently specified with a range (i.e. [0, 5])
             rather than a list of layers/levels to extract.
-        zone : str, list-like
+        zone : str, list-like, optional
             UTM zones (defaults to '30N') for conversion of UTM to spherical coordinates.
-        debug : bool
+        debug : bool, optional
             Set to True to enable debug output. Defaults to False.
+
+        Example
+        -------
+
+        # Load and plot surface currents as a surface and quiver plots.
+        >>> from PyFVCOM.read_results import FileReader
+        >>> from PyFVCOM.plot import Plotter
+        >>> from PyFVCOM.current_tools import vector2scalar
+        >>> F = FileReader('casename_0001.nc', variables=['u', 'v'], dims={'siglay': [0]})
+        >>> # Calculate speed and direction from the current vectors
+        >>> F.data.direction, F.data.speed = vector2scalar(F.data.u, F.data.v)
+        >>> plot = Plotter(F)
+        >>> plot.plot_field(F.data.speed)
+        >>> plot.plot_quiver(F.data.u, F.data.v, field=F.data.speed, add_key=True, scale=5)
 
         Author(s)
         ---------
@@ -60,6 +74,7 @@ class FileReader:
         - Add support for specifying a time period with datetime objects (start:end)
 
         """
+
         self._debug = debug
         self._fvcom = fvcom
         self._zone = zone
