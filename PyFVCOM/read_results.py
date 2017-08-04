@@ -445,14 +445,18 @@ class FileReader:
         self.grid.xc_range = _range(self.grid.xc)
         self.grid.yc_range = _range(self.grid.yc)
 
-        if self.grid.lon_range == 0 and self.grid.lat_range == 0:
-            self.grid.lon, self.grid.lat = lonlat_from_utm(self.grid.x, self.grid.y, zone=self._zone)
-        if self.grid.lonc_range == 0 and self.grid.latc_range == 0:
-            self.grid.lonc, self.grid.latc = lonlat_from_utm(self.grid.xc, self.grid.yc, zone=self._zone)
-        if self.grid.lon_range == 0 and self.grid.lat_range == 0:
-            self.grid.x, self.grid.y = utm_from_lonlat(self.grid.lon, self.grid.lat)
-        if self.grid.lonc_range == 0 and self.grid.latc_range == 0:
-            self.grid.xc, self.grid.yc = utm_from_lonlat(self.grid.lonc, self.grid.latc)
+        # Only do the conversions when we have more than a single point since the relevant ranges will be zero with
+        # only one position.
+        if self.dims.node > 1:
+            if self.grid.lon_range == 0 and self.grid.lat_range == 0:
+                self.grid.lon, self.grid.lat = lonlat_from_utm(self.grid.x, self.grid.y, zone=self._zone)
+            if self.grid.lon_range == 0 and self.grid.lat_range == 0:
+                self.grid.x, self.grid.y = utm_from_lonlat(self.grid.lon, self.grid.lat)
+        if self.dims.nele > 1:
+            if self.grid.lonc_range == 0 and self.grid.latc_range == 0:
+                self.grid.lonc, self.grid.latc = lonlat_from_utm(self.grid.xc, self.grid.yc, zone=self._zone)
+            if self.grid.lonc_range == 0 and self.grid.latc_range == 0:
+                self.grid.xc, self.grid.yc = utm_from_lonlat(self.grid.lonc, self.grid.latc)
 
     def _load_data(self, variables=None):
         """ Wrapper to load the relevant parts of the data in the netCDFs we have been given.
