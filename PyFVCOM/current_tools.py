@@ -4,6 +4,7 @@ Tools to work with current data. Reuses some functions from tide_tools.
 """
 
 import numpy as np
+import copy
 
 class Residuals:
 
