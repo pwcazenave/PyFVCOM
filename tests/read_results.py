@@ -332,7 +332,6 @@ class StubFile():
 class FileReader_test(TestCase):
 
     def setUp(self):
-
         starttime, endtime, interval, lon, lat, triangles = _prep()
         self.stub = StubFile(starttime, endtime, interval, lon=lon, lat=lat, triangles=triangles, zone='30N')
 
@@ -516,9 +515,9 @@ def _prep(starttime=None, duration=None, interval=None):
         starttime = datetime.strptime('2001-02-11 07:14:02', '%Y-%m-%d %H:%M:%S')
 
     if duration:
-        endtime = starttime + relativedelta(months=1)
-    else:
         endtime = starttime + duration
+    else:
+        endtime = starttime + relativedelta(months=1)
 
     if not interval:
         interval = 1.0 / 24.0
