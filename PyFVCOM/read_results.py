@@ -670,10 +670,10 @@ class FileReader:
     def closest_time(self, when):
         """ Find the index of the closest time to the supplied time (datetime object). """
         try:
-            return np.argwhere(np.abs(self.time.datetime - when))
+            return np.argmin(np.abs(self.time.datetime - when))
         except AttributeError:
             self.load_time()
-            return np.argwhere(np.abs(self.time.datetime - when))
+            return np.argmin(np.abs(self.time.datetime - when))
 
     def closest_node(self, where, cartesian=False):
         """
