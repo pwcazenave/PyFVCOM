@@ -675,7 +675,7 @@ class FileReader:
             self.load_time()
             return np.argmin(np.abs(self.time.datetime - when))
 
-    def closest_node(self, where, cartesian=False):
+    def closest_node(self, where, cartesian=False, threshold=None):
         """
         Find the index of the closest node to the supplied position (x, y). Set `cartesian' to True for cartesian
         coordinates (defaults to spherical).
@@ -686,6 +686,15 @@ class FileReader:
             Arbitrary x, y position for which to find the closest model grid position.
         cartesian : bool, optional
             Set to True to use cartesian coordinates. Defaults to False.
+        threshold : float, optional
+            Give a threshold distance beyond which the closest grid is considered too far away. Units are the same as
+            the coordinates in `where'. Return None when this condition is true.
+
+        Returns
+        -------
+        index : int, None
+            Grid index which falls closest to the supplied position. If `threshold' is set and the distance from the
+            supplied position to the nearest model node exceeds that threshold, `index' is None.
 
         """
 
@@ -693,10 +702,17 @@ class FileReader:
             x, y = self.grid.x, self.grid.y
         else:
             x, y = self.grid.lon, self.grid.lat
+        dist = np.sqrt((x - where[0])**2 + (y - where[1])**2)
+        index = np.argmin(dist)
+        if threshold:
+            if dist.min() < threshold:
+                index = np.argmin(dist)
+            else:
+                index = None
 
-        return np.argwhere(np.sqrt((x - where[0])**2 + (y - where[1])**2))
+        return index
 
-    def closest_element(self, where, cartesian=False):
+    def closest_element(self, where, cartesian=False, threshold=None):
         """
         Find the index of the closest element to the supplied position (x, y). Set `cartesian' to True for cartesian
         coordinates (defaults to spherical).
@@ -707,6 +723,15 @@ class FileReader:
             Arbitrary x, y position for which to find the closest model grid position.
         cartesian : bool, optional
             Set to True to use cartesian coordinates. Defaults to False.
+        threshold : float, optional
+            Give a threshold distance beyond which the closest grid is considered too far away. Units are the same as
+            the coordinates in `where'. Return None when this condition is true.
+
+        Returns
+        -------
+        index : int, None
+            Grid index which falls closest to the supplied position. If `threshold' is set and the distance from the
+            supplied position to the nearest model node exceeds that threshold, `index' is None.
 
         """
 
@@ -714,8 +739,15 @@ class FileReader:
             x, y = self.grid.xc, self.grid.yc
         else:
             x, y = self.grid.lonc, self.grid.latc
+        dist = np.sqrt((x - where[0])**2 + (y - where[1])**2)
+        index = np.argmin(dist)
+        if threshold:
+            if dist.min() < threshold:
+                index = np.argmin(dist)
+            else:
+                index = None
 
-        return np.argwhere(np.sqrt((x - where[0])**2 + (y - where[1])**2))
+        return index
 
 
 def MFileReader(fvcom, *args, **kwargs):
