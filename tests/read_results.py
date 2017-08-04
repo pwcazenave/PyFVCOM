@@ -242,6 +242,24 @@ class StubFile():
         ww.setncattr('units', 'meters s-1')
         ww.setncattr('grid', 'fvcom_grid')
         ww.setncattr('type', 'data')
+        u = self.ds.createVariable('u', 'f4', time_siglay_nele)
+        u.setncattr('long_name', 'Eastward Water Velocity')
+        u.setncattr('standard_name', 'eastward_sea_water_velocity')
+        u.setncattr('units', 'meters s-1')
+        u.setncattr('grid', 'fvcom_grid')
+        u.setncattr('type', 'data')
+        u.setncattr('coordinates', 'time siglay latc lonc')
+        u.setncattr('mesh', 'fvcom_mesh')
+        u.setncattr('location', 'face')
+        v = self.ds.createVariable('v', 'f4', time_siglay_nele)
+        v.setncattr('long_name', 'Northward Water Velocity')
+        v.setncattr('standard_name', 'Northward_sea_water_velocity')
+        v.setncattr('units', 'meters s-1')
+        v.setncattr('grid', 'fvcom_grid')
+        v.setncattr('type', 'data')
+        v.setncattr('coordinates', 'time siglay latc lonc')
+        v.setncattr('mesh', 'fvcom_mesh')
+        v.setncattr('location', 'face')
         # 2D elements
         ua = self.ds.createVariable('ua', 'f4', time_nele)
         ua.setncattr('long_name', 'Vertically Averaged x-velocity')
@@ -288,7 +306,9 @@ class StubFile():
         omega[:] = np.tile(_omega, (self.dims.node, self.dims.siglev, 1)).T * (1 - self.grid.siglev)
         temp[:] = np.tile(_temp, (self.dims.node, self.dims.siglay, 1)).T * (1 - self.grid.siglev[1:, :])
         ww[:] = np.tile(_ww, (self.dims.nele, self.dims.siglay, 1)).T * (1 - self.grid.siglev_center[1:, :])
-        ua[:] = np.tile(_ua, (self.dims.nele, 1)).T
+        u[:] = np.tile(_ua, (self.dims.nele, self.dims.siglay, 1)).T * (1 - self.grid.siglev_center[1:, :])
+        v[:] = np.tile(_ua, (self.dims.nele, self.dims.siglay, 1)).T * (1 - self.grid.siglev_center[1:, :])
+        ua[:] = np.tile(_ua * 0.9, (self.dims.nele, 1)).T
         zeta[:] = np.tile(_zeta, (self.dims.node, 1)).T
 
         self.ds.close()
