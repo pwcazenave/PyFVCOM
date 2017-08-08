@@ -28,4 +28,4 @@ from PyFVCOM import tidal_ellipse
 from PyFVCOM import process_results
 from PyFVCOM import read_results
 from PyFVCOM import plot
-
+from PyFVCOM import utilities
