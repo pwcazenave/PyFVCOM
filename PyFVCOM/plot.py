@@ -317,7 +317,11 @@ class Plotter:
         x, y = self.m(self.lonc, self.latc)
 
         if np.any(field):
-            self.quiver_plot = self.axes.quiver(x, y, u, v, field, units='inches', scale_units='inches', scale=scale)
+            self.quiver_plot = self.axes.quiver(x, y, u, v, field,
+                                                cmap=self.cmap,
+                                                units='inches',
+                                                scale_units='inches',
+                                                scale=scale)
             divider = make_axes_locatable(self.axes)
             cax = divider.append_axes("right", size="5%", pad=0.05)
             self.cbar = self.figure.colorbar(self.quiver_plot, cax=cax)
