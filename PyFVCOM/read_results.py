@@ -245,9 +245,9 @@ class FileReader:
             # is often the one with the lowest precision, so use the others preferentially over that.
             if 'Times' not in got_time:
                 if 'time' in got_time:
-                    _dates = num2date(self.time, units=getattr(self.ds.variables['time'], 'units'))
+                    _dates = num2date(self.time.time, units=getattr(self.ds.variables['time'], 'units'))
                 elif 'Itime' in got_time and 'Itime2' in got_time:
-                    _dates = num2date(self.Itime + self.Itime2 / 1000.0 / 60 / 60, units=getattr(self.ds.variables['Itime'], 'units'))
+                    _dates = num2date(self.time.Itime + self.time.Itime2 / 1000.0 / 60 / 60, units=getattr(self.ds.variables['Itime'], 'units'))
                 try:
                     self.time.Times = np.array([datetime.strftime(d, '%Y-%m-%dT%H:%M:%S.%f') for d in _dates])
                 except ValueError:
@@ -260,7 +260,7 @@ class FileReader:
                     except ValueError:
                         _dates = np.array([datetime.strptime(''.join(t.astype(str)).strip(), '%Y/%m/%d %H:%M:%S.%f') for t in self.time.Times])
                 elif 'Itime' in got_time and 'Itime2' in got_time:
-                    _dates = num2date(self.Itime + self.Itime2 / 1000.0 / 60 / 60, units=getattr(self.ds.variables['Itime'], 'units'))
+                    _dates = num2date(self.time.Itime + self.time.Itime2 / 1000.0 / 60 / 60, units=getattr(self.ds.variables['Itime'], 'units'))
                 # We're making Modified Julian Days here to replicate FVCOM's 'time' variable.
                 self.time.time = date2num(_dates, units='days since 1858-11-17 00:00:00')
 
