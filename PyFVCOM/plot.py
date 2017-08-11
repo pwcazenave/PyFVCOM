@@ -139,7 +139,7 @@ class Time:
             return
 
         self.line_plot, = self.axes.plot(self.time, time_series,
-                                         **kwargs)
+                                         *args, **kwargs)
 
         if self.add_legend:
             self.legend = self.axes.legend(frameon=False)
