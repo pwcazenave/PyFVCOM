@@ -6,6 +6,8 @@ Tools to work with current data. Reuses some functions from tide_tools.
 import numpy as np
 import copy
 
+from PyFVCOM.tide_tools import common_time
+
 class Residuals:
 
     def __init__(self, FVCOM, PREDICTED, periods=None, max_speed=None, noisy=False):
@@ -54,7 +56,13 @@ class Residuals:
             if _inc_fvcom > _inc_predicted:
                 skip = int(_inc_fvcom / _inc_predicted)
                 _new_time = PREDICTED.time.datetime[::skip]
-                if np.max(_new_time - FVCOM.time.datetime).total_seconds() == 0:
+                # Get overlapping period between the two data sets.
+                overlap = common_time(FVCOM.time.datetime, _new_time)
+                # Find the indices for FVCOM.time.datetime for that overlap.
+                f_start = _new_time.tolist().index(overlap[0])
+                f_end = _new_time.tolist().index(overlap[1])
+                # Check we've got a common time series now.
+                if np.max(_new_time[f_start:f_end + 1] - FVCOM.time.datetime).total_seconds() == 0:
                     # Do the subsampling on the rest of the data.
                     for var in PREDICTED.obj_iter(PREDICTED.data):
                         setattr(PREDICTED.data, var, getattr(PREDICTED.data, var)[::skip, ...])
