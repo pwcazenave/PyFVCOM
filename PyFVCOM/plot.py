@@ -7,8 +7,7 @@ from mpl_toolkits.basemap import Basemap
 from matplotlib.tri.triangulation import Triangulation
 from matplotlib import rcParams
 from mpl_toolkits.axes_grid1 import make_axes_locatable
-from matplotlib.dates import DateFormatter
-from matplotlib.dates import date2num
+from matplotlib.dates import DateFormatter, date2num
 from datetime import datetime
 
 from PyFVCOM.ll2utm import lonlat_from_utm
