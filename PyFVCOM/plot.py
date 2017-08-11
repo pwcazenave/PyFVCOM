@@ -17,6 +17,7 @@ import numpy as np
 
 rcParams['mathtext.default'] = 'regular'  # use non-LaTeX fonts
 
+
 class Time:
     """ Create time series plots based on output from FVCOM.
 
@@ -283,6 +284,7 @@ class Time:
                 self.colorbar.set_label(self.cb_label)
         else:
             self.surface_plot
+
 
 class Plotter:
     """ Create plot objects based on output from the FVCOM.
