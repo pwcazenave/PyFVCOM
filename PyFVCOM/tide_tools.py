@@ -863,6 +863,7 @@ def overlap(t1start, t1end, t2start, t2end):
 
     return (t1start <= t2start <= t1end) or (t2start <= t1start <= t2end)
 
+
 def common_time(times1, times2):
     """
     Return the common date rage in two time series. At least three dates are
