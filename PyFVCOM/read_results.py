@@ -111,18 +111,19 @@ class FileReader:
         return self.__dict__ == other.__dict__
 
     def __add__(self, FVCOM, debug=False):
-        """ This special method means we can stack two FVCOM objects in time through a simple addition (e.g. fvcom1 +=
-        fvcom2)
+        """
+        This special method means we can stack two FileReader objects in time through a simple addition (e.g. fvcom1
+        += fvcom2)
 
         Parameters
         ----------
-        FVCOM : PyFVCOM.FVCOM
+        FVCOM : PyFVCOM.FileReader
             Previous time to which to add ourselves.
 
         Returns
         -------
-        NEW : PyFVCOM.FVCOM
-            Concatenated (in time) `PyFVCOM.FVCOM' class.
+        NEW : PyFVCOM.FileReader
+            Concatenated (in time) `PyFVCOM.FileReader' class.
 
         Notes
         -----
@@ -210,12 +211,11 @@ class FileReader:
 
         # Add docstrings for the relevant objects.
         self.data.__doc__ = "This object will contain data as loaded from the netCDFs specified. Use " \
-                            "`FVCOM.load_data' to get specific data (optionally at specific locations, times and" \
+                            "`FileReader.load_data' to get specific data (optionally at specific locations, times and" \
                             " depths)."
         self.dims.__doc__ = "This contains the dimensions of the data from the given netCDFs."
-        self.grid.__doc__ = "Use `FVCOM.load_grid' to populate this with the FVCOM grid information. Missing " \
-                            "spherical or cartesian coordinates are automatically created depending on which is " \
-                            "missing."
+        self.grid.__doc__ = "FVCOM grid information. Missing spherical or cartesian coordinates are automatically " \
+                            "created depending on which is missing."
         self.time.__doc__ = "This contains the time data for the given netCDFs. Missing standard FVCOM time variables " \
                             "are automatically created."
 
