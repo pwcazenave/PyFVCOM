@@ -272,7 +272,7 @@ class FileReader:
                     except ValueError:
                         _dates = np.array([datetime.strptime(''.join(t.astype(str)).strip(), '%Y/%m/%d %H:%M:%S.%f') for t in self.time.Times])
                 elif 'time' in got_time:
-                    _dates = num2date(self.time, units=getattr(self.ds.variables['time'], 'units'))
+                    _dates = num2date(self.time.time, units=getattr(self.ds.variables['time'], 'units'))
                 # We're making Modified Julian Days here to replicate FVCOM's 'time' variable.
                 _datenum = date2num(_dates, units='days since 1858-11-17 00:00:00')
                 self.time.Itime = np.floor(_datenum)
