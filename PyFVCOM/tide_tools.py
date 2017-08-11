@@ -898,7 +898,8 @@ def common_time(times1, times2):
     latest_start = max(r1.start, r2.start)
     earliest_end = min(r1.end, r2.end)
 
-    return (latest_start, earliest_end)
+    return latest_start, earliest_end
+
 
 # Add for backwards compatibility.
 def julianDay(*args, **kwargs):
