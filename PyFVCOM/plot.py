@@ -7,6 +7,9 @@ from mpl_toolkits.basemap import Basemap
 from matplotlib.tri.triangulation import Triangulation
 from matplotlib import rcParams
 from mpl_toolkits.axes_grid1 import make_axes_locatable
+from matplotlib.dates import DateFormatter
+from matplotlib.dates import date2num
+from datetime import datetime
 
 from PyFVCOM.ll2utm import lonlat_from_utm
 from PyFVCOM.read_results import FileReader
@@ -14,6 +17,229 @@ from PyFVCOM.read_results import FileReader
 import numpy as np
 
 rcParams['mathtext.default'] = 'regular'  # use non-LaTeX fonts
+
+class Time:
+    """ Create time series plots based on output from FVCOM.
+
+    Provides
+    --------
+    plot_line
+    plot_scatter
+    plot_quiver
+    plot_surface TODO
+
+    Author(s)
+    ---------
+    Pierre Cazenave (Plymouth Marine Laboratory)
+
+    """
+
+    def __init__(self, dataset, figure=None, figsize=(20, 8), axes=None, cmap='viridis', title=None, legend=False, fs=10,
+                 date_format=None, cb_label=None, hold=False):
+        """
+        Parameters
+        ----------
+        dataset : Dataset, PyFVCOM.read_results.FileReader
+            netCDF4 Dataset or PyFVCOM.read_results.FileReader object.
+        figure : Figure, optional
+            Matplotlib Figure object. A figure object is created if not
+            provided.
+        figsize : tuple(float), optional
+            Figure size in cm. This is only used if a new Figure object is
+            created.
+        axes : Axes, optional
+            Matplotlib axes object. An Axes object is created if not
+            provided.
+        cmap : None, Colormap
+            Provide a colourmap to use when plotting vectors or 2D plots (anything with a magnitude). Defaults to
+            'viridis'.
+        title : str, optional
+            Title to use when creating the plot.
+        fs : int, optional
+            Font size to use when rendering plot text.
+        legend : bool, optional
+            Set to True to add a legend. Defaults to False.
+        date_format : str
+            Date format to use.
+        cb_label : str
+            Label to apply to the colour bar. Defaults to no label.
+        hold : bool, optional
+            Set to True to keep existing plots when adding to an existing figure. Defaults to False.
+
+        """
+        self.ds = dataset
+        self.figure = figure
+        self.axes = axes
+        self.fs = fs
+        self.title = title
+        self.figsize = figsize
+        self.hold = hold
+        self.add_legend = legend
+        self.cmap = cmap
+        self.date_format = date_format
+        self.cb_label = cb_label
+
+        # Plot instances (initialise to None for truthiness test later)
+        self.line_plot = None
+        self.scatter_plot = None
+        self.quiver_plot = None  # for vectors with time (e.g. currents at a point)
+        self.surface_plot = None  # for depth-resolved time, for example.
+        self.legend = None
+        self.colorbar = None
+        self.quiver_key = None
+
+        # Are we working with a FileReader object or a bog-standard netCDF4 Dataset?
+        self._FileReader = False
+        if isinstance(dataset, FileReader):
+            self._FileReader = True
+
+        # Initialise the figure
+        self.__init_figure()
+
+    def __init_figure(self):
+        # Read in required grid variables
+        if self._FileReader:
+            self.time = self.ds.time.datetime
+        else:
+            # Try a couple of time formats.
+            try:
+                self.time = np.asarray([datetime.strftime('%Y-%m-%dT%H:%M:%S.%f', i) for i in self.ds.variables['Times']])
+            except ValueError:
+                self.time = np.asarray([datetime.strftime('%Y/%m/%d %H:%M:%S.%f', i) for i in self.ds.variables['Times']])
+        self.n_times = len(self.time)
+
+        # Initialise the figure
+        if self.figure is None:
+            figsize = (cm2inch(self.figsize[0]), cm2inch(self.figsize[1]))
+            self.figure = plt.figure(figsize=figsize)
+
+        # Create plot axes
+        if not self.axes:
+            self.axes = self.figure.add_subplot(1, 1, 1)
+
+        if self.title:
+            self.set_title(self.title)
+
+    def plot_line(self, time_series, **kwargs):
+        """
+        Plot a time series as a line.
+
+        Parameters
+        ----------
+        time_series : list-like, np.ndarray
+            Time series data to plot.
+
+        Additional kwargs are passed to `matplotlib.pyplot.plot'.
+
+        """
+
+        if self.line_plot and not self.hold:
+            # Update the current line.
+            self.line_plot.set_ydata = time_series
+            self.line_plot.set_xdata = self.time
+            return
+
+        self.line_plot, = self.axes.plot(self.time, time_series,
+                                         **kwargs)
+
+        if self.add_legend:
+            self.legend = self.axes.legend(frameon=False)
+
+    def plot_scatter(self, time_series, **kwargs):
+        """
+        Plot a time series as a set of scatter points.
+
+        Parameters
+        ----------
+        time_series : list-like, np.ndarray
+            Time series data to plot.
+
+        Additional kwargs are passed to `matplotlib.pyplot.scatter'.
+
+        """
+
+        if self.scatter_plot and not self.hold:
+            # Update the current scatter. I can't see how to replace both the x, y and colour data (I think set_array
+            # does the latter), so just clear the axis and start again.
+            self.axes.cla()
+
+        self.scatter_plot = self.axes.scatter(self.time, time_series,
+                                              **kwargs)
+        if self.add_legend:
+            self.legend = self.axes.legend(frameon=False)
+
+    def plot_quiver(self, u, v, field=None, scale=1, **kwargs):
+        """
+        Plot a time series of vectors.
+
+        Parameters
+        ----------
+        u, v : list-like, np.ndarray
+            Arrays of time-varying vector components.
+        field : list-like, np.ndarray, str, optional
+            Field by which to colour the vectors. If set to 'magnitude', use the magnitude of the velocity vectors.
+            Defaults to colouring by `color'.
+        scale : float, optional
+            Scale to pass to the quiver. See `matplotlib.pyplot.quiver' for information.
+
+        Additional kwargs are passed to `matplotlib.pyplot.quiver'.
+
+        Notes
+        -----
+
+        The `hold' option to PyFVCOM.plot.Time has no effect here: an existing plot is cleared before adding new data.
+
+        """
+
+        # To plot time along the x-axis with quiver, we need to use numerical representations of time. So,
+        # convert from datetimes to numbers and then format the x-axis labels after the fact. I don't know how to
+        # maintain the funky automatic date labelling which responds to zooming and so on.
+        quiver_time = date2num(self.time)
+        date_format = DateFormatter('%Y-%m-%d')
+
+        if field == 'magnitude':
+            field = np.hypot(u, v)
+
+        if self.quiver_plot:
+            if np.any(field):
+                self.quiver_plot.set_UVC(u, v, field)
+            else:
+                self.quiver_plot.set_UVC(u, v)
+            return
+
+        if np.any(field):
+            self.quiver_plot = self.axes.quiver(quiver_time, np.zeros(u.shape), u, v, field,
+                                                cmap=self.cmap,
+                                                units='inches',
+                                                scale_units='inches',
+                                                scale=scale,
+                                                **kwargs)
+            # Only add the colour bar if we're not being told to hold and this is the first time we're plotting.
+            divider = make_axes_locatable(self.axes)
+            cax = divider.append_axes("right", size="3%", pad=0.1)
+            self.colorbar = self.figure.colorbar(self.quiver_plot, cax=cax)
+            self.colorbar.ax.tick_params(labelsize=self.fs)
+            if self.cb_label:
+                self.colorbar.set_label(self.cb_label)
+
+        else:
+            self.quiver_plot = self.axes.quiver(quiver_time, np.zeros(u.shape), u, v,
+                                                units='inches',
+                                                scale_units='inches',
+                                                scale=scale,
+                                                **kwargs)
+
+        self.axes.xaxis.set_major_formatter(date_format)
+
+        if self.add_legend:
+            label = '{} $\mathrm{ms^{-1}}$'.format(scale)
+            self.quiver_key = plt.quiverkey(self.quiver_plot, 0.9, 0.9, scale, label, coordinates='axes')
+
+        if self.date_format:
+            self.axes.xaxis.set_major_formatter(self.date_format)
+
+        # Turn off the y-axis labels as they don't correspond to the vector lengths.
+        self.axes.get_yaxis().set_visible(False)
 
 class Plotter:
     """ Create plot objects based on output from the FVCOM.
