@@ -119,7 +119,7 @@ class Time:
         if self.title:
             self.axes.set_title(self.title)
 
-    def plot_line(self, time_series, **kwargs):
+    def plot_line(self, time_series, *args, **kwargs):
         """
         Plot a time series as a line.
 
