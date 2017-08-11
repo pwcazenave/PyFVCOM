@@ -25,7 +25,7 @@ class Time:
     plot_line
     plot_scatter
     plot_quiver
-    plot_surface TODO
+    plot_surface
 
     Author(s)
     ---------
@@ -33,8 +33,8 @@ class Time:
 
     """
 
-    def __init__(self, dataset, figure=None, figsize=(20, 8), axes=None, cmap='viridis', title=None, legend=False, fs=10,
-                 date_format=None, cb_label=None, hold=False):
+    def __init__(self, dataset, figure=None, figsize=(20, 8), axes=None, cmap='viridis', title=None, legend=False,
+                 fs=10, date_format=None, cb_label=None, hold=False):
         """
         Parameters
         ----------
@@ -248,6 +248,41 @@ class Time:
 
         # Turn off the y-axis labels as they don't correspond to the vector lengths.
         self.axes.get_yaxis().set_visible(False)
+
+    def plot_surface(self, depth, time_series, fill_seabed=False, **kwargs):
+        """
+        Parameters
+        ----------
+        depth : np.ndarray
+            Depth-varying array of depth. See `PyFVCOM.grid_tools.make_tide' for more information.
+        time_series : np.ndarray
+            Depth-varying array of data to plot.
+        fill_seabed : bool, optional
+            Set to True to fill the seabed from the maximum water depth to the edge of the plot with gray.
+
+        """
+
+        # Squeeze out singleton dimensions first.
+        depth = np.squeeze(depth)
+        time_series = np.squeeze(time_series)
+
+        if not self.surface_plot:
+            self.surface_plot = self.axes.pcolormesh(np.tile(self.time, [depth.shape[-1], 1]).T,
+                                                     depth,
+                                                     time_series,
+                                                     cmap=self.cmap)
+
+            if fill_seabed:
+                self.axes.fill_between(self.time, np.min(depth, axis=1), self.axes.get_ylim()[0], color='0.6')
+            divider = make_axes_locatable(self.axes)
+
+            cax = divider.append_axes("right", size="3%", pad=0.1)
+            self.colorbar = self.figure.colorbar(self.surface_plot, cax=cax)
+            self.colorbar.ax.tick_params(labelsize=self.fs)
+            if self.cb_label:
+                self.colorbar.set_label(self.cb_label)
+        else:
+            self.surface_plot
 
 class Plotter:
     """ Create plot objects based on output from the FVCOM.
