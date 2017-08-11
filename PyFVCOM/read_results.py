@@ -324,7 +324,6 @@ class FileReader:
             triangulation = tri.Triangulation(self.grid.lon, self.grid.lat)
             self.grid.triangles = triangulation.triangles
             self.grid.nv = self.grid.triangles.T + 1
-        _range = lambda x: np.max(x) - np.min(x)
 
         # Fix broken triangulations if necessary.
         if self.grid.nv.min() != 1:
@@ -443,14 +442,14 @@ class FileReader:
                 setattr(self.grid, var, _temp)
 
         # Check ranges and if zero assume we're missing that particular type, so convert from the other accordingly.
-        self.grid.lon_range = _range(self.grid.lon)
-        self.grid.lat_range = _range(self.grid.lat)
-        self.grid.lonc_range = _range(self.grid.lonc)
-        self.grid.latc_range = _range(self.grid.latc)
-        self.grid.x_range = _range(self.grid.x)
-        self.grid.y_range = _range(self.grid.y)
-        self.grid.xc_range = _range(self.grid.xc)
-        self.grid.yc_range = _range(self.grid.yc)
+        self.grid.lon_range = np.ptp(self.grid.lon)
+        self.grid.lat_range = np.ptp(self.grid.lat)
+        self.grid.lonc_range = np.ptp(self.grid.lonc)
+        self.grid.latc_range = np.ptp(self.grid.latc)
+        self.grid.x_range = np.ptp(self.grid.x)
+        self.grid.y_range = np.ptp(self.grid.y)
+        self.grid.xc_range = np.ptp(self.grid.xc)
+        self.grid.yc_range = np.ptp(self.grid.yc)
 
         # Only do the conversions when we have more than a single point since the relevant ranges will be zero with
         # only one position.
