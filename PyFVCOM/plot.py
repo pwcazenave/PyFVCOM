@@ -270,7 +270,7 @@ class Plotter:
         """
         Parameters:
         -----------
-        dataset : Dataset
+        dataset : Dataset, PyFVCOM.read_results.FileReader
             netCDF4 Dataset or PyFVCOM.read_results.FileReader object.
 
         stations : 2D array, optional
@@ -302,7 +302,7 @@ class Plotter:
             Colormap to use when shading field data (plot_field only).
 
         figure : Figure, optional
-            Maplotplotlib Figure object. A figure object is created if not
+            Matplotlib figure object. A figure object is created if not
             provided.
 
         figsize : tuple(float), optional
@@ -310,7 +310,7 @@ class Plotter:
             created.
 
         axes : Axes, optional
-            Maplotplotlib Axes object. An Axes object is created if not
+            Matplotlib Axes object. An Axes object is created if not
             provided.
 
         axis_position : 1D array, optional
@@ -380,7 +380,6 @@ class Plotter:
 
         # Are we working with a FileReader object or a bog-standard netCDF4 Dataset?
         self._FileReader = False
-        # Should do a isinstance
         if isinstance(dataset, FileReader):
             self._FileReader = True
 
