@@ -5,6 +5,7 @@ import copy
 import inspect
 
 import numpy as np
+import matplotlib.tri as tri
 
 from warnings import warn
 from datetime import datetime
@@ -300,10 +301,31 @@ class FileReader:
 
         """
 
+        # Get the grid data.
+        for grid in 'lon', 'lat', 'x', 'y', 'lonc', 'latc', 'xc', 'yc', 'h', 'siglay', 'siglev':
+            try:
+                setattr(self.grid, grid, self.ds.variables[grid][:])
+            except KeyError:
+                # Make zeros for this missing variable so we can convert from the non-missing data below.
+                if grid.endswith('c'):
+                    setattr(self.grid, grid, np.zeros(self.dims.nele).T)
+                else:
+                    setattr(self.grid, grid, np.zeros(self.dims.node).T)
+            except ValueError as value_error_message:
+                warn('Variable {} has a problem with the data. Setting value as all zeros.'.format(grid))
+                print(value_error_message)
+                setattr(self.grid, grid, np.zeros(self.ds.variables[grid].shape))
+
+        try:
+            self.grid.nv = self.ds.variables['nv'][:].astype(int)  # force integers even though they should already be so
+            self.grid.triangles = copy.copy(self.grid.nv.T - 1)  # zero-indexed for python
+        except KeyError:
+            # If we don't have a triangulation, make one.
+            triangulation = tri.Triangulation(self.grid.lon, self.grid.lat)
+            self.grid.triangles = triangulation.triangles
+            self.grid.nv = self.grid.triangles.T + 1
         _range = lambda x: np.max(x) - np.min(x)
 
-        self.grid.nv = self.ds.variables['nv'][:].astype(int)  # force integers even though they should already be so
-        self.grid.triangles = copy.copy(self.grid.nv.T - 1)  # zero-indexed for python
         # Fix broken triangulations if necessary.
         if self.grid.nv.min() != 1:
             if self._debug:
@@ -331,21 +353,6 @@ class FileReader:
         for dim in self._dims:
             if dim != 'time':
                 setattr(self.dims, dim, len(self._dims[dim]))
-
-        # Get the grid data.
-        for grid in 'lon', 'lat', 'x', 'y', 'lonc', 'latc', 'xc', 'yc', 'h', 'siglay', 'siglev':
-            try:
-                setattr(self.grid, grid, self.ds.variables[grid][:])
-            except KeyError:
-                # Make zeros for this missing variable so we can convert from the non-missing data below.
-                if grid.endswith('c'):
-                    setattr(self.grid, grid, np.zeros(self.dims.nele).T)
-                else:
-                    setattr(self.grid, grid, np.zeros(self.dims.node).T)
-            except ValueError as value_error_message:
-                warn('Variable {} has a problem with the data. Setting value as all zeros.'.format(grid))
-                print(value_error_message)
-                setattr(self.grid, grid, np.zeros(self.ds.variables[grid].shape))
 
         # Add compatibility for FVCOM3 (these variables are only specified on the element centres in FVCOM4+ output
         # files). Only create the element centred values if we have the same number of nodes as in the triangulation.
