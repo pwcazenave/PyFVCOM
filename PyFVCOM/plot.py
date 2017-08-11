@@ -269,7 +269,7 @@ class Time:
         if not self.surface_plot:
             self.surface_plot = self.axes.pcolormesh(np.tile(self.time, [depth.shape[-1], 1]).T,
                                                      depth,
-                                                     time_series,
+                                                     np.fliplr(time_series),
                                                      cmap=self.cmap)
 
             if fill_seabed:
