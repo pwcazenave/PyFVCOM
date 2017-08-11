@@ -192,10 +192,8 @@ class Time:
         """
 
         # To plot time along the x-axis with quiver, we need to use numerical representations of time. So,
-        # convert from datetimes to numbers and then format the x-axis labels after the fact. I don't know how to
-        # maintain the funky automatic date labelling which responds to zooming and so on.
+        # convert from datetimes to numbers and then format the x-axis labels after the fact.
         quiver_time = date2num(self.time)
-        date_format = DateFormatter('%Y-%m-%d')
 
         if field == 'magnitude':
             field = np.hypot(u, v)
@@ -229,14 +227,25 @@ class Time:
                                                 scale=scale,
                                                 **kwargs)
 
-        self.axes.xaxis.set_major_formatter(date_format)
+        # Something approaching dynamic labelling of dates.
+        if not self.date_format:
+            x_range = self.quiver_plot.axes.get_xlim()
+            x_delta = x_range[1] - x_range[0]
+            if x_delta > int(1.5 * 365):
+                date_format = DateFormatter('%Y-%m-%d')
+            elif x_delta > 2:
+                date_format = DateFormatter('%Y-%m-%d %H:%M')
+            elif x_delta < 2:
+                date_format = DateFormatter('%H:%M:%S')
+            else:
+                date_format = DateFormatter('%H:%M')
+            self.axes.xaxis.set_major_formatter(date_format)
+        else:
+            self.axes.xaxis.set_major_formatter(self.date_format)
 
         if self.add_legend:
             label = '{} $\mathrm{ms^{-1}}$'.format(scale)
             self.quiver_key = plt.quiverkey(self.quiver_plot, 0.9, 0.9, scale, label, coordinates='axes')
-
-        if self.date_format:
-            self.axes.xaxis.set_major_formatter(self.date_format)
 
         # Turn off the y-axis labels as they don't correspond to the vector lengths.
         self.axes.get_yaxis().set_visible(False)
