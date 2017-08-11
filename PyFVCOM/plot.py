@@ -452,8 +452,8 @@ class Plotter:
 
         # Add coordinate labels to the x and y axes.
         if self.tick_inc:
-            meridians = np.arange(np.min(self.extents[:2]), np.max(self.extents[:2]), self.tick_inc[0])
-            parallels = np.arange(np.min(self.extents[2:]), np.max(self.extents[2:]), self.tick_inc[1])
+            meridians = np.arange(np.floor(np.min(self.extents[:2])), np.ceil(np.max(self.extents[:2])), self.tick_inc[0])
+            parallels = np.arange(np.floor(np.min(self.extents[2:])), np.ceil(np.max(self.extents[2:])), self.tick_inc[1])
             self.m.drawparallels(parallels, labels=[1, 0, 0, 0], fontsize=self.fs, linewidth=0, ax=self.axes)
             self.m.drawmeridians(meridians, labels=[0, 0, 0, 1], fontsize=self.fs, linewidth=0, ax=self.axes)
 
