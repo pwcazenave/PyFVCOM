@@ -117,7 +117,7 @@ class Time:
             self.axes = self.figure.add_subplot(1, 1, 1)
 
         if self.title:
-            self.set_title(self.title)
+            self.axes.set_title(self.title)
 
     def plot_line(self, time_series, **kwargs):
         """
@@ -491,7 +491,7 @@ class Plotter:
         self.m.fillcontinents(color='0.6', zorder=2)
 
         if self.title:
-            self.set_title(self.title)
+            self.axes.set_title(self.title)
 
         # Add coordinate labels to the x and y axes.
         if self.tick_inc:
