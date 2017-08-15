@@ -207,6 +207,7 @@ class FileReader:
         # Create empty object for the grid, dimension, data and time data.
         self.grid = type('grid', (object,), {})()
         self.dims = type('dims', (object,), {})()
+        self.atts = type('atts', (object,), {})()
         self.data = type('data', (object,), {})()
         self.time = type('time', (object,), {})()
 
@@ -215,6 +216,7 @@ class FileReader:
                             "`FileReader.load_data' to get specific data (optionally at specific locations, times and" \
                             " depths)."
         self.dims.__doc__ = "This contains the dimensions of the data from the given netCDFs."
+        self.atts.__doc__ = "This contains the attributes for each variable in the given netCDFs as a dictionary."
         self.grid.__doc__ = "FVCOM grid information. Missing spherical or cartesian coordinates are automatically " \
                             "created depending on which is missing."
         self.time.__doc__ = "This contains the time data for the given netCDFs. Missing standard FVCOM time variables " \
@@ -232,6 +234,10 @@ class FileReader:
             if time in self.ds.variables:
                 setattr(self.time, time, self.ds.variables[time][:])
                 got_time.append(time)
+                attributes = type('attributes', (object,), {})()
+                for attribute in self.ds.variables[time].ncattrs():
+                    setattr(attributes, attribute, getattr(self.ds.variables[time], attribute))
+                setattr(self.atts, time, attributes)
             else:
                 missing_time.append(time)
 
@@ -253,6 +259,10 @@ class FileReader:
                     self.time.Times = np.array([datetime.strftime(d, '%Y-%m-%dT%H:%M:%S.%f') for d in _dates])
                 except ValueError:
                     self.time.Times = np.array([datetime.strftime(d, '%Y/%m/%d %H:%M:%S.%f') for d in _dates])
+                # Add the relevant attribute for the Times variable.
+                attributes = type('attributes', (object,), {})()
+                setattr(attributes, 'time_zone', 'UTC')
+                setattr(self.atts, 'Times', attributes)
 
             if 'time' not in got_time:
                 if 'Times' in got_time:
@@ -264,6 +274,13 @@ class FileReader:
                     _dates = num2date(self.time.Itime + self.time.Itime2 / 1000.0 / 60 / 60, units=getattr(self.ds.variables['Itime'], 'units'))
                 # We're making Modified Julian Days here to replicate FVCOM's 'time' variable.
                 self.time.time = date2num(_dates, units='days since 1858-11-17 00:00:00')
+                # Add the relevant attributes for the time variable.
+                attributes = type('attributes', (object,), {})()
+                setattr(attributes, 'units', 'days since 1858-11-17 00:00:00')
+                setattr(attributes, 'long_name', 'time')
+                setattr(attributes, 'format', 'modified julian day (MJD)')
+                setattr(attributes, 'time_zone', 'UTC')
+                setattr(self.atts, 'time', attributes)
 
             if 'Itime' not in got_time and 'Itime2' not in got_time:
                 if 'Times' in got_time:
@@ -277,6 +294,15 @@ class FileReader:
                 _datenum = date2num(_dates, units='days since 1858-11-17 00:00:00')
                 self.time.Itime = np.floor(_datenum)
                 self.time.Itime2 = (_datenum - np.floor(_datenum)) * 1000 * 60 * 60  # microseconds since midnight
+                attributes = type('attributes', (object,), {})()
+                setattr(attributes, 'units', 'days since 1858-11-17 00:00:00')
+                setattr(attributes, 'format', 'modified julian day (MJD)')
+                setattr(attributes, 'time_zone', 'UTC')
+                setattr(self.atts, 'Itime', attributes)
+                attributes = type('attributes', (object,), {})()
+                setattr(attributes, 'units', 'msec since 00:00:00')
+                setattr(attributes, 'time_zone', 'UTC')
+                setattr(self.atts, 'Itime2', attributes)
 
             # Additional nice-to-have time representations.
             if 'Times' in got_time:
@@ -284,9 +310,15 @@ class FileReader:
                     self.time.datetime = np.array([datetime.strptime(d, '%Y-%m-%dT%H:%M:%S.%f') for d in self.time.Times])
                 except ValueError:
                     self.time.datetime = np.array([datetime.strptime(d, '%Y/%m/%d %H:%M:%S.%f') for d in self.time.Times])
+                attributes = type('attributes', (object,), {})()
+                setattr(attributes, 'long_name', 'Python datetime.datetime')
+                setattr(self.atts, 'datetime', attributes)
             else:
                 self.time.datetime = _dates
             self.time.matlabtime = self.time.time + 678942.0  # convert to MATLAB-indexed times from Modified Julian Date.
+            attributes = type('attributes', (object,), {})()
+            setattr(attributes, 'long_name', 'MATLAB datenum')
+            setattr(self.atts, 'matlabtime', attributes)
 
             # Clip everything to the time indices if we've been given them. Update the time dimension too.
             if 'time' in self._dims:
@@ -305,6 +337,11 @@ class FileReader:
         for grid in 'lon', 'lat', 'x', 'y', 'lonc', 'latc', 'xc', 'yc', 'h', 'siglay', 'siglev':
             try:
                 setattr(self.grid, grid, self.ds.variables[grid][:])
+                # Save the attributes.
+                attributes = type('attributes', (object,), {})()
+                for attribute in self.ds.variables[grid].ncattrs():
+                    setattr(attributes, attribute, getattr(self.ds.variables[grid], attribute))
+                setattr(self.atts, grid, attributes)
             except KeyError:
                 # Make zeros for this missing variable so we can convert from the non-missing data below.
                 if grid.endswith('c'):
@@ -356,10 +393,15 @@ class FileReader:
         # Add compatibility for FVCOM3 (these variables are only specified on the element centres in FVCOM4+ output
         # files). Only create the element centred values if we have the same number of nodes as in the triangulation.
         # This does not occur if we've been asked to extract a different set of nodes and elements, for whatever
-        # reason (e.g. testing).
+        # reason (e.g. testing). We don't add attributes for the data if we've created it as doing so is a pain.
         for var in 'h_center', 'siglay_center', 'siglev_center':
             try:
                 setattr(self.grid, var, self.ds.variables[var][:])
+                # Save the attributes.
+                attributes = type('attributes', (object,), {})()
+                for attribute in self.ds.variables[var].ncattrs():
+                    setattr(attributes, attribute, getattr(self.ds.variables[var], attribute))
+                setattr(self.atts, var, attributes)
             except KeyError:
                 if self.grid.nv.max() == len(self.grid.x):
                     setattr(self.grid, var, nodes2elems(getattr(self.grid, var.split('_')[0]), self.grid.triangles))
@@ -585,6 +627,12 @@ class FileReader:
             if 'time' not in var_dim:
                 # Should we error here or carry on having warned?
                 warn('{} does not contain a time dimension.'.format(v))
+
+            # Save any attributes associated with this variable before trying to load the data.
+            attributes = type('attributes', (object,), {})()
+            for attribute in self.ds.variables[v].ncattrs():
+                setattr(attributes, attribute, getattr(self.ds.variables[v], attribute))
+            setattr(self.atts, v, attributes)
 
             # We've not been told to subset in any dimension, so just return early with all the data.
             if not (start or end or stride or original_layer or original_level or original_node or original_nele):
