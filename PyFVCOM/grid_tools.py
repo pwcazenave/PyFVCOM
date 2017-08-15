@@ -13,6 +13,7 @@ from matplotlib.tri import CubicTriInterpolator
 from warnings import warn
 
 from PyFVCOM.ll2utm import UTM_to_LL
+from PyFVCOM.stats_tools import fix_range
 
 
 def read_sms_mesh(mesh, nodestrings=False):
@@ -2133,6 +2134,9 @@ def make_water_column(zeta, h, siglay):
     Tidy up the try/excepth block with an actual error.
 
     """
+
+    # Fix the range of siglay to be -1 to 0 so we don't get a wobbly seabed.
+    siglay = fix_range(siglay, -1, 0)
 
     # We may have a single node, in which case we don't need the newaxis,
     # otherwise, we do.
