@@ -528,6 +528,10 @@ class FileReader:
 
         if got_time:
             start, end = self._dims['time']
+            # If we've been given a negative end dimension, find the end point for the range based on the size of the
+            # time dimension in the netCDF file.
+            if end < 0:
+                end += self.dims.time + 1
         else:
             start, end = False, False  # load everything
 
