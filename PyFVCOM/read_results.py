@@ -207,7 +207,7 @@ class FileReader:
                 time_axis = idem.ds.variables[time].dimensions.index('time')
                 setattr(idem.time, time, np.delete(getattr(idem.time, time), dupe_indices, axis=time_axis))
             except KeyError:
-                # This is hopefully one of the additional time variable which doesn't exist in the netCDF dataset.
+                # This is hopefully one of the additional time variables which doesn't exist in the netCDF dataset.
                 # Just delete the relevant indices by assuming that time is the first axis.
                 setattr(idem.time, time, np.delete(getattr(idem.time, time), dupe_indices, axis=0))
 
