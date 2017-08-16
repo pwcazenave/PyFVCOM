@@ -14,8 +14,9 @@ from PyFVCOM.utilities import StubFile
 class FileReader_test(TestCase):
 
     def setUp(self):
-        starttime, endtime, interval, lon, lat, triangles = _prep()
-        self.stub = StubFile(starttime, endtime, interval, lon=lon, lat=lat, triangles=triangles, zone='30N')
+        self.starttime, self.endtime, self.interval, self.lon, self.lat, self.triangles = _prep()
+        self.stub = StubFile(self.starttime, self.endtime, self.interval,
+                             lon=self.lon, lat=self.lat, triangles=self.triangles, zone='30N')
 
     def tearDown(self):
         del(self.stub)
@@ -120,6 +121,28 @@ class FileReader_test(TestCase):
         test.assert_almost_equal(np.squeeze(F.data.ww), vertical_velocity, decimal=5)
         self.stub.ncfile.close()
         os.remove(self.stub.ncfile.name)
+
+    def test_add_files(self):
+        # Make another stub file which follows in time from the existing one.
+        next_stub = StubFile(self.endtime, self.endtime + relativedelta(months=1), self.interval,
+                             lon=self.lon, lat=self.lat, triangles=self.triangles, zone='30N')
+
+        # Append the new stub file to the old one.
+        F1 = FileReader(self.stub.ncfile.name, dims={'siglay': [5], 'time': [0, -10]}, variables=['ww'])
+        F2 = FileReader(next_stub.ncfile.name, dims={'siglay': [5], 'time': [0, -10]}, variables=['ww'])
+        all_times = np.concatenate((F1.time.datetime[:], F2.time.datetime[:]), axis=0)
+        all_data = np.concatenate((F1.data.ww[:], F2.data.ww[:]), axis=0)
+        # Repeat the process, but use the __add__ method in FileReader.
+        F = FileReader(self.stub.ncfile.name, dims={'siglay': [5], 'time': [0, -10]}, variables=['ww'])
+        F += FileReader(next_stub.ncfile.name, dims={'siglay': [5], 'time': [0, -10]}, variables=['ww'])
+
+        test.assert_equal(F.time.datetime.shape, all_times.shape)
+        test.assert_equal(F.data.ww.shape, all_data.shape)
+        # Tidy up.
+        self.stub.ncfile.close()
+        next_stub.ncfile.close()
+        os.remove(self.stub.ncfile.name)
+        os.remove(next_stub.ncfile.name)
 
 
 def _prep(starttime=None, duration=None, interval=None):
