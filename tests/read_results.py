@@ -123,7 +123,8 @@ class FileReader_test(TestCase):
         os.remove(self.stub.ncfile.name)
 
     def test_add_files(self):
-        # Make another stub file which follows in time from the existing one.
+        # Make another stub file which follows in time from the existing one. Then only load a section of that in
+        # time and make sure the results are the same as if we'd loaded them manually and added them together.
         next_stub = StubFile(self.endtime, self.endtime + relativedelta(months=1), self.interval,
                              lon=self.lon, lat=self.lat, triangles=self.triangles, zone='30N')
 
