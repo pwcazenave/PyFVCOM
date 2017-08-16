@@ -624,13 +624,13 @@ class FileReader:
         # dimensions).
         if not stride:
             stride = 1
-        if start or end:
-            time = np.arange(start, end, stride)
-        else:
+        if not start:
+            start = 0
+        if not end:
             try:
-                time = np.arange(self.dims.time)
+                end = self.dims.time
             except AttributeError:
-                warn('No time dimension in this netCDF file.')
+                end = -1
 
         for v in var:
             if self._debug:
@@ -681,27 +681,27 @@ class FileReader:
                     if self._debug:
                         print('1: dims {}'.format(self._dims))
                     if 'siglay' in var_dim and 'node' in var_dim:
-                        setattr(self.data, v, self.ds.variables[v][time, layer, node])
+                        setattr(self.data, v, self.ds.variables[v][start:end:stride, layer, node])
                     elif 'siglev' in var_dim and 'node' in var_dim:
-                        setattr(self.data, v, self.ds.variables[v][time, level, node])
+                        setattr(self.data, v, self.ds.variables[v][start:end:stride, level, node])
                     elif 'siglay' in var_dim and 'nele' in var_dim:
-                        setattr(self.data, v, self.ds.variables[v][time, layer, nele])
+                        setattr(self.data, v, self.ds.variables[v][start:end:stride, layer, nele])
                     elif 'siglev' in var_dim and 'nele' in var_dim:
-                        setattr(self.data, v, self.ds.variables[v][time, level, nele])
+                        setattr(self.data, v, self.ds.variables[v][start:end:stride, level, nele])
                 elif temporal and vertical and not horizontal:
                     if self._debug:
                         print('2: dims {}'.format(self._dims))
                     if 'siglay' in var_dim:
-                        setattr(self.data, v, self.ds.variables[v][time, layer, ...])
+                        setattr(self.data, v, self.ds.variables[v][start:end:stride, layer, ...])
                     elif 'siglev' in var_dim:
-                        setattr(self.data, v, self.ds.variables[v][time, level, ...])
+                        setattr(self.data, v, self.ds.variables[v][start:end:stride, level, ...])
                 elif temporal and not vertical and horizontal:
                     if self._debug:
                         print('3: dims {}'.format(self._dims))
                     if 'node' in var_dim:
-                        setattr(self.data, v, self.ds.variables[v][time, node])
+                        setattr(self.data, v, self.ds.variables[v][start:end:stride, node])
                     elif 'nele' in var_dim:
-                        setattr(self.data, v, self.ds.variables[v][time, nele])
+                        setattr(self.data, v, self.ds.variables[v][start:end:stride, nele])
                 elif not temporal and vertical and horizontal:
                     if self._debug:
                         print('4: dims {}'.format(self._dims))
