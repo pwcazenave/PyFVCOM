@@ -43,11 +43,12 @@ class FileReader:
             add this object to another one which does have variables in it.
         dims : dict, optional
             Dictionary of dimension names along which to subsample e.g. dims={'time': [0, 100], 'nele': [0, 10, 100],
-            'node': 100}. Times are specified as ranges; horizontal and vertical dimensions (siglay, siglev, node,
-            nele) can be list-like. Any combination of dimensions is possible. Omitted dimensions are loaded in their
-            entirety. To extract a single time (e.g. the 9th in python indexing), specify the range as [9, 10].
-            N.B. The vertical dimensions (siglay, siglev) can only be currently specified with a range (i.e. [0, 5])
-            rather than a list of layers/levels to extract.
+            'node': 100}.
+            Times (time) is specified as a range; vertical (siglay, siglev) and horizontal dimensions (node,
+            nele) can be list-like.
+            Any combination of dimensions is possible; omitted dimensions are loaded in their entirety.
+            To extract a single time (e.g. the 9th in python indexing), specify the range as [9, 10].
+            Negative indices are supported. To load from the 10th to the last time can be written as 'time': [9, -1]).
         zone : str, list-like, optional
             UTM zones (defaults to '30N') for conversion of UTM to spherical coordinates.
         debug : bool, optional
@@ -81,7 +82,9 @@ class FileReader:
         self._debug = debug
         self._fvcom = fvcom
         self._zone = zone
-        self._dims = dims
+        # We may modify the dimensions (for negative indexing), so make a deepcopy (copy isn't sufficient) so
+        # successive calls to FileReader from MFileReader work properly.
+        self._dims = copy.deepcopy(dims)
         # Silently convert a string variable input to an iterable list.
         if isinstance(variables, str):
             variables = [variables]
@@ -98,6 +101,14 @@ class FileReader:
 
         for dim in self.ds.dimensions:
             setattr(self.dims, dim, self.ds.dimensions[dim].size)
+
+        # Convert negative indexing to positive in dimensions to extract. We do this since we end up using range for
+        # the extraction of each dimension since you can't (easily) pass slices as arguments.
+        for dim in self._dims:
+            negatives = [i < 0 for i in self._dims[dim]]
+            for i, value in enumerate(negatives):
+                if value:
+                    self._dims[dim][i] = self._dims[dim][i] + self.ds.dimensions[dim].size + 1
 
         self._load_time()
         self._load_grid()
@@ -530,10 +541,6 @@ class FileReader:
 
         if got_time:
             start, end = self._dims['time']
-            # If we've been given a negative end dimension, find the end point for the range based on the size of the
-            # time dimension in the netCDF file.
-            if end < 0:
-                end += self.dims.time + 1
         else:
             start, end = False, False  # load everything
 
