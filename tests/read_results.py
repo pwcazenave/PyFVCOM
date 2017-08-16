@@ -137,8 +137,9 @@ class FileReader_test(TestCase):
         F = FileReader(self.stub.ncfile.name, dims={'siglay': [5], 'time': [0, -10]}, variables=['ww'])
         F += FileReader(next_stub.ncfile.name, dims={'siglay': [5], 'time': [0, -10]}, variables=['ww'])
 
-        test.assert_equal(F.time.datetime.shape, all_times.shape)
-        test.assert_equal(F.data.ww.shape, all_data.shape)
+        test.assert_equal(F.time.datetime, all_times)
+        test.assert_equal(F.data.ww, all_data)
+
         # Tidy up.
         self.stub.ncfile.close()
         next_stub.ncfile.close()
