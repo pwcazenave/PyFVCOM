@@ -2153,7 +2153,7 @@ def make_water_column(zeta, h, siglay):
     return z
 
 
-def get_boundary_polygons(triangle):
+def get_boundary_polygons(triangle, noisy=False):
     """
     Gets a list of the clo
 
@@ -2170,7 +2170,7 @@ def get_boundary_polygons(triangle):
     -------
     boundary_polygon_list : list
         List of integer arrays. Each array is one closed boundary polygon with
-		the integers referring to node number 
+        the integers referring to node number 
 
     """
 
@@ -2191,7 +2191,8 @@ def get_boundary_polygons(triangle):
             next_nodes = get_attached_unique_nodes(boundary_node_list[-1], triangle)
             node_ind = 0
             len_bl = len(boundary_node_list)
-            print(len_bl)
+            if noisy:
+                print(len_bl)
             while len(boundary_node_list) == len_bl:
                 try:
                     if next_nodes[node_ind] not in boundary_node_list:
