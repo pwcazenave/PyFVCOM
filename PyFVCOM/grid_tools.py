@@ -13,7 +13,6 @@ from matplotlib.tri import CubicTriInterpolator
 from warnings import warn
 
 from PyFVCOM.ll2utm import UTM_to_LL
-from PyFVCOM.stats_tools import fix_range
 
 
 def read_sms_mesh(mesh, nodestrings=False):
@@ -87,7 +86,7 @@ def read_sms_mesh(mesh, nodestrings=False):
             nodes.append(int(xy[1]))
             # Although MIKE keeps zero and one reserved for normal nodes and
             # land nodes, SMS doesn't. This means it's not straightforward
-            # to determine this information from the SMS file alone. It would
+            # to determine this information from the SMS file alone. It woud
             # require finding nodes which are edge nodes and assigning their
             # ID to one. All other nodes would be zero until they were
             # overwritten when examining the node strings below.
@@ -1244,10 +1243,9 @@ def line_sample(x, y, positions, num=0, return_distance=False, noisy=False):
 
     def __nodes_on_line__(xs, ys, start, end, pdist, noisy=False):
         """
-        Child function to find all the points within the coordinates in xs and
-        ys which fall along the line described by the coordinate pairs start
-        and end. Uses pdist (distance of all coordinates from the line [start,
-        end]) to select nodes.
+        Child function to find all the points within the coordinates in sx and
+        sy which fall along the line described by the coordinate pairs start
+        and end.
 
         Parameters
         ----------
@@ -1265,8 +1263,9 @@ def line_sample(x, y, positions, num=0, return_distance=False, noisy=False):
             List of indices for the nodes used in the line sample.
         line : ndarray
             List of positions which fall along the line described by (start,
-            end). These are the projected positions of the nodes which fall
+            end).  These are the projected positions of the nodes which fall
             closest to the line (not the positions of the nodes themselves).
+
 
         """
 
@@ -1315,12 +1314,12 @@ def line_sample(x, y, positions, num=0, return_distance=False, noisy=False):
                 # Haven't found any points yet.
                 oldtdist = tdist
 
-            if fdist >= length:
+            if fdist > length:
                 # We've gone beyond the end of the line, so don't bother trying
                 # to find another node.  Leave the if block so we actually add
                 # the current index and position to sidx and line. We'll break
                 # out of the main while loop a bit later.
-                break
+                pass
 
             elif tdist > oldtdist:
                 # We're moving away from the end point. Find the closest point
@@ -1358,23 +1357,22 @@ def line_sample(x, y, positions, num=0, return_distance=False, noisy=False):
             # Check if we've gone beyond the end of the line (by checking the
             # length of the sampled line), and if so, break out of the loop.
             # Otherwise, carry on.
-            if beg.tolist() == start.tolist() or fdist <= length:
+            if beg.tolist() == start.tolist() or fdist < length:
                 # Reset the beginning point for the next iteration if we're at
                 # the start or within the line extent.
                 beg = np.array(([xx[tidx], yy[tidx]]))
             else:
+                # Convert the list to an array before we leave.
+                line = np.asarray(line)
                 if noisy:
                     print('Reached the end of the line segment')
 
                 break
 
-        # Convert the list to an array before we leave.
-        line = np.asarray(line)
-
         return sidx, line
 
     # To do multi-segment lines, we'll break each one down into a separate
-    # line and do those sequentially. This means I don't have to rewrite
+    # line, and do those sequentially. This means I don't have to rewrite
     # masses of the existing code and it's still pretty easy to understand (for
     # me at least!).
     nlocations = len(positions)
@@ -1418,7 +1416,7 @@ def line_sample(x, y, positions, num=0, return_distance=False, noisy=False):
             # For each position in the line array, find the nearest indices in
             # the supplied unstructured grid. We'll use our existing function
             # findNearestPoint for this.
-            _, _, _, tidx = find_nearest_point(x, y, xx, yy, noisy=noisy)
+            _, _, _, tidx = findNearestPoint(x, y, xx, yy, noisy=noisy)
             [idx.append(i) for i in tidx.tolist()]
 
         else:
@@ -1500,9 +1498,9 @@ def line_sample(x, y, positions, num=0, return_distance=False, noisy=False):
                 # means we don't end up with negative distances, which means
                 # we don't have to worry about signed distance functions and
                 # other fun things to get proper distance along the transect.
-                xdist = np.diff(xx[tidx])
-                ydist = np.diff(xx[tidx])
-                tdist = np.hstack((0, np.cumsum(np.sqrt(xdist**2 + ydist**2))))
+                xdist = xx[tidx] - xx[tidx[0]]
+                ydist = yy[tidx] - yy[tidx[0]]
+                tdist = np.sqrt(xdist**2 + ydist**2)
                 # Make distances relative to the end of the last segment,
                 # if we have one.
                 if not dist:
@@ -1898,42 +1896,59 @@ def find_connected_elements(n, triangles):
     return surroundingidx
 
 
-def get_area(v1, v2, v3):
-    """ Calculate the area of a triangle/set of triangles.
+def heron(v0, v1, v2):
+    """ Calculate the area of a triangle using Heron's formula.
 
     Parameters
     ----------
-    v1, v2, v3 : tuple, list (float, float)
+    v0, v1, v2 : ndarray
         Coordinate pairs (x, y) of the three vertices of a triangle. Can be 1D
-        arrays of positions or lists of positions.
+        arrays of positions.
 
     Returns
     -------
-    area : tuple, ndarray
-        Area of the triangle(s). Units of v0, v1 and v2.
+    area : ndarray
+        Area of the triangle. Units of v0, v1 and v2.
+
+    Notes
+    -----
+    There are two approaches to calculating the area with Heron's formula, one
+    which is simple and one more complicated and more numerically stable. They
+    are:
+
+    A = sqrt(s * (s - a) * (s - b) * (s - c))
+
+    where a, b and c are the triangle side lengths and s is the semiperimeter:
+
+    s = 0.5 * (a + b + c) # semiperimeter
+
+    and the numerically stable version:
+
+    A = 0.25 * (sqrt((a + (b + c)) * (c - (a - b)) * (c + (a - b)) * (a + (b - c))))
 
     Examples
     --------
-    >>> v1 = ((4, 0), (0, 0))
-    >>> v2 = ((10, -3), (2, 6))
-    >>> v3 = ((7, 9), (10, -5))
-    >>> a = get_area(v1, v2, v3)
+    >>> import numpy as np
+    >>> v0 = np.array((4, 0))
+    >>> v1 = np.array((10, -3))
+    >>> v2 = np.array((7, 9))
+    >>> a = heron(v0, v1, v2)
     >>> print(a)
-    [ 31.5  35. ]
+    31.5
 
     """
-    v1 = np.asarray(v1)
-    v2 = np.asarray(v2)
-    v3 = np.asarray(v3)
 
-    if np.size(v1) == 2:
-        # Single position
-        area = 0.5 * (v1[0] * (v2[1] - v3[1]) + v2[0] * (v3[1] - v1[1]) + v3[0] * (v1[1] - v2[1]))
-    else:
-        # Array of positions
-        area = 0.5 * (v1[:, 0] * (v2[:, 1] - v3[:, 1]) + v2[:, 0] * (v3[:, 1] - v1[:, 1]) + v3[:, 0] * (v1[:, 1] - v2[:, 1]))
+    a = np.sqrt((v0[0] - v1[0])**2 + (v0[1] - v1[1])**2)
+    b = np.sqrt((v1[0] - v2[0])**2 + (v1[1] - v2[1])**2)
+    c = np.sqrt((v2[0] - v0[0])**2 + (v2[1] - v0[1])**2)
 
-    return abs(area)
+    A = 0.25 * (np.sqrt((a + (b + c)) *
+                        (c - (a - b)) *
+                        (c + (a - b)) *
+                        (a + (b - c))
+                        ))
+
+    return A
 
 
 def find_bad_node(nv, node_id):
@@ -2119,7 +2134,7 @@ def make_water_column(zeta, h, siglay):
     siglay : ndarray
         Sigma layers [lay, nodes]
     h : ndarray
-        Water depth [nodes] or [time, nodes]
+        Water depth [nodes]
     zeta : ndarray
         Surface elevation [time, nodes]
 
@@ -2135,9 +2150,6 @@ def make_water_column(zeta, h, siglay):
 
     """
 
-    # Fix the range of siglay to be -1 to 0 so we don't get a wobbly seabed.
-    siglay = fix_range(siglay, -1, 0)
-
     # We may have a single node, in which case we don't need the newaxis,
     # otherwise, we do.
     try:
@@ -2145,12 +2157,76 @@ def make_water_column(zeta, h, siglay):
     except:
         z = (zeta + h)[:, np.newaxis, :] * -siglay[np.newaxis, ...]
 
-    try:
-        z = z - h
-    except ValueError:
-        z = z - h[:, np.newaxis, :]
+    return z - h
 
-    return z
+
+def get_boundary_polygons(triangle):
+    """
+    Gets a list of the clo
+
+    ASSUMPTIONS: This function assumes a 'clean' FVCOM grid, i.e. no
+    elements with 3    boundary nodes and no single element width channels
+
+    Parameters
+    ----------
+    triangle : ndarray
+        The triangle connectivity matrix as produced by the read_fvcom_mesh
+        function.
+
+    Returns
+    -------
+    boundary_polygon_list : list
+        List of integer arrays. Each array is one closed boundary polygon with
+		the integers referring to node number 
+
+    """
+
+    u,c = np.unique(triangle, return_counts=True)
+    uc = np.asarray([u,c]).T
+
+    nodes_lt_4 = np.asarray(uc[uc[:,1]<4,0], dtype=int)
+    boundary_polygon_list = []
+
+    while len(nodes_lt_4) > 0:
+
+        start_node = nodes_lt_4[0]
+
+        boundary_node_list = [start_node, get_attached_unique_nodes(start_node, triangle)[-1]]
+
+        full_loop = 0
+        while full_loop == 0:
+            next_nodes = get_attached_unique_nodes(boundary_node_list[-1], triangle)
+            node_ind = 0
+            len_bl = len(boundary_node_list)
+            print(len_bl)
+            while len(boundary_node_list) == len_bl:
+                try:
+                    if next_nodes[node_ind] not in boundary_node_list:
+                        boundary_node_list.append(next_nodes[node_ind])
+                    else:
+                        node_ind = node_ind + 1
+                except:
+                    full_loop = 1
+                    len_bl = len_bl + 1
+
+        boundary_polygon_list.append(np.asarray(boundary_node_list))
+        nodes_lt_4 = np.asarray(list(set(nodes_lt_4) - set(boundary_node_list)), dtype=int)
+
+    return boundary_polygon_list
+
+
+def get_attached_unique_nodes(this_node, trinodes):
+    """
+    Worker function for get_boundary_polygons function.
+
+    """   
+
+    all_trinodes = trinodes[(trinodes[:,0] == this_node) | (trinodes[:,1] == this_node) |  (trinodes[:,2] == this_node) , :]
+    u,c = np.unique(all_trinodes, return_counts=True)
+
+    return u[c==1]
+
+
 
 
 # For backwards compatibility.
@@ -2237,9 +2313,3 @@ def OSGB36toWGS84(*args, **kwargs):
 def UTMtoLL(*args, **kwargs):
     warn('{} is deprecated. Use UTM_to_LL instead.'.format(inspect.stack()[0][3]))
     return UTM_to_LL(*args, **kwargs)
-
-
-def heron(*args):
-    warn('{} is deprecated. Use get_area instead.'.format(inspect.stack()[0][3]))
-    return get_area(*args)
-
