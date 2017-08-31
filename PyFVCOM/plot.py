@@ -3,7 +3,6 @@
 from __future__ import print_function
 
 from matplotlib import pyplot as plt
-from mpl_toolkits.basemap import Basemap
 from matplotlib.tri.triangulation import Triangulation
 from matplotlib import rcParams
 from mpl_toolkits.axes_grid1 import make_axes_locatable
@@ -14,6 +13,15 @@ from PyFVCOM.ll2utm import lonlat_from_utm
 from PyFVCOM.read_results import FileReader
 
 import numpy as np
+
+from warnings import warn
+
+have_basemap = True
+try:
+    from mpl_toolkits.basemap import Basemap
+except ImportError:
+    warn('No mpl_toolkits found in this python installation. Some functions will be disabled.')
+    have_basemap = False
 
 rcParams['mathtext.default'] = 'regular'  # use non-LaTeX fonts
 
@@ -475,18 +483,21 @@ class Plotter:
 
         # Create basemap object
         if not self.m:
-            self.m = Basemap(llcrnrlon=self.extents[:2].min(),
-                             llcrnrlat=self.extents[-2:].min(),
-                             urcrnrlon=self.extents[:2].max(),
-                             urcrnrlat=self.extents[-2:].max(),
-                             rsphere=(6378137.00, 6356752.3142),
-                             resolution=self.res,
-                             projection='merc',
-                             area_thresh=0.1,
-                             lat_0=self.extents[-2:].mean(),
-                             lon_0=self.extents[:2].mean(),
-                             lat_ts=self.extents[-2:].mean(),
-                             ax=self.axes)
+            if have_basemap:
+                self.m = Basemap(llcrnrlon=self.extents[:2].min(),
+                                llcrnrlat=self.extents[-2:].min(),
+                                urcrnrlon=self.extents[:2].max(),
+                                urcrnrlat=self.extents[-2:].max(),
+                                rsphere=(6378137.00, 6356752.3142),
+                                resolution=self.res,
+                                projection='merc',
+                                area_thresh=0.1,
+                                lat_0=self.extents[-2:].mean(),
+                                lon_0=self.extents[:2].mean(),
+                                lat_ts=self.extents[-2:].mean(),
+                                ax=self.axes)
+            else:
+                raise RuntimeError('mpl_toolkits is not available in this Python.')
 
         self.m.drawmapboundary()
         self.m.drawcoastlines(zorder=2)
