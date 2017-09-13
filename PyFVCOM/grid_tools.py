@@ -2186,8 +2186,8 @@ def get_boundary_polygons(triangle, noisy=False):
 
         boundary_node_list = [start_node, get_attached_unique_nodes(start_node, triangle)[-1]]
 
-        full_loop = 0
-        while full_loop == 0:
+        full_loop = True
+        while full_loop:
             next_nodes = get_attached_unique_nodes(boundary_node_list[-1], triangle)
             node_ind = 0
             len_bl = len(boundary_node_list)
@@ -2198,10 +2198,10 @@ def get_boundary_polygons(triangle, noisy=False):
                     if next_nodes[node_ind] not in boundary_node_list:
                         boundary_node_list.append(next_nodes[node_ind])
                     else:
-                        node_ind = node_ind + 1
+                        node_ind += 1
                 except:
-                    full_loop = 1
-                    len_bl = len_bl + 1
+                    full_loop = False
+                    len_bl += 1
 
         boundary_polygon_list.append(np.asarray(boundary_node_list))
         nodes_lt_4 = np.asarray(list(set(nodes_lt_4) - set(boundary_node_list)), dtype=int)
