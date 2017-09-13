@@ -1886,7 +1886,7 @@ def find_connected_elements(n, triangles):
 
     """
 
-    if len(n) == 1:
+    if isinstance(n, int) or len(n) == 1:
         surroundingidx = np.argwhere(triangles == n)[:, 0]
     else:
         surroundingidx = []
