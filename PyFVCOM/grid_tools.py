@@ -2158,7 +2158,7 @@ def get_boundary_polygons(triangle, noisy=False):
     Gets a list of the clo
 
     ASSUMPTIONS: This function assumes a 'clean' FVCOM grid, i.e. no
-    elements with 3    boundary nodes and no single element width channels
+    elements with 3 boundary nodes and no single element width channels.
 
     Parameters
     ----------
@@ -2170,14 +2170,14 @@ def get_boundary_polygons(triangle, noisy=False):
     -------
     boundary_polygon_list : list
         List of integer arrays. Each array is one closed boundary polygon with
-        the integers referring to node number 
+        the integers referring to node number.
 
     """
 
-    u,c = np.unique(triangle, return_counts=True)
-    uc = np.asarray([u,c]).T
+    u, c = np.unique(triangle, return_counts=True)
+    uc = np.asarray([u, c]).T
 
-    nodes_lt_4 = np.asarray(uc[uc[:,1]<4,0], dtype=int)
+    nodes_lt_4 = np.asarray(uc[uc[:,1] < 4, 0], dtype=int)
     boundary_polygon_list = []
 
     while len(nodes_lt_4) > 0:
