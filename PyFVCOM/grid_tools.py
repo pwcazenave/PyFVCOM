@@ -12,6 +12,7 @@ import numpy as np
 from matplotlib.tri.triangulation import Triangulation
 from matplotlib.tri import CubicTriInterpolator
 from warnings import warn
+from functools import partial
 
 from PyFVCOM.ll2utm import UTM_to_LL
 from PyFVCOM.stats_tools import fix_range
@@ -2379,7 +2380,7 @@ def control_volumes(x, y, tri, node_control=True, element_control=True, noisy=Fa
         # art1 = np.zeros(m)
         # for i in range(m):
         #     art1[i] = _node_control_area(args[i])
-        art1 = pool.map(_node_control_area, args)
+        art1 = pool.map(partial(node_control_area, x=x, y=y, xc=xc, yc=yc, tri=tri), range(m))
 
     # Compute area of control volume art2(i) = sum(all tris surrounding node i)
     if element_control:
@@ -2387,7 +2388,7 @@ def control_volumes(x, y, tri, node_control=True, element_control=True, noisy=Fa
             print('Compute control volume for fluxes over elements (art2)')
         art = get_area(np.asarray((x[tri[:, 0]], y[tri[:, 0]])).T, np.asarray((x[tri[:, 1]], y[tri[:, 1]])).T, np.asarray((x[tri[:, 2]], y[tri[:, 2]])).T)
         args = ((tri, art, i) for i in range(m))
-        art2 = pool.map(_element_control_area, args)
+        art2 = pool.map(partial(element_control_area, triangles=tri, art=art), range(m))
 
     pool.close()
 
@@ -2399,15 +2400,20 @@ def control_volumes(x, y, tri, node_control=True, element_control=True, noisy=Fa
         return art2
 
 
-def _node_control_area(args):
+def node_control_area(n, x, y, xc, yc, tri):
     """
     Worker function to calculate the control volume for fluxes of node-based values for a given node.
 
     Parameters
     ----------
-    args : tuple
-        Tuple of x node coordinates, y node coordinates, x element coordinates, y element coordinates,
-        triangulation table and the current node ID.
+    n : list-like
+        Current node ID.
+    x, y : list-like
+        Node positions
+    xc, yc : list-like
+        Element centre positions
+    tri : list-like
+        Unstructured grid triangulation table.
 
     Returns
     -------
@@ -2415,8 +2421,6 @@ def _node_control_area(args):
         Node control volume area in x or y length units squared.
 
     """
-
-    x, y, xc, yc, tri, n = args
 
     connected_elements = find_connected_elements(n, tri)
     area = 0
@@ -2439,14 +2443,18 @@ def _node_control_area(args):
     return area
 
 
-def _element_control_area(args):
+def element_control_area(node, triangles, art):
     """
     Worker function to calculate the control volume for fluxes of element-based values for a given node.
 
     Parameters
     ----------
-    args : tuple
-        Tuple of the triangulation table, the element areas and the current node ID.
+    node : int
+        Node ID.
+    triangles : list-like
+        Unstructured grid triangulation table.
+    art : list-like
+        Element areas.
 
     Returns
     -------
@@ -2458,8 +2466,7 @@ def _element_control_area(args):
 
     """
 
-    triangles, art, i = args
-    connected_elements = find_connected_elements(i, triangles)
+    connected_elements = find_connected_elements(node, triangles)
 
     return np.sum(art[connected_elements])
 
