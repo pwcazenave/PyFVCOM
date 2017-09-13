@@ -1811,7 +1811,7 @@ def clip_domain(x, y, extents, noisy=False):
     return mask
 
 
-def surrounders(n, triangles):
+def find_connected_nodes(n, triangles):
     """
     Return the IDs of the nodes surrounding node number `n'.
 
@@ -2328,3 +2328,7 @@ def heron(*args):
     warn('{} is deprecated. Use get_area instead.'.format(inspect.stack()[0][3]))
     return get_area(*args)
 
+
+def surrounders(*args):
+    warn('{} is deprecated. Use find_connected_nodes instead.'.format(inspect.stack()[0][3]))
+    return find_connected_nodes(*args)
