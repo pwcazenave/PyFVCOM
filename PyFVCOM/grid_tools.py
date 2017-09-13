@@ -7,6 +7,7 @@ from __future__ import print_function
 
 import sys
 import inspect
+import multiprocessing
 import numpy as np
 from matplotlib.tri.triangulation import Triangulation
 from matplotlib.tri import CubicTriInterpolator
@@ -14,6 +15,7 @@ from warnings import warn
 
 from PyFVCOM.ll2utm import UTM_to_LL
 from PyFVCOM.stats_tools import fix_range
+from PyFVCOM.read_results import nodes2elems
 
 
 def read_sms_mesh(mesh, nodestrings=False):
@@ -2320,8 +2322,146 @@ def grid_metrics(tri, noisy=False):
     return ntve, nbve, nbe, isbce, isonb
 
 
+def control_volumes(x, y, tri, node_control=True, element_control=True, noisy=False):
+    """
+    This calculates the surface area of individual control volumes consisted of triangles with a common node point.
+
+    Parameters
+    ----------
+    x, y : ndarray
+        Node positions
+    tri : ndarray
+        Triangulation table for the unstructured grid.
+    node_control : bool
+        Set to False to disable calculation of node control volumes. Defaults to True.
+    element_control : bool
+        Set to False to disable calculation of element control volumes. Defaults to True.
+    noisy : bool
+        Set to True to enable verbose output.
+
+    Returns
+    -------
+    art1 : ndarray
+        Area of interior control volume (for node value integration)
+    art2 : ndarray
+        Sum area of all cells around each node.
+
+    Notes
+    -----
+    This is a python reimplementation of the FVCOM function CELL_AREA in cell_area.F. Whilst the reimplementation is
+    coded with efficiency in mind (the calculations occur in parallel), this is still slow for large grids. Please be
+    patient!
+
+    """
+
+    if not node_control and not element_control:
+        raise ValueError("Set either `node_control' or `element_control' to `True'")
+
+    pool = multiprocessing.Pool()
+
+    m = len(x)  # number of nodes
+
+    # Calculate art1 (control volume for fluxes of node-based values). I do this differently from how it's done in
+    # FVCOM as I can't wrap my head around the seemingly needlessly complicated approach they've taken. Here,
+    # my approach is:
+    #   1. For each node, find all the elements connected to it (find_connected_elements).
+    #   2. Identify the nodes in all those elements.
+    #   3. Find the position of the halfway point along each vertex between our current node and all the other nodes
+    #   connected to it.
+    #   4. Using those positions and the positions of the centre of each element, create a polygon (ordered clockwise).
+    #   5. Calculate the area of that polygon with the shapely tools.
+    if node_control:
+        if noisy:
+            print('Compute control volume for fluxes at nodes (art1)')
+        xc = nodes2elems(x, tri)
+        yc = nodes2elems(y, tri)
+        args = [(x, y, xc, yc, tri, i) for i in range(m)]
+        # art1 = np.zeros(m)
+        # for i in range(m):
+        #     art1[i] = _node_control_area(args[i])
+        art1 = pool.map(_node_control_area, args)
+
+    # Compute area of control volume art2(i) = sum(all tris surrounding node i)
+    if element_control:
+        if noisy:
+            print('Compute control volume for fluxes over elements (art2)')
+        art = get_area(np.asarray((x[tri[:, 0]], y[tri[:, 0]])).T, np.asarray((x[tri[:, 1]], y[tri[:, 1]])).T, np.asarray((x[tri[:, 2]], y[tri[:, 2]])).T)
+        args = ((tri, art, i) for i in range(m))
+        art2 = pool.map(_element_control_area, args)
+
+    pool.close()
+
+    if node_control and element_control:
+        return art1, art2
+    elif node_control and not element_control:
+        return art1
+    elif not node_control and element_control:
+        return art2
 
 
+def _node_control_area(args):
+    """
+    Worker function to calculate the control volume for fluxes of node-based values for a given node.
+
+    Parameters
+    ----------
+    args : tuple
+        Tuple of x node coordinates, y node coordinates, x element coordinates, y element coordinates,
+        triangulation table and the current node ID.
+
+    Returns
+    -------
+    node_area : float
+        Node control volume area in x or y length units squared.
+
+    """
+
+    x, y, xc, yc, tri, n = args
+
+    connected_elements = find_connected_elements(n, tri)
+    area = 0
+    # Create two triangles which are from the mid-point of each vertex with the current node and the element centre.
+    # Sum the areas as we go.
+    for element in connected_elements:
+        # Find the nodes in this element.
+        connected_nodes = np.unique(tri[element, :])
+        other_nodes = connected_nodes[connected_nodes != n]
+        centre_x = xc[element]
+        centre_y = yc[element]
+        mid_x, mid_y = [], []
+        for node in other_nodes:
+            mid_x.append(x[n] - ((x[n] - x[node]) / 2))
+            mid_y.append(y[n] - ((y[n] - y[node]) / 2))
+        # Now calculate the area of the triangles formed by [(x[n], y[n]), (centre_x, centre_y), (mid_x, mid_y)].
+        for mid_xy in zip(mid_x, mid_y):
+            area += get_area((x[n], y[n]), mid_xy, (centre_x, centre_y))
+
+    return area
+
+
+def _element_control_area(args):
+    """
+    Worker function to calculate the control volume for fluxes of element-based values for a given node.
+
+    Parameters
+    ----------
+    args : tuple
+        Tuple of the triangulation table, the element areas and the current node ID.
+
+    Returns
+    -------
+    element_area : float
+        Element control volume area in x or y length units squared.
+
+    Notes
+    -----
+
+    """
+
+    triangles, art, i = args
+    connected_elements = find_connected_elements(i, triangles)
+
+    return np.sum(art[connected_elements])
 
 
 # For backwards compatibility.
