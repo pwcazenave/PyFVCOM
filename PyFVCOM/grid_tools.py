@@ -2211,14 +2211,29 @@ def get_boundary_polygons(triangle, noisy=False):
 
 def get_attached_unique_nodes(this_node, trinodes):
     """
-    Worker function for get_boundary_polygons function.
+    Find the nodes on the boundary connected to `this_node'.
 
-    """   
+    Parameters
+    ----------
+    this_node : int
+        Node ID.
+    trinodes : ndarray
+        Triangulation table for an unstructured grid.
 
-    all_trinodes = trinodes[(trinodes[:,0] == this_node) | (trinodes[:,1] == this_node) |  (trinodes[:,2] == this_node) , :]
-    u,c = np.unique(all_trinodes, return_counts=True)
+    Returns
+    -------
+    connected_nodes : ndarray
+        IDs of the nodes connected to `this_node' on the boundary. If `this_node' is not on the boundary,
+        `connected_nodes' is empty.
 
-    return u[c==1]
+    """
+
+    all_trinodes = trinodes[(trinodes[:, 0] == this_node) | (trinodes[:, 1] == this_node) | (trinodes[:, 2] == this_node), :]
+    u, c = np.unique(all_trinodes, return_counts=True)
+
+    return u[c == 1]
+
+
 
 
 
