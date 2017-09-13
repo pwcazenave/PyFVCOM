@@ -2234,6 +2234,92 @@ def get_attached_unique_nodes(this_node, trinodes):
     return u[c == 1]
 
 
+def grid_metrics(tri, noisy=False):
+    """
+    Calculate unstructured grid metrics (most of FVCOM's tge.F).
+
+    Parameters
+    ----------
+    tri : ndarray
+        Triangulation table for the grid.
+    noisy : bool
+        Set to True to enable verbose output (default = False)
+
+    Returns
+    -------
+    nbe : ndarray
+        Indices of tri for the elements connected to each element in the domain. To visualise:
+            plt.plot(x[tri[1000, :], y[tri[1000, :], 'ro')
+            plt.plot(x[tri[nbe[1000], :]] and y[tri[nbe[1000], :]], 'k.')
+        plots the 999th element nodes with the nodes of the surrounding elements too.
+    isbce : ndarray
+        Flag if element is on the boundary (True = yes, False = no)
+    isonb : ndarray
+        Flag if node is on the boundary (True = yes, False = no)
+    ntve : ndarray
+        The number of neighboring elements of each grid node
+    nbve : ndarray
+        nbve(i,1->ntve(i)) = ntve elements containing node i
+
+    Notes
+    -----
+    This is more or less a direct translation from FORTRAN (FVCOM's tge.F).
+
+    """
+
+    nt = tri.shape[0]
+    m = len(np.unique(tri.ravel()))
+
+    # Allocate all our arrays. Use masked by default arrays so we only use valid indices.
+    isonb = np.zeros(m).astype(bool)
+    ntve = np.zeros(m, dtype=int)
+    nbe = np.ma.array(np.zeros((tri.shape), dtype=int), mask=True)
+    nbve = np.ma.array(np.zeros((m, 10), dtype=int), mask=True)
+    # Number of elements connected to each node (ntve) and the IDs of the elements connected to each node (nbve).
+    if noisy:
+        print('Counting neighbouring nodes and elements')
+    for i, (n1, n2, n3) in enumerate(tri):
+        nbve[tri[i, 0], ntve[n1]] = i
+        nbve[tri[i, 1], ntve[n2]] = i
+        nbve[tri[i, 2], ntve[n3]] = i
+        # Only increment the counters afterwards as Python indexes from 0.
+        ntve[n1] += 1
+        ntve[n2] += 1
+        ntve[n3] += 1
+
+    if noisy:
+        print('Getting neighbouring elements for each element')
+    # Get the element IDs connected to each element.
+    for i, (n1, n2, n3) in enumerate(tri):
+        for j1 in range(ntve[n1]):
+            for j2 in range(ntve[n2]):
+                if nbve[n1, j1] == nbve[n2, j2] and nbve[n1, j1] != i:
+                    nbe[i, 2] = nbve[n1, j1]
+        for j2 in range(ntve[n2]):
+            for j3 in range(ntve[n3]):
+                if nbve[n2, j2] == nbve[n3, j3] and nbve[n2, j2] != i:
+                    nbe[i, 0] = nbve[n2, j2]
+        for j1 in range(ntve[n1]):
+            for j3 in range(ntve[n3]):
+                if nbve[n1, j1] == nbve[n3, j3] and nbve[n1, j1] != i:
+                    nbe[i, 1] = nbve[n3, j3]
+
+    if noisy:
+        print('Getting boundary element IDs')
+    isbce = np.max(nbe.mask, axis=1)
+
+    if noisy:
+        print('Getting boundary node IDs')
+
+    # Get the boundary node IDs. Holy nested list comprehensions, Batman!
+    boundary_element_node_ids = np.unique(tri[isbce, :]).ravel()
+    boundary_nodes = np.unique([i for i in [get_attached_unique_nodes(i, tri) for i in boundary_element_node_ids] if np.any(i)])
+    # Make a boolean of that.
+    isonb[boundary_nodes] = True
+
+    return ntve, nbve, nbe, isbce, isonb
+
+
 
 
 
