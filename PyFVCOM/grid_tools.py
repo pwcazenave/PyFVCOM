@@ -1802,10 +1802,10 @@ def clip_domain(x, y, extents, noisy=False):
 
     """
 
-    mask = np.where((x > extents[0]) *
-            (x < extents[1]) *
-            (y > extents[2]) *
-            (y < extents[3]))[0]
+    mask = np.where((x >= extents[0]) *
+            (x <= extents[1]) *
+            (y >= extents[2]) *
+            (y <= extents[3]))[0]
 
     if noisy:
         print('Subset contains {} points of {} total.'.format(len(mask),
