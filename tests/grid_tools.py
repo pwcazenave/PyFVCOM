@@ -38,4 +38,5 @@ class GridToolsTest(TestCase):
                            2 / 3, 1 / 6, 2 / 3,
                            1 / 6, 2 / 3, 1 / 6]
         test_element_areas = [0.5, 2, 2, 2, 0.5, 2, 0.5, 2, 0.5]
-        node_areas, element_areas = control_volumes(self.x, self.y, self.tri)
+        node_areas, element_areas = control_volumes(self.x, self.y, self.tri)        test.assert_almost_equal(node_areas, test_node_areas)
+        test.assert_almost_equal(element_areas, test_element_areas)
