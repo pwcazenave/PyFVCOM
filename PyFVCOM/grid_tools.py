@@ -799,9 +799,9 @@ def element_side_lengths(triangles, x, y):
     triangle and return as an array of lengths. Units are in the original input
     units (no conversion from lat/long to metres, for example).
 
-    The arrays triangles, x and y can be created by running
-    parseUnstructuredGridSMS(), parseUnstructuredGridFVCOM() or
-    parseUnstructuredGridMIKE() on a given SMS, FVCOM or MIKE grid file.
+    The arrays triangles, x and y can be created by running read_sms_mesh(),
+    read_fvcom_mesh() or read_mike_mesh() on a given SMS, FVCOM or MIKE grid
+    file.
 
     Parameters
     ----------
