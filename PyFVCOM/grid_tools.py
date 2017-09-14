@@ -2376,10 +2376,6 @@ def control_volumes(x, y, tri, node_control=True, element_control=True, noisy=Fa
             print('Compute control volume for fluxes at nodes (art1)')
         xc = nodes2elems(x, tri)
         yc = nodes2elems(y, tri)
-        args = [(x, y, xc, yc, tri, i) for i in range(m)]
-        # art1 = np.zeros(m)
-        # for i in range(m):
-        #     art1[i] = _node_control_area(args[i])
         art1 = pool.map(partial(node_control_area, x=x, y=y, xc=xc, yc=yc, tri=tri), range(m))
 
     # Compute area of control volume art2(i) = sum(all tris surrounding node i)
@@ -2387,7 +2383,6 @@ def control_volumes(x, y, tri, node_control=True, element_control=True, noisy=Fa
         if noisy:
             print('Compute control volume for fluxes over elements (art2)')
         art = get_area(np.asarray((x[tri[:, 0]], y[tri[:, 0]])).T, np.asarray((x[tri[:, 1]], y[tri[:, 1]])).T, np.asarray((x[tri[:, 2]], y[tri[:, 2]])).T)
-        args = ((tri, art, i) for i in range(m))
         art2 = pool.map(partial(element_control_area, triangles=tri, art=art), range(m))
 
     pool.close()
