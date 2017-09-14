@@ -22,7 +22,7 @@ class GridToolsTest(TestCase):
         test_node_area = 2 / 3
         node = 1
         node_area = node_control_area(node, self.x, self.y, self.xc, self.yc, self.tri)
-        test.assert_almost_equal(test_node_area, node_area)
+        test.assert_almost_equal(node_area, test_node_area)
 
     def test_get_element_control_area(self):
         test_element_area = 2
@@ -31,7 +31,7 @@ class GridToolsTest(TestCase):
                        np.asarray((self.x[self.tri[:, 1]], self.y[self.tri[:, 1]])).T,
                        np.asarray((self.x[self.tri[:, 2]], self.y[self.tri[:, 2]])).T)
         element_area = element_control_area(node, self.tri, art)
-        test.assert_almost_equal(test_element_area, element_area)
+        test.assert_almost_equal(element_area, test_element_area)
 
     def test_get_control_volumes(self):
         test_node_areas = [1 / 6, 2 / 3, 2 / 3,
