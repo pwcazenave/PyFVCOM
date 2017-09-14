@@ -1783,7 +1783,7 @@ def connectivity(p, t):
 
 def clip_domain(x, y, extents, noisy=False):
     """
-    Function to find the indices for the positions in pos which fall within the
+    Function to find the indices for the positions in `x' and `y' which fall within the
     bounding box defined in extents.
 
     Parameters
