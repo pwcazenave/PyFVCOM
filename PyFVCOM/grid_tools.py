@@ -1118,6 +1118,9 @@ def mesh2grid(meshX, meshY, meshZ, nx, ny, thresh=None, noisy=False):
 
     """
 
+    if not thresh:
+        thresh = np.inf
+
     # Get the extents of the input data.
     xmin, xmax, ymin, ymax = meshX.min(), meshX.max(), meshY.min(), meshY.max()
 
