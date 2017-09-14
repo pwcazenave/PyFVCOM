@@ -2055,7 +2055,8 @@ def ind2sub(array_shape, index):
     ----------
     array_shape : list, tuple, ndarray
         Shape of the array for which to calculate the indices.
-    index : index in the flattened array.
+    index : int
+        Index in the flattened array.
 
     Returns
     -------
