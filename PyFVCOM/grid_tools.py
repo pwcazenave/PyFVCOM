@@ -2159,7 +2159,7 @@ def make_water_column(zeta, h, siglay):
 
 def get_boundary_polygons(triangle, noisy=False):
     """
-    Gets a list of the clo
+    Gets a list of the grid boundary nodes ordered correctly.
 
     ASSUMPTIONS: This function assumes a 'clean' FVCOM grid, i.e. no
     elements with 3 boundary nodes and no single element width channels.
