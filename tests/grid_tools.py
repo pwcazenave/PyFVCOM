@@ -192,11 +192,46 @@ class GridToolsTest(TestCase):
         test.assert_equal(boundary_nodes, test_boundary_nodes)
 
     def test_grid_metrics(self):
-        test_ntve = []
-        test_nbve = []
-        test_nbe = []
-        test_isbce = []
-        test_isonb = []
+        test_ntve = [1, 4, 4, 4, 1, 4, 1, 4, 1]
+        test_nbve = np.ma.empty((len(self.x), 10), dtype=int)
+        test_nbve.mask = True
+        test_nbve[0, 0] = 0
+        test_nbve[1, :4] = [0, 1, 4, 5]
+        test_nbve[2, :4] = [0, 1, 2, 3]
+        test_nbve[3, :4] = [1, 2, 4, 6]
+        test_nbve[4, 0] = 3
+        test_nbve[5, :4] = [2, 3, 6, 7]
+        test_nbve[6, 0] = 5
+        test_nbve[7, :4] = [4, 5, 6, 7]
+        test_nbve[8, 0] = 7
+        test_nbve.mask[1, :4] = False
+        test_nbve.mask[2, :4] = False
+        test_nbve.mask[3, :4] = False
+        test_nbve.mask[4, 0] = False
+        test_nbve.mask[5, :4] = False
+        test_nbve.mask[6, 0] = False
+        test_nbve.mask[7, :4] = False
+        test_nbve.mask[8, 0] = False
+        test_nbe = np.ma.empty((8, 3), dtype=int)
+        test_nbe.mask = True
+        test_nbe[0, 0] = 1
+        test_nbe[1, :] = [2, 4, 0]
+        test_nbe[2, :] = [6, 1, 3]
+        test_nbe[3, 1] = 2
+        test_nbe[4, :] = [6, 5, 1]
+        test_nbe[5, 2] = 4
+        test_nbe[6, :] = [7, 4, 2]
+        test_nbe[7, 2] = 6
+        test_nbe.mask[0, 0] = False
+        test_nbe.mask[1, :] = False
+        test_nbe.mask[2, :] = False
+        test_nbe.mask[3, 1] = False
+        test_nbe.mask[4, :] = False
+        test_nbe.mask[5, 2] = False
+        test_nbe.mask[6, :] = False
+        test_nbe.mask[7, 2] = False
+        test_isbce = [True, False, False, True, False, True, False, True]
+        test_isonb = [True, True, True, False, True, True, True, True, True]
         ntve, nbve, nbe, isbce, isonb = grid_metrics(self.tri)
         test.assert_equal(ntve, test_ntve)
         test.assert_equal(nbve, test_nbve)
