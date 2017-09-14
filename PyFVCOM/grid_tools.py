@@ -2271,7 +2271,6 @@ def grid_metrics(tri, noisy=False):
 
     """
 
-    nt = tri.shape[0]
     m = len(np.unique(tri.ravel()))
 
     # Allocate all our arrays. Use masked by default arrays so we only use valid indices.
