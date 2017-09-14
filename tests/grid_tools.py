@@ -7,7 +7,7 @@ from PyFVCOM.read_results import nodes2elems
 from PyFVCOM.grid_tools import get_area, node_control_area, element_control_area, control_volumes
 
 
-class grid_tools_test(TestCase):
+class GridToolsTest(TestCase):
 
     def setUp(self):
         # Make a really simple unstructured grid of 4 elements stack on top of one another.
@@ -39,4 +39,3 @@ class grid_tools_test(TestCase):
         test_control_volumes = [1 / 3] * len(self.x)
         test_control_volumes = [1] * len(self.x)
         node_areas, element_areas = control_volumes(self.x, self.y, self.tri)
-
