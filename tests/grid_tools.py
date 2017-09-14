@@ -18,9 +18,6 @@ class GridToolsTest(TestCase):
         self.yc = nodes2elems(self.y, self.tri)
         self.z = np.array([0, 1, 1, 0, 2, 1, 2, 3, 3])
 
-    def tearDown(self):
-        pass
-
     def test_get_node_control_area(self):
         test_node_area = 2 / 3
         node = 1
