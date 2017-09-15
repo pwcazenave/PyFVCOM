@@ -1022,7 +1022,7 @@ def dens_jackett(th, s, p=None):
 
 def cond2salt(cond):
     """
-    Convert conductivity to salinity assuming constant temperature (25 celsius)
+    Convert conductivity to salinity assuming constant temperature (25 Celsius)
     and pressure.
 
     Parameters
@@ -1047,8 +1047,8 @@ def cond2salt(cond):
     # Some constants
     k1, k2, k3, k4, k5, k6 = 0.012, -0.2174, 25.3283, 13.7714, -6.4788, 2.5842
 
-    # Ratio of specific conductance at 25 celsius to standard seawater
-    # (salinity equals 35) at 25 celsius (53.087 millisiemens per centimetre).
+    # Ratio of specific conductance at 25 Celsius to standard seawater
+    # (salinity equals 35) at 25 Celsius (53.087 millisiemens per centimetre).
     R = cond / (53.087 * 1000)  # convert from milli to micro
 
     salt = \
