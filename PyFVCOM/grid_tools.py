@@ -2430,6 +2430,43 @@ def element_control_area(node, triangles, art):
     return np.sum(art[connected_elements])
 
 
+def unstructured_grid_volume(area, depth, surface_elevation, thickness, depth_intergrated=False):
+    """
+    Calculate the volume for every cell in the unstructured grid.
+
+    Parameters
+    ----------
+    area : np.ndarray
+        Element area
+    depth : np.ndarray
+        Static water depth
+    surface_elevation : np.ndarray
+        Time-varying surface elevation
+    thickness : np.ndarray
+        Level (i.e. between layer) position (range 0-1). In FVCOM, this is siglev.
+    depth_intergrated : bool, optional
+        Set to True to return the depth-integrated volume in addition to the depth-resolved volume. Defaults to False.
+
+    Returns
+    -------
+    depth_volume : np.ndarray
+        Depth-resolved volume of all the elements with time.
+    volume : np.ndarray, optional
+        Depth-integrated volume of all the elements with time.
+
+    """
+
+    # Convert thickness to actual thickness rather than position in water column of the layer.
+    dz = np.abs(np.diff(thickness, axis=0))
+    volume = (area * (surface_elevation + depth))
+    depth_volume = volume[:, np.newaxis, :] * dz[np.newaxis, ...]
+
+    if depth_intergrated:
+        return depth_volume, volume
+    else:
+        return depth_volume
+
+
 # For backwards compatibility.
 def parseUnstructuredGridSMS(*args, **kwargs):
     warn('{} is deprecated. Use read_sms_mesh instead.'.format(inspect.stack()[0][3]))

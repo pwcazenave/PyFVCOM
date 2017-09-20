@@ -111,40 +111,6 @@ def data_average(data, **args):
     return dataMeaned
 
 
-def unstructured_grid_volume(FVCOM):
-    """
-    Calculate the volume for every cell in the unstructured grid.
-
-    Parameters
-    ----------
-    FVCOM : dict
-        Dict which contains the following keys:
-            - art1 - element area
-            - h - water depth
-            - zeta - surface elevation time series
-            - siglev - sigma level layer thickness (range 0-1)
-
-    Returns
-    -------
-    allVolumes : np.ndarray
-        Array with the volumes of all the elements with time.
-
-    """
-
-    elemAreas = FVCOM['art1']
-    elemDepths = FVCOM['h']
-    elemTides = FVCOM['zeta']
-    elemThickness = np.abs(np.diff(FVCOM['siglev'], axis=0))
-
-    # Get volumes for each cell at each time step to include tidal changes
-    tt, xx = FVCOM['zeta'].shape  # time, node
-    ll = FVCOM['siglev'].shape[0] - 1  # layers = levels - 1
-    allVolumes = ((elemDepths
-        + np.tile(elemTides, [ll, 1, 1]).transpose(1, 0, 2))
-        * np.tile(elemThickness, [tt, 1, 1])) * elemAreas
-
-    return allVolumes
-
 
 def residual_flow(FVCOM, idxRange=False, checkPlot=False, noisy=False):
     """
