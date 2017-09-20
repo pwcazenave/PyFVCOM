@@ -18,6 +18,7 @@ from warnings import warn
 from collections import namedtuple
 
 from PyFVCOM.grid_tools import find_nearest_point
+from PyFVCOM.utilities import fix_range
 
 try:
     import sqlite3
@@ -899,6 +900,50 @@ def common_time(times1, times2):
     earliest_end = min(r1.end, r2.end)
 
     return latest_start, earliest_end
+
+
+def make_water_column(zeta, h, siglay):
+    """
+    Make a time varying water column array with the surface elevation at the
+    surface and depth negative down.
+
+    Parameters
+    ----------
+    siglay : ndarray
+        Sigma layers [lay, nodes]
+    h : ndarray
+        Water depth [nodes] or [time, nodes]
+    zeta : ndarray
+        Surface elevation [time, nodes]
+
+    Returns
+    -------
+    depth : ndarray
+        Time-varying water depth (with the surface depth varying rather than
+        the seabed) [time, lay, nodes].
+
+    Todo
+    ----
+    Tidy up the try/excepth block with an actual error.
+
+    """
+
+    # Fix the range of siglay to be -1 to 0 so we don't get a wobbly seabed.
+    siglay = fix_range(siglay, -1, 0)
+
+    # We may have a single node, in which case we don't need the newaxis,
+    # otherwise, we do.
+    try:
+        z = (zeta + h) * -siglay
+    except:
+        z = (zeta + h)[:, np.newaxis, :] * -siglay[np.newaxis, ...]
+
+    try:
+        z = z - h
+    except ValueError:
+        z = z - h[:, np.newaxis, :]
+
+    return z
 
 
 # Add for backwards compatibility.
