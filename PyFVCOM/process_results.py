@@ -11,97 +11,6 @@ import matplotlib.pyplot as plt
 
 from warnings import warn
 
-def calculate_total_CO2(FVCOM, varPlot, startIdx, layerIdx, leakIdx, dt, noisy=False):
-    """
-    Calculates total CO2 input and plots accordingly. Nothing too fancy.
-
-    Give a NetCDF object as the first input (i.e. the output of readFVCOM()).
-    The variable of interest is defined as a string in varPlot and the
-    summation begins at startIdx. The total is calculated at that layer
-    layerIdx (you probably want this to be zero) and at the point leakIdx.
-
-    Plot is of the input at leakIdx for the duration of FVCOM['time'].
-
-    Optionally specify noisy as True to get more verbose output.
-
-    FIXME(pica) This doesn't work as is.
-
-    """
-
-    Z = FVCOM[varPlot]
-
-    TCO2 = np.zeros(FVCOM['time'].shape)
-
-    for i in range(startIdx, Z.shape[0]):
-        if i > 0:
-            if len(np.shape(Z)) == 3:
-                TCO2[i] = TCO2[i-1] + (Z[i, layerIdx, leakIdx].squeeze() * dt)
-            else:
-                TCO2[i] = TCO2[i-1] + (Z[i, leakIdx].squeeze() * dt)
-
-    # Scale to daily input. Input rate begins two days into model run
-    nDays = FVCOM['time'].max()-FVCOM['time'].min()-2
-    TCO2Scaled = TCO2/nDays
-
-    # Get the total CO2 in the system at the end of the simulation
-    totalCO2inSystem = np.sum(Z[np.isfinite(Z)])  # skip NaNs
-
-    # Some results
-    if noisy:
-        print("Leak:\t\t{}\nLayer:\t\t{}\nStart:\t\t{}".format(leakIdx, layerIdx, startIdx))
-        print("Total input per day:\t\t{:.2f}".format(TCO2Scaled[-1]))
-        print("Total in the system:\t\t{:.2f}".format(totalCO2inSystem))
-        print("Total in the system per day:\t{:.2f}".format(totalCO2inSystem / nDays))
-
-    # Make a pretty picture
-    # plt.figure(100)
-    # plt.clf()
-    # #plt.plot(FVCOM['time'],TCO2,'r-x')
-    # plt.plot(xrange(Z.shape[0]),np.squeeze(Z[:,layerIdx,leakIdx]),'r-x')
-    # plt.xlabel('Time')
-    # plt.ylabel(varPlot + ' input')
-    # plt.show()
-
-    return totalCO2inSystem
-
-
-def calculate_CO2_leak_budget(FVCOM, leakIdx, startDay):
-    """
-    Replicate Riqui's CO2leak_budget.m code.
-
-    Calculates the total CO2 input in the system over a 24 hour period. Code
-    automatically calculates output file timestep in hours to obtain a 24 hour
-    stretch.
-
-    Specify the first argument as the output of readFVCOM(), the second as the
-    leak point in the grid and the third argument as the leak start.
-
-    FIXME(pica) Not yet working (and probably doesn't match Riqui's code...)
-
-    """
-
-    # Get output file sampling in hours
-    dt = int(round((FVCOM['time'][1] - FVCOM['time'][0]) * 24, 1))
-    # Calculate number of steps required to get a day's worth of results
-    timeSteps = np.r_[0:(24/dt)+1]+startDay
-
-    # Preallocate the output arrays
-    CO2 = np.ones(len(timeSteps))*np.nan
-    CO2Leak = np.ones(np.shape(CO2))*np.nan
-
-    for i, tt in enumerate(timeSteps):
-        dump = FVCOM['h'] + FVCOM['zeta'][tt, :]
-        dz = np.abs(np.diff(FVCOM['siglev'], axis=0))
-        data = FVCOM['DYE'][tt, :, :]*dz
-        data = np.sum(data, axis=0)
-        CO2[i] = np.sum(data*FVCOM['art1'] * dump)
-        CO2Leak[i] = np.sum(data[leakIdx] * FVCOM['art1'][leakIdx])
-
-    maxCO2 = np.max(CO2)
-
-    return CO2, CO2Leak, maxCO2
-
-
 def data_average(data, **args):
     """ Depth average a given FVCOM output data set along a specified axis """
 
@@ -264,16 +173,6 @@ def residual_flow(FVCOM, idxRange=False, checkPlot=False, noisy=False):
 
 
 # For backwards compatibility.
-def calculateTotalCO2(*args, **kwargs):
-    warn('{} is deprecated. Use calculate_total_CO2 instead.'.format(inspect.stack()[0][3]))
-    return calculate_total_CO2(*args, **kwargs)
-
-
-def CO2LeakBudget(*args, **kwargs):
-    warn('{} is deprecated. Use calculate_CO2_leak_budget instead.'.format(inspect.stack()[0][3]))
-    return calculate_CO2_leak_budget(*args, **kwargs)
-
-
 def dataAverage(*args, **kwargs):
     warn('{} is deprecated. Use data_average instead.'.format(inspect.stack()[0][3]))
     return data_average(*args, **kwargs)
