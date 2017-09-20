@@ -11,15 +11,6 @@ import matplotlib.pyplot as plt
 
 from warnings import warn
 
-def data_average(data, **args):
-    """ Depth average a given FVCOM output data set along a specified axis """
-
-    dataMask = np.ma.masked_array(data, np.isnan(data))
-    dataMeaned = np.ma.filled(dataMask.mean(**args), fill_value=np.nan).squeeze()
-
-    return dataMeaned
-
-
 
 def residual_flow(FVCOM, idxRange=False, checkPlot=False, noisy=False):
     """
@@ -173,11 +164,6 @@ def residual_flow(FVCOM, idxRange=False, checkPlot=False, noisy=False):
 
 
 # For backwards compatibility.
-def dataAverage(*args, **kwargs):
-    warn('{} is deprecated. Use data_average instead.'.format(inspect.stack()[0][3]))
-    return data_average(*args, **kwargs)
-
-
 def unstructuredGridVolume(*args, **kwargs):
     warn('{} is deprecated. Use unstructured_grid_volume instead.'.format(inspect.stack()[0][3]))
     return unstructured_grid_volume(*args, **kwargs)
