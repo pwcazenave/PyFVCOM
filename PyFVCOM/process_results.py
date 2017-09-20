@@ -164,11 +164,6 @@ def residual_flow(FVCOM, idxRange=False, checkPlot=False, noisy=False):
 
 
 # For backwards compatibility.
-def unstructuredGridVolume(*args, **kwargs):
-    warn('{} is deprecated. Use unstructured_grid_volume instead.'.format(inspect.stack()[0][3]))
-    return unstructured_grid_volume(*args, **kwargs)
-
-
 def residualFlow(*args, **kwargs):
     warn('{} is deprecated. Use residual_flow instead.'.format(inspect.stack()[0][3]))
     return residual_flow(*args, **kwargs)
