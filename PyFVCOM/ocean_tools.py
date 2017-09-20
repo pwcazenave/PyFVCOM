@@ -787,8 +787,12 @@ def sw_sal78(c, t, p):
     return s
 
 
+def sw_sal80(args):
+    return sw_sal78(*args)
 
 
+def sw_salinity(args):
+    return sw_sal78(*args)
 
 
 def dens_jackett(th, s, p=None):
