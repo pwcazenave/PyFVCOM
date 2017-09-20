@@ -2319,7 +2319,12 @@ def grid_metrics(tri, noisy=False):
 
     # Get the boundary node IDs. Holy nested list comprehensions, Batman!
     boundary_element_node_ids = np.unique(tri[isbce, :]).ravel()
-    boundary_nodes = np.unique([i for i in [get_attached_unique_nodes(i, tri) for i in boundary_element_node_ids] if np.any(i)])
+    boundary_nodes = []
+    for i in boundary_element_node_ids:
+        current_nodes = get_attached_unique_nodes(i, tri)
+        if np.any(current_nodes):
+            boundary_nodes += current_nodes.tolist()
+    boundary_nodes = np.unique(boundary_nodes)
     # Make a boolean of that.
     isonb[boundary_nodes] = True
 
