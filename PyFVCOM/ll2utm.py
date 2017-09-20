@@ -160,6 +160,8 @@ def utm_from_lonlat(lon, lat, zone=None, ellipsoid='WGS84', datum='WGS84'):
     -------
     eastings, northings : np.ndarray
         Eastings and northings for the given longitude, latitudes and zone.
+    zone : np.ndarray
+        List of UTM zones for the eastings and northings.
 
     """
     lon = to_list(lon)
