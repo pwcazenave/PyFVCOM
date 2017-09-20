@@ -198,23 +198,17 @@ def pressure2depth(p, lat):
     z : ndarray
         Water depth in metres.
 
+    Notes
+    -----
+    This implements the UNESCO Technical Papers in Marine Science No. 44 (available from
+    http://unesdoc.unesco.org/images/0005/000598/059832eb.pdf).
+
     """
 
-    c1 = 9.72659
-    c2 = -2.1512e-5
-    c3 = 2.279e-10
-    c4 = -1.82e-15
-    gam = 2.184e-6
+    x = np.sin(lat / 57.29578)**2
+    g = 9.780318 * (1.0 + (5.2788e-3 + 2.36e-5 * x) * x) + 1.092e-6 * p
 
-    y = np.abs(lat)
-    rad = np.sin(np.deg2rad(y))**2
-
-    gy = 9.780318 * (1.0 + (rad * 5.2788e-3) + (rad**2 * 2.36e-5))
-
-    bline = gy + (gam * 0.5 * p)
-
-    tline = (c1 * p) + (c2 * p**2.0) + (c3 * p**3.0) + (c4 * p**4.0)
-    z = tline / bline
+    z = ((((-1.82e-15 * p + 2.279e-10) * p - 2.2512e-5 ) * p + 9.72659) * p) / g
 
     return z
 
