@@ -11,6 +11,8 @@ import numpy as np
 from warnings import warn
 from scipy import stats, polyfit, polyval
 
+from PyFVCOM.utilities import fix_range
+
 
 def calculate_regression(x, y, type):
     """
@@ -91,35 +93,6 @@ def calculate_polyfit(x, y):
         yf = yf / 10**yFactor
 
     return xf, yf
-
-
-def fix_range(a, nmin, nmax):
-    """
-    Given an array of values `a', scale the values within in to the range
-    specified by `nmin' and `nmax'.
-
-    Parameters
-    ----------
-    a : ndarray
-        Array of values to scale.
-    nmin, nmax : float
-        New minimum and maximum values for the new range.
-
-    Returns
-    -------
-    b : ndarray
-        Scaled array.
-
-    """
-
-    A = a.min()
-    B = a.max()
-    C = nmin
-    D = nmax
-
-    b = (((D - C) * (a - A)) / (B - A)) + C
-
-    return b
 
 
 def rmse(a, b, axis=0):
