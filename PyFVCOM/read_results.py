@@ -434,7 +434,7 @@ class FileReader:
                     if 'siglay' in self._dims and 'siglay' in self.ds.variables[var].dimensions:
                         var_shape[self.ds.variables[var].dimensions.index('siglay')] = self.dims.siglay
                     elif 'siglev' in self._dims and 'siglev' in self.ds.variables[var].dimensions:
-                        var_shape[self.ds.variables[var].dimensions.index('siglev')] = self.dims.siglay
+                        var_shape[self.ds.variables[var].dimensions.index('siglev')] = self.dims.siglev
                     _temp = np.empty(var_shape)
                     if 'siglay' in self.ds.variables[var].dimensions:
                         for ni, node in enumerate(self._dims['node']):
@@ -469,7 +469,7 @@ class FileReader:
                     if 'siglay' in self._dims and 'siglay' in self.ds.variables[var].dimensions:
                         var_shape[self.ds.variables[var].dimensions.index('siglay')] = self.dims.siglay
                     elif 'siglev' in self._dims and 'siglev' in self.ds.variables[var].dimensions:
-                        var_shape[self.ds.variables[var].dimensions.index('siglev')] = self.dims.siglay
+                        var_shape[self.ds.variables[var].dimensions.index('siglev')] = self.dims.siglev
                     _temp = np.empty(var_shape)
                     if 'siglay' in self.ds.variables[var].dimensions:
                         for ni, nele in enumerate(self._dims['nele']):
