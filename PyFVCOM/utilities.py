@@ -4,7 +4,7 @@ from netCDF4 import Dataset, date2num
 from datetime import datetime
 
 from PyFVCOM.ll2utm import utm_from_lonlat
-from PyFVCOM.read_results import nodes2elems
+from PyFVCOM.grid_tools import nodes2elems
 
 
 class StubFile():

@@ -14,6 +14,7 @@ from datetime import datetime
 from netCDF4 import Dataset, MFDataset, num2date, date2num
 
 from PyFVCOM.ll2utm import lonlat_from_utm, utm_from_lonlat
+from PyFVCOM.grid_tools import unstructured_grid_volume, nodes2elems
 
 
 class FileReader:
@@ -347,7 +348,7 @@ class FileReader:
         """
 
         # Get the grid data.
-        for grid in 'lon', 'lat', 'x', 'y', 'lonc', 'latc', 'xc', 'yc', 'h', 'siglay', 'siglev':
+        for grid in 'lon', 'lat', 'x', 'y', 'lonc', 'latc', 'xc', 'yc', 'h', 'siglay', 'siglev', 'art1', 'art2':
             try:
                 setattr(self.grid, grid, self.ds.variables[grid][:])
                 # Save the attributes.
@@ -816,6 +817,29 @@ class FileReader:
 
         return index
 
+    def grid_volume(self):
+        """
+        Calculate the grid volume (optionally time varying) for the loaded grid.
+
+        If the surface elevation data have been loaded (`zeta'), the volume varies with time, otherwise, the volume
+        is for the mean water depth (`h').
+
+        Returns
+        -------
+        self.depth_volume : ndarray
+            Depth-resolved volume.
+        self.volume : ndarray
+            Depth-integrated volume.
+
+        """
+
+        if not hasattr(self.data, 'zeta'):
+            surface_elevation = np.zeros((self.dims.node, self.dims.time))
+        else:
+            surface_elevation = self.data.zeta
+
+        self.depth_volume, self.volume = unstructured_grid_volume(self.grid.art1, self.grid.h, surface_elevation, depth_integrated=True)
+
 
 def MFileReader(fvcom, *args, **kwargs):
     """ Wrapper around FileReader for loading multiple files at once.
@@ -1069,10 +1093,12 @@ def ncread(file, vars=None, dims=False, noisy=False, atts=False, datetimes=False
     # end up doing the conversion twice, once for `Times' and again for
     # `time' if both variables have been requested in `vars'.
     done_datetimes = False
+    got_itime = False
+    got_itime2 = False
     # Check whether we'll be able to fulfill the datetime request.
-    if datetimes and vars and not list(set(vars) & set(('Times', 'time'))):
+    if datetimes and vars and not list(set(vars) & set(('Times', 'time', 'Itime', 'Itime2'))):
         raise ValueError("Conversion to python datetimes has been requested "
-                         "but no time variable (`Times' or `time') has been "
+                         "but no time variable (`Times', `time', `Itime' or `Itime2') has been "
                          "requested in vars.")
 
     # If we have a list, assume it's lots of files and load them all. Only use
@@ -1157,12 +1183,12 @@ def ncread(file, vars=None, dims=False, noisy=False, atts=False, datetimes=False
                 for varatt in rootgrp.variables[key].ncattrs():
                     attributes[key][varatt] = getattr(rootgrp.variables[key], varatt)
 
-            if datetimes and key in ('Times', 'time') and not done_datetimes:
+            if datetimes and key in ('Times', 'time', 'Itime', 'Itime2') and not done_datetimes:
                 # Convert the time data to datetime objects. How we do this
-                # depends on which we hit first - `Times' or `time'. For the
-                # former, we need to parse the strings, for the latter we can
-                # leverage num2date from the netCDF4 module and use the time
-                # units attribute.
+                # depends on which we hit first - `Times', `time', `Itime' or
+                # `Itime2'. For the former, we need to parse the strings, for the
+                # latter we can leverage num2date from the netCDF4 module and
+                # use the time units attribute.
                 if key == 'Times':
                     try:
                         # Check if we've only extracted a single time step, in
@@ -1183,6 +1209,10 @@ def ncread(file, vars=None, dims=False, noisy=False, atts=False, datetimes=False
                     FVCOM['datetime'] = num2date(FVCOM[key],
                                                  rootgrp.variables[key].units)
                     done_datetimes = True
+                elif key == 'Itime':
+                    got_itime = True
+                elif key == 'Itime2':
+                    got_itime2 = True
 
             if noisy:
                 if len(str(to_extract)) < 60:
@@ -1192,6 +1222,12 @@ def ncread(file, vars=None, dims=False, noisy=False, atts=False, datetimes=False
 
         elif noisy:
                 print()
+
+    # If: 1. we haven't got datetime in the output 2. we've been asked to get it and 3. we've got both Itime and
+    # Itime2, then make datetime from those.
+    if datetimes and got_itime and got_itime2 and 'datetime' not in FVCOM:
+        FVCOM['datetime'] = num2date(FVCOM['Itime'] + (FVCOM['Itime2'] / 1000 / 24 / 60 / 60),
+                                     rootgrp.variables['Itime'].units)
 
     # Close the open file.
     rootgrp.close()
@@ -1376,99 +1412,6 @@ def write_probes(file, mjd, timeseries, datatype, site, depth, sigma=(-1, -1), l
         # Dump the data (this may be slow).
         for line in np.column_stack((mjd, timeseries)):
             f.write(fmt.format(*line))
-
-
-def elems2nodes(elems, tri, nvert=None):
-    """
-    Calculate a nodal value based on the average value for the elements
-    of which it a part. This necessarily involves an average, so the
-    conversion from nodes2elems and elems2nodes is not reversible.
-
-    Parameters
-    ----------
-    elems : ndarray
-        Array of unstructured grid element values to move to the element
-        nodes.
-    tri : ndarray
-        Array of shape (nelem, 3) comprising the list of connectivity
-        for each element.
-    nvert : int, optional
-        Number of nodes (vertices) in the unstructured grid.
-
-    Returns
-    -------
-    nodes : ndarray
-        Array of values at the grid nodes.
-
-    """
-
-    if not nvert:
-        nvert = np.max(tri) + 1
-    count = np.zeros(nvert, dtype=int)
-
-    # Deal with 1D and 2D element arrays separately
-    if np.ndim(elems) == 1:
-        nodes = np.zeros(nvert)
-        for i, indices in enumerate(tri):
-            n0, n1, n2 = indices
-            nodes[n0] = nodes[n0] + elems[i]
-            nodes[n1] = nodes[n1] + elems[i]
-            nodes[n2] = nodes[n2] + elems[i]
-            count[n0] = count[n0] + 1
-            count[n1] = count[n1] + 1
-            count[n2] = count[n2] + 1
-
-    elif np.ndim(elems) > 1:
-        # Horrible hack alert to get the output array shape for multiple
-        # dimensions.
-        nodes = np.zeros((list(np.shape(elems)[:-1]) + [nvert]))
-        for i, indices in enumerate(tri):
-            n0, n1, n2 = indices
-            nodes[..., n0] = nodes[..., n0] + elems[..., i]
-            nodes[..., n1] = nodes[..., n1] + elems[..., i]
-            nodes[..., n2] = nodes[..., n2] + elems[..., i]
-            count[n0] = count[n0] + 1
-            count[n1] = count[n1] + 1
-            count[n2] = count[n2] + 1
-
-    # Now calculate the average for each node based on the number of
-    # elements of which it is a part.
-    nodes /= count
-
-    return nodes
-
-
-def nodes2elems(nodes, tri):
-    """
-    Calculate a element centre value based on the average value for the
-    nodes from which it is formed. This necessarily involves an average,
-    so the conversion from nodes2elems and elems2nodes is not
-    necessarily reversible.
-
-    Parameters
-    ----------
-    nodes : ndarray
-        Array of unstructured grid node values to move to the element
-        centres.
-    tri : ndarray
-        Array of shape (nelem, 3) comprising the list of connectivity
-        for each element.
-
-    Returns
-    -------
-    elems : ndarray
-        Array of values at the grid nodes.
-
-    """
-
-    if np.ndim(nodes) == 1:
-        elems = nodes[tri].mean(axis=-1)
-    elif np.ndim(nodes) == 2:
-        elems = nodes[..., tri].mean(axis=-1)
-    else:
-        raise Exception('Too many dimensions (maximum of two)')
-
-    return elems
 
 
 # For backwards compatibility.
