@@ -16,7 +16,6 @@ from functools import partial
 
 from PyFVCOM.ll2utm import UTM_to_LL
 from PyFVCOM.utilities import fix_range
-from PyFVCOM.read_results import nodes2elems
 
 
 def read_sms_mesh(mesh, nodestrings=False):
@@ -2460,6 +2459,99 @@ def unstructured_grid_volume(area, depth, surface_elevation, thickness, depth_in
         return depth_volume, volume
     else:
         return depth_volume
+
+
+def elems2nodes(elems, tri, nvert=None):
+    """
+    Calculate a nodal value based on the average value for the elements
+    of which it a part. This necessarily involves an average, so the
+    conversion from nodes2elems and elems2nodes is not reversible.
+
+    Parameters
+    ----------
+    elems : ndarray
+        Array of unstructured grid element values to move to the element
+        nodes.
+    tri : ndarray
+        Array of shape (nelem, 3) comprising the list of connectivity
+        for each element.
+    nvert : int, optional
+        Number of nodes (vertices) in the unstructured grid.
+
+    Returns
+    -------
+    nodes : ndarray
+        Array of values at the grid nodes.
+
+    """
+
+    if not nvert:
+        nvert = np.max(tri) + 1
+    count = np.zeros(nvert, dtype=int)
+
+    # Deal with 1D and 2D element arrays separately
+    if np.ndim(elems) == 1:
+        nodes = np.zeros(nvert)
+        for i, indices in enumerate(tri):
+            n0, n1, n2 = indices
+            nodes[n0] = nodes[n0] + elems[i]
+            nodes[n1] = nodes[n1] + elems[i]
+            nodes[n2] = nodes[n2] + elems[i]
+            count[n0] = count[n0] + 1
+            count[n1] = count[n1] + 1
+            count[n2] = count[n2] + 1
+
+    elif np.ndim(elems) > 1:
+        # Horrible hack alert to get the output array shape for multiple
+        # dimensions.
+        nodes = np.zeros((list(np.shape(elems)[:-1]) + [nvert]))
+        for i, indices in enumerate(tri):
+            n0, n1, n2 = indices
+            nodes[..., n0] = nodes[..., n0] + elems[..., i]
+            nodes[..., n1] = nodes[..., n1] + elems[..., i]
+            nodes[..., n2] = nodes[..., n2] + elems[..., i]
+            count[n0] = count[n0] + 1
+            count[n1] = count[n1] + 1
+            count[n2] = count[n2] + 1
+
+    # Now calculate the average for each node based on the number of
+    # elements of which it is a part.
+    nodes /= count
+
+    return nodes
+
+
+def nodes2elems(nodes, tri):
+    """
+    Calculate a element centre value based on the average value for the
+    nodes from which it is formed. This necessarily involves an average,
+    so the conversion from nodes2elems and elems2nodes is not
+    necessarily reversible.
+
+    Parameters
+    ----------
+    nodes : ndarray
+        Array of unstructured grid node values to move to the element
+        centres.
+    tri : ndarray
+        Array of shape (nelem, 3) comprising the list of connectivity
+        for each element.
+
+    Returns
+    -------
+    elems : ndarray
+        Array of values at the grid nodes.
+
+    """
+
+    if np.ndim(nodes) == 1:
+        elems = nodes[tri].mean(axis=-1)
+    elif np.ndim(nodes) == 2:
+        elems = nodes[..., tri].mean(axis=-1)
+    else:
+        raise Exception('Too many dimensions (maximum of two)')
+
+    return elems
 
 
 # For backwards compatibility.
