@@ -537,7 +537,7 @@ class Plotter:
         self.tri = Triangulation(x, y, self.triangles)
         self.masked_tris = self.tri.get_masked_triangles()
         field = field[self.masked_tris].mean(axis=1)
-        self.tripcolor_plot = self.axes.tripcolor(x, y, self.triangles, field,
+        self.tripcolor_plot = self.axes.tripcolor(self.tri, field,
                                                   vmin=self.vmin, vmax=self.vmax, cmap=self.cmap,
                                                   edgecolors=self.edgecolors, zorder=1, norm=self.norm)
 

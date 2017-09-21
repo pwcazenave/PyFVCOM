@@ -57,7 +57,7 @@ class FileReader:
         Example
         -------
 
-        # Load and plot surface currents as a surface and quiver plots.
+        # Load and plot surface currents as surface and quiver plots.
         >>> from PyFVCOM.read_results import FileReader
         >>> from PyFVCOM.plot import Plotter
         >>> from PyFVCOM.current_tools import vector2scalar

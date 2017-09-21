@@ -7,13 +7,16 @@ from __future__ import print_function
 
 import sys
 import inspect
+import multiprocessing
 import numpy as np
 from matplotlib.tri.triangulation import Triangulation
 from matplotlib.tri import CubicTriInterpolator
 from warnings import warn
+from functools import partial
 
 from PyFVCOM.ll2utm import UTM_to_LL
-from PyFVCOM.stats_tools import fix_range
+from PyFVCOM.utilities import fix_range
+from PyFVCOM.read_results import nodes2elems
 
 
 def read_sms_mesh(mesh, nodestrings=False):
@@ -796,9 +799,9 @@ def element_side_lengths(triangles, x, y):
     triangle and return as an array of lengths. Units are in the original input
     units (no conversion from lat/long to metres, for example).
 
-    The arrays triangles, x and y can be created by running
-    parseUnstructuredGridSMS(), parseUnstructuredGridFVCOM() or
-    parseUnstructuredGridMIKE() on a given SMS, FVCOM or MIKE grid file.
+    The arrays triangles, x and y can be created by running read_sms_mesh(),
+    read_fvcom_mesh() or read_mike_mesh() on a given SMS, FVCOM or MIKE grid
+    file.
 
     Parameters
     ----------
@@ -1114,6 +1117,9 @@ def mesh2grid(meshX, meshY, meshZ, nx, ny, thresh=None, noisy=False):
         dimensions follow.
 
     """
+
+    if not thresh:
+        thresh = np.inf
 
     # Get the extents of the input data.
     xmin, xmax, ymin, ymax = meshX.min(), meshX.max(), meshY.min(), meshY.max()
@@ -1780,7 +1786,7 @@ def connectivity(p, t):
 
 def clip_domain(x, y, extents, noisy=False):
     """
-    Function to find the indices for the positions in pos which fall within the
+    Function to find the indices for the positions in `x' and `y' which fall within the
     bounding box defined in extents.
 
     Parameters
@@ -1799,10 +1805,10 @@ def clip_domain(x, y, extents, noisy=False):
 
     """
 
-    mask = np.where((x > extents[0]) *
-            (x < extents[1]) *
-            (y > extents[2]) *
-            (y < extents[3]))[0]
+    mask = np.where((x >= extents[0]) *
+            (x <= extents[1]) *
+            (y >= extents[2]) *
+            (y <= extents[3]))[0]
 
     if noisy:
         print('Subset contains {} points of {} total.'.format(len(mask),
@@ -1811,7 +1817,7 @@ def clip_domain(x, y, extents, noisy=False):
     return mask
 
 
-def surrounders(n, triangles):
+def find_connected_nodes(n, triangles):
     """
     Return the IDs of the nodes surrounding node number `n'.
 
@@ -1886,7 +1892,7 @@ def find_connected_elements(n, triangles):
 
     """
 
-    if len(n) == 1:
+    if isinstance(n, int) or len(n) == 1:
         surroundingidx = np.argwhere(triangles == n)[:, 0]
     else:
         surroundingidx = []
@@ -2052,7 +2058,8 @@ def ind2sub(array_shape, index):
     ----------
     array_shape : list, tuple, ndarray
         Shape of the array for which to calculate the indices.
-    index : index in the flattened array.
+    index : int
+        Index in the flattened array.
 
     Returns
     -------
@@ -2062,13 +2069,8 @@ def ind2sub(array_shape, index):
 
     """
 
-    print('WARNING: Just use numpy.unravel_index!')
 
-    rows = int(index.astype('int') / array_shape[1])
-    # Or numpy.mod(ind.astype('int'), array_shape[1])
-    cols = int(index.astype('int') % array_shape[1])
-
-    return (rows, cols)
+    return np.unravel_index(index, array_shape)
 
 
 def rotate_points(x, y, origin, angle):
@@ -2109,56 +2111,12 @@ def rotate_points(x, y, origin, angle):
     return xr, yr
 
 
-def make_water_column(zeta, h, siglay):
-    """
-    Make a time varying water column array with the surface elevation at the
-    surface and depth negative down.
-
-    Parameters
-    ----------
-    siglay : ndarray
-        Sigma layers [lay, nodes]
-    h : ndarray
-        Water depth [nodes] or [time, nodes]
-    zeta : ndarray
-        Surface elevation [time, nodes]
-
-    Returns
-    -------
-    depth : ndarray
-        Time-varying water depth (with the surface depth varying rather than
-        the seabed) [time, lay, nodes].
-
-    Todo
-    ----
-    Tidy up the try/excepth block with an actual error.
-
-    """
-
-    # Fix the range of siglay to be -1 to 0 so we don't get a wobbly seabed.
-    siglay = fix_range(siglay, -1, 0)
-
-    # We may have a single node, in which case we don't need the newaxis,
-    # otherwise, we do.
-    try:
-        z = (zeta + h) * -siglay
-    except:
-        z = (zeta + h)[:, np.newaxis, :] * -siglay[np.newaxis, ...]
-
-    try:
-        z = z - h
-    except ValueError:
-        z = z - h[:, np.newaxis, :]
-
-    return z
-
-
 def get_boundary_polygons(triangle, noisy=False):
     """
-    Gets a list of the clo
+    Gets a list of the grid boundary nodes ordered correctly.
 
     ASSUMPTIONS: This function assumes a 'clean' FVCOM grid, i.e. no
-    elements with 3    boundary nodes and no single element width channels
+    elements with 3 boundary nodes and no single element width channels.
 
     Parameters
     ----------
@@ -2170,14 +2128,14 @@ def get_boundary_polygons(triangle, noisy=False):
     -------
     boundary_polygon_list : list
         List of integer arrays. Each array is one closed boundary polygon with
-        the integers referring to node number 
+        the integers referring to node number.
 
     """
 
-    u,c = np.unique(triangle, return_counts=True)
-    uc = np.asarray([u,c]).T
+    u, c = np.unique(triangle, return_counts=True)
+    uc = np.asarray([u, c]).T
 
-    nodes_lt_4 = np.asarray(uc[uc[:,1]<4,0], dtype=int)
+    nodes_lt_4 = np.asarray(uc[uc[:,1] < 4, 0], dtype=int)
     boundary_polygon_list = []
 
     while len(nodes_lt_4) > 0:
@@ -2186,8 +2144,8 @@ def get_boundary_polygons(triangle, noisy=False):
 
         boundary_node_list = [start_node, get_attached_unique_nodes(start_node, triangle)[-1]]
 
-        full_loop = 0
-        while full_loop == 0:
+        full_loop = True
+        while full_loop:
             next_nodes = get_attached_unique_nodes(boundary_node_list[-1], triangle)
             node_ind = 0
             len_bl = len(boundary_node_list)
@@ -2198,10 +2156,10 @@ def get_boundary_polygons(triangle, noisy=False):
                     if next_nodes[node_ind] not in boundary_node_list:
                         boundary_node_list.append(next_nodes[node_ind])
                     else:
-                        node_ind = node_ind + 1
+                        node_ind += 1
                 except:
-                    full_loop = 1
-                    len_bl = len_bl + 1
+                    full_loop = False
+                    len_bl += 1
 
         boundary_polygon_list.append(np.asarray(boundary_node_list))
         nodes_lt_4 = np.asarray(list(set(nodes_lt_4) - set(boundary_node_list)), dtype=int)
@@ -2211,16 +2169,297 @@ def get_boundary_polygons(triangle, noisy=False):
 
 def get_attached_unique_nodes(this_node, trinodes):
     """
-    Worker function for get_boundary_polygons function.
+    Find the nodes on the boundary connected to `this_node'.
 
-    """   
+    Parameters
+    ----------
+    this_node : int
+        Node ID.
+    trinodes : ndarray
+        Triangulation table for an unstructured grid.
 
-    all_trinodes = trinodes[(trinodes[:,0] == this_node) | (trinodes[:,1] == this_node) |  (trinodes[:,2] == this_node) , :]
-    u,c = np.unique(all_trinodes, return_counts=True)
+    Returns
+    -------
+    connected_nodes : ndarray
+        IDs of the nodes connected to `this_node' on the boundary. If `this_node' is not on the boundary,
+        `connected_nodes' is empty.
 
-    return u[c==1]
+    """
+
+    all_trinodes = trinodes[(trinodes[:, 0] == this_node) | (trinodes[:, 1] == this_node) | (trinodes[:, 2] == this_node), :]
+    u, c = np.unique(all_trinodes, return_counts=True)
+
+    return u[c == 1]
 
 
+def grid_metrics(tri, noisy=False):
+    """
+    Calculate unstructured grid metrics (most of FVCOM's tge.F).
+
+    Parameters
+    ----------
+    tri : ndarray
+        Triangulation table for the grid.
+    noisy : bool
+        Set to True to enable verbose output (default = False)
+
+    Returns
+    -------
+    nbe : ndarray
+        Indices of tri for the elements connected to each element in the domain. To visualise:
+            plt.plot(x[tri[1000, :], y[tri[1000, :], 'ro')
+            plt.plot(x[tri[nbe[1000], :]] and y[tri[nbe[1000], :]], 'k.')
+        plots the 999th element nodes with the nodes of the surrounding elements too.
+    isbce : ndarray
+        Flag if element is on the boundary (True = yes, False = no)
+    isonb : ndarray
+        Flag if node is on the boundary (True = yes, False = no)
+    ntve : ndarray
+        The number of neighboring elements of each grid node
+    nbve : ndarray
+        nbve(i,1->ntve(i)) = ntve elements containing node i
+
+    Notes
+    -----
+    This is more or less a direct translation from FORTRAN (FVCOM's tge.F).
+
+    """
+
+    m = len(np.unique(tri.ravel()))
+
+    # Allocate all our arrays. Use masked by default arrays so we only use valid indices.
+    isonb = np.zeros(m).astype(bool)
+    ntve = np.zeros(m, dtype=int)
+    nbe = np.ma.array(np.zeros((tri.shape), dtype=int), mask=True)
+    nbve = np.ma.array(np.zeros((m, 10), dtype=int), mask=True)
+    # Number of elements connected to each node (ntve) and the IDs of the elements connected to each node (nbve).
+    if noisy:
+        print('Counting neighbouring nodes and elements')
+    for i, (n1, n2, n3) in enumerate(tri):
+        nbve[tri[i, 0], ntve[n1]] = i
+        nbve[tri[i, 1], ntve[n2]] = i
+        nbve[tri[i, 2], ntve[n3]] = i
+        # Only increment the counters afterwards as Python indexes from 0.
+        ntve[n1] += 1
+        ntve[n2] += 1
+        ntve[n3] += 1
+
+    if noisy:
+        print('Getting neighbouring elements for each element')
+    # Get the element IDs connected to each element.
+    for i, (n1, n2, n3) in enumerate(tri):
+        for j1 in range(ntve[n1]):
+            for j2 in range(ntve[n2]):
+                if nbve[n1, j1] == nbve[n2, j2] and nbve[n1, j1] != i:
+                    nbe[i, 2] = nbve[n1, j1]
+        for j2 in range(ntve[n2]):
+            for j3 in range(ntve[n3]):
+                if nbve[n2, j2] == nbve[n3, j3] and nbve[n2, j2] != i:
+                    nbe[i, 0] = nbve[n2, j2]
+        for j1 in range(ntve[n1]):
+            for j3 in range(ntve[n3]):
+                if nbve[n1, j1] == nbve[n3, j3] and nbve[n1, j1] != i:
+                    nbe[i, 1] = nbve[n3, j3]
+
+    if noisy:
+        print('Getting boundary element IDs')
+    isbce = np.max(nbe.mask, axis=1)
+
+    if noisy:
+        print('Getting boundary node IDs')
+
+    # Get the boundary node IDs. Holy nested list comprehensions, Batman!
+    boundary_element_node_ids = np.unique(tri[isbce, :]).ravel()
+    boundary_nodes = []
+    for i in boundary_element_node_ids:
+        current_nodes = get_attached_unique_nodes(i, tri)
+        if np.any(current_nodes):
+            boundary_nodes += current_nodes.tolist()
+    boundary_nodes = np.unique(boundary_nodes)
+    # Make a boolean of that.
+    isonb[boundary_nodes] = True
+
+    return ntve, nbve, nbe, isbce, isonb
+
+
+def control_volumes(x, y, tri, node_control=True, element_control=True, noisy=False):
+    """
+    This calculates the surface area of individual control volumes consisted of triangles with a common node point.
+
+    Parameters
+    ----------
+    x, y : ndarray
+        Node positions
+    tri : ndarray
+        Triangulation table for the unstructured grid.
+    node_control : bool
+        Set to False to disable calculation of node control volumes. Defaults to True.
+    element_control : bool
+        Set to False to disable calculation of element control volumes. Defaults to True.
+    noisy : bool
+        Set to True to enable verbose output.
+
+    Returns
+    -------
+    art1 : ndarray
+        Area of interior control volume (for node value integration)
+    art2 : ndarray
+        Sum area of all cells around each node.
+
+    Notes
+    -----
+    This is a python reimplementation of the FVCOM function CELL_AREA in cell_area.F. Whilst the reimplementation is
+    coded with efficiency in mind (the calculations occur in parallel), this is still slow for large grids. Please be
+    patient!
+
+    """
+
+    if not node_control and not element_control:
+        raise ValueError("Set either `node_control' or `element_control' to `True'")
+
+    pool = multiprocessing.Pool()
+
+    m = len(x)  # number of nodes
+
+    # Calculate art1 (control volume for fluxes of node-based values). I do this differently from how it's done in
+    # FVCOM as I can't wrap my head around the seemingly needlessly complicated approach they've taken. Here,
+    # my approach is:
+    #   1. For each node, find all the elements connected to it (find_connected_elements).
+    #   2. Identify the nodes in all those elements.
+    #   3. Find the position of the halfway point along each vertex between our current node and all the other nodes
+    #   connected to it.
+    #   4. Using those positions and the positions of the centre of each element, create a polygon (ordered clockwise).
+    #   5. Calculate the area of that polygon with the shapely tools.
+    if node_control:
+        if noisy:
+            print('Compute control volume for fluxes at nodes (art1)')
+        xc = nodes2elems(x, tri)
+        yc = nodes2elems(y, tri)
+        art1 = pool.map(partial(node_control_area, x=x, y=y, xc=xc, yc=yc, tri=tri), range(m))
+
+    # Compute area of control volume art2(i) = sum(all tris surrounding node i)
+    if element_control:
+        if noisy:
+            print('Compute control volume for fluxes over elements (art2)')
+        art = get_area(np.asarray((x[tri[:, 0]], y[tri[:, 0]])).T, np.asarray((x[tri[:, 1]], y[tri[:, 1]])).T, np.asarray((x[tri[:, 2]], y[tri[:, 2]])).T)
+        art2 = pool.map(partial(element_control_area, triangles=tri, art=art), range(m))
+
+    pool.close()
+
+    if node_control and element_control:
+        return art1, art2
+    elif node_control and not element_control:
+        return art1
+    elif not node_control and element_control:
+        return art2
+
+
+def node_control_area(n, x, y, xc, yc, tri):
+    """
+    Worker function to calculate the control volume for fluxes of node-based values for a given node.
+
+    Parameters
+    ----------
+    n : list-like
+        Current node ID.
+    x, y : list-like
+        Node positions
+    xc, yc : list-like
+        Element centre positions
+    tri : list-like
+        Unstructured grid triangulation table.
+
+    Returns
+    -------
+    node_area : float
+        Node control volume area in x or y length units squared.
+
+    """
+
+    connected_elements = find_connected_elements(n, tri)
+    area = 0
+    # Create two triangles which are from the mid-point of each vertex with the current node and the element centre.
+    # Sum the areas as we go.
+    for element in connected_elements:
+        # Find the nodes in this element.
+        connected_nodes = np.unique(tri[element, :])
+        other_nodes = connected_nodes[connected_nodes != n]
+        centre_x = xc[element]
+        centre_y = yc[element]
+        mid_x, mid_y = [], []
+        for node in other_nodes:
+            mid_x.append(x[n] - ((x[n] - x[node]) / 2))
+            mid_y.append(y[n] - ((y[n] - y[node]) / 2))
+        # Now calculate the area of the triangles formed by [(x[n], y[n]), (centre_x, centre_y), (mid_x, mid_y)].
+        for mid_xy in zip(mid_x, mid_y):
+            area += get_area((x[n], y[n]), mid_xy, (centre_x, centre_y))
+
+    return area
+
+
+def element_control_area(node, triangles, art):
+    """
+    Worker function to calculate the control volume for fluxes of element-based values for a given node.
+
+    Parameters
+    ----------
+    node : int
+        Node ID.
+    triangles : list-like
+        Unstructured grid triangulation table.
+    art : list-like
+        Element areas.
+
+    Returns
+    -------
+    element_area : float
+        Element control volume area in x or y length units squared.
+
+    Notes
+    -----
+
+    """
+
+    connected_elements = find_connected_elements(node, triangles)
+
+    return np.sum(art[connected_elements])
+
+
+def unstructured_grid_volume(area, depth, surface_elevation, thickness, depth_intergrated=False):
+    """
+    Calculate the volume for every cell in the unstructured grid.
+
+    Parameters
+    ----------
+    area : np.ndarray
+        Element area
+    depth : np.ndarray
+        Static water depth
+    surface_elevation : np.ndarray
+        Time-varying surface elevation
+    thickness : np.ndarray
+        Level (i.e. between layer) position (range 0-1). In FVCOM, this is siglev.
+    depth_intergrated : bool, optional
+        Set to True to return the depth-integrated volume in addition to the depth-resolved volume. Defaults to False.
+
+    Returns
+    -------
+    depth_volume : np.ndarray
+        Depth-resolved volume of all the elements with time.
+    volume : np.ndarray, optional
+        Depth-integrated volume of all the elements with time.
+
+    """
+
+    # Convert thickness to actual thickness rather than position in water column of the layer.
+    dz = np.abs(np.diff(thickness, axis=0))
+    volume = (area * (surface_elevation + depth))
+    depth_volume = volume[:, np.newaxis, :] * dz[np.newaxis, ...]
+
+    if depth_intergrated:
+        return depth_volume, volume
+    else:
+        return depth_volume
 
 
 # For backwards compatibility.
@@ -2313,3 +2552,7 @@ def heron(*args):
     warn('{} is deprecated. Use get_area instead.'.format(inspect.stack()[0][3]))
     return get_area(*args)
 
+
+def surrounders(*args):
+    warn('{} is deprecated. Use find_connected_nodes instead.'.format(inspect.stack()[0][3]))
+    return find_connected_nodes(*args)
