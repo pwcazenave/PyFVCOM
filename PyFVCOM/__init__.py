@@ -25,7 +25,7 @@ from PyFVCOM import ocean_tools
 from PyFVCOM import stats_tools
 from PyFVCOM import tidal_ellipse
 from PyFVCOM import tide_tools
+from PyFVCOM import plot
 from PyFVCOM import process_results
 from PyFVCOM import read_results
-from PyFVCOM import plot
 from PyFVCOM import utilities
