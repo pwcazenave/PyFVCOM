@@ -14,6 +14,7 @@ from datetime import datetime
 from netCDF4 import Dataset, MFDataset, num2date, date2num
 
 from PyFVCOM.ll2utm import lonlat_from_utm, utm_from_lonlat
+from PyFVCOM.grid_tools import unstructured_grid_volume, nodes2elems
 
 
 class FileReader:
@@ -347,7 +348,7 @@ class FileReader:
         """
 
         # Get the grid data.
-        for grid in 'lon', 'lat', 'x', 'y', 'lonc', 'latc', 'xc', 'yc', 'h', 'siglay', 'siglev':
+        for grid in 'lon', 'lat', 'x', 'y', 'lonc', 'latc', 'xc', 'yc', 'h', 'siglay', 'siglev', 'art1', 'art2':
             try:
                 setattr(self.grid, grid, self.ds.variables[grid][:])
                 # Save the attributes.
@@ -815,6 +816,29 @@ class FileReader:
                 index = None
 
         return index
+
+    def grid_volume(self):
+        """
+        Calculate the grid volume (optionally time varying) for the loaded grid.
+
+        If the surface elevation data have been loaded (`zeta'), the volume varies with time, otherwise, the volume
+        is for the mean water depth (`h').
+
+        Returns
+        -------
+        self.depth_volume : ndarray
+            Depth-resolved volume.
+        self.volume : ndarray
+            Depth-integrated volume.
+
+        """
+
+        if not hasattr(self.data, 'zeta'):
+            surface_elevation = np.zeros((self.dims.node, self.dims.time))
+        else:
+            surface_elevation = self.data.zeta
+
+        self.depth_volume, self.volume = unstructured_grid_volume(self.grid.art1, self.grid.h, surface_elevation, depth_integrated=True)
 
 
 def MFileReader(fvcom, *args, **kwargs):
