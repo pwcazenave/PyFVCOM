@@ -1069,10 +1069,12 @@ def ncread(file, vars=None, dims=False, noisy=False, atts=False, datetimes=False
     # end up doing the conversion twice, once for `Times' and again for
     # `time' if both variables have been requested in `vars'.
     done_datetimes = False
+    got_itime = False
+    got_itime2 = False
     # Check whether we'll be able to fulfill the datetime request.
-    if datetimes and vars and not list(set(vars) & set(('Times', 'time'))):
+    if datetimes and vars and not list(set(vars) & set(('Times', 'time', 'Itime', 'Itime2'))):
         raise ValueError("Conversion to python datetimes has been requested "
-                         "but no time variable (`Times' or `time') has been "
+                         "but no time variable (`Times', `time', `Itime' or `Itime2') has been "
                          "requested in vars.")
 
     # If we have a list, assume it's lots of files and load them all. Only use
@@ -1157,12 +1159,12 @@ def ncread(file, vars=None, dims=False, noisy=False, atts=False, datetimes=False
                 for varatt in rootgrp.variables[key].ncattrs():
                     attributes[key][varatt] = getattr(rootgrp.variables[key], varatt)
 
-            if datetimes and key in ('Times', 'time') and not done_datetimes:
+            if datetimes and key in ('Times', 'time', 'Itime', 'Itime2') and not done_datetimes:
                 # Convert the time data to datetime objects. How we do this
-                # depends on which we hit first - `Times' or `time'. For the
-                # former, we need to parse the strings, for the latter we can
-                # leverage num2date from the netCDF4 module and use the time
-                # units attribute.
+                # depends on which we hit first - `Times', `time', `Itime' or
+                # `Itime2'. For the former, we need to parse the strings, for the
+                # latter we can leverage num2date from the netCDF4 module and
+                # use the time units attribute.
                 if key == 'Times':
                     try:
                         # Check if we've only extracted a single time step, in
@@ -1183,6 +1185,10 @@ def ncread(file, vars=None, dims=False, noisy=False, atts=False, datetimes=False
                     FVCOM['datetime'] = num2date(FVCOM[key],
                                                  rootgrp.variables[key].units)
                     done_datetimes = True
+                elif key == 'Itime':
+                    got_itime = True
+                elif key == 'Itime2':
+                    got_itime2 = True
 
             if noisy:
                 if len(str(to_extract)) < 60:
@@ -1192,6 +1198,12 @@ def ncread(file, vars=None, dims=False, noisy=False, atts=False, datetimes=False
 
         elif noisy:
                 print()
+
+    # If: 1. we haven't got datetime in the output 2. we've been asked to get it and 3. we've got both Itime and
+    # Itime2, then make datetime from those.
+    if datetimes and got_itime and got_itime2 and 'datetime' not in FVCOM:
+        FVCOM['datetime'] = num2date(FVCOM['Itime'] + (FVCOM['Itime2'] / 1000 / 24 / 60 / 60),
+                                     rootgrp.variables['Itime'].units)
 
     # Close the open file.
     rootgrp.close()
