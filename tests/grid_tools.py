@@ -10,7 +10,7 @@ from PyFVCOM.grid_tools import *
 class GridToolsTest(TestCase):
 
     def setUp(self):
-        """ Make a really simple unstructured grid of 8 elements as two rows of 4 elements. """
+        """ Make a really simple unstructured grid of 8 elements as two rows of 4 elements."""
         self.x = np.array([0, 1, 0, 1, 0, 1, 2, 2, 2])
         self.y = np.array([0, 0, 1, 1, 2, 2, 0, 1, 2])
         self.tri = np.array([[0, 2, 1], [1, 2, 3], [2, 5, 3], [2, 4, 5], [1, 3, 7], [1, 7, 6], [3, 5, 7], [7, 5, 8]])
@@ -238,3 +238,24 @@ class GridToolsTest(TestCase):
         test.assert_equal(nbe, test_nbe)
         test.assert_equal(isbce, test_isbce)
         test.assert_equal(isonb, test_isonb)
+
+    def test_vincenty_distance(self):
+        """
+        Standard tests as defined in https://github.com/maurycyp/vincenty
+        """
+        dist = vincenty_distance((0.0, 0.0), (0.0, 0.0))  # coincident points
+        test.assert_equal(0.0, dist)
+        dist = vincenty_distance((0.0, 0.0), (0.0, 1.0))
+        test.assert_almost_equal(111.319491, dist)
+        dist = vincenty_distance((0.0, 0.0), (1.0, 0.0))
+        test.assert_almost_equal(110.574389, dist)
+        dist = vincenty_distance((0.0, 0.0), (0.5, 179.5))  # slow convergence
+        test.assert_almost_equal(19936.288579, dist)
+        #vincenty((0.0, 0.0), (0.5, 179.7))  # failure to converge
+        boston = (42.3541165, -71.0693514)
+        newyork = (40.7791472, -73.9680804)
+        dist = vincenty_distance(boston, newyork)
+        test.assert_almost_equal(298.396057, dist)
+        dist = vincenty_distance(boston, newyork, miles=True)
+        test.assert_almost_equal(185.414657, dist)
+
