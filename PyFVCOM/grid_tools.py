@@ -15,7 +15,6 @@ from warnings import warn
 from functools import partial
 
 from PyFVCOM.ll2utm import UTM_to_LL
-from PyFVCOM.utilities import fix_range
 
 
 def read_sms_mesh(mesh, nodestrings=False):
