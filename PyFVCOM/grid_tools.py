@@ -1899,32 +1899,6 @@ def trigradient(x, y, z, t=None):
     return dx, dy
 
 
-def ind2sub(array_shape, index):
-    """
-    NOTE: Just use numpy.unravel_index!
-
-    Replicate the MATLAB ind2sub function to return the subscript values (row,
-    column) of the index for a matrix shaped `array_shape'.
-
-    Parameters
-    ----------
-    array_shape : list, tuple, ndarray
-        Shape of the array for which to calculate the indices.
-    index : int
-        Index in the flattened array.
-
-    Returns
-    -------
-    row, column : int
-        Indices of the row and column, respectively, in the array of shape
-        `array_shape'.
-
-    """
-
-
-    return np.unravel_index(index, array_shape)
-
-
 def rotate_points(x, y, origin, angle):
     """
     Rotate the points in `x' and `y' around the point `origin' by `angle'
