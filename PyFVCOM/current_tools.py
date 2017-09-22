@@ -1,12 +1,12 @@
 """
-Tools to work with current data. Reuses some functions from tide_tools.
+Tools to work with current data. Reuses some functions from PyFVCOM.tide.
 
 """
 
 import numpy as np
 import copy
 
-from PyFVCOM.tide_tools import common_time
+from PyFVCOM.utilities import common_time
 
 class Residuals:
 

@@ -15,7 +15,7 @@ import numpy as np
 from lxml import etree
 from warnings import warn
 
-from PyFVCOM.grid_tools import find_nearest_point
+from PyFVCOM.grid import find_nearest_point
 from PyFVCOM.utilities import fix_range
 
 try:
@@ -118,7 +118,7 @@ def get_observed_data(db, table, startYear=False, endYear=False, noisy=False):
 
     See Also
     --------
-    tide_tools.get_observed_metadata : extract metadata for a tide station.
+    tide.get_observed_metadata : extract metadata for a tide station.
 
     Notes
     -----
@@ -470,7 +470,7 @@ def read_POLPRED(harmonics, noisy=False):
 
     See Also
     --------
-    tide_tools.grid_POLPRED : Converts the POLPRED data into a rectangular
+    tide.grid_POLPRED : Converts the POLPRED data into a rectangular
         gridded data set with values of -999.9 outside the POLPRED domain.
 
     """
@@ -544,7 +544,7 @@ def grid_POLPRED(values, noisy=False):
     Parameters
     ----------
     values : ndarray
-        Output from read_POLPRED(). See `tide_tools.read_POLPRED'.
+        Output from read_POLPRED(). See `tide.read_POLPRED'.
     noisy : bool, optional
         Set to True to enable verbose output.
 
@@ -563,8 +563,8 @@ def grid_POLPRED(values, noisy=False):
 
     See Also
     --------
-    tide_tools.read_POLPRED : Reads in the POLPRED ASCII data.
-    tide_tools.get_harmonics_POLPRED : Extract tidal harmonics within a
+    tide.read_POLPRED : Reads in the POLPRED ASCII data.
+    tide.get_harmonics_POLPRED : Extract tidal harmonics within a
         threshold distance of a supplied coordinate.
 
     """
@@ -609,7 +609,7 @@ def get_harmonics_POLPRED(harmonics, constituents, lon, lat, stations, noisy=Fal
         List of tidal constituent names to extract (e.g. ['M2', 'S2']).
     lon, lat : ndarray
         Longitude and latitude positions to find the closest POLPRED
-        data point. Uses grid_tools.find_nearest_point to identify the
+        data point. Uses grid.find_nearest_point to identify the
         closest point. See distThresh below.
     stations : list
         List of tide station names (or coordinates) which are used as
@@ -638,9 +638,9 @@ def get_harmonics_POLPRED(harmonics, constituents, lon, lat, stations, noisy=Fal
 
     See Also
     --------
-    tide_tools.read_POLPRED : Read in the POLPRED data to split the ASCII
+    tide.read_POLPRED : Read in the POLPRED data to split the ASCII
         file into a header dict and an ndarray of values.
-    grid_tools.find_nearest_point : Find the closest point in one set of
+    grid.find_nearest_point : Find the closest point in one set of
         coordinates to a specified point or set of points.
 
     """

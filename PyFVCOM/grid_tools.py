@@ -15,7 +15,7 @@ from matplotlib.tri import CubicTriInterpolator
 from warnings import warn
 from functools import partial
 
-from PyFVCOM.ll2utm import UTM_to_LL
+from PyFVCOM.coordinate import UTM_to_LL
 
 
 def read_sms_mesh(mesh, nodestrings=False):
@@ -403,9 +403,9 @@ def write_sms_mesh(triangles, nodes, x, y, z, types, mesh):
 
     Input data is probably best obtained from one of:
 
-        grid_tools.read_sms_mesh()
-        grid_tools.read_fvcom_mesh()
-        grid_tools.read_mike_mesh()
+        grid.read_sms_mesh()
+        grid.read_fvcom_mesh()
+        grid.read_mike_mesh()
 
     which read in the relevant grids and output the required information for
     this function.
@@ -1689,7 +1689,7 @@ def find_connected_nodes(n, triangles):
 
     See Also
     --------
-    PyFVCOM.grid_tools.find_connected_elements().
+    PyFVCOM.grid.find_connected_elements().
 
     Notes
     -----
@@ -1741,7 +1741,7 @@ def find_connected_elements(n, triangles):
 
     See Also
     --------
-    PyFVCOM.grid_tools.surrounders().
+    PyFVCOM.grid.surrounders().
 
     """
 
@@ -1820,7 +1820,7 @@ def find_bad_node(nv, node_id):
 
     Examples
     --------
-    >>> from PyFVCOM.grid_tools import read_sms_mesh, connectivity
+    >>> from PyFVCOM.grid import read_sms_mesh, connectivity
     >>> nv, nodes, x, y, z, _ = read_sms_mesh('test_mesh.2dm')
     >>> _, _, _, bnd = connectivity(np.asarray((x, y)).transpose(), nv)
     >>> coast_nodes = nodes[bnd]
@@ -1862,7 +1862,7 @@ def trigradient(x, y, z, t=None):
 
     >>> import numpy as np
     >>> import matplotlib.pyplot as plt
-    >>> from PyFVCOM.grid_tools import trigradient
+    >>> from PyFVCOM.grid import trigradient
     >>> from matplotlib.tri.triangulation import Triangulation
     >>> x, y = np.meshgrid(np.arange(-2, 2, 0.1), np.arange(-2, 2, 0.1))
     >>> x[1:2:-1, :] = x[1:2:-1, :] + 0.1 / 2
@@ -2452,8 +2452,6 @@ def vincenty_distance(point1, point2, miles=False):
         s *= MILES_PER_KILOMETER  # kilometers to miles
 
     return round(s, 6)
-
-
 
 
 # For backwards compatibility.

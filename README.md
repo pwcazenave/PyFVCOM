@@ -49,26 +49,26 @@ Optionally:
 Provides
 --------
 
-* buoy_tools - read data from an SQLite3 database of BODC buoy data.
+* buoy - read data from an SQLite3 database of BODC buoy data.
     - get_buoy_metadata
     - get_buoy_data
 
-* cst_tools - create coastline files for SMS from shapefiles or DHI MIKE arcs.
+* coast - work with coastlines
     - read_ESRI_shapefile
     - read_arc_MIKE
     - read_CST
     - write_CST
 
-* ctd_tools - interrogate an SQLite data base of CTD casts.
+* ctd - interrogate an SQLite data base of CTD casts.
     - get_CTD_metadata
     - get_CTD_data
     - get_ferrybox_data
 
-* current_tools - convert from vector components to scalars and back.
+* current - tools related to processing currents
     - scalar2vector
     - vector2scalar
 
-* grid_tools - tools to parse SMS, DHI MIKE and FVCOM unstructured grids. Also provides functionality to add coasts and clip triangulations to a given domain. Functions to parse FVCOM river files are also included, as is a function to resample an unstructured grid onto a regular grid (without interpolation, simply finding the nearest point within a threshold distance).
+* grid - tools to parse SMS, DHI MIKE, GMSH and FVCOM unstructured grids. Also provides functionality to add coasts and clip triangulations to a given domain. Functions to parse FVCOM river files are also included, as is a function to resample an unstructured grid onto a regular grid (without interpolation, simply finding the nearest point within a threshold distance). This module contains a number of generally useful tools related to unstructured grids (node and element lookups, grid connectivity, grid metrics, area tools).
     - read_sms_mesh
     - read_fvcom_mesh
     - read_mike_mesh
@@ -90,11 +90,11 @@ Provides
     - surrounders
     - get_area
 
-* ll2utm - convert from spherical to cartesian UTM coordinates and back. Available from <http://robotics.ai.uiuc.edu/~hyoon24/LatLongUTMconversion.py>. 
+* coordinate - convert from spherical and cartesian (UTM) coordinates. Also work with British National Grid coordinates and spherical.
     - LL_to_UTM
     - UTM_to_LL
 
-* ocean_tools - a number of routines to convert between combinations of temperature, salinity, pressure, depth and density.
+* ocean - a number of routines to convert between combinations of temperature, salinity, pressure, depth and density.
     - pressure2depth
     - depth2pressure
     - dT_adiab_sw
@@ -126,14 +126,13 @@ Provides
     - Plotter.remove_line_plots
     - Plotter.plot_scatter
 
-* process_results - perform some analyses on FVCOM data read in using read_FVCOM_results.
     - calculate_total_CO2
     - calculate_CO2_leak_budget
     - data_average
     - unstructured_grid_volume
     - residual_flow
 
-* read_results - parse the netCDF model output and extract a subset of the variables.
+* read - parse the netCDF model output and extract a subset of the variables.
     - ncwrite
     - ncread
     - read_probes
@@ -141,7 +140,7 @@ Provides
     - elems2nodes
     - nodes2elems
 
-* stats_tools - some basic statistics tools.
+* stats - some basic statistics tools.
     - calculate_regression
     - calculate_polyfit
     - coefficient_of_determination
@@ -158,7 +157,7 @@ Provides
     - do_the_plot
     - prep_plot
 
-* tide_tools - tools to use and abuse tidal data from an SQLite database of tidal time series.
+* tide - tools to use and abuse tidal data from an SQLite database of tidal time series.
     - julian_day
     - gregorian_date
     - add_harmonic_results
@@ -170,6 +169,7 @@ Provides
     - read_POLPRED
     - grid_POLPRED
     - get_harmonics_POLPRED
+* utilities - general utilities (including time utilities)
 
 
 Examples

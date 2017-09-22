@@ -14,18 +14,16 @@ import inspect
 from warnings import warn
 
 # Import everything!
-from PyFVCOM import buoy_tools
-from PyFVCOM import cst_tools
-from PyFVCOM import ctd_tools
-from PyFVCOM import current_tools
-from PyFVCOM import grid_tools
-from PyFVCOM import ll2utm
-from PyFVCOM import ll2utm as coordinate_tools
-from PyFVCOM import ocean_tools
-from PyFVCOM import stats_tools
+from PyFVCOM import buoy
+from PyFVCOM import coast
+from PyFVCOM import ctd
+from PyFVCOM import current
+from PyFVCOM import grid
+from PyFVCOM import coordinate
+from PyFVCOM import ocean
+from PyFVCOM import stats
 from PyFVCOM import tidal_ellipse
-from PyFVCOM import tide_tools
+from PyFVCOM import tide
 from PyFVCOM import plot
-from PyFVCOM import process_results
 from PyFVCOM import read_results
 from PyFVCOM import utilities

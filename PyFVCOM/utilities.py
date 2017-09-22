@@ -6,8 +6,8 @@ from netCDF4 import Dataset, date2num
 from datetime import datetime
 from collections import namedtuple
 
-from PyFVCOM.ll2utm import utm_from_lonlat
-from PyFVCOM.grid_tools import nodes2elems
+from PyFVCOM.coordinate import utm_from_lonlat
+from PyFVCOM.grid import nodes2elems
 
 
 class StubFile():
