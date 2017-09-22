@@ -3,7 +3,8 @@
 
 Major reorganisation of the toolbox with non-backward compatible changes.
 
-We've added a few new classes which should simplfy interacting with FVCOM model outputs.
+We've added a few new classes which should simplfy interacting with FVCOM
+model outputs.
 
 The module names have also been rationalised and methods/functions which were
 in illogical modules have been moved to more sensible places.
