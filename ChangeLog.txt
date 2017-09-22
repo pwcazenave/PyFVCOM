@@ -1,3 +1,98 @@
+2.0.0
+-----
+
+Major reorganisation of the toolbox with non-backward compatible changes.
+
+We've added a few new classes which should simplfy interacting with FVCOM
+model outputs.
+
+The module names have also been rationalised and methods/functions which were
+in illogical modules have been moved to more sensible places.
+
+The old and new module names are:
+
+buoy_tools    -> buoy
+cst_tools     -> coast
+ll2utm        -> coordinate
+ctd_tools     -> ctd
+current_tools -> current
+grid_tools    -> grid
+ocean_tools   -> ocean
+read_results  -> read
+stats_tools   -> stats
+tide_tools    -> tide
+
+Major changes
+-------------
+
+- PyFVCOM.coordinate is home to british_national_grid_to_lonlat (formerly
+PyFVCOM.grid.OSGB36_to_WGS84). The old LL_to_UTM and UTM_to_LL functions are
+deprecated (in favour of lonlat_from_utm and utm_from_lonlat, respectively).
+
+- PyFVCOM.current has a new Residual class which calculates residual vectors
+(that is the difference between the two) from two time series of currents. We
+mostly use this to identify the non-tidal currents by comparing modelled
+currents with currents predicted from tidal constituents.
+
+- PyFVCOM.process_tools has had most of its outdated CO2 functions removed and
+the remaining function has been subsumed into PyFVCOM.current.
+
+- PyFVCOM.grid has a lot of new functions, including:
+    - find_connected_nodes (formerly surrounders)
+    - find_connected_elements
+    - find_bad_node
+    - trigradient
+    - rotate_points
+    - get_boundary_polygons
+    - get_attached_unique_nodes
+    - grid_metrics
+    - control_volumes
+    - node_control_area
+    - element_control_area
+
+- PyFVCOM.grid is also the new home of:
+    - unstructured_grid_volume (formerly in PyFVCOM.process_results)
+    - elems2nodes (formerly in PyFVCOM.read)
+    - nodes2elems (formerly in PyFVCOM.read)
+
+- PyFVCOM.ocean has had a couple of functions which didn't work removed
+(sw_sal80 and sw_salinity).
+
+- PyFVCOM.plot has modifications to Plotter to return more useful bits of the
+figure (axes, scatter, tripcolor etc.). There is also a new class (Time) which
+will plot time series data in a similar manner to Plotter will for maps.
+
+- PyFVCOM.read has a new FileReader class which takes an FVCOM model output
+file and does a lot of preprocessing on it to make it easier to use with
+Python. This includes:
+	- adding missing spatial coordinates (e.g. creating spherical from
+	cartesian and vice versa)
+	- adding missing time representations (e.g. creating Modified Julian Days
+	from the Times string)
+    - creating python datetime objects.
+    - fixing broken triangulation tables
+
+- The PyFVCOM.read FileReader class also allows subsetting in time and space and
+can return a user-defined list of variables (in addition to the space and time
+variables, which are always loaded). FileReader objects can also append other
+FileReader objects, so you can easily create long time series representations.
+
+- The node and element swapping functions (nodes2elems and elems2nodes) have
+been moved from PyFVCOM.read to PyFVCOM.grid as that seems a more fitting
+place for them.
+
+- PyFVCOM.stats has lost fix_range to PyFVCOM.utilities. The
+coefficient_of_determination has also been renamed to calculate_coefficient to
+reflect its function and make the name shorted.
+
+- PyFVCOM.tide has also lost julian_day, gregorian_date, common_time and overlap
+to PyFVCOM.utilities.
+
+- Finally, the top-level tests subdirectory contains some nosetests for most of
+the toolbox. The aim is that all new functions have corresponding tests added
+(where appropriate) so we can ensure functionality is maintained into the
+future.
+
 1.6.2
 -----
 

@@ -3,7 +3,7 @@ from setuptools import setup
 setup(
     name = 'PyFVCOM',
     packages = ['PyFVCOM'],
-    version = '1.6.2',
+    version = '2.0.0',
     description = ("PyFVCOM is a collection of various tools and utilities which can be used to extract, analyse and plot input and output files from FVCOM."),
     author = 'Pierre Cazenave',
     author_email = 'pica@pml.ac.uk',
@@ -12,7 +12,7 @@ setup(
     keywords = ['fvcom', 'unstructured grid', 'mesh'],
     license = 'MIT',
     platforms = 'any',
-    install_requires = ['pyshp', 'jdcal', 'scipy', 'numpy', 'matplotlib', 'netCDF4', 'lxml', 'matplotlib', 'pyproj'],
+    install_requires = ['pyshp', 'jdcal', 'scipy', 'numpy', 'matplotlib', 'netCDF4', 'lxml', 'pyproj'],
     classifiers = []
 )
 

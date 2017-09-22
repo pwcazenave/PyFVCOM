@@ -9,12 +9,13 @@ import sys
 import inspect
 import multiprocessing
 import numpy as np
+import math
 from matplotlib.tri.triangulation import Triangulation
 from matplotlib.tri import CubicTriInterpolator
 from warnings import warn
 from functools import partial
 
-from PyFVCOM.ll2utm import UTM_to_LL
+from PyFVCOM.coordinate import UTM_to_LL
 
 
 def read_sms_mesh(mesh, nodestrings=False):
@@ -402,9 +403,9 @@ def write_sms_mesh(triangles, nodes, x, y, z, types, mesh):
 
     Input data is probably best obtained from one of:
 
-        grid_tools.read_sms_mesh()
-        grid_tools.read_fvcom_mesh()
-        grid_tools.read_mike_mesh()
+        grid.read_sms_mesh()
+        grid.read_fvcom_mesh()
+        grid.read_mike_mesh()
 
     which read in the relevant grids and output the required information for
     this function.
@@ -1533,152 +1534,6 @@ def line_sample(x, y, positions, num=0, return_distance=False, noisy=False):
         return idx, line
 
 
-def OSGB36_to_WGS84(eastings, northings):
-    """
-    Converts British National Grid coordinates to latitude and longitude on the
-    WGS84 spheriod.
-
-    Taken shamelessly from:
-        http://hannahfry.co.uk/2012/02/01/converting-british-national-grid-to-latitude-and-longitude-ii/
-
-    Modified to read NumPy arrays for eastings and northings. The conversion is
-    pretty crude (just a loop through all the input coordinates rather than
-    a proper array-based conversion). Also flipped order of the returned arrays
-    to be the same as the input (x then y).
-
-    Parameters
-    ----------
-    eastings : ndarray
-        Array of eastings (in metres)
-    northings : ndarray
-        Array of northings (in metres)
-
-    Returns
-    -------
-    Lon : ndarray
-        Array of converted longitudes.
-    Lat : ndarray
-        Array of converted latitudes.
-
-    """
-
-    # E, N are the British national grid coordinates - eastings and northings
-
-    # The Airy 180 semi-major and semi-minor axes used for OSGB36 (m)
-    a, b = 6377563.396, 6356256.909
-    # Scale factor on the central meridian
-    F0 = 0.9996012717
-    # Latitude of true origin (radians)
-    lat0 = np.deg2rad(49)
-    # Longtitude of true origin and central meridian (radians)
-    lon0 = np.deg2rad(-2)
-    # Northing & easting of true origin (m)
-    N0, E0 = -100000, 400000
-    # eccentricity squared
-    e2 = 1 - (b*b)/(a*a)
-    n = (a-b)/(a+b)
-
-    # Iterate through the pairs of values in eastings and northings.
-    lonlist, latlist = [], []
-    for xy in zip(eastings, northings):
-
-        E = xy[0]
-        N = xy[1]
-
-        # Initialise the iterative variables
-        lat, M = lat0, 0
-
-        while N - N0 - M >= 0.00001:  # Accurate to 0.01mm
-            lat = (N - N0 - M)/(a * F0) + lat
-            M1 = (1 + n + (5./4) * n**2 + (5./4) * n**3) * (lat-lat0)
-            M2 = (3*n + 3 * n**2 + (21./8)*n**3) * np.sin(lat-lat0) * \
-                np.cos(lat+lat0)
-            M3 = ((15./8) * n**2 + (15./8)*n**3) * np.sin(2*(lat-lat0)) * \
-                np.cos(2 * (lat+lat0))
-            M4 = (35./24)*n**3 * np.sin(3*(lat-lat0)) * np.cos(3*(lat+lat0))
-            # meridional arc
-            M = b * F0 * (M1 - M2 + M3 - M4)
-
-        # transverse radius of curvature
-        nu = a * F0 / np.sqrt(1-e2 * np.sin(lat)**2)
-
-        # meridional radius of curvature
-        rho = a * F0 * (1-e2) * (1-e2 * np.sin(lat)**2)**(-1.5)
-        eta2 = nu / rho-1
-
-        secLat = 1./np.cos(lat)
-        VII = np.tan(lat) / (2 * rho * nu)
-        VIII = np.tan(lat) / (24 * rho * nu**3) * (5 + 3 * np.tan(lat)**2 +
-            eta2 - 9 * np.tan(lat)**2 * eta2)
-        IX = np.tan(lat) / (720 * rho * nu**5) * (61 + 90 * np.tan(lat)**2 +
-            45 * np.tan(lat)**4)
-        X = secLat / nu
-        XI = secLat / (6 * nu**3) * (nu / rho + 2 * np.tan(lat)**2)
-        XII = secLat / (120 * nu**5) * (5 + 28 * np.tan(lat)**2 + 24 *
-            np.tan(lat)**4)
-        XIIA = secLat / (5040 * nu**7) * (61 + 662 * np.tan(lat)**2 + 1320 *
-            np.tan(lat)**4 + 720 * np.tan(lat)**6)
-        dE = E-E0
-
-        # These are on the wrong ellipsoid currently: Airy1830. (Denoted by _1)
-        lat_1 = lat - VII * dE**2 + VIII * dE**4 - IX * dE**6
-        lon_1 = lon0 + X * dE - XI * dE**3 + XII * dE**5 - XIIA * dE**7
-
-        # Want to convert to the GRS80 ellipsoid.
-        # First convert to cartesian from spherical polar coordinates
-        H = 0  # Third spherical coord.
-        x_1 = (nu / F0 + H) * np.cos(lat_1) * np.cos(lon_1)
-        y_1 = (nu / F0 + H) * np.cos(lat_1) * np.sin(lon_1)
-        z_1 = ((1-e2) * nu / F0 + H) * np.sin(lat_1)
-
-        # Perform Helmut transform (to go between Airy 1830 (_1) and GRS80 (_2))
-        s = -20.4894 * 10**-6  # The scale factor -1
-        # The translations along x,y,z axes respectively
-        tx, ty, tz = 446.448, -125.157, + 542.060
-        # The rotations along x,y,z respectively, in seconds
-        rxs, rys, rzs = 0.1502, 0.2470, 0.8421
-        # And in radians
-        rx = rxs * np.pi / (180 * 3600.)
-        ry = rys * np.pi / (180 * 3600.)
-        rz = rzs * np.pi / (180 * 3600.)
-
-        x_2 = tx + (1 + s) * x_1 + (-rz) * y_1 + (ry) * z_1
-        y_2 = ty + (rz) * x_1 + (1 + s) * y_1 + (-rx) * z_1
-        z_2 = tz + (-ry) * x_1 + (rx) * y_1 + (1 + s) * z_1
-
-        # Back to spherical polar coordinates from cartesian
-        # Need some of the characteristics of the new ellipsoid
-
-        # The GSR80 semi-major and semi-minor axes used for WGS84(m)
-        a_2, b_2 = 6378137.000, 6356752.3141
-        # The eccentricity of the GRS80 ellipsoid
-        e2_2 = 1 - (b_2 * b_2) / (a_2 * a_2)
-        p = np.sqrt(x_2**2 + y_2**2)
-
-        # Lat is obtained by an iterative proceedure:
-        lat = np.arctan2(z_2, (p * (1-e2_2)))  # Initial value
-        latold = 2 * np.pi
-        while abs(lat - latold) > 10**-16:
-            lat, latold = latold, lat
-            nu_2 = a_2 / np.sqrt(1-e2_2 * np.sin(latold)**2)
-            lat = np.arctan2(z_2 + e2_2 * nu_2 * np.sin(latold), p)
-
-        # Lon and height are then pretty easy
-        lon = np.arctan2(y_2, x_2)
-        H = p / np.cos(lat) - nu_2
-
-        # Convert to degrees
-        latlist.append(np.rad2deg(lat))
-        lonlist.append(np.rad2deg(lon))
-
-    # Convert to NumPy arrays.
-    lon = np.asarray(lonlist)
-    lat = np.asarray(latlist)
-
-    # Job's a good'n.
-    return lon, lat
-
-
 def connectivity(p, t):
     """
     Assemble connectivity data for a triangular mesh.
@@ -1834,7 +1689,7 @@ def find_connected_nodes(n, triangles):
 
     See Also
     --------
-    PyFVCOM.grid_tools.find_connected_elements().
+    PyFVCOM.grid.find_connected_elements().
 
     Notes
     -----
@@ -1886,7 +1741,7 @@ def find_connected_elements(n, triangles):
 
     See Also
     --------
-    PyFVCOM.grid_tools.surrounders().
+    PyFVCOM.grid.surrounders().
 
     """
 
@@ -1965,7 +1820,7 @@ def find_bad_node(nv, node_id):
 
     Examples
     --------
-    >>> from PyFVCOM.grid_tools import read_sms_mesh, connectivity
+    >>> from PyFVCOM.grid import read_sms_mesh, connectivity
     >>> nv, nodes, x, y, z, _ = read_sms_mesh('test_mesh.2dm')
     >>> _, _, _, bnd = connectivity(np.asarray((x, y)).transpose(), nv)
     >>> coast_nodes = nodes[bnd]
@@ -2007,7 +1862,7 @@ def trigradient(x, y, z, t=None):
 
     >>> import numpy as np
     >>> import matplotlib.pyplot as plt
-    >>> from PyFVCOM.grid_tools import trigradient
+    >>> from PyFVCOM.grid import trigradient
     >>> from matplotlib.tri.triangulation import Triangulation
     >>> x, y = np.meshgrid(np.arange(-2, 2, 0.1), np.arange(-2, 2, 0.1))
     >>> x[1:2:-1, :] = x[1:2:-1, :] + 0.1 / 2
@@ -2043,32 +1898,6 @@ def trigradient(x, y, z, t=None):
     dx, dy = tci.gradient(tt.x, tt.y)
 
     return dx, dy
-
-
-def ind2sub(array_shape, index):
-    """
-    NOTE: Just use numpy.unravel_index!
-
-    Replicate the MATLAB ind2sub function to return the subscript values (row,
-    column) of the index for a matrix shaped `array_shape'.
-
-    Parameters
-    ----------
-    array_shape : list, tuple, ndarray
-        Shape of the array for which to calculate the indices.
-    index : int
-        Index in the flattened array.
-
-    Returns
-    -------
-    row, column : int
-        Indices of the row and column, respectively, in the array of shape
-        `array_shape'.
-
-    """
-
-
-    return np.unravel_index(index, array_shape)
 
 
 def rotate_points(x, y, origin, angle):
@@ -2551,6 +2380,78 @@ def nodes2elems(nodes, tri):
         raise Exception('Too many dimensions (maximum of two)')
 
     return elems
+
+
+def vincenty_distance(point1, point2, miles=False):
+    """
+    Author Maurycy Pietrzak (https://github.com/maurycyp/vincenty)
+
+    Vincenty's formula (inverse method) to calculate the distance (in
+    kilometers or miles) between two points on the surface of a spheroid
+
+    """
+    a = 6378137  # meters
+    f = 1 / 298.257223563
+    b = 6356752.314245  # meters; b = (1 - f)a
+
+    MILES_PER_KILOMETER = 0.621371
+
+    MAX_ITERATIONS = 200
+    CONVERGENCE_THRESHOLD = 1e-12  # .000,000,000,001
+
+
+    # short-circuit coincident points
+    if point1[0] == point2[0] and point1[1] == point2[1]:
+        return 0.0
+
+    U1 = math.atan((1 - f) * math.tan(math.radians(point1[0])))
+    U2 = math.atan((1 - f) * math.tan(math.radians(point2[0])))
+    L = math.radians(point2[1] - point1[1])
+    Lambda = L
+
+    sinU1 = math.sin(U1)
+    cosU1 = math.cos(U1)
+    sinU2 = math.sin(U2)
+    cosU2 = math.cos(U2)
+
+    for iteration in range(MAX_ITERATIONS):
+        sinLambda = math.sin(Lambda)
+        cosLambda = math.cos(Lambda)
+        sinSigma = math.sqrt((cosU2 * sinLambda) ** 2 +
+                             (cosU1 * sinU2 - sinU1 * cosU2 * cosLambda) ** 2)
+        if sinSigma == 0:
+            return 0.0  # coincident points
+        cosSigma = sinU1 * sinU2 + cosU1 * cosU2 * cosLambda
+        sigma = math.atan2(sinSigma, cosSigma)
+        sinAlpha = cosU1 * cosU2 * sinLambda / sinSigma
+        cosSqAlpha = 1 - sinAlpha ** 2
+        try:
+            cos2SigmaM = cosSigma - 2 * sinU1 * sinU2 / cosSqAlpha
+        except ZeroDivisionError:
+            cos2SigmaM = 0
+        C = f / 16 * cosSqAlpha * (4 + f * (4 - 3 * cosSqAlpha))
+        LambdaPrev = Lambda
+        Lambda = L + (1 - C) * f * sinAlpha * (sigma + C * sinSigma *
+                                               (cos2SigmaM + C * cosSigma *
+                                                (-1 + 2 * cos2SigmaM ** 2)))
+        if abs(Lambda - LambdaPrev) < CONVERGENCE_THRESHOLD:
+            break  # successful convergence
+    else:
+        return None  # failure to converge
+
+    uSq = cosSqAlpha * (a ** 2 - b ** 2) / (b ** 2)
+    A = 1 + uSq / 16384 * (4096 + uSq * (-768 + uSq * (320 - 175 * uSq)))
+    B = uSq / 1024 * (256 + uSq * (-128 + uSq * (74 - 47 * uSq)))
+    deltaSigma = B * sinSigma * (cos2SigmaM + B / 4 * (cosSigma *
+                 (-1 + 2 * cos2SigmaM ** 2) - B / 6 * cos2SigmaM *
+                 (-3 + 4 * sinSigma ** 2) * (-3 + 4 * cos2SigmaM ** 2)))
+    s = b * A * (sigma - deltaSigma)
+
+    s /= 1000  # meters to kilometers
+    if miles:
+        s *= MILES_PER_KILOMETER  # kilometers to miles
+
+    return round(s, 6)
 
 
 # For backwards compatibility.

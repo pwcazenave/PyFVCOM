@@ -938,16 +938,16 @@ def vorticity(x, y, u, v, vtype='averaged'):
     Returns
     -------
     vort : ndarray
-        Calculated voriticity from the velocity components.
+        Calculated vorticity from the velocity components.
 
     """
 
     # # Need to do some calculations on the model grid to find neighbours etc.
-    # # Use grid_tools for that.
+    # # Use PyFVCOM.grid for that.
     # try:
-    #     from grid_tools import triangleGridEdge as tge
+    #     from PyFVCOM.grid import grid_metrics
     # except:
-    #     raise ImportError('Failed to import tge from the grid_tools.')
+    #     raise ImportError('Failed to import grid_metrics from the grid.')
 
     # # Some basic shape parameters
     # nt, nz, nn = np.shape(u)
@@ -1176,7 +1176,6 @@ def mixedlayerdepth(rho, depth, thresh=0.03):
         depth), axis=1)
 
     return mld
-
 
 
 def stokes(h, U, omega, z0, delta=False, U_star=False):

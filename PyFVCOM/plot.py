@@ -9,8 +9,8 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from matplotlib.dates import DateFormatter, date2num
 from datetime import datetime
 
-from PyFVCOM.ll2utm import lonlat_from_utm
-from PyFVCOM.read_results import FileReader
+from PyFVCOM.coordinate import lonlat_from_utm
+from PyFVCOM.read import FileReader
 
 import numpy as np
 
@@ -263,7 +263,7 @@ class Time:
         Parameters
         ----------
         depth : np.ndarray
-            Depth-varying array of depth. See `PyFVCOM.grid_tools.make_tide' for more information.
+            Depth-varying array of depth. See `PyFVCOM.tide.make_water_column' for more information.
         time_series : np.ndarray
             Depth-varying array of data to plot.
         fill_seabed : bool, optional
