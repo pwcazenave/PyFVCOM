@@ -938,7 +938,7 @@ def vorticity(x, y, u, v, vtype='averaged'):
     Returns
     -------
     vort : ndarray
-        Calculated voriticity from the velocity components.
+        Calculated vorticity from the velocity components.
 
     """
 
@@ -1176,7 +1176,6 @@ def mixedlayerdepth(rho, depth, thresh=0.03):
         depth), axis=1)
 
     return mld
-
 
 
 def stokes(h, U, omega, z0, delta=False, U_star=False):
