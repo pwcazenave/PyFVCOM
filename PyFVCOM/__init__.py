@@ -25,5 +25,5 @@ from PyFVCOM import stats
 from PyFVCOM import tidal_ellipse
 from PyFVCOM import tide
 from PyFVCOM import plot
-from PyFVCOM import read_results
+from PyFVCOM import read
 from PyFVCOM import utilities
