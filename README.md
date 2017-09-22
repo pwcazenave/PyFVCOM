@@ -27,48 +27,51 @@ pip install PyFVCOM
 Prerequisites
 -------------
 
-* Python. This has been written against Python 2.7.11 and tentatively against Python 3.4.3, so in principle anything newer than those should be OK.
+* Python. This is mostly written to run in Python 3.5+, but may (should) work in 2.7.
 
-* numpy, again, this has been tested with numpy version 1.4.1 to 1.10.4.
+* numpy
 
-* scipy, versions 0.7.2 to 0.14.1.
+* scipy
 
-* matplotlib, versions 1.0.1 to 1.5.1.
+* matplotlib
 
-* netCDF4, version 0.9.9 to 1.1.5.
+* netCDF4
 
-* jdcal, version 1.0 to 1.2.
+* pyshp
 
-* pyshp, version 1.2.3.
+* jdcal
 
-Optionally:
+* pyproj
 
-* iPython, version 0.10.2 to 3.2.1. This makes for a good development environment, particularly when invoked with the -pylab argument, which automatically imports matplotlib.pylab and numpy, amongst others.
+* lxml
 
+We recommend Jupyter (formerly iPython) for interactive use of PyFVCOM (and python generally).
 
 Provides
 --------
 
-* buoy_tools - read data from an SQLite3 database of BODC buoy data.
+* buoy - read data from an SQLite3 database of BODC buoy data.
     - get_buoy_metadata
     - get_buoy_data
 
-* cst_tools - create coastline files for SMS from shapefiles or DHI MIKE arcs.
+* coast - work with coastlines
     - read_ESRI_shapefile
     - read_arc_MIKE
     - read_CST
     - write_CST
 
-* ctd_tools - interrogate an SQLite data base of CTD casts.
+* ctd - interrogate an SQLite data base of CTD casts.
     - get_CTD_metadata
     - get_CTD_data
     - get_ferrybox_data
 
-* current_tools - convert from vector components to scalars and back.
+* current - tools related to processing currents
+    - Residuals
     - scalar2vector
     - vector2scalar
+    - residual_flow
 
-* grid_tools - tools to parse SMS, DHI MIKE and FVCOM unstructured grids. Also provides functionality to add coasts and clip triangulations to a given domain. Functions to parse FVCOM river files are also included, as is a function to resample an unstructured grid onto a regular grid (without interpolation, simply finding the nearest point within a threshold distance).
+* grid - tools to parse SMS, DHI MIKE, GMSH and FVCOM unstructured grids. Also provides functionality to add coasts and clip triangulations to a given domain. Functions to parse FVCOM river files are also included, as is a function to resample an unstructured grid onto a regular grid (without interpolation, simply finding the nearest point within a threshold distance). This module contains a number of generally useful tools related to unstructured grids (node and element lookups, grid connectivity, grid metrics, area tools).
     - read_sms_mesh
     - read_fvcom_mesh
     - read_mike_mesh
@@ -84,17 +87,30 @@ Provides
     - get_rivers
     - mesh2grid
     - line_sample
-    - OSGB36_to_WGS84
     - connectivity
     - clip_domain
-    - surrounders
+    - find_connected_nodes
+    - find_connected_elements
     - get_area
+    - find_bad_node
+    - trigradient
+    - rotate_points
+    - get_boundary_polygons
+    - get_attached_unique_nodes
+    - grid_metrics
+    - control_volumes
+    - node_control_area
+    - element_control_area
+    - unstructured_grid_volume
+    - elems2nodes
+    - nodes2elems
 
-* ll2utm - convert from spherical to cartesian UTM coordinates and back. Available from <http://robotics.ai.uiuc.edu/~hyoon24/LatLongUTMconversion.py>. 
-    - LL_to_UTM
-    - UTM_to_LL
+* coordinate - convert from spherical and cartesian (UTM) coordinates. Also work with British National Grid coordinates and spherical.
+    - utm_from_lonlat
+    - lonlat_from_utm
+    - british_national_grid_to_lonlat
 
-* ocean_tools - a number of routines to convert between combinations of temperature, salinity, pressure, depth and density.
+* ocean - a number of routines to convert between combinations of temperature, salinity, pressure, depth and density.
     - pressure2depth
     - depth2pressure
     - dT_adiab_sw
@@ -106,11 +122,9 @@ Provides
     - sw_dens
     - sw_svan
     - sw_sal78
-    - sw_sal80
-    - sw_salinity
     - dens_jackett
     - cond2salt
-    - vorticity (currently empty)
+    - vorticity (currently unimplemented)
     - zbar
     - pea
     - simpsonhunter
@@ -120,33 +134,29 @@ Provides
     - calculate_rhum
 
 * plot - plotting class for FVCOM outputs.
+    - Time.plot_line
+    - Time.plot_scatter
+    - Time.plot_quiver
+    - Time.plot_surface
     - Plotter.plot_field
     - Plotter.plot_quiver
     - Plotter.plot_lines
     - Plotter.remove_line_plots
     - Plotter.plot_scatter
 
-* process_results - perform some analyses on FVCOM data read in using read_FVCOM_results.
-    - calculate_total_CO2
-    - calculate_CO2_leak_budget
-    - data_average
-    - unstructured_grid_volume
-    - residual_flow
-
-* read_results - parse the netCDF model output and extract a subset of the variables.
+* read - parse the netCDF model output and extract a subset of the variables.
+    - FileReader
+    - MFileReader
     - ncwrite
     - ncread
     - read_probes
     - write_probes
-    - elems2nodes
-    - nodes2elems
 
-* stats_tools - some basic statistics tools.
+* stats - some basic statistics tools.
     - calculate_regression
     - calculate_polyfit
-    - coefficient_of_determination
-    - fix_range
     - rmse
+    - calculate_coefficient
 
 * tidal_ellipse - Python version of the Tidal Ellipse MATLAB toolbox <http://woodshole.er.usgs.gov/operations/sea-mat/tidal_ellipse-html/index.html>.
     - ap2ep
@@ -158,9 +168,7 @@ Provides
     - do_the_plot
     - prep_plot
 
-* tide_tools - tools to use and abuse tidal data from an SQLite database of tidal time series.
-    - julian_day
-    - gregorian_date
+* tide - tools to use and abuse tidal data from an SQLite database of tidal time series.
     - add_harmonic_results
     - get_observed_data
     - get_observed_metadata
@@ -170,6 +178,16 @@ Provides
     - read_POLPRED
     - grid_POLPRED
     - get_harmonics_POLPRED
+    - make_water_column
+
+* utilities - general utilities (including time utilities)
+    - StubFile
+    - fix_range
+    - julian_day
+    - gregorian_date
+    - overlap
+    - common_time
+    - ind2sub
 
 
 Examples

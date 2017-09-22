@@ -13,8 +13,8 @@ from warnings import warn
 from datetime import datetime
 from netCDF4 import Dataset, MFDataset, num2date, date2num
 
-from PyFVCOM.ll2utm import lonlat_from_utm, utm_from_lonlat
-from PyFVCOM.grid_tools import unstructured_grid_volume, nodes2elems
+from PyFVCOM.coordinate import lonlat_from_utm, utm_from_lonlat
+from PyFVCOM.grid import unstructured_grid_volume, nodes2elems
 
 
 class FileReader:
@@ -61,7 +61,7 @@ class FileReader:
         # Load and plot surface currents as surface and quiver plots.
         >>> from PyFVCOM.read_results import FileReader
         >>> from PyFVCOM.plot import Plotter
-        >>> from PyFVCOM.current_tools import vector2scalar
+        >>> from PyFVCOM.current import vector2scalar
         >>> F = FileReader('casename_0001.nc', variables=['u', 'v'], dims={'siglay': [0]})
         >>> # Calculate speed and direction from the current vectors
         >>> F.data.direction, F.data.speed = vector2scalar(F.data.u, F.data.v)
