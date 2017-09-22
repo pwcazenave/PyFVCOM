@@ -1239,15 +1239,70 @@ class FileReader(Domain):
                                 print(f'Extracting indices {variable_indices[i]} for variable {v}', flush=True)
                             data_raw = data_raw.take(variable_indices[i], axis=i)
 
-                    setattr(self.data, v, data_raw)
-                    del data_raw
-
-            except MemoryError:
-                raise MemoryError("Variable {} too large for RAM. Use `dims' to load subsets in space or time or "
-                                  "`variables' to request only certain variables.".format(v))
-
-        # Update the dimensions to match the data.
-        self._update_dimensions(var)
+                # Check what dimensions this variables has an load the indices accordingly. This is probably an ideal
+                # candidate for optimisation of the indexing (see numpy's fancy indexing or ravel()ing the whole
+                # array and using ranges instead: https://stackoverflow.com/questions/14386822). This also assumes we
+                # will only ever have a 3D array (4D really, x, y, z, t, but unstructured, so (x,y), z,
+                # t). I can imagine a scenario where we have 4D but that isn't yet a requirement.
+                temporal = 'time' in var_dim
+                vertical = 'siglay' in var_dim or 'siglev' in var_dim
+                horizontal = 'node' in var_dim or 'nele' in var_dim
+                if temporal and vertical and horizontal:
+                    if self._debug:
+                        print('1: dims {}'.format(self._dims))
+                    if 'siglay' in var_dim and 'node' in var_dim:
+                        setattr(self.data, v, self.ds.variables[v][start:end:stride, layer, node])
+                    elif 'siglev' in var_dim and 'node' in var_dim:
+                        setattr(self.data, v, self.ds.variables[v][start:end:stride, level, node])
+                    elif 'siglay' in var_dim and 'nele' in var_dim:
+                        setattr(self.data, v, self.ds.variables[v][start:end:stride, layer, nele])
+                    elif 'siglev' in var_dim and 'nele' in var_dim:
+                        setattr(self.data, v, self.ds.variables[v][start:end:stride, level, nele])
+                elif temporal and vertical and not horizontal:
+                    if self._debug:
+                        print('2: dims {}'.format(self._dims))
+                    if 'siglay' in var_dim:
+                        setattr(self.data, v, self.ds.variables[v][start:end:stride, layer, ...])
+                    elif 'siglev' in var_dim:
+                        setattr(self.data, v, self.ds.variables[v][start:end:stride, level, ...])
+                elif temporal and not vertical and horizontal:
+                    if self._debug:
+                        print('3: dims {}'.format(self._dims))
+                    if 'node' in var_dim:
+                        setattr(self.data, v, self.ds.variables[v][start:end:stride, node])
+                    elif 'nele' in var_dim:
+                        setattr(self.data, v, self.ds.variables[v][start:end:stride, nele])
+                elif not temporal and vertical and horizontal:
+                    if self._debug:
+                        print('4: dims {}'.format(self._dims))
+                    if 'siglay' in var_dim and 'node' in var_dim:
+                        setattr(self.data, v, self.ds.variables[v][..., layer, node])
+                    elif 'siglev' in var_dim and 'node' in var_dim:
+                        setattr(self.data, v, self.ds.variables[v][..., level, node])
+                    elif 'siglay' in var_dim and 'nele' in var_dim:
+                        setattr(self.data, v, self.ds.variables[v][..., layer, nele])
+                    elif 'siglev' in var_dim and 'nele' in var_dim:
+                        setattr(self.data, v, self.ds.variables[v][..., level, nele])
+                elif not temporal and vertical and not horizontal:
+                    if self._debug:
+                        print('5: dims {}'.format(self._dims))
+                    if 'siglay' in var_dim:
+                        setattr(self.data, v, self.ds.variables[v][..., layer, ...])
+                    elif 'siglev' in var_dim:
+                        setattr(self.data, v, self.ds.variables[v][..., level, ...])
+                elif not temporal and not vertical and horizontal:
+                    if self._debug:
+                        print('6: dims {}'.format(self._dims))
+                    if 'node' in var_dim:
+                        setattr(self.data, v, self.ds.variables[v][node]) # ellipse omitted to stop 
+                    elif 'nele' in var_dim:
+                        setattr(self.data, v, self.ds.variables[v][nele])
+                else:
+                    # If we've been given dimensions but this variables doesn't have any of those, we'll end up here,
+                    # in which case, just return everything.
+                    if self._debug:
+                        print('7: no dims {}'.format(self._dims))
+                    setattr(self.data, v, self.ds.variables[v][:])
 
     def closest_time(self, when):
         """
