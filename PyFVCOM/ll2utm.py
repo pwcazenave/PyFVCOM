@@ -170,9 +170,17 @@ def utm_from_lonlat(lon, lat, zone=None, ellipsoid='WGS84', datum='WGS84'):
     # For the spherical case, if we haven't been given zones, find them.
     if not zone:
         zone = []
-        for lonlat in zip(lon, lat):
-            zone_number = _get_zone_number(*lonlat)
-            zone_letter = _get_zone_letter(lonlat[-1])
+        try:
+            for lonlat in zip(lon, lat):
+                zone_number = _get_zone_number(*lonlat)
+                zone_letter = _get_zone_letter(lonlat[-1])
+                if zone_number and zone_letter:
+                    zone.append('{:d}{}'.format(zone_number, zone_letter))
+                else:
+                    raise ValueError('Invalid zone letter: are your latitudes north or south of 84 and -80 respectively?')
+        except TypeError:
+            zone_number = _get_zone_number(lon, lat)
+            zone_letter = _get_zone_letter(lat)
             if zone_number and zone_letter:
                 zone.append('{:d}{}'.format(zone_number, zone_letter))
             else:
@@ -181,14 +189,21 @@ def utm_from_lonlat(lon, lat, zone=None, ellipsoid='WGS84', datum='WGS84'):
     zone = to_list(zone)
     inverse = False
 
-    npos = len(lon)
-    if npos != len(lon):
-        raise ValueError('Supplied latitudes and longitudes are not the same size.')
+    try:
+        npos = len(lon)
+        if npos != len(lon):
+            raise ValueError('Supplied latitudes and longitudes are not the same size.')
+    except TypeError:
+        npos = 1
 
     # If we've been given a single zone and multiple coordinates, make a
     # list of zones so we can do things easily in parallel.
-    if len(zone) != npos:
-        zone = zone * npos
+    try:
+        if len(zone) != npos:
+            zone = zone * npos
+    except TypeError:
+        # Leave zone as is.
+        pass
 
     # Do this in parallel unless we only have a single position.
     if npos > 1:
@@ -205,7 +220,11 @@ def utm_from_lonlat(lon, lat, zone=None, ellipsoid='WGS84', datum='WGS84'):
         # The lon, lat and zone will all be lists here, For
         # cross-python2/python3 support, we can't just * them, so assume
         # the first value in the list is what we want.
-        lon, lat = __convert((lon[0], lat[0], zone[0], ellipsoid, datum, inverse))
+        try:
+            lon, lat = __convert((lon[0], lat[0], zone[0], ellipsoid, datum, inverse))
+        except IndexError:
+            lon, lat = __convert((lon, lat, zone, ellipsoid, datum, inverse))
+
         lon = to_list(lon)
         lat = to_list(lat)
 
