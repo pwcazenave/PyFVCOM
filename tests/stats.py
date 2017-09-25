@@ -6,7 +6,7 @@ from netCDF4 import num2date, date2num
 
 from unittest import TestCase
 
-from PyFVCOM.stats_tools import *
+from PyFVCOM.stats import *
 
 class StatsToolsTest(TestCase):
 
