@@ -7,7 +7,7 @@ from unittest import TestCase
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 
-from PyFVCOM.read_results import FileReader
+from PyFVCOM.read import FileReader
 from PyFVCOM.utilities import StubFile
 
 
@@ -19,72 +19,57 @@ class FileReader_test(TestCase):
                              lon=self.lon, lat=self.lat, triangles=self.triangles, zone='30N')
 
     def tearDown(self):
+        self.stub.ncfile.close()
+        os.remove(self.stub.ncfile.name)
         del(self.stub)
 
     def test_get_single_lon(self):
         lon = -5.78687373
         F = FileReader(self.stub.ncfile.name, dims={'node': [0]})
         test.assert_almost_equal(F.grid.lon, lon, decimal=5)
-        self.stub.ncfile.close()
-        os.remove(self.stub.ncfile.name)
 
     def test_get_single_lat(self):
         lat = 56.89470906
         F = FileReader(self.stub.ncfile.name, dims={'node': [29]})
         test.assert_almost_equal(F.grid.lat, lat, decimal=5)
-        self.stub.ncfile.close()
-        os.remove(self.stub.ncfile.name)
 
     def test_get_single_lonc(self):
         lonc = -4.67915533
         F = FileReader(self.stub.ncfile.name, dims={'nele': [0]})
         test.assert_almost_equal(F.grid.lonc, lonc, decimal=5)
-        self.stub.ncfile.close()
-        os.remove(self.stub.ncfile.name)
 
     def test_get_single_latc(self):
         latc = 52.864905897403958
         F = FileReader(self.stub.ncfile.name, dims={'nele': [29]})
         test.assert_almost_equal(F.grid.latc, latc, decimal=5)
-        self.stub.ncfile.close()
-        os.remove(self.stub.ncfile.name)
 
     def test_get_multipe_lon(self):
         lon = np.array((-5.78687373, -3.26585943))
         F = FileReader(self.stub.ncfile.name, dims={'node': [0, 5]})
         test.assert_almost_equal(F.grid.lon, lon, decimal=5)
-        self.stub.ncfile.close()
-        os.remove(self.stub.ncfile.name)
 
     def test_get_multipe_lat(self):
         lat = np.array((56.89470906, 58.49899088))
         F = FileReader(self.stub.ncfile.name, dims={'node': [29, 34]})
         test.assert_almost_equal(F.grid.lat, lat, decimal=5)
-        self.stub.ncfile.close()
-        os.remove(self.stub.ncfile.name)
 
     def test_get_multipe_lonc(self):
         lonc = np.array((-4.67915533, 0.61115498))
         F = FileReader(self.stub.ncfile.name, dims={'nele': [0, 5]})
         test.assert_almost_equal(F.grid.lonc, lonc, decimal=5)
-        self.stub.ncfile.close()
-        os.remove(self.stub.ncfile.name)
 
     def test_get_multipe_latc(self):
         latc = np.array((52.8649059 , 52.90310308))
         F = FileReader(self.stub.ncfile.name, dims={'nele': [29, 34]})
         test.assert_almost_equal(F.grid.latc, latc, decimal=5)
-        self.stub.ncfile.close()
-        os.remove(self.stub.ncfile.name)
 
     def test_get_water_column(self):
         water_column = np.array([
-            8.18035714, 7.27142857, 6.3625, 5.45357143, 4.54464286,
-            3.63571429, 2.72678571, 1.81785714, 0.90892857, 0.0])
+            9.99821472, 10.90714264, 11.81607151, 12.72500038, 13.6339283,
+            14.54285717, 15.45178604, 16.36071396, 17.26964378, 18.1785717
+        ])
         F = FileReader(self.stub.ncfile.name, dims={'node': [5], 'time': [10, 11]}, variables=['temp'])
         test.assert_almost_equal(np.squeeze(F.data.temp), water_column, decimal=5)
-        self.stub.ncfile.close()
-        os.remove(self.stub.ncfile.name)
 
     def test_get_time_series(self):
         surface_elevation = np.array([
@@ -96,31 +81,37 @@ class FileReader_test(TestCase):
             -1.3620492, -0.88678734, -0.18925488, 0.55571376, 1.1613944])
         F = FileReader(self.stub.ncfile.name, dims={'node': [10], 'time': [10, 40]}, variables=['zeta'])
         test.assert_almost_equal(np.squeeze(F.data.zeta), surface_elevation, decimal=5)
-        self.stub.ncfile.close()
-        os.remove(self.stub.ncfile.name)
 
     def test_get_layer(self):
         vertical_velocity = np.array([
-            0.00377454, 0.00377454, 0.00377454, 0.00377454, 0.00377454,
-            0.00377454, 0.00377454, 0.00377454, 0.00377454, 0.00377454,
-            0.00377454, 0.00377454, 0.00377454, 0.00377454, 0.00377454,
-            0.00377454, 0.00377454, 0.00377454, 0.00377454, 0.00377454,
-            0.00377454, 0.00377454, 0.00377454, 0.00377454, 0.00377454,
-            0.00377454, 0.00377454, 0.00377454, 0.00377454, 0.00377454,
-            0.00377454, 0.00377454, 0.00377454, 0.00377454, 0.00377454,
-            0.00377454, 0.00377454, 0.00377454, 0.00377454, 0.00377454,
-            0.00377454, 0.00377454, 0.00377454, 0.00377454, 0.00377454,
-            0.00377454, 0.00377454, 0.00377454, 0.00377454, 0.00377454,
-            0.00377454, 0.00377454, 0.00377454, 0.00377454, 0.00377454,
-            0.00377454, 0.00377454, 0.00377454, 0.00377454, 0.00377454,
-            0.00377454, 0.00377454, 0.00377454, 0.00377454, 0.00377454,
-            0.00377454, 0.00377454, 0.00377454, 0.00377454, 0.00377454,
-            0.00377454, 0.00377454, 0.00377454, 0.00377454, 0.00377454,
-            0.00377454, 0.00377454, 0.00377454, 0.00377454])
+          0.01509815, 0.01509815, 0.01509815, 0.01509815, 0.01509815,
+          0.01509815, 0.01509815, 0.01509815, 0.01509815, 0.01509815,
+          0.01509815, 0.01509815, 0.01509815, 0.01509815, 0.01509815,
+          0.01509815, 0.01509815, 0.01509815, 0.01509815, 0.01509815,
+          0.01509815, 0.01509815, 0.01509815, 0.01509815, 0.01509815,
+          0.01509815, 0.01509815, 0.01509815, 0.01509815, 0.01509815,
+          0.01509815, 0.01509815, 0.01509815, 0.01509815, 0.01509815,
+          0.01509815, 0.01509815, 0.01509815, 0.01509815, 0.01509815,
+          0.01509815, 0.01509815, 0.01509815, 0.01509815, 0.01509815,
+          0.01509815, 0.01509815, 0.01509815, 0.01509815, 0.01509815,
+          0.01509815, 0.01509815, 0.01509815, 0.01509815, 0.01509815,
+          0.01509815, 0.01509815, 0.01509815, 0.01509815, 0.01509815,
+          0.01509815, 0.01509815, 0.01509815, 0.01509815, 0.01509815,
+          0.01509815, 0.01509815, 0.01509815, 0.01509815, 0.01509815,
+          0.01509815, 0.01509815, 0.01509815, 0.01509815, 0.01509815,
+          0.01509815, 0.01509815, 0.01509815, 0.01509815])
         F = FileReader(self.stub.ncfile.name, dims={'siglay': [5], 'time': [100, 101]}, variables=['ww'])
         test.assert_almost_equal(np.squeeze(F.data.ww), vertical_velocity, decimal=5)
-        self.stub.ncfile.close()
-        os.remove(self.stub.ncfile.name)
+
+    def test_get_layer_no_variable(self):
+        siglay = -np.tile(np.arange(0.05, 1, 0.2), [len(self.lon), 1]).T
+        F = FileReader(self.stub.ncfile.name, dims={'siglay': np.arange(0, 10, 2)})
+        test.assert_almost_equal(F.grid.siglay, siglay)
+
+    def test_get_level_no_variable(self):
+        siglev = -np.tile(np.arange(0, 1.2, 0.2), [len(self.lon), 1]).T
+        F = FileReader(self.stub.ncfile.name, dims={'siglev': np.arange(0, 11, 2)})
+        test.assert_almost_equal(F.grid.siglev, siglev)
 
     def test_add_files(self):
         # Make another stub file which follows in time from the existing one. Then only load a section of that in
@@ -139,12 +130,6 @@ class FileReader_test(TestCase):
 
         test.assert_equal(F.time.datetime, all_times)
         test.assert_equal(F.data.ww, all_data)
-
-        # Tidy up.
-        self.stub.ncfile.close()
-        next_stub.ncfile.close()
-        os.remove(self.stub.ncfile.name)
-        os.remove(next_stub.ncfile.name)
 
 
 def _prep(starttime=None, duration=None, interval=None):

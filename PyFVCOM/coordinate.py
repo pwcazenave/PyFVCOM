@@ -167,6 +167,12 @@ def utm_from_lonlat(lon, lat, zone=None, ellipsoid='WGS84', datum='WGS84'):
     lon = to_list(lon)
     lat = to_list(lat)
 
+    # Fix zone arrays/lists/tuple/strings.
+    if isinstance(zone, str):
+        zone = to_list(zone)
+    elif isinstance(zone, np.ndarray):
+        zone = zone.tolist()
+
     # For the spherical case, if we haven't been given zones, find them.
     if not zone:
         zone = []

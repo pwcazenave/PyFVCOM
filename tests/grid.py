@@ -3,8 +3,8 @@ import numpy as np
 
 from unittest import TestCase
 
-from PyFVCOM.read_results import nodes2elems
-from PyFVCOM.grid_tools import *
+from PyFVCOM.read import nodes2elems
+from PyFVCOM.grid import *
 
 
 class GridToolsTest(TestCase):
@@ -92,14 +92,6 @@ class GridToolsTest(TestCase):
         test.assert_almost_equal(test_line, line)
         test.assert_almost_equal(test_dist, dist)
 
-    def test_OSGB35_to_WGS84(self):
-        # Make up some fairly realistic coordinates.
-        x, y = [10000, 20000], [50000, 60000]
-        test_lon, test_lat = [-7.46963128, -7.34010597], [50.22103197, 50.31708046]
-        lon, lat = OSGB36_to_WGS84(x, y)
-        test.assert_almost_equal(lon, test_lon)
-        test.assert_almost_equal(lat, test_lat)
-
     def test_connectivity(self):
         test_e = [[0, 1], [0, 2], [1, 2], [1, 3],
                   [1, 6], [1, 7], [2, 3], [2, 4],
@@ -163,14 +155,6 @@ class GridToolsTest(TestCase):
         dx, dy = trigradient(self.x, self.y, self.z)
         test.assert_equal(dx, test_dx)
         test.assert_equal(dy, test_dy)
-
-    def test_ind2sub(self):
-        ind = 25
-        shape = (10, 20)
-        test_row, test_col = 1, 5
-        rows, cols = ind2sub(shape, ind)
-        test.assert_equal(rows, test_row)
-        test.assert_equal(cols, test_col)
 
     def test_rotate_points(self):
         angle = 45

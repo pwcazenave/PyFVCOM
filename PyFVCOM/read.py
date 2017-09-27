@@ -14,7 +14,7 @@ from datetime import datetime
 from netCDF4 import Dataset, MFDataset, num2date, date2num
 
 from PyFVCOM.coordinate import lonlat_from_utm, utm_from_lonlat
-from PyFVCOM.grid import unstructured_grid_volume, nodes2elems
+from PyFVCOM.grid import unstructured_grid_volume, nodes2elems, vincenty_distance
 
 
 class FileReader:
@@ -497,6 +497,17 @@ class FileReader:
                     _temp = np.zeros(var_shape)
                 setattr(self.grid, var, _temp)
 
+        # Check if we've been given vertical dimensions to subset in too, and if so, do that.
+        for var in 'siglay', 'siglev', 'siglay_center', 'siglev_center':
+            short_dim = copy.copy(var)
+            # Strip off the _center to match the dimension name.
+            if short_dim.endswith('_center'):
+                short_dim = short_dim.split('_')[0]
+            if short_dim in self._dims:
+                if short_dim in self.ds.variables[var].dimensions:
+                    _temp = getattr(self.grid, var)[self._dims[short_dim], ...]
+                setattr(self.grid, var, _temp)
+
         # Check ranges and if zero assume we're missing that particular type, so convert from the other accordingly.
         self.grid.lon_range = np.ptp(self.grid.lon)
         self.grid.lat_range = np.ptp(self.grid.lat)
@@ -725,9 +736,9 @@ class FileReader:
                     if self._debug:
                         print('6: dims {}'.format(self._dims))
                     if 'node' in var_dim:
-                        setattr(self.data, v, self.ds.variables[v][..., node])
+                        setattr(self.data, v, self.ds.variables[v][node]) # ellipse omitted to stop 
                     elif 'nele' in var_dim:
-                        setattr(self.data, v, self.ds.variables[v][..., nele])
+                        setattr(self.data, v, self.ds.variables[v][nele])
                 else:
                     # If we've been given dimensions but this variables doesn't have any of those, we'll end up here,
                     # in which case, just return everything.
@@ -743,7 +754,7 @@ class FileReader:
             self.load_time()
             return np.argmin(np.abs(self.time.datetime - when))
 
-    def closest_node(self, where, cartesian=False, threshold=None):
+    def closest_node(self, where, cartesian=False, threshold=None, vincenty=False):
         """
         Find the index of the closest node to the supplied position (x, y). Set `cartesian' to True for cartesian
         coordinates (defaults to spherical).
@@ -756,8 +767,11 @@ class FileReader:
             Set to True to use cartesian coordinates. Defaults to False.
         threshold : float, optional
             Give a threshold distance beyond which the closest grid is considered too far away. Units are the same as
-            the coordinates in `where'. Return None when this condition is true.
-
+            the coordinates in `where', unless using lat/lon and vincenty when it is in metres. Return None when
+            beyond threshold.
+        vincenty : bool, optional
+            Use vincenty distance calculation. Allows specification of point in lat/lon but threshold in metres 
+        
         Returns
         -------
         index : int, None
@@ -766,11 +780,16 @@ class FileReader:
 
         """
 
-        if cartesian:
-            x, y = self.grid.x, self.grid.y
+        if not vincenty:
+            if cartesian:
+                x, y = self.grid.x, self.grid.y
+            else:
+                x, y = self.grid.lon, self.grid.lat
+            dist = np.sqrt((x - where[0])**2 + (y - where[1])**2)        
         else:
-            x, y = self.grid.lon, self.grid.lat
-        dist = np.sqrt((x - where[0])**2 + (y - where[1])**2)
+            grid_pts = np.asarray([self.grid.lon, self.grid.lat]).T
+            where_pt_rep = np.tile(np.asarray(where), (len(self.grid.lon),1))
+            dist = np.asarray([vincenty_distance(pt_1, pt_2) for pt_1, pt_2 in zip(grid_pts, where_pt_rep)])*1000
         index = np.argmin(dist)
         if threshold:
             if dist.min() < threshold:
@@ -780,7 +799,7 @@ class FileReader:
 
         return index
 
-    def closest_element(self, where, cartesian=False, threshold=None):
+    def closest_element(self, where, cartesian=False, threshold=None, vincenty=False):
         """
         Find the index of the closest element to the supplied position (x, y). Set `cartesian' to True for cartesian
         coordinates (defaults to spherical).
@@ -793,8 +812,11 @@ class FileReader:
             Set to True to use cartesian coordinates. Defaults to False.
         threshold : float, optional
             Give a threshold distance beyond which the closest grid is considered too far away. Units are the same as
-            the coordinates in `where'. Return None when this condition is true.
-
+            the coordinates in `where', unless using lat/lon and vincenty when it is in metres. Return None when
+            beyond threshold.
+        vincenty : bool, optional
+            Use vincenty distance calculation. Allows specification of point in lat/lon but threshold in metres
+ 
         Returns
         -------
         index : int, None
@@ -802,12 +824,17 @@ class FileReader:
             supplied position to the nearest model node exceeds that threshold, `index' is None.
 
         """
-
-        if cartesian:
-            x, y = self.grid.xc, self.grid.yc
+        if not vincenty:
+            if cartesian:
+                x, y = self.grid.xc, self.grid.yc
+            else:
+                x, y = self.grid.lonc, self.grid.latc
+            dist = np.sqrt((x - where[0])**2 + (y - where[1])**2)
         else:
-            x, y = self.grid.lonc, self.grid.latc
-        dist = np.sqrt((x - where[0])**2 + (y - where[1])**2)
+            grid_pts = np.asarray([self.grid.lonc, self.grid.latc]).T
+            where_pt_rep = np.tile(np.asarray(where), (len(self.grid.lonc),1))
+            dist = np.asarray([vincenty_distance(pt_1, pt_2) for pt_1, pt_2 in zip(grid_pts, where_pt_rep)])*1000
+        
         index = np.argmin(dist)
         if threshold:
             if dist.min() < threshold:

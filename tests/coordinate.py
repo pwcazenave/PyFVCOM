@@ -3,7 +3,7 @@ import numpy as np
 
 from unittest import TestCase
 
-from PyFVCOM.ll2utm import *
+from PyFVCOM.coordinate import *
 
 class CoordinateToolsTest(TestCase):
 
@@ -79,3 +79,12 @@ class CoordinateToolsTest(TestCase):
         lon, lat = lonlat_from_utm(self.x, self.y, '30N')
         test.assert_almost_equal(lon, self.lon)
         test.assert_almost_equal(lat, self.lat)
+
+    def test_british_national_grid_to_lonlat(self):
+        # Make up some fairly realistic coordinates.
+        x, y = [10000, 20000], [50000, 60000]
+        test_lon, test_lat = [-7.46963128, -7.34010597], [50.22103197, 50.31708046]
+        lon, lat = british_national_grid_to_lonlat(x, y)
+        test.assert_almost_equal(lon, test_lon)
+        test.assert_almost_equal(lat, test_lat)
+

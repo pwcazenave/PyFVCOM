@@ -3,7 +3,7 @@ import numpy as np
 
 from unittest import TestCase
 
-from PyFVCOM.ocean_tools import *
+from PyFVCOM.ocean import *
 
 class OceanToolsTest(TestCase):
 
