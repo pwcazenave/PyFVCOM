@@ -736,9 +736,15 @@ class FileReader:
                     if self._debug:
                         print('6: dims {}'.format(self._dims))
                     if 'node' in var_dim:
-                        setattr(self.data, v, self.ds.variables[v][node]) # ellipse omitted to stop 
+                        if len(var_dim) == 1:
+                            setattr(self.data, v, self.ds.variables[v][node])
+                        else:
+                            setattr(self.data, v, self.ds.variables[v][..., node])
                     elif 'nele' in var_dim:
-                        setattr(self.data, v, self.ds.variables[v][nele])
+                        if len(var_dim) == 1:
+                            setattr(self.data, v, self.ds.variables[v][nele])
+                        else:
+                            setattr(self.data, v, self.ds.variables[v][..., nele])
                 else:
                     # If we've been given dimensions but this variables doesn't have any of those, we'll end up here,
                     # in which case, just return everything.
