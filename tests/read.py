@@ -120,6 +120,16 @@ class FileReader_test(TestCase):
           0.01509815, 0.01509815, 0.01509815, 0.01509815])
         F = FileReader(self.stub.ncfile.name, dims={'siglay': [5], 'time': [100, 101]}, variables=['ww'])
         test.assert_almost_equal(np.squeeze(F.data.ww), vertical_velocity, decimal=5)
+
+    def test_get_layer_no_variable(self):
+        siglay = -np.tile(np.arange(0.05, 1, 0.2), [len(self.lon), 1]).T
+        F = FileReader(self.stub.ncfile.name, dims={'siglay': np.arange(0, 10, 2)})
+        test.assert_almost_equal(F.grid.siglay, siglay)
+
+    def test_get_level_no_variable(self):
+        siglev = -np.tile(np.arange(0, 1.2, 0.2), [len(self.lon), 1]).T
+        F = FileReader(self.stub.ncfile.name, dims={'siglev': np.arange(0, 11, 2)})
+        test.assert_almost_equal(F.grid.siglev, siglev)
         self.stub.ncfile.close()
         os.remove(self.stub.ncfile.name)
 
