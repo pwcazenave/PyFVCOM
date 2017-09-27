@@ -24,3 +24,12 @@ class StatsToolsTest(TestCase):
         scaled_signal = fix_range(self.signal1, target_min, target_max)
         test.assert_equal(scaled_signal.min(), target_min)
         test.assert_equal(scaled_signal.max(), target_max)
+
+    def test_ind2sub(self):
+        ind = 25
+        shape = (10, 20)
+        test_row, test_col = 1, 5
+        rows, cols = ind2sub(shape, ind)
+        test.assert_equal(rows, test_row)
+        test.assert_equal(cols, test_col)
+

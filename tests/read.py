@@ -7,7 +7,7 @@ from unittest import TestCase
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 
-from PyFVCOM.read_results import FileReader
+from PyFVCOM.read import FileReader
 from PyFVCOM.utilities import StubFile
 
 
