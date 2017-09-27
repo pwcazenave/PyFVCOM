@@ -497,6 +497,17 @@ class FileReader:
                     _temp = np.zeros(var_shape)
                 setattr(self.grid, var, _temp)
 
+        # Check if we've been given vertical dimensions to subset in too, and if so, do that.
+        for var in 'siglay', 'siglev', 'siglay_center', 'siglev_center':
+            short_dim = copy.copy(var)
+            # Strip off the _center to match the dimension name.
+            if short_dim.endswith('_center'):
+                short_dim = short_dim.split('_')[0]
+            if short_dim in self._dims:
+                if short_dim in self.ds.variables[var].dimensions:
+                    _temp = getattr(self.grid, var)[self._dims[short_dim], ...]
+                setattr(self.grid, var, _temp)
+
         # Check ranges and if zero assume we're missing that particular type, so convert from the other accordingly.
         self.grid.lon_range = np.ptp(self.grid.lon)
         self.grid.lat_range = np.ptp(self.grid.lat)
