@@ -47,8 +47,8 @@ class StubFile():
         self.grid.h = (self.grid.h / self.grid.h.max()) * 100.0
         self.grid.h_center = nodes2elems(self.grid.h, triangles)
 
-        self.grid.siglev = np.tile(np.arange(0, 1.1, 0.1), [len(self.grid.lon), 1]).T
-        self.grid.siglay = np.diff(self.grid.siglev, axis=0)
+        self.grid.siglev = -np.tile(np.arange(0, 1.1, 0.1), [len(self.grid.lon), 1]).T
+        self.grid.siglay = -np.tile(np.arange(0.05, 1, 0.1), [len(self.grid.lon), 1]).T
         self.grid.siglev_center = nodes2elems(self.grid.siglev, triangles)
         self.grid.siglay_center = nodes2elems(self.grid.siglay, triangles)
 
