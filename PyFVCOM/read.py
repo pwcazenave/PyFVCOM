@@ -670,32 +670,35 @@ class FileReader:
                     print('0: no dims')
                 setattr(self.data, v, self.ds.variables[v][:])
             else:
+                possible_indices = {'time':time}
                 # Populate indices for omitted values.
                 if not isinstance(original_layer, (list, tuple, np.ndarray)):
                     if not original_layer:
                         siglay = np.arange(self.dims.siglay)
+                possible_indices['siglay'] = siglay
                 if not isinstance(original_level, (list, tuple, np.ndarray)):
                     if not original_level:
                         siglev = np.arange(self.dims.siglev)
+                possible_indices['siglev'] = siglev
                 if not isinstance(original_node, (list, tuple, np.ndarray)):
                     if not original_node:
                         # I'm not sure if this is a really terrible idea (from a performance perspective).
                         node = np.arange(self.dims.node)
+                possible_indices['node'] = node
                 if not isinstance(original_nele, (list, tuple, np.ndarray)):
                     if not original_nele:
                         # I'm not sure if this is a really terrible idea (from a performance perspective).
                         nele = np.arange(self.dims.nele)
+                possible_indices['nele'] = nele
 
                 var_index_dict = {}
                 for this_key, this_size in var_size_dict.items():
                     # Try and add the indexes for the various dimensions present in var_dim. If there is a 
                     # dimension which isn't present (e.g. bedlay for sediment) then it creates a range covering the
-                    # whole slice. This is mildly risky if the unknown dimension happens to coincide with the name 
-                    # of a variable in the function as it will try to assign this as the index. Extra dimensions are
-                    # relatively rare in FVCOM so hopefully this won't trip it up...
+                    # whole slice.
                     try:
-                        exec('var_index_dict[this_key] = ' + this_key)
-                    except NameError:
+                        var_index_dict[this_key] = possible_indices[this_key]
+                    except KeyError:
                         var_index_dict[this_key] = np.arange(var_size_dict[this_key]) 
 
                 # Need to reorder to get back to the order the dimensions are in the netcdf (since the dictionary is 
