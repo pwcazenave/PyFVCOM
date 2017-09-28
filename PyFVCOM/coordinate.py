@@ -8,6 +8,8 @@ refuses to do coordinate conversions outside a single zone.
 
 """
 
+from __future__ import division
+
 import re
 import inspect
 import multiprocessing
