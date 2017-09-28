@@ -625,7 +625,7 @@ class FileReader:
         except TypeError:
             var = [var]
 
-        # For backwards compatibilit
+        # For backwards compatibility
         siglay = layer
         siglev = level
 
@@ -646,7 +646,7 @@ class FileReader:
         for v in var:
             if self._debug:
                 print('Loading: {}'.format(v))
-            # Get this variable's dimensions and the shape
+            # Get this variable's dimensions and shape
             var_dim = self.ds.variables[v].dimensions
             var_shape = self.ds.variables[v].shape 
             var_size_dict = dict(zip(var_dim, var_shape))
