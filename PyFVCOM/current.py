@@ -3,6 +3,8 @@ Tools to work with current data. Reuses some functions from PyFVCOM.tide.
 
 """
 
+from __future__ import division
+
 import numpy as np
 import copy
 
