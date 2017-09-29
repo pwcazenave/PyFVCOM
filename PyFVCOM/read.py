@@ -653,11 +653,13 @@ class FileReader:
             if 'time' not in var_dim:
                 # Should we error here or carry on having warned?
                 warn('{} does not contain a time dimension.'.format(v))
+                possible_indices = {}
             else:
                 # make the end of the stride if not supplied
                 if not end:
                     end = var_size_dict['time'] 
                 time = np.arange(start,end,stride)
+                possible_indices = {'time':time}
             # Save any attributes associated with this variable before trying to load the data.
             attributes = type('attributes', (object,), {})()
             for attribute in self.ds.variables[v].ncattrs():
@@ -670,7 +672,6 @@ class FileReader:
                     print('0: no dims')
                 setattr(self.data, v, self.ds.variables[v][:])
             else:
-                possible_indices = {'time':time}
                 # Populate indices for omitted values.
                 if not isinstance(original_layer, (list, tuple, np.ndarray)):
                     if not original_layer:
