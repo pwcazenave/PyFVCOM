@@ -82,6 +82,16 @@ class FileReader_test(TestCase):
         F = FileReader(self.stub.ncfile.name, dims={'node': [10], 'time': [10, 40]}, variables=['zeta'])
         test.assert_almost_equal(np.squeeze(F.data.zeta), surface_elevation, decimal=5)
 
+    def test_get_single_time(self):
+        surface_elevation = np.array([-1.41013891])
+        F = FileReader(self.stub.ncfile.name, dims={'node': [10], 'time': [10, 11]}, variables=['zeta'])
+        test.assert_almost_equal(np.squeeze(F.data.zeta), surface_elevation, decimal=5)
+
+    def test_get_single_time_negative_index(self):
+        surface_elevation = np.array([[0.22058453]])
+        F = FileReader(self.stub.ncfile.name, dims={'node': [10], 'time': [-10, -9]}, variables=['zeta'])
+        test.assert_almost_equal(np.squeeze(F.data.zeta), surface_elevation, decimal=5)
+
     def test_get_layer(self):
         vertical_velocity = np.array([
           0.01509815, 0.01509815, 0.01509815, 0.01509815, 0.01509815,
