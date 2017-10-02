@@ -648,7 +648,7 @@ class FileReader:
                 print('Loading: {}'.format(v))
             # Get this variable's dimensions and shape
             var_dim = self.ds.variables[v].dimensions
-            var_shape = self.ds.variables[v].shape 
+            var_shape = self.ds.variables[v].shape
             var_size_dict = dict(zip(var_dim, var_shape))
             if 'time' not in var_dim:
                 # Should we error here or carry on having warned?
@@ -657,7 +657,7 @@ class FileReader:
             else:
                 # make the end of the stride if not supplied
                 if not end:
-                    end = var_size_dict['time'] 
+                    end = var_size_dict['time']
                 time = np.arange(start,end,stride)
                 possible_indices = {'time':time}
             # Save any attributes associated with this variable before trying to load the data.
@@ -694,16 +694,16 @@ class FileReader:
 
                 var_index_dict = {}
                 for this_key, this_size in var_size_dict.items():
-                    # Try and add the indexes for the various dimensions present in var_dim. If there is a 
+                    # Try and add the indices for the various dimensions present in var_dim. If there is a
                     # dimension which isn't present (e.g. bedlay for sediment) then it creates a range covering the
                     # whole slice.
                     try:
                         var_index_dict[this_key] = possible_indices[this_key]
                     except KeyError:
-                        var_index_dict[this_key] = np.arange(var_size_dict[this_key]) 
+                        var_index_dict[this_key] = np.arange(var_size_dict[this_key])
 
-                # Need to reorder to get back to the order the dimensions are in the netcdf (since the dictionary is 
-                # unordered
+                # Need to reorder to get back to the order the dimensions are in the netcdf (since the dictionary is
+                # unordered).
                 ordered_coords = [list(var_index_dict[this_key]) for this_key in var_dim]
                 setattr(self.data, v, self.ds.variables[v][ordered_coords])
 
