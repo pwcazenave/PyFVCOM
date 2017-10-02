@@ -143,8 +143,8 @@ class FileReader_test(TestCase):
          20.91413689,   18.19268227,   11.62014961,    7.51470757,
          38.44644928,   45.77177048,   34.9041214 ,   51.38194275,
          77.87741852,   81.04411316], dtype=float32) 
-		F = FileReader(self.stub.ncfile.name, variables=['h'])
-		test.assert_almost_equal(F.data.h, h)
+        F = FileReader(self.stub.ncfile.name, variables=['h'])
+        test.assert_almost_equal(F.data.h, h)
 
     def test_add_files(self):
         # Make another stub file which follows in time from the existing one. Then only load a section of that in
