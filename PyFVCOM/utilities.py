@@ -269,6 +269,11 @@ class StubFile():
         ua.setncattr('units', 'meters s-1')
         ua.setncattr('grid', 'fvcom_grid')
         ua.setncattr('type', 'data')
+        va = self.ds.createVariable('va', 'f4', time_nele)
+        va.setncattr('long_name', 'Vertically Averaged y-velocity')
+        va.setncattr('units', 'meters s-1')
+        va.setncattr('grid', 'fvcom_grid')
+        va.setncattr('type', 'data')
         # 2D nodes
         zeta = self.ds.createVariable('zeta', 'f4', time_node)
         zeta.setncattr('long_name', 'Water Surface Elevation')
@@ -305,6 +310,7 @@ class StubFile():
         _temp = np.linspace(9, 15, self.dims.actual_time)
         _ww = self._make_tide(amplitude / 150, phase + 90, period)
         _ua = self._make_tide(amplitude / 10, phase + 45, period / 2)
+        _va = self._make_tide(amplitude / 20, phase + 135, period / 4)
         _zeta = self._make_tide(amplitude, phase, period)
         omega[:] = np.tile(_omega, (self.dims.node, self.dims.siglev, 1)).T * (1 - self.grid.siglev)
         temp[:] = np.tile(_temp, (self.dims.node, self.dims.siglay, 1)).T * (1 - self.grid.siglev[1:, :])
@@ -312,6 +318,7 @@ class StubFile():
         u[:] = np.tile(_ua, (self.dims.nele, self.dims.siglay, 1)).T * (1 - self.grid.siglev_center[1:, :])
         v[:] = np.tile(_ua, (self.dims.nele, self.dims.siglay, 1)).T * (1 - self.grid.siglev_center[1:, :])
         ua[:] = np.tile(_ua * 0.9, (self.dims.nele, 1)).T
+        va[:] = np.tile(_va * 0.9, (self.dims.nele, 1)).T
         zeta[:] = np.tile(_zeta, (self.dims.node, 1)).T
 
         self.ds.close()
