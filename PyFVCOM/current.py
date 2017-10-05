@@ -9,7 +9,7 @@ import numpy as np
 import copy
 
 from PyFVCOM.utilities import common_time
-from PyFVCOM.grid import grid_metrics
+from PyFVCOM.grid import grid_metrics, shape_coefficients
 
 
 class Residuals:
@@ -431,15 +431,14 @@ def vorticity(fvcom, depth_averaged=False):
 
     """
 
-    # We need a1u and a2u to calculate vorticity. At the moment, PyFVCOM doesn't compute that, so we have to have
-    # read it in from a netCDF.
-    if not hasattr(fvcom.grid, 'a1u') and not hasattr(fvcom.grid, 'a2u'):
-        raise AttributeError('Missing FVCOM grid metric variables a1u and a2u.')
-
     # Compute the elements connected to each element if we haven't already been given it. This is slow as it does a
     # bunch of other things too even though we only want element connectivity.
     if not hasattr(fvcom.grid, 'nbe'):
-        _, _, fvcom.grid.nbe, _, _ = grid_metrics(fvcom.grid.triangles)
+        _, _, fvcom.grid.nbe, isbce, _ = grid_metrics(fvcom.grid.triangles)
+
+    # We need a1u and a2u to calculate vorticity. If we haven't got them, make them.
+    if not hasattr(fvcom.grid, 'a1u') and not hasattr(fvcom.grid, 'a2u'):
+        fvcom.grid.a1u, fvcom.grid.a2u = shape_coefficients(fvcom.grid.xc, fvcom.grid.yc, fvcom.grid.triangles, isbce)
 
     # Surrounding elements
     n1 = fvcom.grid.nbe[:, 0]
