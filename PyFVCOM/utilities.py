@@ -38,7 +38,7 @@ class StubFile():
         self.grid = type('grid', (object,), {})()
         self.grid.lon = lon
         self.grid.lat = lat
-        self.grid.nv = triangles + 1  # back to 1-based indexing.
+        self.grid.nv = triangles.T + 1  # back to 1-based indexing.
         self.grid.lonc = nodes2elems(lon, triangles)
         self.grid.latc = nodes2elems(lat, triangles)
         self.grid.x, self.grid.y, _ = utm_from_lonlat(self.grid.lon, self.grid.lat, zone=zone)
@@ -291,7 +291,7 @@ class StubFile():
         siglev_center[:] = self.grid.siglev_center
         h[:] = self.grid.h
         h_center[:] = self.grid.h_center
-        nv[:] = self.grid.nv.T  # need to fix shape
+        nv[:] = self.grid.nv
         time[:] = self.time.time
         Times[:] = [list(t) for t in self.time.Times]  # 2D array of characters
         Itime[:] = self.time.Itime
