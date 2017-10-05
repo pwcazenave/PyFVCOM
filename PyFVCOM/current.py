@@ -465,14 +465,14 @@ def vorticity(fvcom, depth_averaged=False):
         data_v = fvcom.data.v
 
     for time_index in range(fvcom.dims.time):
-        dvdx[time_index, ...] = (np.multiply(a1u[0, :], data_v[time_index, ...])
-                                 + np.multiply(a1u[1, :].T, data_v[time_index, ..., n1]).T
-                                 + np.multiply(a1u[2, :].T, data_v[time_index, ..., n2]).T
-                                 + np.multiply(a1u[3, :].T, data_v[time_index, ..., n3]).T)
-        dudy[time_index, ...] = (np.multiply(a2u[0, :], data_u[time_index, ...])
-                                 + np.multiply(a2u[1, :].T, data_u[time_index, ..., n1]).T
-                                 + np.multiply(a2u[2, :].T, data_u[time_index, ..., n2]).T
-                                 + np.multiply(a2u[3, :].T, data_u[time_index, ..., n3]).T)
+        dvdx[time_index, ...] = (np.multiply(a1u[0, ...], data_v[time_index, ...])
+                                 + np.multiply(a1u[1, ...].T, data_v[time_index, ..., n1]).T
+                                 + np.multiply(a1u[2, ...].T, data_v[time_index, ..., n2]).T
+                                 + np.multiply(a1u[3, ...].T, data_v[time_index, ..., n3]).T)
+        dudy[time_index, ...] = (np.multiply(a2u[0, ...], data_u[time_index, ...])
+                                 + np.multiply(a2u[1, ...].T, data_u[time_index, ..., n1]).T
+                                 + np.multiply(a2u[2, ...].T, data_u[time_index, ..., n2]).T
+                                 + np.multiply(a2u[3, ...].T, data_u[time_index, ..., n3]).T)
 
     vort = dvdx - dudy
 
