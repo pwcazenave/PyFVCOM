@@ -916,55 +916,6 @@ def cond2salt(cond):
     return salt
 
 
-def vorticity(x, y, u, v, vtype='averaged'):
-    """
-    Calculate vorticity from a velocity field for an unstructured grid output
-    from FVCOM.
-
-    This is a Python translation of the FVCOM calc_vort.F function which for
-    some reason seems to be ignored in the main FVCOM code.
-
-    Parameters
-    ----------
-    x, y : ndarray
-        Positions of the u and v samples. In FVCOM parlance, this is the 'xc'
-        and 'yc' or 'lonc' and 'latc' variables in the output file (element
-        centre positions).
-    u, v : ndarray
-        3D (i.e. vertically varying) u and v velocity components.
-    vtype : str, optional
-        Type of vorticity using either the vertically averaged velocity
-        (vtype='averaged') or the curl of the flux (vtype='flux'). Default is
-        vtype='averaged'.
-
-    Returns
-    -------
-    vort : ndarray
-        Calculated vorticity from the velocity components.
-
-    """
-
-    # # Need to do some calculations on the model grid to find neighbours etc.
-    # # Use PyFVCOM.grid for that.
-    # try:
-    #     from PyFVCOM.grid import grid_metrics
-    # except:
-    #     raise ImportError('Failed to import grid_metrics from the grid.')
-
-    # # Some basic shape parameters
-    # nt, nz, nn = np.shape(u)
-
-    # if vtype == 'averaged':
-    #     # Vertically average the velocity components.
-    #     ua = np.mean(u, dims=0)
-    #     va = np.mean(v, dims=0)
-
-    # elif vtype == 'flux':
-    #     # Let's not do vertically averaged and instead do each vertical layer
-    #     # separately.
-    #     for zz in xrange(0, nz):
-
-
 def zbar(data, levels):
     """
     Depth-average values in data.
