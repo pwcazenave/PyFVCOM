@@ -353,8 +353,12 @@ class FileReader:
 
         """
 
+        grid_metrics = ['nbe', 'ntsn', 'nbsn', 'ntve', 'nbve', 'art1', 'art2', 'a1u', 'a2u']
+        grid_variables = ['lon', 'lat', 'x', 'y', 'lonc', 'latc', 'xc', 'yc',
+                          'h', 'siglay', 'siglev']
+
         # Get the grid data.
-        for grid in 'lon', 'lat', 'x', 'y', 'lonc', 'latc', 'xc', 'yc', 'h', 'siglay', 'siglev', 'art1', 'art2':
+        for grid in grid_variables:
             try:
                 setattr(self.grid, grid, self.ds.variables[grid][:])
                 # Save the attributes.
@@ -372,6 +376,30 @@ class FileReader:
                 warn('Variable {} has a problem with the data. Setting value as all zeros.'.format(grid))
                 print(value_error_message)
                 setattr(self.grid, grid, np.zeros(self.ds.variables[grid].shape))
+
+        # Load the grid metrics data separately as we don't want to set a bunch of zeros for missing data.
+        for grid in grid_metrics:
+            if grid in self.ds.variables:
+                setattr(self.grid, grid, self.ds.variables[grid][:])
+                # Save the attributes.
+                attributes = type('attributes', (object,), {})()
+                for attribute in self.ds.variables[grid].ncattrs():
+                    setattr(attributes, attribute, getattr(self.ds.variables[grid], attribute))
+                setattr(self.atts, grid, attributes)
+            else:
+                # We've not got this in the netCDF, so make it from what we have got.
+
+        # Fix the indexing and shapes of the grid metrics variables.
+        for metric in grid_metrics:
+            try:
+                # Only transpose nbe.
+                if metric == 'nbe':
+                    setattr(self.grid, metric, getattr(self.grid, metric).T - 1)
+                else:
+                    setattr(self.grid, metric, getattr(self.grid, metric) - 1)
+            except AttributeError:
+                # We don't have this variable, so just pass by silently.
+                pass
 
         try:
             self.grid.nv = self.ds.variables['nv'][:].astype(int)  # force integers even though they should already be so
