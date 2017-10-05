@@ -2057,7 +2057,7 @@ def grid_metrics(tri, noisy=False):
     # Allocate all our arrays. Use masked by default arrays so we only use valid indices.
     isonb = np.zeros(m).astype(bool)
     ntve = np.zeros(m, dtype=int)
-    nbe = np.ma.array(np.zeros((tri.shape), dtype=int), mask=True)
+    nbe = np.ma.array(np.zeros(tri.shape, dtype=int), mask=True)
     nbve = np.ma.array(np.zeros((m, 10), dtype=int), mask=True)
     # Number of elements connected to each node (ntve) and the IDs of the elements connected to each node (nbve).
     if noisy:
