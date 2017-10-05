@@ -146,6 +146,11 @@ class FileReader_test(TestCase):
         F = FileReader(self.stub.ncfile.name, variables=['h'])
         test.assert_almost_equal(F.data.h, h)
 
+    def test_non_temporal_variable_with_dimension(self):
+        h = np.asarray([1.64808428, 12.75706577, 18.34670639, 24.29236031])
+        F = FileReader(self.stub.ncfile.name, variables=['h'], dims={'node': np.arange(4)})
+        test.assert_almost_equal(F.data.h, h)
+
     def test_add_files(self):
         # Make another stub file which follows in time from the existing one. Then only load a section of that in
         # time and make sure the results are the same as if we'd loaded them manually and added them together.
