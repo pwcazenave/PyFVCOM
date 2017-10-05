@@ -2032,6 +2032,10 @@ def grid_metrics(tri, noisy=False):
 
     Returns
     -------
+    ntve : ndarray
+        The number of neighboring elements of each grid node
+    nbve : ndarray
+        nbve(i,1->ntve(i)) = ntve elements containing node i
     nbe : ndarray
         Indices of tri for the elements connected to each element in the domain. To visualise:
             plt.plot(x[tri[1000, :], y[tri[1000, :], 'ro')
@@ -2041,10 +2045,6 @@ def grid_metrics(tri, noisy=False):
         Flag if element is on the boundary (True = yes, False = no)
     isonb : ndarray
         Flag if node is on the boundary (True = yes, False = no)
-    ntve : ndarray
-        The number of neighboring elements of each grid node
-    nbve : ndarray
-        nbve(i,1->ntve(i)) = ntve elements containing node i
 
     Notes
     -----
