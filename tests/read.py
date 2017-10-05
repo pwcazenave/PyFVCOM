@@ -59,7 +59,7 @@ class FileReader_test(TestCase):
         test.assert_almost_equal(F.grid.lonc, lonc, decimal=5)
 
     def test_get_multipe_latc(self):
-        latc = np.array((52.8649059 , 52.90310308))
+        latc = np.array((52.8649059, 52.90310308))
         F = FileReader(self.stub.ncfile.name, dims={'nele': [29, 34]})
         test.assert_almost_equal(F.grid.latc, latc, decimal=5)
 
