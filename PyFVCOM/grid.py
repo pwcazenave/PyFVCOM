@@ -2518,6 +2518,9 @@ def shape_coefficients(xc, yc, nbe, isbce):
         a2u[i, 3] = (x1**2 + x2**2 + x3**2) * y3 - (x1 * y1 + x2 * y2 + x3 * y3) * x3
         a2u[i, 3] = a2u[i, 3] / delt
 
+    # Return transposed arrays to match what gets read in from a netCDF file.
+    return a1u.T, a2u.T
+
 
 # For backwards compatibility.
 def parseUnstructuredGridSMS(*args, **kwargs):
