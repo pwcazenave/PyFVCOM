@@ -10,7 +10,7 @@ import numpy as np
 import matplotlib.tri as tri
 
 from warnings import warn
-from datetime import datetime
+from datetime import datetime, timedelta
 from netCDF4 import Dataset, MFDataset, num2date, date2num
 
 from PyFVCOM.coordinate import lonlat_from_utm, utm_from_lonlat
@@ -46,7 +46,8 @@ class FileReader:
             Dictionary of dimension names along which to subsample e.g. dims={'time': [0, 100], 'nele': [0, 10, 100],
             'node': 100}.
             Times (time) is specified as a range; vertical (siglay, siglev) and horizontal dimensions (node,
-            nele) can be list-like.
+            nele) can be list-like. Time can also be specified as either a time string (e.g. '2000-01-25
+            23:00:00.00000') or given as a datetime object.
             Any combination of dimensions is possible; omitted dimensions are loaded in their entirety.
             To extract a single time (e.g. the 9th in python indexing), specify the range as [9, 10].
             Negative indices are supported. To load from the 10th to the last time can be written as 'time': [9, -1]).
@@ -106,10 +107,11 @@ class FileReader:
         # Convert negative indexing to positive in dimensions to extract. We do this since we end up using range for
         # the extraction of each dimension since you can't (easily) pass slices as arguments.
         for dim in self._dims:
-            negatives = [i < 0 for i in self._dims[dim]]
-            for i, value in enumerate(negatives):
-                if value:
-                    self._dims[dim][i] = self._dims[dim][i] + self.ds.dimensions[dim].size + 1
+            negatives = [i < 0 for i in self._dims[dim] if isinstance(i, int)]
+            if negatives:
+                for i, value in enumerate(negatives):
+                    if value:
+                        self._dims[dim][i] = self._dims[dim][i] + self.ds.dimensions[dim].size + 1
 
         self._load_time()
         self._load_grid()
@@ -336,6 +338,10 @@ class FileReader:
 
             # Clip everything to the time indices if we've been given them. Update the time dimension too.
             if 'time' in self._dims:
+                if all([isinstance(i, (datetime, str)) for i in self._dims['time']]):
+                    # Convert datetime dimensions to indices in the currently loaded data.
+                    self._dims['time'][0] = self.time_to_index(self._dims['time'][0])
+                    self._dims['time'][1] = self.time_to_index(self._dims['time'][1]) + 1  # make the indexing inclusive
                 for time in self.obj_iter(self.time):
                     setattr(self.time, time, getattr(self.time, time)[self._dims['time'][0]:self._dims['time'][1]])
             self.dims.time = len(self.time.time)
@@ -827,6 +833,44 @@ class FileReader:
             surface_elevation = self.data.zeta
 
         self.depth_volume, self.volume = unstructured_grid_volume(self.grid.art1, self.grid.h, surface_elevation, depth_integrated=True)
+
+    def time_to_index(self, target_time, tolerance=False):
+        """
+        Find the time index for the given time string (%Y-%m-%d %H:%M:%S.%f) or datetime object.
+
+        Parameters
+        ----------
+        target_time : str or datetime.datetime
+            Time for which to find the time index. If given as a string, the time format must be "%Y-%m-%d %H:%M:%S.%f".
+        tolerance : float, optional
+            Seconds of tolerance to allow when finding the appropriate index. Use this flag to only return an index
+            to within some tolerance. By default, the closest time is returned irrespective of how far in time it is
+            from the data.
+
+        Returns
+        -------
+        time_idx : int
+            Index for the currently loaded data closest to the specified time.
+
+        """
+
+        if not isinstance(target_time, datetime):
+            try:
+                target_time = datetime.strptime(target_time, '%Y-%m-%d %H:%M:%S.%f')
+            except ValueError:
+                # Try again in case we've not been given fractional seconds, just to be nice.
+                target_time = datetime.strptime(target_time, '%Y-%m-%d %H:%M:%S')
+
+        time_diff = np.abs(self.time.datetime - target_time)
+        if not tolerance:
+            time_idx = np.argmin(time_diff)
+        else:
+            if np.min(time_diff) <= timedelta(seconds=tolerance):
+                time_idx = np.argmin(time_diff)
+            else:
+                time_idx = None
+
+        return time_idx
 
 
 def MFileReader(fvcom, *args, **kwargs):

@@ -164,6 +164,30 @@ class FileReader_test(TestCase):
         test.assert_equal(F.time.datetime, all_times)
         test.assert_equal(F.data.ww, all_data)
 
+    def test_get_time_with_string(self):
+        time_dims = ['2001-02-12 09:00:00.00000', '2001-02-14 12:00:00.00000']
+        returned_indices = [26, 78]
+
+        F = FileReader(self.stub.ncfile.name, dims={'time': time_dims})
+        test.assert_equal(F._dims['time'], returned_indices)
+
+    def test_get_time_with_datetime(self):
+        time_dims = [datetime.strptime('2001-02-12 09:00:00.00000', '%Y-%m-%d %H:%M:%S.%f'),
+                     datetime.strptime('2001-02-14 12:00:00.00000', '%Y-%m-%d %H:%M:%S.%f')]
+        returned_indices = [26, 78]
+
+        F = FileReader(self.stub.ncfile.name, dims={'time': time_dims})
+        test.assert_equal(F._dims['time'][0], returned_indices[0])
+
+    def test_get_time_with_tolerance(self):
+        time_dims = [datetime.strptime('2001-02-12 09:00:00.00000', '%Y-%m-%d %H:%M:%S.%f'),
+                     datetime.strptime('2001-02-12 09:14:02.00000', '%Y-%m-%d %H:%M:%S.%f')]
+        returned_indices = [None, 26]
+
+        F = FileReader(self.stub.ncfile.name)
+        file_indices = [F.time_to_index(i, tolerance=10) for i in time_dims]
+        test.assert_equal(file_indices, returned_indices)
+
 
 def _prep(starttime=None, duration=None, interval=None):
     """
