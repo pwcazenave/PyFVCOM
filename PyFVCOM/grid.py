@@ -2454,6 +2454,71 @@ def vincenty_distance(point1, point2, miles=False):
     return round(s, 6)
 
 
+def shape_coefficients(xc, yc, nbe, isbce):
+    """
+    This function is used to calculate the coefficients for a linear function on the x-y plane:
+        r(x, y; phai) = phai_c + cofa1 * x + cofa2 * y
+
+    Unlike the FVCOM implementation, this returns NaNs for boundary elements (FVCOM returns zeros).
+
+    Parameters
+    ----------
+    xc, yc : np.ndarray, list-like
+        Element centre coordinates (cartesian coordinates)
+    nbe : np.ndarray
+        The three element IDs which surround each element.
+    isbce : np.ndarray
+        Flag for whether a given element is on the grid boundary.
+
+    Returns
+    -------
+    a1u : np.ndarray
+        Interpolant in the x direction.
+    a2u : np.ndarray
+        Interpolant in the y direction.
+
+    Notes
+    -----
+    This is a more or less direct translation of the FVCOM subroutine SHAPE_COEFFICIENTS_GCN from shape_coef_gcn.F.
+    There is probably a lot of optimisation to be done, but it seems to run in a not totally unreasonable amount of
+    time as is, so I'm leaving it for now.
+
+    """
+
+    a1u = np.empty((len(xc), 4))
+    a2u = np.empty((len(xc), 4))
+    a1u[:] = np.nan
+    a2u[:] = np.nan
+    non_boundary_indices = np.arange(len(xc))[~isbce]
+    for i in non_boundary_indices:
+        y1 = (yc[nbe[i, 0]] - yc[i]) / 1000
+        y2 = (yc[nbe[i, 1]] - yc[i]) / 1000
+        y3 = (yc[nbe[i, 2]] - yc[i]) / 1000
+        x1 = (xc[nbe[i, 0]] - xc[i]) / 1000
+        x2 = (xc[nbe[i, 1]] - xc[i]) / 1000
+        x3 = (xc[nbe[i, 2]] - xc[i]) / 1000
+
+        delt = ((x1 * y2 - x2 * y1)**2 + (x1 * y3 - x3 * y1)**2 + (x2 * y3 - x3 * y2)**2) * 1000
+
+        a1u[i, 0] = (y1 + y2 + y3) * (x1 * y1 + x2 * y2+x3 * y3)- (x1 + x2 + x3) * (y1**2 + y2**2 + y3**2)
+        a1u[i, 0] = a1u[i, 0] / delt
+        a1u[i, 1] = (y1**2 + y2**2 + y3**2) * x1 - (x1 * y1 + x2 * y2 + x3 * y3) * y1
+        a1u[i, 1] = a1u[i, 1] / delt
+        a1u[i, 2] = (y1**2 + y2**2 + y3**2) * x2 - (x1 * y1 + x2 * y2 + x3 * y3) * y2
+        a1u[i, 2] = a1u[i, 2] / delt
+        a1u[i, 3] = (y1**2 + y2**2 + y3**2) * x3 - (x1 * y1 + x2 * y2 + x3 * y3) * y3
+        a1u[i, 3] = a1u[i, 3] / delt
+
+        a2u[i, 0] = (x1 + x2 + x3) * (x1 * y1 + x2 * y2+x3 * y3)- (y1 + y2 + y3) * (x1**2 + x2**2 + x3**2)
+        a2u[i, 0] = a2u[i, 0] / delt
+        a2u[i, 1] = (x1**2 + x2**2 + x3**2) * y1 - (x1 * y1 + x2 * y2 + x3 * y3) * x1
+        a2u[i, 1] = a2u[i, 1] / delt
+        a2u[i, 2] = (x1**2 + x2**2 + x3**2) * y2 - (x1 * y1 + x2 * y2 + x3 * y3) * x2
+        a2u[i, 2] = a2u[i, 2] / delt
+        a2u[i, 3] = (x1**2 + x2**2 + x3**2) * y3 - (x1 * y1 + x2 * y2 + x3 * y3) * x3
+        a2u[i, 3] = a2u[i, 3] / delt
+
+
 # For backwards compatibility.
 def parseUnstructuredGridSMS(*args, **kwargs):
     warn('{} is deprecated. Use read_sms_mesh instead.'.format(inspect.stack()[0][3]))
