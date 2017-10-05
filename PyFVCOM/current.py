@@ -25,10 +25,10 @@ class Residuals:
 
         Parameters
         ----------
-        FVCOM : PyFVCOM.read_results.FileReader
+        FVCOM : PyFVCOM.read.FileReader
             Times series object and grid. Must have loaded the current data (u,
             v).
-        PREDICTED : PyFVCOM.read_results.FileReader
+        PREDICTED : PyFVCOM.read.FileReader
             Times series object which is subtracted from `FVCOM'.
         periods : list-like
             Give a list of strings for averaging the residuals. Choose from

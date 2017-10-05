@@ -60,7 +60,7 @@ class FileReader:
         -------
 
         # Load and plot surface currents as surface and quiver plots.
-        >>> from PyFVCOM.read_results import FileReader
+        >>> from PyFVCOM.read import FileReader
         >>> from PyFVCOM.plot import Plotter
         >>> from PyFVCOM.current import vector2scalar
         >>> F = FileReader('casename_0001.nc', variables=['u', 'v'], dims={'siglay': [0]})
@@ -907,11 +907,11 @@ def MFileReader(fvcom, *args, **kwargs):
     fvcom : list-like, str
         List of files to load.
 
-    Additional arguments are passed to `PyFVCOM.read_results.FileReader'.
+    Additional arguments are passed to `PyFVCOM.read.FileReader'.
 
     Returns
     -------
-    FVCOM : PyFVCOM.read_results.FileReader
+    FVCOM : PyFVCOM.read.FileReader
         Concatenated data from the files in `fvcom'.
 
     """
