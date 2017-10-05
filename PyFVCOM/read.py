@@ -386,8 +386,6 @@ class FileReader:
                 for attribute in self.ds.variables[grid].ncattrs():
                     setattr(attributes, attribute, getattr(self.ds.variables[grid], attribute))
                 setattr(self.atts, grid, attributes)
-            else:
-                # We've not got this in the netCDF, so make it from what we have got.
 
         # Fix the indexing and shapes of the grid metrics variables.
         for metric in grid_metrics:
