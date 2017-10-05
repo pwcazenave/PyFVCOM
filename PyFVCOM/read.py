@@ -392,9 +392,10 @@ class FileReader:
             try:
                 # Only transpose nbe.
                 if metric == 'nbe':
+                    # Offset indexing by one for Python.
                     setattr(self.grid, metric, getattr(self.grid, metric).T - 1)
                 else:
-                    setattr(self.grid, metric, getattr(self.grid, metric) - 1)
+                    setattr(self.grid, metric, getattr(self.grid, metric))
             except AttributeError:
                 # We don't have this variable, so just pass by silently.
                 pass
