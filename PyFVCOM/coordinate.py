@@ -230,7 +230,7 @@ def utm_from_lonlat(lon, lat, zone=None, ellipsoid='WGS84', datum='WGS84', paral
         pool.close()
     elif npos > 1 and not parallel:
         eastings, northings = [], []
-        for pos in zip(lon, lat, zones, [ellipsoid] * npos, [datum] * npos, [inverse] * npos):
+        for pos in zip(lon, lat, zone, [ellipsoid] * npos, [datum] * npos, [inverse] * npos):
             result = __convert(pos)
             eastings.append(result[0])
             northings.append(result[1])
