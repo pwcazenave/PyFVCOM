@@ -859,7 +859,7 @@ class FileReader:
         else:
             surface_elevation = self.data.zeta
 
-        self.depth_volume, self.volume = unstructured_grid_volume(self.grid.art1, self.grid.h, surface_elevation, depth_integrated=True)
+        self.depth_volume, self.volume = unstructured_grid_volume(self.grid.art1, self.grid.h, surface_elevation, self.grid.siglev, depth_integrated=True)
 
     def time_to_index(self, target_time, tolerance=False):
         """
