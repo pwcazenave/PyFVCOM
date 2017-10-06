@@ -117,11 +117,7 @@ class FileReader:
         self._load_grid()
 
         if variables:
-            try:
-                self._load_data(self._variables)
-            except MemoryError:
-                raise MemoryError("Data too large for RAM. Use `dims' to load subsets in space or time or "
-                                  "`variables' to request only certain variables.")
+            self._load_data(self._variables)
 
     def __eq__(self, other):
         # For easy comparison of classes.
@@ -738,7 +734,11 @@ class FileReader:
                 # Need to reorder to get back to the order the dimensions are in the netcdf (since the dictionary is
                 # unordered).
                 ordered_coords = [list(var_index_dict[this_key]) for this_key in var_dim]
-                setattr(self.data, v, self.ds.variables[v][ordered_coords])
+                try:
+                    setattr(self.data, v, self.ds.variables[v][ordered_coords])
+                except MemoryError:
+                    raise MemoryError("Variable {} too large for RAM. Use `dims' to load subsets in space or time or "
+                                      "`variables' to request only certain variables.".format(v))
 
     def closest_time(self, when):
         """ Find the index of the closest time to the supplied time (datetime object). """
