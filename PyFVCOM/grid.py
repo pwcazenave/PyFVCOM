@@ -2252,7 +2252,7 @@ def element_control_area(node, triangles, art):
     return np.sum(art[connected_elements])
 
 
-def unstructured_grid_volume(area, depth, surface_elevation, thickness, depth_intergrated=False):
+def unstructured_grid_volume(area, depth, surface_elevation, thickness, depth_integrated=False):
     """
     Calculate the volume for every cell in the unstructured grid.
 
@@ -2283,7 +2283,7 @@ def unstructured_grid_volume(area, depth, surface_elevation, thickness, depth_in
     volume = (area * (surface_elevation + depth))
     depth_volume = volume[:, np.newaxis, :] * dz[np.newaxis, ...]
 
-    if depth_intergrated:
+    if depth_integrated:
         return depth_volume, volume
     else:
         return depth_volume
