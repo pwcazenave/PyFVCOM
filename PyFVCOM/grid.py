@@ -1745,14 +1745,15 @@ def find_connected_elements(n, triangles):
 
     """
 
-    if isinstance(n, int) or len(n) == 1:
-        surroundingidx = np.argwhere(triangles == n)[:, 0]
-    else:
+    try:
         surroundingidx = []
         for ni in n:
-            surroundingidx.append(np.argwhere(triangles == ni)[:, 0])
+            idx = np.argwhere(triangles == ni)[:, 0]
+            surroundingidx.append(idx)
         surroundingidx = np.asarray([item for sublist in surroundingidx for item in sublist])
         surroundingidx = np.unique(surroundingidx)
+    except TypeError:
+        surroundingidx = np.argwhere(triangles == n)[:, 0]
 
     return surroundingidx
 
