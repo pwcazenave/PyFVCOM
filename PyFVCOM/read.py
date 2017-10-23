@@ -374,14 +374,14 @@ class FileReader:
                 setattr(self.grid, grid, np.zeros(self.ds.variables[grid].shape))
 
         # Load the grid metrics data separately as we don't want to set a bunch of zeros for missing data.
-        for grid in grid_metrics:
-            if grid in self.ds.variables:
-                setattr(self.grid, grid, self.ds.variables[grid][:])
+        for metric in grid_metrics:
+            if metric in self.ds.variables:
+                setattr(self.grid, metric, self.ds.variables[metric][:])
                 # Save the attributes.
                 attributes = type('attributes', (object,), {})()
-                for attribute in self.ds.variables[grid].ncattrs():
-                    setattr(attributes, attribute, getattr(self.ds.variables[grid], attribute))
-                setattr(self.atts, grid, attributes)
+                for attribute in self.ds.variables[metric].ncattrs():
+                    setattr(attributes, attribute, getattr(self.ds.variables[metric], attribute))
+                setattr(self.atts, metric, attributes)
 
         # Fix the indexing and shapes of the grid metrics variables.
         for metric in grid_metrics:
