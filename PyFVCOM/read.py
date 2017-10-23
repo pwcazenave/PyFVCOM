@@ -63,12 +63,12 @@ class FileReader:
         >>> from PyFVCOM.read import FileReader
         >>> from PyFVCOM.plot import Plotter
         >>> from PyFVCOM.current import vector2scalar
-        >>> F = FileReader('casename_0001.nc', variables=['u', 'v'], dims={'siglay': [0]})
+        >>> fvcom = FileReader('casename_0001.nc', variables=['u', 'v'], dims={'siglay': [0]})
         >>> # Calculate speed and direction from the current vectors
-        >>> F.data.direction, F.data.speed = vector2scalar(F.data.u, F.data.v)
-        >>> plot = Plotter(F)
-        >>> plot.plot_field(F.data.speed)
-        >>> plot.plot_quiver(F.data.u, F.data.v, field=F.data.speed, add_key=True, scale=5)
+        >>> fvcom.data.direction, fvcom.data.speed = vector2scalar(fvcom.data.u, fvcom.data.v)
+        >>> plot = Plotter(fvcom)
+        >>> plot.plot_field(fvcom.data.speed)
+        >>> plot.plot_quiver(fvcom.data.u, fvcom.data.v, field=fvcom.data.speed, add_key=True, scale=5)
 
         Author(s)
         ---------
