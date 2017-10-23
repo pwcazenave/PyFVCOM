@@ -51,6 +51,8 @@ class FileReader:
             Any combination of dimensions is possible; omitted dimensions are loaded in their entirety.
             To extract a single time (e.g. the 9th in python indexing), specify the range as [9, 10].
             Negative indices are supported. To load from the 10th to the last time can be written as 'time': [9, -1]).
+            A special dimension of 'wesn' can be used to specify a bounding box within which to extract the model
+            grid and data.
         zone : str, list-like, optional
             UTM zones (defaults to '30N') for conversion of UTM to spherical coordinates.
         debug : bool, optional
@@ -74,16 +76,12 @@ class FileReader:
         ---------
         Pierre Cazenave (Plymouth Marine Laboratory)
 
-        Todo
-        ----
-        - Add support for specifying a subset in space with a bounding box (w/e/s/n)
-        - Add support for specifying a time period with datetime objects (start:end)
-
         """
 
         self._debug = debug
         self._fvcom = fvcom
         self._zone = zone
+        self._bounding_box = False
         # We may modify the dimensions (for negative indexing), so make a deepcopy (copy isn't sufficient) so
         # successive calls to FileReader from MFileReader work properly.
         self._dims = copy.deepcopy(dims)
@@ -108,10 +106,14 @@ class FileReader:
         # the extraction of each dimension since you can't (easily) pass slices as arguments.
         for dim in self._dims:
             negatives = [i < 0 for i in self._dims[dim] if isinstance(i, int)]
-            if negatives:
+            if negatives and dim != 'wesn':
                 for i, value in enumerate(negatives):
                     if value:
                         self._dims[dim][i] = self._dims[dim][i] + self.ds.dimensions[dim].size + 1
+            # If we've been given a region to load (W/E/S/N), set a flag to extract only nodes and elements which
+            # fall within that region.
+            if dim == 'wesn':
+                self._bounding_box = True
 
         self._load_time()
         self._load_grid()
@@ -445,6 +447,17 @@ class FileReader:
             except KeyError:
                 if self.grid.nv.max() == len(self.grid.x):
                     setattr(self.grid, var, nodes2elems(getattr(self.grid, var.split('_')[0]), self.grid.triangles))
+
+        # Convert the given W/E/S/N coordinates into node and element IDs to subset.
+        if self._bounding_box:
+            self._dims['node'] = np.argwhere((self.grid.lon > self._dims['wesn'][0]) &
+                                             (self.grid.lon < self._dims['wesn'][1]) &
+                                             (self.grid.lat > self._dims['wesn'][2]) &
+                                             (self.grid.lat < self._dims['wesn'][3])).flatten()
+            self._dims['nele'] = np.argwhere((self.grid.lonc > self._dims['wesn'][0]) &
+                                             (self.grid.lonc < self._dims['wesn'][1]) &
+                                             (self.grid.latc > self._dims['wesn'][2]) &
+                                             (self.grid.latc < self._dims['wesn'][3])).flatten()
 
         # If we've been given dimensions to subset in, do that now. Loading the data first and then subsetting
         # shouldn't be a problem from a memory perspective because if you don't have enough memory for the grid data,

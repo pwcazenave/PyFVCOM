@@ -63,6 +63,16 @@ class FileReader_test(TestCase):
         F = FileReader(self.stub.ncfile.name, dims={'nele': [29, 34]})
         test.assert_almost_equal(F.grid.latc, latc, decimal=5)
 
+    def test_get_bounding_box(self):
+        wesn = [-5, -3, 50, 55]
+        extents = [-4.9847326278686523, -3.0939722061157227,
+                   50.19110107421875, 54.946651458740234]
+        F = FileReader(self.stub.ncfile.name, dims={'wesn': wesn})
+        test.assert_equal(F.grid.lon.min(), extents[0])
+        test.assert_equal(F.grid.lon.max(), extents[1])
+        test.assert_equal(F.grid.lat.min(), extents[2])
+        test.assert_equal(F.grid.lat.max(), extents[3])
+
     def test_get_water_column(self):
         water_column = np.array([
             9.99821472, 10.90714264, 11.81607151, 12.72500038, 13.6339283,
