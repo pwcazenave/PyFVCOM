@@ -383,12 +383,9 @@ class FileReader:
                     setattr(attributes, attribute, getattr(self.ds.variables[metric], attribute))
                 setattr(self.atts, metric, attributes)
 
-        # Fix the indexing and shapes of the grid metrics variables.
-        for metric in grid_metrics:
+            # Fix the indexing and shapes of the grid metrics variables. Only transpose and offset indexing for nbe.
             try:
-                # Only transpose nbe.
                 if metric == 'nbe':
-                    # Offset indexing by one for Python.
                     setattr(self.grid, metric, getattr(self.grid, metric).T - 1)
                 else:
                     setattr(self.grid, metric, getattr(self.grid, metric))
