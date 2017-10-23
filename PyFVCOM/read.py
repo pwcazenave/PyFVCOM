@@ -712,14 +712,24 @@ class FileReader:
                     print('0: no dims')
                 setattr(self.data, v, self.ds.variables[v][:])
             else:
-                # Populate indices for omitted values.
+                # Populate indices for omitted values. Warn we don't have a sigma layer dimension, but carry on. We
+                # don't need to make dummy data because if this file doesn't have this dimension, it certainly
+                # won't have any data which include it.
                 if not isinstance(original_layer, (list, tuple, np.ndarray)):
                     if not original_layer:
-                        siglay = np.arange(self.dims.siglay)
+                        try:
+                            siglay = np.arange(self.dims.siglay)
+                        except AttributeError:
+                            warn('{} does not contain a sigma layer dimension.'.format(v))
+                            pass
                 possible_indices['siglay'] = siglay
                 if not isinstance(original_level, (list, tuple, np.ndarray)):
                     if not original_level:
-                        siglev = np.arange(self.dims.siglev)
+                        try:
+                            siglev = np.arange(self.dims.siglev)
+                        except AttributeError:
+                            warn('{} does not contain a sigma level dimension.'.format(v))
+                            pass
                 possible_indices['siglev'] = siglev
                 if not isinstance(original_node, (list, tuple, np.ndarray)):
                     if not original_node:
