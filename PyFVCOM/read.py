@@ -699,7 +699,7 @@ class FileReader:
                 if not end:
                     end = var_size_dict['time']
                 time = np.arange(start,end,stride)
-                possible_indices = {'time':time}
+                possible_indices = {'time': time}
             # Save any attributes associated with this variable before trying to load the data.
             attributes = type('attributes', (object,), {})()
             for attribute in self.ds.variables[v].ncattrs():
