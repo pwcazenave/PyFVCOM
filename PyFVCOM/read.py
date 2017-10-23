@@ -75,6 +75,7 @@ class FileReader:
         Author(s)
         ---------
         Pierre Cazenave (Plymouth Marine Laboratory)
+        Mike Bedington (Plymouth Marine Laboratory)
 
         """
 
