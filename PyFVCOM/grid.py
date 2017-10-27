@@ -2289,6 +2289,27 @@ def unstructured_grid_volume(area, depth, surface_elevation, thickness, depth_in
     else:
         return depth_volume
 
+def unstructured_grid_depths(h , zeta, siglev):
+    """
+    Calculate the depth seriex for cells in an unstructured grid.
+
+    Parameters
+    ----------
+    h - water depth 
+    zeta - surface elevation time series 
+    siglev - sigma level layer thickness, range 0-1
+
+    Returns
+    -------
+    allDepths : np.ndarray
+    """
+
+    tt, xx = zeta.shape  # time, node
+    ll = siglev.shape[0] - 1  # layers = levels - 1
+    allThickness = ((h + np.tile(zeta, [ll, 1, 1]).transpose(1, 0, 2)) * np.tile(siglev, [tt, 1, 1]))
+    allDepths = -np.cumsum(allThickness, axis=1) + h
+
+    return allDepths
 
 def elems2nodes(elems, tri, nvert=None):
     """
@@ -2521,6 +2542,41 @@ def shape_coefficients(xc, yc, nbe, isbce):
 
     # Return transposed arrays to match what gets read in from a netCDF file.
     return a1u.T, a2u.T
+
+
+def reduce_triangulation(tri, nodes):
+    """
+    Returns the triangulation for a subset of grid nodes. 
+
+    Parameters
+    ----------
+    tri : np.ndarray Nx3
+        Grid triangulation (e.g. triangle as returned from read_fvcom_mesh
+    nodes : np.ndarray M 
+        Selected subset of nodes for re triangulating
+
+    Returns
+    -------
+    reduced_tri : np.ndarray Mx3
+        Triangulation for just the nodes listed in nodes
+
+    Notes
+    -----
+    Assumes the nodes selected are a contiguous part of the grid.
+
+	"""
+
+
+    reduced_tri = tri[np.all(np.isin(tri, nodes), axis=1), :]
+
+    # remap nodes to a new index
+    new_index = np.arange(0, len(nodes))
+    for this_old, this_new in zip(nodes, new_index):
+        reduced_tri[reduced_tri == this_old] = this_new
+
+    return reduced_tri
+
+
 
 
 # For backwards compatibility.
