@@ -2303,12 +2303,11 @@ def unstructured_grid_depths(h , zeta, siglev):
     -------
     allDepths : np.ndarray
     """
-
+    siglevDiff = np.abs(np.diff(siglev, axis=0))
     tt, xx = zeta.shape  # time, node
     ll = siglev.shape[0] - 1  # layers = levels - 1
-    allThickness = ((h + np.tile(zeta, [ll, 1, 1]).transpose(1, 0, 2)) * np.tile(siglev, [tt, 1, 1]))
-    allDepths = -np.cumsum(allThickness, axis=1) + h
-
+    allThickness = ((h + np.tile(zeta, [ll, 1, 1]).transpose(1, 0, 2)) * np.tile(siglevDiff, [tt, 1, 1]))
+    allDepths = np.flip(-np.cumsum(allThickness, axis=1) + h, axis=1)
     return allDepths
 
 def elems2nodes(elems, tri, nvert=None):
