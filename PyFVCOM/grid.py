@@ -2563,7 +2563,7 @@ def reduce_triangulation(tri, nodes):
     -----
     Assumes the nodes selected are a contiguous part of the grid.
 
-	"""
+    """
 
 
     reduced_tri = tri[np.all(np.isin(tri, nodes), axis=1), :]
@@ -2575,7 +2575,132 @@ def reduce_triangulation(tri, nodes):
 
     return reduced_tri
 
+def getcrossectiontriangles(cross_section_pnts, trinodes, X, Y, dist_res):
+    """
+    Subsamples the line defined by cross_section_pnts at the resolution dist_res on the grid defined by
+    the triangulation trinodes, X, Y. Returns the location of the sub sampled points (sub_samp), which 
+    triangle they are in (sample_cells) and their nearest nodes (sample_nodes).
 
+
+    Parameters
+    ----------
+    cross_section_pnts : 2x2 list_like
+        The two ends of the cross section line. 
+
+    trinodes : list-like
+        Unstructured grid triangulation table
+
+    X,Y : list-like
+        Node positions
+
+    dist_res : float
+        Approximate distance at which to sample the line
+
+    Returns
+    -------
+    sub_samp : 2xN list
+        Positions of sample points
+
+    sample_cells : N list
+        The cells within which the subsample points fall. -1 indicates that the point is outside the grid.
+
+    sample_nodes : N list
+        The nodes nearest the subsample points. -1 indicates that the point is outside the grid.
+    
+
+    Example
+    -------
+
+
+    TO DO
+    -----
+
+    Messy code. There definitely should be a more elegant version of this...
+    Set up example and tests.
+
+    """
+    cross_section_x = [cross_section_pnts[0][0], cross_section_pnts[1][0]]
+    cross_section_y = [cross_section_pnts[0][1], cross_section_pnts[1][1]]
+
+    cross_section_dist = np.sqrt((cross_section_x[1] - cross_section_x[0])**2 + (cross_section_y[1] - cross_section_y[0])**2)
+    res = np.ceil(cross_section_dist/dist_res)
+
+    # first reduce the number of points to consider by only including triangles which cross the line through the two points
+    tri_X = X[trinodes]
+    tri_Y = Y[trinodes]
+    
+    tri_cross_log_1_1 = np.logical_or(np.logical_and(tri_X.min(1) < min(cross_section_x), tri_X.max(1) > max(cross_section_x)),
+                            np.logical_and(tri_Y.min(1) < min(cross_section_y), tri_Y.max(1) > max(cross_section_y)))
+
+    tri_cross_log_1_2 = np.any(np.logical_and(np.logical_and(tri_X < max(cross_section_x), tri_X > min(cross_section_x)), np.logical_and(tri_Y < max(cross_section_y), tri_Y > min(cross_section_y))), axis = 1)
+    tri_cross_log_1 = np.logical_or(tri_cross_log_1_1, tri_cross_log_1_2)
+
+    tri_cross_log_1_2 = np.any(np.logical_and(np.logical_and(tri_X < max(cross_section_x), tri_X > min(cross_section_x)), np.logical_and(tri_Y < max(cross_section_y), tri_Y > min(cross_section_y))), axis = 1)
+    tri_cross_log_1 = np.logical_or(tri_cross_log_1_1, tri_cross_log_1_2)
+
+    # and reduce further by requiring every node to be within 1 line length + 10%
+    line_len = np.sqrt((cross_section_x[0] - cross_section_x[1])**2 + (cross_section_y[0] - cross_section_y[1])**2)
+    line_len_plus = line_len * 1.1
+
+    tri_dist_1 = np.sqrt((tri_X - cross_section_x[0])**2 + (tri_Y - cross_section_y[0])**2)
+    tri_dist_2 = np.sqrt((tri_X - cross_section_x[1])**2 + (tri_Y - cross_section_y[1])**2)
+
+    tri_cross_log_2 = np.logical_and(tri_dist_1.min(1) < line_len_plus, tri_dist_2.min(1) < line_len_plus)
+    tri_cross_log = np.logical_and(tri_cross_log_1, tri_cross_log_2)
+
+    # then subsample the line at a given resolution and find which triangle each sample falls in (if at all)
+    sub_samp = np.asarray([np.linspace(cross_section_x[0], cross_section_x[1], res), np.linspace(cross_section_y[0], cross_section_y[1], res)]).T
+    red_tri_list_ind = np.arange(0, len(trinodes))[tri_cross_log]
+    sample_cells = np.zeros(len(sub_samp))
+
+    for this_ind, this_point in enumerate(sub_samp):
+        in_this_tri = False
+        this_tri_ind = 0
+        while in_this_tri is False:
+            this_tri = red_tri_list_ind[this_tri_ind]
+            is_in = isintriange(tri_X[this_tri,:], tri_Y[this_tri,:], this_point[0], this_point[1])
+
+            if is_in:
+                sample_cells[this_ind] = this_tri
+                in_this_tri = True
+            elif this_tri_ind == len(red_tri_list_ind)-1:
+                sample_cells[this_ind] = -1
+                in_this_tri = True
+            else:
+                this_tri_ind +=1
+
+    # for node properties now need the weight the nearest nodes to the sample point
+    sample_nodes = np.zeros(len(sub_samp))
+    red_node_ind = np.unique(trinodes[red_tri_list_ind,:])
+
+    for this_ind, this_point in enumerate(sub_samp):
+        if sample_cells[this_ind] == -1:
+            sample_nodes[this_ind] = -1
+        else:
+            all_dist = np.sqrt((X[red_node_ind] - this_point[0])**2 + (Y[red_node_ind] - this_point[1])**2)
+            sample_nodes[this_ind] = red_node_ind[np.where(all_dist==all_dist.min())]
+
+    return sub_samp, sample_cells, sample_nodes
+
+def isintriange(tri_x, tri_y, point_x, point_y):
+    # Returns a boolean as to whether the point (point_x, point_y) is within the triangle (tri_x, tri_y)
+    # method from http://totologic.blogspot.co.uk/2014/01/accurate-point-in-triangle-test.html without edge test
+    # used in getcrossectiontriangles
+    x1 = tri_x[0]
+    x2 = tri_x[1]
+    x3 = tri_x[2]
+
+    y1 = tri_y[0]
+    y2 = tri_y[1]
+    y3 = tri_y[2]
+
+    a = ((y2 - y3)*(point_x - x3) + (x3 - x2)*(point_y - y3)) / ((y2 - y3)*(x1 - x3) + (x3 - x2)*(y1 - y3))
+    b = ((y3 - y1)*(point_x - x3) + (x1 - x3)*(point_y - y3)) / ((y2 - y3)*(x1 - x3) + (x3 - x2)*(y1 - y3))
+    c = 1 - a - b
+
+    is_in =  0 <= a <= 1 and 0 <= b <= 1 and 0 <= c <= 1
+
+    return is_in
 
 
 # For backwards compatibility.
