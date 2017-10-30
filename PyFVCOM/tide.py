@@ -756,7 +756,7 @@ def lanczos(x, dt=1, Cf=None, M=10, passtype='low'):
     dt : float, optional
         Sampling interval. Defaults to 1.
     Cf : float, optional
-        Cutoff frequency at which to pass data. Defaults to the half the Nyquist frequency.
+        Cutoff frequency in minutes at which to pass data. Defaults to the half the Nyquist frequency.
     M : int, optional
         Number of samples in the window. Defaults to 10.
     passtype : str
