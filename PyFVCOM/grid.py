@@ -2188,7 +2188,7 @@ def node_control_area(n, x, y, xc, yc, tri):
 
     Parameters
     ----------
-    n : list-like
+    n : int
         Current node ID.
     x, y : list-like
         Node positions
