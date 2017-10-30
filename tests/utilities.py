@@ -35,3 +35,11 @@ class UtilitiesTest(TestCase):
         test.assert_equal(rows, test_row)
         test.assert_equal(cols, test_col)
 
+    def test_date_range(self):
+        start = datetime.strptime('2010-02-01 00:00:00', '%Y-%m-%d %H:%M:%S')
+        end = datetime.strptime('2010-02-03 00:00:00', '%Y-%m-%d %H:%M:%S')
+        time_range = date_range(start, end, inc=0.5)  # half-day interval
+        test.assert_equal(start, time_range[0])
+        test.assert_equal(end, time_range[-1])
+        test.assert_equal(5, len(time_range))
+
