@@ -138,7 +138,7 @@ def _get_zone_letter(latitude):
         return None
 
 
-def utm_from_lonlat(lon, lat, zone=None, ellipsoid='WGS84', datum='WGS84', parallel=True):
+def utm_from_lonlat(lon, lat, zone=None, ellipsoid='WGS84', datum='WGS84', parallel=False):
     """
     Converts lat/long to UTM for the specified zone.
 
@@ -158,8 +158,8 @@ def utm_from_lonlat(lon, lat, zone=None, ellipsoid='WGS84', datum='WGS84', paral
     datum : str, optional
         Give a datum for the conversion. Defaults to WGS84.
     parallel : bool, optional
-        Optionally disable the parallel processing (sometimes this is faster
-        for a small number of positions). Defaults to True.
+        Optionally enable the parallel processing (sometimes this is faster
+        for a very large number of positions). Defaults to False.
 
     Returns
     -------
@@ -249,7 +249,7 @@ def utm_from_lonlat(lon, lat, zone=None, ellipsoid='WGS84', datum='WGS84', paral
     return np.asarray(eastings), np.asarray(northings), np.asarray(zone)
 
 
-def lonlat_from_utm(eastings, northings, zone, ellipsoid='WGS84', datum='WGS84', parallel=True):
+def lonlat_from_utm(eastings, northings, zone, ellipsoid='WGS84', datum='WGS84', parallel=False):
     """
     Converts UTM coordinates to lat/long.
 
@@ -268,8 +268,8 @@ def lonlat_from_utm(eastings, northings, zone, ellipsoid='WGS84', datum='WGS84',
     datum : str, optional
         Give a datum for the conversion. Defaults to WGS84.
     parallel : bool, optional
-        Optionally disable the parallel processing (sometimes this is faster
-        for a small number of positions). Defaults to True.
+        Optionally enable parallel processing (sometimes this is faster
+        for a large number of positions). Defaults to False.
 
     Returns
     -------
