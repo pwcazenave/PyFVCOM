@@ -830,10 +830,8 @@ def lanczos(x, dt=1, Cf=None, M=10, passtype='low'):
 
 def _lanczos_filter_coef(Cf, M):
     # Positive coefficients of Lanczos [low high]-pass.
-    hkcs = Cf * np.array(
-        [1] + (np.sin(np.pi * np.linspace(1, M, M) * Cf) / (np.pi * np.linspace(1, M, M) * Cf)).tolist())
-    sigma = sigma = np.array(
-        [1] + (np.sin(np.pi * np.linspace(1, M, M) / M) / (np.pi * np.linspace(1, M, M) / M)).tolist())
+    hkcs = Cf * np.array([1] + (np.sin(np.pi * np.linspace(1, M, M) * Cf) / (np.pi * np.linspace(1, M, M) * Cf)).tolist())
+    sigma = sigma = np.array([1] + (np.sin(np.pi * np.linspace(1, M, M) / M) / (np.pi * np.linspace(1, M, M) / M)).tolist())
     hkB = hkcs * sigma
     hkA = -hkB
     hkA[0] = hkA[0] + 1
