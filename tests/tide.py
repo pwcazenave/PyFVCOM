@@ -69,8 +69,8 @@ class TideTest(TestCase):
                                 -1.21544662e+00, -5.51819064e-01])
         filtered_signal, _, _, _, _ = lanczos(self.signal,
                                               dt=self.interval * 24 * 60,
-                                              M=10,
-                                              Cf=1/(60*24),  # daily filter
+                                              samples=10,
+                                              cutoff=1/(60*24), # daily filter
                                               passtype='low')
         test.assert_almost_equal(filtered_signal, test_signal)
 
