@@ -9,6 +9,7 @@ European continental shelf.
 from __future__ import print_function
 
 import sys
+import scipy
 import inspect
 import numpy as np
 
@@ -742,6 +743,126 @@ def make_water_column(zeta, h, siglay):
         z = z - h[:, np.newaxis, :]
 
     return z
+
+
+def lanczos(x, dt=1, Cf=None, M=10, passtype='low'):
+    """
+    Apply a Lanczos low- or high-pass filter to a time series.
+
+    Parameters
+    ----------
+    x : np.ndarray
+        1-D times series values.
+    dt : float, optional
+        Sampling interval. Defaults to 1.
+    Cf : float, optional
+        Cutoff frequency at which to pass data. Defaults to the half the Nyquist frequency.
+    M : int, optional
+        Number of samples in the window. Defaults to 10.
+    passtype : str
+        Set the filter to `low' to low-pass (default) or `high' to high-pass.
+
+    Returns
+    -------
+    y : np.ndarray
+        Smoothed time series.
+    coef : np.ndarray
+        Coefficients of the time window (cosine)
+    window : np.ndarray
+        Frequency window (aprox. ones for Ff lower(greater) than Fc if low(high)-pass filter and ceros otherwise)
+    Cx : np.ndarray
+        Complex Fourier Transform of X for Ff frequencies
+    Ff : np.ndarray
+        Fourier frequencies, from 0 to the Nyquist frequency.
+
+    Notes
+    -----
+    This is a python reimplementation of the MATLAB lanczosfilter.m function from
+    https://mathworks.com/matlabcentral/fileexchange/14041.
+
+    NaN values are replaced by the mean of the time series and ignored. If you have a better idea, just let me know.
+
+    Reference
+    ---------
+    Emery, W. J. and R. E. Thomson. "Data Analysis Methods in Physical Oceanography". Elsevier, 2d ed.,
+    2004. On pages 533-539.
+
+    """
+
+    if passtype == 'low':
+        filterindex = 0
+    elif passtype == 'high':
+        filterindex = 1
+    else:
+        raise ValueError("Specified `passtype' is invalid. Select `high' or `low'.")
+
+    # Nyquist frequency
+    Nf = 1 / (2 * dt)
+    if not Cf:
+        Cf = Nf / 2
+
+    # Normalize the cut off frequency with the Nyquist frequency:
+    Cf = Cf / Nf
+
+    # Lanczos cosine coefficients:
+    coef = _lanczos_filter_coef(Cf, M)
+    coef = coef[:, filterindex]
+
+    # Filter in frequency space:
+    window, Ff = _spectral_window(coef, len(x))
+    Ff = Ff * Nf
+
+    # Replace NaNs with the mean (ideas?):
+    inan = np.isnan(x)
+    if np.any(inan):
+        xmean = np.nanmean(x)
+        x[inan] = xmean
+
+    # Filtering:
+    y, Cx = _spectral_filtering(x, window)
+
+    # Make sure we've got arrays which match in size.
+    if not len(x) == len(y):
+        raise ValueError('Hmmmm. Just')
+
+    return y, coef, window, Cx, Ff
+
+
+def _lanczos_filter_coef(Cf, M):
+    # Positive coefficients of Lanczos [low high]-pass.
+    hkcs = Cf * np.array(
+        [1] + (np.sin(np.pi * np.linspace(1, M, M) * Cf) / (np.pi * np.linspace(1, M, M) * Cf)).tolist())
+    sigma = sigma = np.array(
+        [1] + (np.sin(np.pi * np.linspace(1, M, M) / M) / (np.pi * np.linspace(1, M, M) / M)).tolist())
+    hkB = hkcs * sigma
+    hkA = -hkB
+    hkA[0] = hkA[0] + 1
+    coef = np.array([hkB.ravel(), hkA.ravel()]).T
+
+    return coef
+
+
+def _spectral_window(coef, N):
+    # Window of cosine filter in frequency space.
+    eps = np.finfo(np.float32).eps
+    Ff = np.arange(0, 1 + eps, 2 / N)  # add an epsilon to enclose the stop in the range.
+    window = np.zeros(len(Ff))
+    for i in range(len(Ff)):
+        window[i] = coef[0] + 2 * np.sum(coef[1:] * np.cos((np.arange(1, len(coef))) * np.pi * Ff[i]))
+
+    return window, Ff
+
+
+def _spectral_filtering(x, window):
+    # Filtering in frequency space is multiplication, (convolution in time space).
+    Nx = len(x)
+    Cx = scipy.fft(x.ravel())
+    Cx = Cx[:(Nx // 2) + 1]
+    CxH = Cx * window.ravel()
+    # Mirror CxH and append it to itself, dropping a value at each end.
+    CxH = np.concatenate((CxH, scipy.conj(CxH[1:-1][::-1])))
+    y = np.real(scipy.ifft(CxH))
+    return y, Cx
 
 
 # Add for backwards compatibility.
