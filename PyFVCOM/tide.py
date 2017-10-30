@@ -745,7 +745,7 @@ def make_water_column(zeta, h, siglay):
     return z
 
 
-def lanczos(x, dt=1, Cf=None, M=10, passtype='low'):
+def lanczos(x, dt=1, cutoff=None, samples=10, passtype='low'):
     """
     Apply a Lanczos low- or high-pass filter to a time series.
 
@@ -755,9 +755,9 @@ def lanczos(x, dt=1, Cf=None, M=10, passtype='low'):
         1-D times series values.
     dt : float, optional
         Sampling interval. Defaults to 1.
-    Cf : float, optional
+    cutoff : float, optional
         Cutoff frequency in minutes at which to pass data. Defaults to the half the Nyquist frequency.
-    M : int, optional
+    samples : int, optional
         Number of samples in the window. Defaults to 10.
     passtype : str
         Set the filter to `low' to low-pass (default) or `high' to high-pass.
@@ -798,14 +798,14 @@ def lanczos(x, dt=1, Cf=None, M=10, passtype='low'):
 
     # Nyquist frequency
     Nf = 1 / (2 * dt)
-    if not Cf:
-        Cf = Nf / 2
+    if not cutoff:
+        cutoff = Nf / 2
 
     # Normalize the cut off frequency with the Nyquist frequency:
-    Cf = Cf / Nf
+    cutoff = cutoff / Nf
 
     # Lanczos cosine coefficients:
-    coef = _lanczos_filter_coef(Cf, M)
+    coef = _lanczos_filter_coef(cutoff, samples)
     coef = coef[:, filterindex]
 
     # Filter in frequency space:
@@ -828,10 +828,10 @@ def lanczos(x, dt=1, Cf=None, M=10, passtype='low'):
     return y, coef, window, Cx, Ff
 
 
-def _lanczos_filter_coef(Cf, M):
+def _lanczos_filter_coef(cutoff, samples):
     # Positive coefficients of Lanczos [low high]-pass.
-    hkcs = Cf * np.array([1] + (np.sin(np.pi * np.linspace(1, M, M) * Cf) / (np.pi * np.linspace(1, M, M) * Cf)).tolist())
-    sigma = sigma = np.array([1] + (np.sin(np.pi * np.linspace(1, M, M) / M) / (np.pi * np.linspace(1, M, M) / M)).tolist())
+    hkcs = cutoff * np.array([1] + (np.sin(np.pi * np.linspace(1, samples, samples) * cutoff) / (np.pi * np.linspace(1, samples, samples) * cutoff)).tolist())
+    sigma = sigma = np.array([1] + (np.sin(np.pi * np.linspace(1, samples, samples) / samples) / (np.pi * np.linspace(1, samples, samples) / samples)).tolist())
     hkB = hkcs * sigma
     hkA = -hkB
     hkA[0] = hkA[0] + 1
