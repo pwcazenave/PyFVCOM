@@ -822,8 +822,8 @@ def lanczos(x, dt=1, Cf=None, M=10, passtype='low'):
     y, Cx = _spectral_filtering(x, window)
 
     # Make sure we've got arrays which match in size.
-    if not len(x) == len(y):
-        raise ValueError('Hmmmm. Just')
+    if not (len(x) == len(y)):
+        raise ValueError('Hmmmm. Fix the arrays!')
 
     return y, coef, window, Cx, Ff
 
