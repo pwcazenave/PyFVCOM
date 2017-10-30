@@ -756,7 +756,7 @@ def lanczos(x, dt=1, Cf=None, M=10, passtype='low'):
     dt : float, optional
         Sampling interval. Defaults to 1.
     Cf : float, optional
-        Cutoff frequency at which to pass data. Defaults to the half the Nyquist frequency.
+        Cutoff frequency in minutes at which to pass data. Defaults to the half the Nyquist frequency.
     M : int, optional
         Number of samples in the window. Defaults to 10.
     passtype : str
@@ -822,18 +822,16 @@ def lanczos(x, dt=1, Cf=None, M=10, passtype='low'):
     y, Cx = _spectral_filtering(x, window)
 
     # Make sure we've got arrays which match in size.
-    if not len(x) == len(y):
-        raise ValueError('Hmmmm. Just')
+    if not (len(x) == len(y)):
+        raise ValueError('Hmmmm. Fix the arrays!')
 
     return y, coef, window, Cx, Ff
 
 
 def _lanczos_filter_coef(Cf, M):
     # Positive coefficients of Lanczos [low high]-pass.
-    hkcs = Cf * np.array(
-        [1] + (np.sin(np.pi * np.linspace(1, M, M) * Cf) / (np.pi * np.linspace(1, M, M) * Cf)).tolist())
-    sigma = sigma = np.array(
-        [1] + (np.sin(np.pi * np.linspace(1, M, M) / M) / (np.pi * np.linspace(1, M, M) / M)).tolist())
+    hkcs = Cf * np.array([1] + (np.sin(np.pi * np.linspace(1, M, M) * Cf) / (np.pi * np.linspace(1, M, M) * Cf)).tolist())
+    sigma = sigma = np.array([1] + (np.sin(np.pi * np.linspace(1, M, M) / M) / (np.pi * np.linspace(1, M, M) / M)).tolist())
     hkB = hkcs * sigma
     hkA = -hkB
     hkA[0] = hkA[0] + 1
