@@ -545,7 +545,8 @@ def date_range(start_date, end_date, inc=1):
     end_seconds = int(end_date.strftime('%s'))
 
     inc *= 86400  # seconds
-    dates = np.arange(start_seconds, end_seconds + inc, inc)
+    eps = np.finfo(np.float32).eps
+    dates = np.arange(start_seconds, end_seconds + eps, inc)
     dates = np.asarray([datetime.utcfromtimestamp(d) for d in dates])
 
     return dates
