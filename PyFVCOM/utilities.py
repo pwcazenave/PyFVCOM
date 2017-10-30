@@ -56,7 +56,7 @@ class StubFile():
 
         # Create the all the times we need.
         self.time = type('time', (object,), {})()
-        self.time.datetime = self._make_time(start, end, interval)
+        self.time.datetime = date_range(start, end, interval)
         self.time.time = date2num(self.time.datetime, units='days since 1858-11-17 00:00:00')
         self.time.Times = np.array([datetime.strftime(d, '%Y-%m-%dT%H:%M:%S.%f') for d in self.time.datetime])
         self.time.Itime = np.floor(self.time.time)
@@ -346,34 +346,6 @@ class StubFile():
 
         setattr(self.data, name, array)
 
-    def _make_time(self, start, end, inc=1):
-        """
-        Make a list of datetimes between two dates.
-
-        Parameters
-        ----------
-        start_time, end_time : datetime
-            Start and end time as datetime objects.
-        inc : float, optional
-            Specify a time increment for the list of dates in days. If omitted,
-            defaults to 1 day.
-
-        Returns
-        -------
-        dates : list
-            List of datetimes.
-
-        """
-
-        start_seconds = int(start.strftime('%s'))
-        end_seconds = int(end.strftime('%s'))
-
-        inc *= 86400  # seconds
-        dates = np.arange(start_seconds, end_seconds + inc, inc)
-        dates = np.asarray([datetime.utcfromtimestamp(d) for d in dates])
-
-        return dates
-
     def _make_tide(self, amplitude, phase, period):
         """ Create a sinusoid of given amplitude, phase and period. """
 
@@ -548,6 +520,35 @@ def gregorian_date(julianDay, mjd=False):
             greg[ii, 3:] = [hours, minutes, seconds]
 
     return greg
+
+
+def date_range(start_date, end_date, inc=1):
+    """
+    Make a list of datetimes from start_date to end_date (inclusive).
+
+    Parameters
+    ----------
+    start_date, end_date : datetime
+        Start and end time as datetime objects. `end_date' is inclusive.
+    inc : float, optional
+        Specify a time increment for the list of dates in days. If omitted,
+        defaults to 1 day.
+
+    Returns
+    -------
+    dates : list
+        List of datetimes.
+
+    """
+
+    start_seconds = int(start_date.strftime('%s'))
+    end_seconds = int(end_date.strftime('%s'))
+
+    inc *= 86400  # seconds
+    dates = np.arange(start_seconds, end_seconds + inc, inc)
+    dates = np.asarray([datetime.utcfromtimestamp(d) for d in dates])
+
+    return dates
 
 
 def overlap(t1start, t1end, t2start, t2end):
