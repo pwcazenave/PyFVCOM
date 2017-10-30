@@ -10,7 +10,7 @@ from unittest import TestCase
 
 from PyFVCOM.utilities import *
 
-class StatsToolsTest(TestCase):
+class UtilitiesTest(TestCase):
 
     def setUp(self):
         """ Make a couple of time series """
