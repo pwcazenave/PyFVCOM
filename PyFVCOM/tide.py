@@ -17,7 +17,7 @@ from lxml import etree
 from warnings import warn
 
 from PyFVCOM.grid import find_nearest_point
-from PyFVCOM.utilities import fix_range
+from PyFVCOM.utilities import fix_range, julian_day
 
 try:
     import sqlite3
