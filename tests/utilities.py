@@ -14,9 +14,9 @@ class UtilitiesTest(TestCase):
 
     def setUp(self):
         """ Make a couple of time series """
-        start = date2num(datetime.strptime('2010-01-01 00:00:00', '%Y-%m-%d %H:%M:%S'), units='days since 2010-01-01 00:00:00')
-        end = date2num(datetime.strptime('2010-02-01 00:00:00', '%Y-%m-%d %H:%M:%S'), units='days since 2010-01-01 00:00:00')
-        time = np.arange(start, end, 1/24/4)
+        self.start = date2num(datetime.strptime('2010-01-01 00:00:00', '%Y-%m-%d %H:%M:%S'), units='days since 2010-01-01 00:00:00')
+        self.end = date2num(datetime.strptime('2010-02-01 00:00:00', '%Y-%m-%d %H:%M:%S'), units='days since 2010-01-01 00:00:00')
+        time = np.arange(self.start, self.end, 1/24/4)
         self.time = num2date(time, units='days since 2010-01-01 00:00:00')
         self.signal1 = np.sin(time) + np.cos(time)
         self.signal2 = np.cos(time) + np.tan(time)
