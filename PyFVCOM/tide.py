@@ -797,12 +797,12 @@ def lanczos(x, dt=1, cutoff=None, samples=10, passtype='low'):
         raise ValueError("Specified `passtype' is invalid. Select `high' or `low'.")
 
     # Nyquist frequency
-    Nf = 1 / (2 * dt)
+    nyquist_frequency = 1 / (2 * dt)
     if not cutoff:
-        cutoff = Nf / 2
+        cutoff = nyquist_frequency / 2
 
     # Normalize the cut off frequency with the Nyquist frequency:
-    cutoff = cutoff / Nf
+    cutoff = cutoff / nyquist_frequency
 
     # Lanczos cosine coefficients:
     coef = _lanczos_filter_coef(cutoff, samples)
@@ -810,7 +810,7 @@ def lanczos(x, dt=1, cutoff=None, samples=10, passtype='low'):
 
     # Filter in frequency space:
     window, Ff = _spectral_window(coef, len(x))
-    Ff = Ff * Nf
+    Ff = Ff * nyquist_frequency
 
     # Replace NaNs with the mean (ideas?):
     inan = np.isnan(x)
