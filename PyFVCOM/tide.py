@@ -857,8 +857,8 @@ def _spectral_filtering(x, window):
     Cx = scipy.fft(x.ravel())
     Cx = Cx[:(Nx // 2) + 1]
     CxH = Cx * window.ravel()
-    # Mirror CxH and append it to itself, dropping a value at each end.
-    CxH = np.concatenate((CxH, scipy.conj(CxH[1:-1][::-1])))
+    # Mirror CxH and append it to itself, dropping the first value.
+    CxH = np.concatenate((CxH, scipy.conj(CxH[1:][::-1])))
     y = np.real(scipy.ifft(CxH))
     return y, Cx
 
