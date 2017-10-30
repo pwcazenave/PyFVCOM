@@ -16,10 +16,10 @@ class UtilitiesTest(TestCase):
         """ Make a couple of time series """
         self.start = date2num(datetime.strptime('2010-01-01 00:00:00', '%Y-%m-%d %H:%M:%S'), units='days since 2010-01-01 00:00:00')
         self.end = date2num(datetime.strptime('2010-02-01 00:00:00', '%Y-%m-%d %H:%M:%S'), units='days since 2010-01-01 00:00:00')
-        time = np.arange(self.start, self.end, 1/24/4)
-        self.time = num2date(time, units='days since 2010-01-01 00:00:00')
-        self.signal1 = np.sin(time) + np.cos(time)
-        self.signal2 = np.cos(time) + np.tan(time)
+        self.num_time = np.arange(self.start, self.end, 1/24/4)
+        self.time = num2date(self.num_time, units='days since 2010-01-01 00:00:00')
+        self.signal1 = np.sin(self.num_time) + np.cos(self.num_time)
+        self.signal2 = np.cos(self.num_time) + np.tan(self.num_time)
 
     def test_fix_range(self):
         target_min, target_max = -100, 100
@@ -42,4 +42,13 @@ class UtilitiesTest(TestCase):
         test.assert_equal(start, time_range[0])
         test.assert_equal(end, time_range[-1])
         test.assert_equal(5, len(time_range))
+
+    def test_make_signal(self):
+        # This should be a much better test.
+        amplitude = 2
+        period = 4
+        phase = 0
+        signal = make_signal(self.num_time, amplitude, phase, period)
+        test.assert_equal(np.max(signal), amplitude)
+        test.assert_equal(np.min(signal), -amplitude)
 

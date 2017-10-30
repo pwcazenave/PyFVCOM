@@ -612,6 +612,33 @@ def common_time(times1, times2):
     return latest_start, earliest_end
 
 
+def make_signal(time, amplitude=1, phase=0, period=1):
+    """
+    Make an arbitrary sinusoidal signal with given amplitude, phase and period over a specific time interval.
+
+    Parameters
+    ----------
+    time : np.ndarray
+        Time series in number of days.
+    amplitude : float, optional
+        A specific amplitude (defaults to 1).
+    phase : float, optional
+        A given phase offset in degrees (defaults to 0).
+    period : float, optional
+        A period for the sine wave (defaults to 1).
+
+    Returns
+    -------
+    signal : np.ndarray
+        The time series with the given parameters.
+
+    """
+
+    signal = (amplitude * np.sin((2 * np.pi * 1 / period * (time - np.min(time)) + np.deg2rad(phase))))
+
+    return signal
+
+
 def ind2sub(array_shape, index):
     """
     NOTE: Just use numpy.unravel_index!
