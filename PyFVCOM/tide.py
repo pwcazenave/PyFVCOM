@@ -750,6 +750,18 @@ class Lanczos:
     Create a Lanczos filter object with specific parameters. Pass a time series to filter() to apply that filter to
     the time series.
 
+    Notes
+    -----
+    This is a python reimplementation of the MATLAB lanczosfilter.m function from
+    https://mathworks.com/matlabcentral/fileexchange/14041.
+
+    NaN values are replaced by the mean of the time series and ignored. If you have a better idea, just let me know.
+
+    Reference
+    ---------
+    Emery, W. J. and R. E. Thomson. "Data Analysis Methods in Physical Oceanography". Elsevier, 2d ed.,
+    2004. On pages 533-539.
+
     """
     def __init__(self, dt=1, cutoff=None, samples=10, passtype='low'):
         """

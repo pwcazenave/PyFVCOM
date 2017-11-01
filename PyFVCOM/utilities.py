@@ -1,5 +1,6 @@
 from __future__ import division
 
+import pytz
 import jdcal
 import tempfile
 import numpy as np
@@ -541,8 +542,8 @@ def date_range(start_date, end_date, inc=1):
 
     """
 
-    start_seconds = int(start_date.strftime('%s'))
-    end_seconds = int(end_date.strftime('%s'))
+    start_seconds = int(start_date.replace(tzinfo=pytz.UTC).strftime('%s'))
+    end_seconds = int(end_date.replace(tzinfo=pytz.UTC).strftime('%s'))
 
     inc *= 86400  # seconds
     dates = np.arange(start_seconds, end_seconds, inc)
