@@ -131,6 +131,12 @@ class GridToolsTest(TestCase):
         elements = find_connected_elements(node, self.tri)
         test.assert_equal(elements, test_elements)
 
+    def test_find_connected_elements_array(self):
+        node = [5, 0]
+        test_elements = [0, 2, 3, 6, 7]
+        elements = find_connected_elements(node, self.tri)
+        test.assert_equal(elements, test_elements)
+
     def test_get_area(self):
         test_area = [0.5] * len(self.xc)
         area = get_area(np.asarray((self.x[self.tri[:, 0]], self.y[self.tri[:, 0]])).T,
