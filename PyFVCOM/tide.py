@@ -745,6 +745,118 @@ def make_water_column(zeta, h, siglay):
     return z
 
 
+class Lanczos:
+    """
+    Create a Lanczos filter object with specific parameters. Pass a time series to filter() to apply that filter to
+    the time series.
+
+    """
+    def __init__(self, dt=1, cutoff=None, samples=10, passtype='low'):
+        """
+
+        Parameters
+        ----------
+        dt : float, optional
+            Sampling interval. Defaults to 1. (dT in the MATLAB version).
+        cutoff : float, optional
+            Cutoff frequency in minutes at which to pass data. Defaults to the half the Nyquist frequency. (Cf in the MATLAB version).
+        samples : int, optional
+            Number of samples in the window. Defaults to 10. (M in the MATLAB version)
+        passtype : str
+            Set the filter to `low' to low-pass (default) or `high' to high-pass. (pass in the MATLAB version).
+
+        """
+
+        self.dt = dt
+        self.cutoff = cutoff
+        self.samples = samples
+        self.passtype = passtype
+
+        if self.passtype == 'low':
+            filterindex = 0
+        elif self.passtype == 'high':
+            filterindex = 1
+        else:
+            raise ValueError("Specified `passtype' is invalid. Select `high' or `low'.")
+
+        # Nyquist frequency
+        self.nyquist_frequency = 1 / (2 * self.dt)
+        if not self.cutoff:
+            cutoff = self.nyquist_frequency / 2
+
+        # Normalize the cut off frequency with the Nyquist frequency:
+        self.cutoff = self.cutoff / self.nyquist_frequency
+
+        # Lanczos cosine coefficients:
+        self._lanczos_filter_coef()
+        self.coef = self.coef[:, filterindex]
+
+    def _lanczos_filter_coef(self):
+        # Positive coefficients of Lanczos [low high]-pass.
+        hkcs = self.cutoff * np.array([1] + (np.sin(np.pi * np.linspace(1, self.samples, self.samples) * self.cutoff) / (np.pi * np.linspace(1, self.samples, self.samples) * self.cutoff)).tolist())
+        sigma = sigma = np.array([1] + (np.sin(np.pi * np.linspace(1, self.samples, self.samples) / self.samples) / (np.pi * np.linspace(1, self.samples, self.samples) / self.samples)).tolist())
+        hkB = hkcs * sigma
+        hkA = -hkB
+        hkA[0] = hkA[0] + 1
+
+        self.coef = np.array([hkB.ravel(), hkA.ravel()]).T
+
+    def _spectral_window(self):
+        # Window of cosine filter in frequency space.
+        eps = np.finfo(np.float32).eps
+        self.Ff = np.arange(0, 1 + eps, 2 / self.N)  # add an epsilon to enclose the stop in the range.
+        self.window = np.zeros(len(self.Ff))
+        for i in range(len(self.Ff)):
+            self.window[i] = self.coef[0] + 2 * np.sum(self.coef[1:] * np.cos((np.arange(1, len(self.coef))) * np.pi * self.Ff[i]))
+
+    def _spectral_filtering(self, x):
+        # Filtering in frequency space is multiplication, (convolution in time space).
+        Cx = scipy.fft(x.ravel())
+        Cx = Cx[:(self.N // 2) + 1]
+        CxH = Cx * self.window.ravel()
+        # Mirror CxH and append it to itself, dropping the values depending on the length of the input.
+        CxH = np.concatenate((CxH, scipy.conj(CxH[1:self.N - len(CxH) + 1][::-1])))
+        y = np.real(scipy.ifft(CxH))
+
+        return y
+
+    def filter(self, x):
+        """
+        Filter the given time series values and return the filtered data.
+
+        Parameters
+        ----------
+        x : np.ndarray
+            Time series values (1D).
+
+        Returns
+        -------
+        y : np.ndarray
+            Filtered time series values (1D).
+
+        """
+
+        # Filter in frequency space:
+        self.N = len(x)
+        self._spectral_window()
+        self.Ff *= self.nyquist_frequency
+
+        # Replace NaNs with the mean (ideas?):
+        inan = np.isnan(x)
+        if np.any(inan):
+            xmean = np.nanmean(x)
+            x[inan] = xmean
+
+        # Filtering:
+        y = self._spectral_filtering(x)
+
+        # Make sure we've got arrays which match in size.
+        if not (len(x) == len(y)):
+            raise ValueError('Hmmmm. Fix the arrays!')
+
+        return y
+
+
 def lanczos(x, dt=1, cutoff=None, samples=10, passtype='low'):
     """
     Apply a Lanczos low- or high-pass filter to a time series.
