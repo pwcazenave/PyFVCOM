@@ -65,12 +65,13 @@ will plot time series data in a similar manner to Plotter will for maps.
 - PyFVCOM.read has a new FileReader class which takes an FVCOM model output
 file and does a lot of preprocessing on it to make it easier to use with
 Python. This includes:
-	- adding missing spatial coordinates (e.g. creating spherical from
-	cartesian and vice versa)
-	- adding missing time representations (e.g. creating Modified Julian Days
-	from the Times string)
+    - adding missing spatial coordinates (e.g. creating spherical from
+    cartesian and vice versa).
+    - adding missing time representations (e.g. creating Modified Julian Days
+    from the Times string).
     - creating python datetime objects.
-    - fixing broken triangulation tables
+    - fixing broken triangulation tables.
+    - loading data within a bounding box.
 
 - The PyFVCOM.read FileReader class also allows subsetting in time and space and
 can return a user-defined list of variables (in addition to the space and time

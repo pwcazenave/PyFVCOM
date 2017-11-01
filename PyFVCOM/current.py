@@ -3,10 +3,14 @@ Tools to work with current data. Reuses some functions from PyFVCOM.tide.
 
 """
 
+from __future__ import division
+
 import numpy as np
 import copy
 
 from PyFVCOM.utilities import common_time
+from PyFVCOM.grid import grid_metrics, shape_coefficients
+
 
 class Residuals:
 
@@ -21,10 +25,10 @@ class Residuals:
 
         Parameters
         ----------
-        FVCOM : PyFVCOM.read_results.FileReader
+        FVCOM : PyFVCOM.read.FileReader
             Times series object and grid. Must have loaded the current data (u,
             v).
-        PREDICTED : PyFVCOM.read_results.FileReader
+        PREDICTED : PyFVCOM.read.FileReader
             Times series object which is subtracted from `FVCOM'.
         periods : list-like
             Give a list of strings for averaging the residuals. Choose from
@@ -252,6 +256,7 @@ def vector2scalar(u, v):
 
     return direction, magnitude
 
+
 def residual_flow(FVCOM, idxRange=False, checkPlot=False, noisy=False):
     """
     Calculate the residual flow. By default, the calculation will take place
@@ -401,3 +406,74 @@ def residual_flow(FVCOM, idxRange=False, checkPlot=False, noisy=False):
         fig.show()
 
     return uRes, vRes, rDir, rMag
+
+
+def vorticity(fvcom, depth_averaged=False):
+    """
+    This function computes the vorticity from some velocity data.
+
+    Parameters
+    ----------
+    fvcom : PyFVCOM.FileReader
+        FVCOM model output. Requires velocity data to be loaded (either depth-resolved ('u', 'v') or depth-averaged
+        ('ua', 'va').
+    depth_averaged : bool
+        Set to True to compute the vorticity from the depth-averaged velocity data. Defaults to the depth-resolved data.
+
+    Returns
+    vort : np.ndarray
+        Horizontal vorticity (1/s) array.
+
+    Notes
+    -----
+        This can be slow over a large domain.
+        This is lifted more or less directly from PySeidon (https://github.com/GrumpyNounours/PySeidon).
+
+    """
+
+    # Compute the elements connected to each element if we haven't already been given it. This is slow as it does a
+    # bunch of other things too even though we only want element connectivity.
+    if not hasattr(fvcom.grid, 'nbe'):
+        _, _, fvcom.grid.nbe, isbce, _ = grid_metrics(fvcom.grid.triangles)
+
+    # We need a1u and a2u to calculate vorticity. If we haven't got them, make them.
+    if not hasattr(fvcom.grid, 'a1u') and not hasattr(fvcom.grid, 'a2u'):
+        fvcom.grid.a1u, fvcom.grid.a2u = shape_coefficients(fvcom.grid.xc, fvcom.grid.yc, fvcom.grid.triangles, isbce)
+
+    # Surrounding elements
+    n1 = fvcom.grid.nbe[:, 0]
+    n2 = fvcom.grid.nbe[:, 1]
+    n3 = fvcom.grid.nbe[:, 2]
+
+    if depth_averaged:
+        if not hasattr(fvcom.data, 'ua') and not hasattr(fvcom.data, 'va'):
+            raise AttributeError('Missing the depth-averaged velocity data.')
+        dudy = np.zeros((fvcom.dims.time, fvcom.dims.nele))
+        dvdx = np.zeros((fvcom.dims.time, fvcom.dims.nele))
+        a1u = fvcom.grid.a1u
+        a2u = fvcom.grid.a2u
+        data_u = fvcom.data.ua
+        data_v = fvcom.data.va
+    else:
+        if not hasattr(fvcom.data, 'u') and not hasattr(fvcom.data, 'v'):
+            raise AttributeError('Missing the velocity data.')
+        dudy = np.zeros((fvcom.dims.time, fvcom.dims.siglay, fvcom.dims.nele))
+        dvdx = np.zeros((fvcom.dims.time, fvcom.dims.siglay, fvcom.dims.nele))
+        a1u = fvcom.grid.a1u[:, np.newaxis, :]
+        a2u = fvcom.grid.a2u[:, np.newaxis, :]
+        data_u = fvcom.data.u
+        data_v = fvcom.data.v
+
+    for time_index in range(fvcom.dims.time):
+        dvdx[time_index, ...] = (np.multiply(a1u[0, ...], data_v[time_index, ...])
+                                 + np.multiply(a1u[1, ...].T, data_v[time_index, ..., n1]).T
+                                 + np.multiply(a1u[2, ...].T, data_v[time_index, ..., n2]).T
+                                 + np.multiply(a1u[3, ...].T, data_v[time_index, ..., n3]).T)
+        dudy[time_index, ...] = (np.multiply(a2u[0, ...], data_u[time_index, ...])
+                                 + np.multiply(a2u[1, ...].T, data_u[time_index, ..., n1]).T
+                                 + np.multiply(a2u[2, ...].T, data_u[time_index, ..., n2]).T
+                                 + np.multiply(a2u[3, ...].T, data_u[time_index, ..., n3]).T)
+
+    vort = dvdx - dudy
+
+    return vort

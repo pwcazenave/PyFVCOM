@@ -1,3 +1,5 @@
+from __future__ import division
+
 import numpy.testing as test
 import numpy as np
 
@@ -126,6 +128,12 @@ class GridToolsTest(TestCase):
     def test_find_connected_elements(self):
         node = 5
         test_elements = [2, 3, 6, 7]
+        elements = find_connected_elements(node, self.tri)
+        test.assert_equal(elements, test_elements)
+
+    def test_find_connected_elements_array(self):
+        node = [5, 0]
+        test_elements = [0, 2, 3, 6, 7]
         elements = find_connected_elements(node, self.tri)
         test.assert_equal(elements, test_elements)
 

@@ -3,7 +3,7 @@ Tools for manipulating and converting unstructured grids in a range of formats.
 
 """
 
-from __future__ import print_function
+from __future__ import print_function, division
 
 import sys
 import inspect
@@ -1745,14 +1745,15 @@ def find_connected_elements(n, triangles):
 
     """
 
-    if isinstance(n, int) or len(n) == 1:
-        surroundingidx = np.argwhere(triangles == n)[:, 0]
-    else:
+    try:
         surroundingidx = []
         for ni in n:
-            surroundingidx.append(np.argwhere(triangles == ni)[:, 0])
+            idx = np.argwhere(triangles == ni)[:, 0]
+            surroundingidx.append(idx)
         surroundingidx = np.asarray([item for sublist in surroundingidx for item in sublist])
         surroundingidx = np.unique(surroundingidx)
+    except TypeError:
+        surroundingidx = np.argwhere(triangles == n)[:, 0]
 
     return surroundingidx
 
@@ -2032,6 +2033,10 @@ def grid_metrics(tri, noisy=False):
 
     Returns
     -------
+    ntve : ndarray
+        The number of neighboring elements of each grid node
+    nbve : ndarray
+        nbve(i,1->ntve(i)) = ntve elements containing node i
     nbe : ndarray
         Indices of tri for the elements connected to each element in the domain. To visualise:
             plt.plot(x[tri[1000, :], y[tri[1000, :], 'ro')
@@ -2041,10 +2046,6 @@ def grid_metrics(tri, noisy=False):
         Flag if element is on the boundary (True = yes, False = no)
     isonb : ndarray
         Flag if node is on the boundary (True = yes, False = no)
-    ntve : ndarray
-        The number of neighboring elements of each grid node
-    nbve : ndarray
-        nbve(i,1->ntve(i)) = ntve elements containing node i
 
     Notes
     -----
@@ -2057,7 +2058,7 @@ def grid_metrics(tri, noisy=False):
     # Allocate all our arrays. Use masked by default arrays so we only use valid indices.
     isonb = np.zeros(m).astype(bool)
     ntve = np.zeros(m, dtype=int)
-    nbe = np.ma.array(np.zeros((tri.shape), dtype=int), mask=True)
+    nbe = np.ma.array(np.zeros(tri.shape, dtype=int), mask=True)
     nbve = np.ma.array(np.zeros((m, 10), dtype=int), mask=True)
     # Number of elements connected to each node (ntve) and the IDs of the elements connected to each node (nbve).
     if noisy:
@@ -2187,7 +2188,7 @@ def node_control_area(n, x, y, xc, yc, tri):
 
     Parameters
     ----------
-    n : list-like
+    n : int
         Current node ID.
     x, y : list-like
         Node positions
@@ -2252,7 +2253,7 @@ def element_control_area(node, triangles, art):
     return np.sum(art[connected_elements])
 
 
-def unstructured_grid_volume(area, depth, surface_elevation, thickness, depth_intergrated=False):
+def unstructured_grid_volume(area, depth, surface_elevation, thickness, depth_integrated=False):
     """
     Calculate the volume for every cell in the unstructured grid.
 
@@ -2283,11 +2284,31 @@ def unstructured_grid_volume(area, depth, surface_elevation, thickness, depth_in
     volume = (area * (surface_elevation + depth))
     depth_volume = volume[:, np.newaxis, :] * dz[np.newaxis, ...]
 
-    if depth_intergrated:
+    if depth_integrated:
         return depth_volume, volume
     else:
         return depth_volume
 
+def unstructured_grid_depths(h , zeta, siglev):
+    """
+    Calculate the depth seriex for cells in an unstructured grid.
+
+    Parameters
+    ----------
+    h - water depth 
+    zeta - surface elevation time series 
+    siglev - sigma level layer thickness, range 0-1
+
+    Returns
+    -------
+    allDepths : np.ndarray
+    """
+    siglevDiff = np.abs(np.diff(siglev, axis=0))
+    tt, xx = zeta.shape  # time, node
+    ll = siglev.shape[0] - 1  # layers = levels - 1
+    allThickness = ((h + np.tile(zeta, [ll, 1, 1]).transpose(1, 0, 2)) * np.tile(siglevDiff, [tt, 1, 1]))
+    allDepths = np.flip(-np.cumsum(allThickness, axis=1) + h, axis=1)
+    return allDepths
 
 def elems2nodes(elems, tri, nvert=None):
     """
@@ -2452,6 +2473,234 @@ def vincenty_distance(point1, point2, miles=False):
         s *= MILES_PER_KILOMETER  # kilometers to miles
 
     return round(s, 6)
+
+
+def shape_coefficients(xc, yc, nbe, isbce):
+    """
+    This function is used to calculate the coefficients for a linear function on the x-y plane:
+        r(x, y; phai) = phai_c + cofa1 * x + cofa2 * y
+
+    Unlike the FVCOM implementation, this returns NaNs for boundary elements (FVCOM returns zeros).
+
+    Parameters
+    ----------
+    xc, yc : np.ndarray, list-like
+        Element centre coordinates (cartesian coordinates)
+    nbe : np.ndarray
+        The three element IDs which surround each element.
+    isbce : np.ndarray
+        Flag for whether a given element is on the grid boundary.
+
+    Returns
+    -------
+    a1u : np.ndarray
+        Interpolant in the x direction.
+    a2u : np.ndarray
+        Interpolant in the y direction.
+
+    Notes
+    -----
+    This is a more or less direct translation of the FVCOM subroutine SHAPE_COEFFICIENTS_GCN from shape_coef_gcn.F.
+    There is probably a lot of optimisation to be done, but it seems to run in a not totally unreasonable amount of
+    time as is, so I'm leaving it for now.
+
+    """
+
+    a1u = np.empty((len(xc), 4))
+    a2u = np.empty((len(xc), 4))
+    a1u[:] = np.nan
+    a2u[:] = np.nan
+    non_boundary_indices = np.arange(len(xc))[~isbce]
+    for i in non_boundary_indices:
+        y1 = (yc[nbe[i, 0]] - yc[i]) / 1000
+        y2 = (yc[nbe[i, 1]] - yc[i]) / 1000
+        y3 = (yc[nbe[i, 2]] - yc[i]) / 1000
+        x1 = (xc[nbe[i, 0]] - xc[i]) / 1000
+        x2 = (xc[nbe[i, 1]] - xc[i]) / 1000
+        x3 = (xc[nbe[i, 2]] - xc[i]) / 1000
+
+        delt = ((x1 * y2 - x2 * y1)**2 + (x1 * y3 - x3 * y1)**2 + (x2 * y3 - x3 * y2)**2) * 1000
+
+        a1u[i, 0] = (y1 + y2 + y3) * (x1 * y1 + x2 * y2+x3 * y3)- (x1 + x2 + x3) * (y1**2 + y2**2 + y3**2)
+        a1u[i, 0] = a1u[i, 0] / delt
+        a1u[i, 1] = (y1**2 + y2**2 + y3**2) * x1 - (x1 * y1 + x2 * y2 + x3 * y3) * y1
+        a1u[i, 1] = a1u[i, 1] / delt
+        a1u[i, 2] = (y1**2 + y2**2 + y3**2) * x2 - (x1 * y1 + x2 * y2 + x3 * y3) * y2
+        a1u[i, 2] = a1u[i, 2] / delt
+        a1u[i, 3] = (y1**2 + y2**2 + y3**2) * x3 - (x1 * y1 + x2 * y2 + x3 * y3) * y3
+        a1u[i, 3] = a1u[i, 3] / delt
+
+        a2u[i, 0] = (x1 + x2 + x3) * (x1 * y1 + x2 * y2+x3 * y3)- (y1 + y2 + y3) * (x1**2 + x2**2 + x3**2)
+        a2u[i, 0] = a2u[i, 0] / delt
+        a2u[i, 1] = (x1**2 + x2**2 + x3**2) * y1 - (x1 * y1 + x2 * y2 + x3 * y3) * x1
+        a2u[i, 1] = a2u[i, 1] / delt
+        a2u[i, 2] = (x1**2 + x2**2 + x3**2) * y2 - (x1 * y1 + x2 * y2 + x3 * y3) * x2
+        a2u[i, 2] = a2u[i, 2] / delt
+        a2u[i, 3] = (x1**2 + x2**2 + x3**2) * y3 - (x1 * y1 + x2 * y2 + x3 * y3) * x3
+        a2u[i, 3] = a2u[i, 3] / delt
+
+    # Return transposed arrays to match what gets read in from a netCDF file.
+    return a1u.T, a2u.T
+
+
+def reduce_triangulation(tri, nodes):
+    """
+    Returns the triangulation for a subset of grid nodes. 
+
+    Parameters
+    ----------
+    tri : np.ndarray Nx3
+        Grid triangulation (e.g. triangle as returned from read_fvcom_mesh
+    nodes : np.ndarray M 
+        Selected subset of nodes for re triangulating
+
+    Returns
+    -------
+    reduced_tri : np.ndarray Mx3
+        Triangulation for just the nodes listed in nodes
+
+    Notes
+    -----
+    Assumes the nodes selected are a contiguous part of the grid.
+
+    """
+
+
+    reduced_tri = tri[np.all(np.isin(tri, nodes), axis=1), :]
+
+    # remap nodes to a new index
+    new_index = np.arange(0, len(nodes))
+    for this_old, this_new in zip(nodes, new_index):
+        reduced_tri[reduced_tri == this_old] = this_new
+
+    return reduced_tri
+
+def getcrossectiontriangles(cross_section_pnts, trinodes, X, Y, dist_res):
+    """
+    Subsamples the line defined by cross_section_pnts at the resolution dist_res on the grid defined by
+    the triangulation trinodes, X, Y. Returns the location of the sub sampled points (sub_samp), which 
+    triangle they are in (sample_cells) and their nearest nodes (sample_nodes).
+
+
+    Parameters
+    ----------
+    cross_section_pnts : 2x2 list_like
+        The two ends of the cross section line. 
+
+    trinodes : list-like
+        Unstructured grid triangulation table
+
+    X,Y : list-like
+        Node positions
+
+    dist_res : float
+        Approximate distance at which to sample the line
+
+    Returns
+    -------
+    sub_samp : 2xN list
+        Positions of sample points
+
+    sample_cells : N list
+        The cells within which the subsample points fall. -1 indicates that the point is outside the grid.
+
+    sample_nodes : N list
+        The nodes nearest the subsample points. -1 indicates that the point is outside the grid.
+    
+
+    Example
+    -------
+
+
+    TO DO
+    -----
+
+    Messy code. There definitely should be a more elegant version of this...
+    Set up example and tests.
+
+    """
+    cross_section_x = [cross_section_pnts[0][0], cross_section_pnts[1][0]]
+    cross_section_y = [cross_section_pnts[0][1], cross_section_pnts[1][1]]
+
+    cross_section_dist = np.sqrt((cross_section_x[1] - cross_section_x[0])**2 + (cross_section_y[1] - cross_section_y[0])**2)
+    res = np.ceil(cross_section_dist/dist_res)
+
+    # first reduce the number of points to consider by only including triangles which cross the line through the two points
+    tri_X = X[trinodes]
+    tri_Y = Y[trinodes]
+    
+    tri_cross_log_1_1 = np.logical_or(np.logical_and(tri_X.min(1) < min(cross_section_x), tri_X.max(1) > max(cross_section_x)),
+                            np.logical_and(tri_Y.min(1) < min(cross_section_y), tri_Y.max(1) > max(cross_section_y)))
+
+    tri_cross_log_1_2 = np.any(np.logical_and(np.logical_and(tri_X < max(cross_section_x), tri_X > min(cross_section_x)), np.logical_and(tri_Y < max(cross_section_y), tri_Y > min(cross_section_y))), axis = 1)
+    tri_cross_log_1 = np.logical_or(tri_cross_log_1_1, tri_cross_log_1_2)
+
+    tri_cross_log_1_2 = np.any(np.logical_and(np.logical_and(tri_X < max(cross_section_x), tri_X > min(cross_section_x)), np.logical_and(tri_Y < max(cross_section_y), tri_Y > min(cross_section_y))), axis = 1)
+    tri_cross_log_1 = np.logical_or(tri_cross_log_1_1, tri_cross_log_1_2)
+
+    # and reduce further by requiring every node to be within 1 line length + 10%
+    line_len = np.sqrt((cross_section_x[0] - cross_section_x[1])**2 + (cross_section_y[0] - cross_section_y[1])**2)
+    line_len_plus = line_len * 1.1
+
+    tri_dist_1 = np.sqrt((tri_X - cross_section_x[0])**2 + (tri_Y - cross_section_y[0])**2)
+    tri_dist_2 = np.sqrt((tri_X - cross_section_x[1])**2 + (tri_Y - cross_section_y[1])**2)
+
+    tri_cross_log_2 = np.logical_and(tri_dist_1.min(1) < line_len_plus, tri_dist_2.min(1) < line_len_plus)
+    tri_cross_log = np.logical_and(tri_cross_log_1, tri_cross_log_2)
+
+    # then subsample the line at a given resolution and find which triangle each sample falls in (if at all)
+    sub_samp = np.asarray([np.linspace(cross_section_x[0], cross_section_x[1], res), np.linspace(cross_section_y[0], cross_section_y[1], res)]).T
+    red_tri_list_ind = np.arange(0, len(trinodes))[tri_cross_log]
+    sample_cells = np.zeros(len(sub_samp))
+
+    for this_ind, this_point in enumerate(sub_samp):
+        in_this_tri = False
+        this_tri_ind = 0
+        while in_this_tri is False:
+            this_tri = red_tri_list_ind[this_tri_ind]
+            is_in = isintriange(tri_X[this_tri,:], tri_Y[this_tri,:], this_point[0], this_point[1])
+
+            if is_in:
+                sample_cells[this_ind] = this_tri
+                in_this_tri = True
+            elif this_tri_ind == len(red_tri_list_ind)-1:
+                sample_cells[this_ind] = -1
+                in_this_tri = True
+            else:
+                this_tri_ind +=1
+
+    # for node properties now need the weight the nearest nodes to the sample point
+    sample_nodes = np.zeros(len(sub_samp))
+    red_node_ind = np.unique(trinodes[red_tri_list_ind,:])
+
+    for this_ind, this_point in enumerate(sub_samp):
+        if sample_cells[this_ind] == -1:
+            sample_nodes[this_ind] = -1
+        else:
+            all_dist = np.sqrt((X[red_node_ind] - this_point[0])**2 + (Y[red_node_ind] - this_point[1])**2)
+            sample_nodes[this_ind] = red_node_ind[np.where(all_dist==all_dist.min())]
+
+    return sub_samp, sample_cells, sample_nodes
+
+def isintriange(tri_x, tri_y, point_x, point_y):
+    # Returns a boolean as to whether the point (point_x, point_y) is within the triangle (tri_x, tri_y)
+    # method from http://totologic.blogspot.co.uk/2014/01/accurate-point-in-triangle-test.html without edge test
+    # used in getcrossectiontriangles
+    x1 = tri_x[0]
+    x2 = tri_x[1]
+    x3 = tri_x[2]
+
+    y1 = tri_y[0]
+    y2 = tri_y[1]
+    y3 = tri_y[2]
+
+    a = ((y2 - y3)*(point_x - x3) + (x3 - x2)*(point_y - y3)) / ((y2 - y3)*(x1 - x3) + (x3 - x2)*(y1 - y3))
+    b = ((y3 - y1)*(point_x - x3) + (x1 - x3)*(point_y - y3)) / ((y2 - y3)*(x1 - x3) + (x3 - x2)*(y1 - y3))
+    c = 1 - a - b
+
+    is_in =  0 <= a <= 1 and 0 <= b <= 1 and 0 <= c <= 1
+
+    return is_in
 
 
 # For backwards compatibility.

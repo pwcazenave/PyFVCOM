@@ -8,6 +8,8 @@ refuses to do coordinate conversions outside a single zone.
 
 """
 
+from __future__ import division
+
 import re
 import inspect
 import multiprocessing
@@ -136,7 +138,7 @@ def _get_zone_letter(latitude):
         return None
 
 
-def utm_from_lonlat(lon, lat, zone=None, ellipsoid='WGS84', datum='WGS84'):
+def utm_from_lonlat(lon, lat, zone=None, ellipsoid='WGS84', datum='WGS84', parallel=False):
     """
     Converts lat/long to UTM for the specified zone.
 
@@ -155,6 +157,9 @@ def utm_from_lonlat(lon, lat, zone=None, ellipsoid='WGS84', datum='WGS84'):
         Give an ellipsoid for the conversion. Defaults to WGS84.
     datum : str, optional
         Give a datum for the conversion. Defaults to WGS84.
+    parallel : bool, optional
+        Optionally enable the parallel processing (sometimes this is faster
+        for a very large number of positions). Defaults to False.
 
     Returns
     -------
@@ -211,8 +216,9 @@ def utm_from_lonlat(lon, lat, zone=None, ellipsoid='WGS84', datum='WGS84'):
         # Leave zone as is.
         pass
 
-    # Do this in parallel unless we only have a single position.
-    if npos > 1:
+    # Do this in parallel unless we only have a single position or we've been
+    # told not to.
+    if npos > 1 and parallel:
         pool = multiprocessing.Pool()
         arguments = zip(lon, lat, zone,
                         [ellipsoid] * npos,
@@ -220,24 +226,30 @@ def utm_from_lonlat(lon, lat, zone=None, ellipsoid='WGS84', datum='WGS84'):
                         [inverse] * npos)
         results = pool.map(__convert, arguments)
         results = np.asarray(results)
-        lon, lat = results[:, 0], results[:, 1]
+        eastings, northings = results[:, 0], results[:, 1]
         pool.close()
+    elif npos > 1 and not parallel:
+        eastings, northings = [], []
+        for pos in zip(lon, lat, zone, [ellipsoid] * npos, [datum] * npos, [inverse] * npos):
+            result = __convert(pos)
+            eastings.append(result[0])
+            northings.append(result[1])
     else:
         # The lon, lat and zone will all be lists here, For
         # cross-python2/python3 support, we can't just * them, so assume
         # the first value in the list is what we want.
         try:
-            lon, lat = __convert((lon[0], lat[0], zone[0], ellipsoid, datum, inverse))
+            eastings, northings = __convert((lon[0], lat[0], zone[0], ellipsoid, datum, inverse))
         except IndexError:
-            lon, lat = __convert((lon, lat, zone, ellipsoid, datum, inverse))
+            eastings, northings = __convert((lon, lat, zone, ellipsoid, datum, inverse))
 
-        lon = to_list(lon)
-        lat = to_list(lat)
+        eastings = to_list(eastings)
+        northings = to_list(northings)
 
-    return np.asarray(lon), np.asarray(lat), np.asarray(zone)
+    return np.asarray(eastings), np.asarray(northings), np.asarray(zone)
 
 
-def lonlat_from_utm(eastings, northings, zone, ellipsoid='WGS84', datum='WGS84'):
+def lonlat_from_utm(eastings, northings, zone, ellipsoid='WGS84', datum='WGS84', parallel=False):
     """
     Converts UTM coordinates to lat/long.
 
@@ -255,6 +267,9 @@ def lonlat_from_utm(eastings, northings, zone, ellipsoid='WGS84', datum='WGS84')
         Give an ellipsoid for the conversion. Defaults to WGS84.
     datum : str, optional
         Give a datum for the conversion. Defaults to WGS84.
+    parallel : bool, optional
+        Optionally enable parallel processing (sometimes this is faster
+        for a large number of positions). Defaults to False.
 
     Returns
     -------
@@ -278,8 +293,9 @@ def lonlat_from_utm(eastings, northings, zone, ellipsoid='WGS84', datum='WGS84')
     if len(zone) != npos:
         zone = zone * npos
 
-    # Do this in parallel unless we only have a single position.
-    if npos > 1:
+    # Do this in parallel unless we only have a small number of positions or
+    # we've been told not to.
+    if npos > 1 and parallel:
         pool = multiprocessing.Pool()
         arguments = zip(eastings, northings, zone,
                         [ellipsoid] * npos,
@@ -289,6 +305,12 @@ def lonlat_from_utm(eastings, northings, zone, ellipsoid='WGS84', datum='WGS84')
         results = np.asarray(results)
         lon, lat = results[:, 0], results[:, 1]
         pool.close()
+    elif npos > 1 and not parallel:
+        lon, lat = [], []
+        for pos in zip(eastings, northings, zone, [ellipsoid] * npos, [datum] * npos, [inverse] * npos):
+            result = __convert(pos)
+            lon.append(result[0])
+            lat.append(result[1])
     else:
         # The eastings, northings and zone will all be lists here, For
         # cross-python2/python3 support, we can't just * them, so assume

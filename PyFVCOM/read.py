@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from __future__ import print_function
+from __future__ import print_function, division
 
 import sys
 import copy
@@ -10,7 +10,7 @@ import numpy as np
 import matplotlib.tri as tri
 
 from warnings import warn
-from datetime import datetime
+from datetime import datetime, timedelta
 from netCDF4 import Dataset, MFDataset, num2date, date2num
 
 from PyFVCOM.coordinate import lonlat_from_utm, utm_from_lonlat
@@ -46,10 +46,13 @@ class FileReader:
             Dictionary of dimension names along which to subsample e.g. dims={'time': [0, 100], 'nele': [0, 10, 100],
             'node': 100}.
             Times (time) is specified as a range; vertical (siglay, siglev) and horizontal dimensions (node,
-            nele) can be list-like.
+            nele) can be list-like. Time can also be specified as either a time string (e.g. '2000-01-25
+            23:00:00.00000') or given as a datetime object.
             Any combination of dimensions is possible; omitted dimensions are loaded in their entirety.
             To extract a single time (e.g. the 9th in python indexing), specify the range as [9, 10].
             Negative indices are supported. To load from the 10th to the last time can be written as 'time': [9, -1]).
+            A special dimension of 'wesn' can be used to specify a bounding box within which to extract the model
+            grid and data.
         zone : str, list-like, optional
             UTM zones (defaults to '30N') for conversion of UTM to spherical coordinates.
         debug : bool, optional
@@ -59,30 +62,27 @@ class FileReader:
         -------
 
         # Load and plot surface currents as surface and quiver plots.
-        >>> from PyFVCOM.read_results import FileReader
+        >>> from PyFVCOM.read import FileReader
         >>> from PyFVCOM.plot import Plotter
         >>> from PyFVCOM.current import vector2scalar
-        >>> F = FileReader('casename_0001.nc', variables=['u', 'v'], dims={'siglay': [0]})
+        >>> fvcom = FileReader('casename_0001.nc', variables=['u', 'v'], dims={'siglay': [0]})
         >>> # Calculate speed and direction from the current vectors
-        >>> F.data.direction, F.data.speed = vector2scalar(F.data.u, F.data.v)
-        >>> plot = Plotter(F)
-        >>> plot.plot_field(F.data.speed)
-        >>> plot.plot_quiver(F.data.u, F.data.v, field=F.data.speed, add_key=True, scale=5)
+        >>> fvcom.data.direction, fvcom.data.speed = vector2scalar(fvcom.data.u, fvcom.data.v)
+        >>> plot = Plotter(fvcom)
+        >>> plot.plot_field(fvcom.data.speed)
+        >>> plot.plot_quiver(fvcom.data.u, fvcom.data.v, field=fvcom.data.speed, add_key=True, scale=5)
 
         Author(s)
         ---------
         Pierre Cazenave (Plymouth Marine Laboratory)
-
-        Todo
-        ----
-        - Add support for specifying a subset in space with a bounding box (w/e/s/n)
-        - Add support for specifying a time period with datetime objects (start:end)
+        Mike Bedington (Plymouth Marine Laboratory)
 
         """
 
         self._debug = debug
         self._fvcom = fvcom
         self._zone = zone
+        self._bounding_box = False
         # We may modify the dimensions (for negative indexing), so make a deepcopy (copy isn't sufficient) so
         # successive calls to FileReader from MFileReader work properly.
         self._dims = copy.deepcopy(dims)
@@ -106,20 +106,21 @@ class FileReader:
         # Convert negative indexing to positive in dimensions to extract. We do this since we end up using range for
         # the extraction of each dimension since you can't (easily) pass slices as arguments.
         for dim in self._dims:
-            negatives = [i < 0 for i in self._dims[dim]]
-            for i, value in enumerate(negatives):
-                if value:
-                    self._dims[dim][i] = self._dims[dim][i] + self.ds.dimensions[dim].size + 1
+            negatives = [i < 0 for i in self._dims[dim] if isinstance(i, int)]
+            if negatives and dim != 'wesn':
+                for i, value in enumerate(negatives):
+                    if value:
+                        self._dims[dim][i] = self._dims[dim][i] + self.ds.dimensions[dim].size + 1
+            # If we've been given a region to load (W/E/S/N), set a flag to extract only nodes and elements which
+            # fall within that region.
+            if dim == 'wesn':
+                self._bounding_box = True
 
         self._load_time()
         self._load_grid()
 
         if variables:
-            try:
-                self._load_data(self._variables)
-            except MemoryError:
-                raise MemoryError("Data too large for RAM. Use `dims' to load subsets in space or time or "
-                                  "`variables' to request only certain variables.")
+            self._load_data(self._variables)
 
     def __eq__(self, other):
         # For easy comparison of classes.
@@ -336,6 +337,10 @@ class FileReader:
 
             # Clip everything to the time indices if we've been given them. Update the time dimension too.
             if 'time' in self._dims:
+                if all([isinstance(i, (datetime, str)) for i in self._dims['time']]):
+                    # Convert datetime dimensions to indices in the currently loaded data.
+                    self._dims['time'][0] = self.time_to_index(self._dims['time'][0])
+                    self._dims['time'][1] = self.time_to_index(self._dims['time'][1]) + 1  # make the indexing inclusive
                 for time in self.obj_iter(self.time):
                     setattr(self.time, time, getattr(self.time, time)[self._dims['time'][0]:self._dims['time'][1]])
             self.dims.time = len(self.time.time)
@@ -347,8 +352,12 @@ class FileReader:
 
         """
 
+        grid_metrics = ['nbe', 'ntsn', 'nbsn', 'ntve', 'nbve', 'art1', 'art2', 'a1u', 'a2u']
+        grid_variables = ['lon', 'lat', 'x', 'y', 'lonc', 'latc', 'xc', 'yc',
+                          'h', 'siglay', 'siglev']
+
         # Get the grid data.
-        for grid in 'lon', 'lat', 'x', 'y', 'lonc', 'latc', 'xc', 'yc', 'h', 'siglay', 'siglev', 'art1', 'art2':
+        for grid in grid_variables:
             try:
                 setattr(self.grid, grid, self.ds.variables[grid][:])
                 # Save the attributes.
@@ -366,6 +375,26 @@ class FileReader:
                 warn('Variable {} has a problem with the data. Setting value as all zeros.'.format(grid))
                 print(value_error_message)
                 setattr(self.grid, grid, np.zeros(self.ds.variables[grid].shape))
+
+        # Load the grid metrics data separately as we don't want to set a bunch of zeros for missing data.
+        for metric in grid_metrics:
+            if metric in self.ds.variables:
+                setattr(self.grid, metric, self.ds.variables[metric][:])
+                # Save the attributes.
+                attributes = type('attributes', (object,), {})()
+                for attribute in self.ds.variables[metric].ncattrs():
+                    setattr(attributes, attribute, getattr(self.ds.variables[metric], attribute))
+                setattr(self.atts, metric, attributes)
+
+            # Fix the indexing and shapes of the grid metrics variables. Only transpose and offset indexing for nbe.
+            try:
+                if metric == 'nbe':
+                    setattr(self.grid, metric, getattr(self.grid, metric).T - 1)
+                else:
+                    setattr(self.grid, metric, getattr(self.grid, metric))
+            except AttributeError:
+                # We don't have this variable, so just pass by silently.
+                pass
 
         try:
             self.grid.nv = self.ds.variables['nv'][:].astype(int)  # force integers even though they should already be so
@@ -419,6 +448,17 @@ class FileReader:
             except KeyError:
                 if self.grid.nv.max() == len(self.grid.x):
                     setattr(self.grid, var, nodes2elems(getattr(self.grid, var.split('_')[0]), self.grid.triangles))
+
+        # Convert the given W/E/S/N coordinates into node and element IDs to subset.
+        if self._bounding_box:
+            self._dims['node'] = np.argwhere((self.grid.lon > self._dims['wesn'][0]) &
+                                             (self.grid.lon < self._dims['wesn'][1]) &
+                                             (self.grid.lat > self._dims['wesn'][2]) &
+                                             (self.grid.lat < self._dims['wesn'][3])).flatten()
+            self._dims['nele'] = np.argwhere((self.grid.lonc > self._dims['wesn'][0]) &
+                                             (self.grid.lonc < self._dims['wesn'][1]) &
+                                             (self.grid.latc > self._dims['wesn'][2]) &
+                                             (self.grid.latc < self._dims['wesn'][3])).flatten()
 
         # If we've been given dimensions to subset in, do that now. Loading the data first and then subsetting
         # shouldn't be a problem from a memory perspective because if you don't have enough memory for the grid data,
@@ -524,12 +564,12 @@ class FileReader:
             if self.grid.lon_range == 0 and self.grid.lat_range == 0:
                 self.grid.lon, self.grid.lat = lonlat_from_utm(self.grid.x, self.grid.y, zone=self._zone)
             if self.grid.lon_range == 0 and self.grid.lat_range == 0:
-                self.grid.x, self.grid.y = utm_from_lonlat(self.grid.lon, self.grid.lat)
+                self.grid.x, self.grid.y, _ = utm_from_lonlat(self.grid.lon, self.grid.lat)
         if self.dims.nele > 1:
             if self.grid.lonc_range == 0 and self.grid.latc_range == 0:
                 self.grid.lonc, self.grid.latc = lonlat_from_utm(self.grid.xc, self.grid.yc, zone=self._zone)
             if self.grid.lonc_range == 0 and self.grid.latc_range == 0:
-                self.grid.xc, self.grid.yc = utm_from_lonlat(self.grid.lonc, self.grid.latc)
+                self.grid.xc, self.grid.yc, _ = utm_from_lonlat(self.grid.lonc, self.grid.latc)
 
     def _load_data(self, variables=None):
         """ Wrapper to load the relevant parts of the data in the netCDFs we have been given.
@@ -625,12 +665,16 @@ class FileReader:
         except TypeError:
             var = [var]
 
+        # For backwards compatibility
+        siglay = layer
+        siglev = level
+
         # Save the inputs so we can loop through the variables without checking the last loop's values (which
         # otherwise leads to difficult to fix behaviour).
         original_node = copy.copy(node)
         original_nele = copy.copy(nele)
-        original_layer = copy.copy(layer)
-        original_level = copy.copy(level)
+        original_layer = copy.copy(siglay)
+        original_level = copy.copy(siglev)
 
         # Make the time here as it's independent of the variable in question (unlike the horizontal and vertical
         # dimensions).
@@ -638,21 +682,24 @@ class FileReader:
             stride = 1
         if not start:
             start = 0
-        if not end:
-            try:
-                end = self.dims.time
-            except AttributeError:
-                end = -1
 
         for v in var:
             if self._debug:
                 print('Loading: {}'.format(v))
-            # Get this variable's dimensions
+            # Get this variable's dimensions and shape
             var_dim = self.ds.variables[v].dimensions
+            var_shape = self.ds.variables[v].shape
+            var_size_dict = dict(zip(var_dim, var_shape))
             if 'time' not in var_dim:
                 # Should we error here or carry on having warned?
                 warn('{} does not contain a time dimension.'.format(v))
-
+                possible_indices = {}
+            else:
+                # make the end of the stride if not supplied
+                if not end:
+                    end = var_size_dict['time']
+                time = np.arange(start,end,stride)
+                possible_indices = {'time': time}
             # Save any attributes associated with this variable before trying to load the data.
             attributes = type('attributes', (object,), {})()
             for attribute in self.ds.variables[v].ncattrs():
@@ -665,86 +712,54 @@ class FileReader:
                     print('0: no dims')
                 setattr(self.data, v, self.ds.variables[v][:])
             else:
-                # Populate indices for omitted values.
+                # Populate indices for omitted values. Warn we don't have a sigma layer dimension, but carry on. We
+                # don't need to make dummy data because if this file doesn't have this dimension, it certainly
+                # won't have any data which include it.
                 if not isinstance(original_layer, (list, tuple, np.ndarray)):
                     if not original_layer:
-                        layer = np.arange(self.dims.siglay)
+                        try:
+                            siglay = np.arange(self.dims.siglay)
+                        except AttributeError:
+                            warn('{} does not contain a sigma layer dimension.'.format(v))
+                            pass
+                possible_indices['siglay'] = siglay
                 if not isinstance(original_level, (list, tuple, np.ndarray)):
                     if not original_level:
-                        level = np.arange(self.dims.siglev)
+                        try:
+                            siglev = np.arange(self.dims.siglev)
+                        except AttributeError:
+                            warn('{} does not contain a sigma level dimension.'.format(v))
+                            pass
+                possible_indices['siglev'] = siglev
                 if not isinstance(original_node, (list, tuple, np.ndarray)):
                     if not original_node:
                         # I'm not sure if this is a really terrible idea (from a performance perspective).
                         node = np.arange(self.dims.node)
+                possible_indices['node'] = node
                 if not isinstance(original_nele, (list, tuple, np.ndarray)):
                     if not original_nele:
                         # I'm not sure if this is a really terrible idea (from a performance perspective).
                         nele = np.arange(self.dims.nele)
+                possible_indices['nele'] = nele
 
-                # Check what dimensions this variables has an load the indices accordingly. This is probably an ideal
-                # candidate for optimisation of the indexing (see numpy's fancy indexing or ravel()ing the whole
-                # array and using ranges instead: https://stackoverflow.com/questions/14386822). This also assumes we
-                # will only ever have a 3D array (4D really, x, y, z, t, but unstructured, so (x,y), z,
-                # t). I can imagine a scenario where we have 4D but that isn't yet a requirement.
-                temporal = 'time' in var_dim
-                vertical = 'siglay' in var_dim or 'siglev' in var_dim
-                horizontal = 'node' in var_dim or 'nele' in var_dim
-                if temporal and vertical and horizontal:
-                    if self._debug:
-                        print('1: dims {}'.format(self._dims))
-                    if 'siglay' in var_dim and 'node' in var_dim:
-                        setattr(self.data, v, self.ds.variables[v][start:end:stride, layer, node])
-                    elif 'siglev' in var_dim and 'node' in var_dim:
-                        setattr(self.data, v, self.ds.variables[v][start:end:stride, level, node])
-                    elif 'siglay' in var_dim and 'nele' in var_dim:
-                        setattr(self.data, v, self.ds.variables[v][start:end:stride, layer, nele])
-                    elif 'siglev' in var_dim and 'nele' in var_dim:
-                        setattr(self.data, v, self.ds.variables[v][start:end:stride, level, nele])
-                elif temporal and vertical and not horizontal:
-                    if self._debug:
-                        print('2: dims {}'.format(self._dims))
-                    if 'siglay' in var_dim:
-                        setattr(self.data, v, self.ds.variables[v][start:end:stride, layer, ...])
-                    elif 'siglev' in var_dim:
-                        setattr(self.data, v, self.ds.variables[v][start:end:stride, level, ...])
-                elif temporal and not vertical and horizontal:
-                    if self._debug:
-                        print('3: dims {}'.format(self._dims))
-                    if 'node' in var_dim:
-                        setattr(self.data, v, self.ds.variables[v][start:end:stride, node])
-                    elif 'nele' in var_dim:
-                        setattr(self.data, v, self.ds.variables[v][start:end:stride, nele])
-                elif not temporal and vertical and horizontal:
-                    if self._debug:
-                        print('4: dims {}'.format(self._dims))
-                    if 'siglay' in var_dim and 'node' in var_dim:
-                        setattr(self.data, v, self.ds.variables[v][..., layer, node])
-                    elif 'siglev' in var_dim and 'node' in var_dim:
-                        setattr(self.data, v, self.ds.variables[v][..., level, node])
-                    elif 'siglay' in var_dim and 'nele' in var_dim:
-                        setattr(self.data, v, self.ds.variables[v][..., layer, nele])
-                    elif 'siglev' in var_dim and 'nele' in var_dim:
-                        setattr(self.data, v, self.ds.variables[v][..., level, nele])
-                elif not temporal and vertical and not horizontal:
-                    if self._debug:
-                        print('5: dims {}'.format(self._dims))
-                    if 'siglay' in var_dim:
-                        setattr(self.data, v, self.ds.variables[v][..., layer, ...])
-                    elif 'siglev' in var_dim:
-                        setattr(self.data, v, self.ds.variables[v][..., level, ...])
-                elif not temporal and not vertical and horizontal:
-                    if self._debug:
-                        print('6: dims {}'.format(self._dims))
-                    if 'node' in var_dim:
-                        setattr(self.data, v, self.ds.variables[v][node]) # ellipse omitted to stop 
-                    elif 'nele' in var_dim:
-                        setattr(self.data, v, self.ds.variables[v][nele])
-                else:
-                    # If we've been given dimensions but this variables doesn't have any of those, we'll end up here,
-                    # in which case, just return everything.
-                    if self._debug:
-                        print('7: no dims {}'.format(self._dims))
-                    setattr(self.data, v, self.ds.variables[v][:])
+                var_index_dict = {}
+                for this_key, this_size in var_size_dict.items():
+                    # Try and add the indices for the various dimensions present in var_dim. If there is a
+                    # dimension which isn't present (e.g. bedlay for sediment) then it creates a range covering the
+                    # whole slice.
+                    try:
+                        var_index_dict[this_key] = possible_indices[this_key]
+                    except KeyError:
+                        var_index_dict[this_key] = np.arange(var_size_dict[this_key])
+
+                # Need to reorder to get back to the order the dimensions are in the netcdf (since the dictionary is
+                # unordered).
+                ordered_coords = [list(var_index_dict[this_key]) for this_key in var_dim]
+                try:
+                    setattr(self.data, v, self.ds.variables[v][ordered_coords])
+                except MemoryError:
+                    raise MemoryError("Variable {} too large for RAM. Use `dims' to load subsets in space or time or "
+                                      "`variables' to request only certain variables.".format(v))
 
     def closest_time(self, when):
         """ Find the index of the closest time to the supplied time (datetime object). """
@@ -865,7 +880,45 @@ class FileReader:
         else:
             surface_elevation = self.data.zeta
 
-        self.depth_volume, self.volume = unstructured_grid_volume(self.grid.art1, self.grid.h, surface_elevation, depth_integrated=True)
+        self.depth_volume, self.volume = unstructured_grid_volume(self.grid.art1, self.grid.h, surface_elevation, self.grid.siglev, depth_integrated=True)
+
+    def time_to_index(self, target_time, tolerance=False):
+        """
+        Find the time index for the given time string (%Y-%m-%d %H:%M:%S.%f) or datetime object.
+
+        Parameters
+        ----------
+        target_time : str or datetime.datetime
+            Time for which to find the time index. If given as a string, the time format must be "%Y-%m-%d %H:%M:%S.%f".
+        tolerance : float, optional
+            Seconds of tolerance to allow when finding the appropriate index. Use this flag to only return an index
+            to within some tolerance. By default, the closest time is returned irrespective of how far in time it is
+            from the data.
+
+        Returns
+        -------
+        time_idx : int
+            Index for the currently loaded data closest to the specified time.
+
+        """
+
+        if not isinstance(target_time, datetime):
+            try:
+                target_time = datetime.strptime(target_time, '%Y-%m-%d %H:%M:%S.%f')
+            except ValueError:
+                # Try again in case we've not been given fractional seconds, just to be nice.
+                target_time = datetime.strptime(target_time, '%Y-%m-%d %H:%M:%S')
+
+        time_diff = np.abs(self.time.datetime - target_time)
+        if not tolerance:
+            time_idx = np.argmin(time_diff)
+        else:
+            if np.min(time_diff) <= timedelta(seconds=tolerance):
+                time_idx = np.argmin(time_diff)
+            else:
+                time_idx = None
+
+        return time_idx
 
 
 def MFileReader(fvcom, *args, **kwargs):
@@ -876,11 +929,11 @@ def MFileReader(fvcom, *args, **kwargs):
     fvcom : list-like, str
         List of files to load.
 
-    Additional arguments are passed to `PyFVCOM.read_results.FileReader'.
+    Additional arguments are passed to `PyFVCOM.read.FileReader'.
 
     Returns
     -------
-    FVCOM : PyFVCOM.read_results.FileReader
+    FVCOM : PyFVCOM.read.FileReader
         Concatenated data from the files in `fvcom'.
 
     """

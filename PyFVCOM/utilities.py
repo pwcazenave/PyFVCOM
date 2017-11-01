@@ -1,3 +1,5 @@
+from __future__ import division
+
 import jdcal
 import tempfile
 import numpy as np
@@ -36,7 +38,7 @@ class StubFile():
         self.grid = type('grid', (object,), {})()
         self.grid.lon = lon
         self.grid.lat = lat
-        self.grid.nv = triangles + 1  # back to 1-based indexing.
+        self.grid.nv = triangles.T + 1  # back to 1-based indexing.
         self.grid.lonc = nodes2elems(lon, triangles)
         self.grid.latc = nodes2elems(lat, triangles)
         self.grid.x, self.grid.y, _ = utm_from_lonlat(self.grid.lon, self.grid.lat, zone=zone)
@@ -54,7 +56,7 @@ class StubFile():
 
         # Create the all the times we need.
         self.time = type('time', (object,), {})()
-        self.time.datetime = self._make_time(start, end, interval)
+        self.time.datetime = date_range(start, end, interval)
         self.time.time = date2num(self.time.datetime, units='days since 1858-11-17 00:00:00')
         self.time.Times = np.array([datetime.strftime(d, '%Y-%m-%dT%H:%M:%S.%f') for d in self.time.datetime])
         self.time.Itime = np.floor(self.time.time)
@@ -267,6 +269,11 @@ class StubFile():
         ua.setncattr('units', 'meters s-1')
         ua.setncattr('grid', 'fvcom_grid')
         ua.setncattr('type', 'data')
+        va = self.ds.createVariable('va', 'f4', time_nele)
+        va.setncattr('long_name', 'Vertically Averaged y-velocity')
+        va.setncattr('units', 'meters s-1')
+        va.setncattr('grid', 'fvcom_grid')
+        va.setncattr('type', 'data')
         # 2D nodes
         zeta = self.ds.createVariable('zeta', 'f4', time_node)
         zeta.setncattr('long_name', 'Water Surface Elevation')
@@ -289,7 +296,7 @@ class StubFile():
         siglev_center[:] = self.grid.siglev_center
         h[:] = self.grid.h
         h_center[:] = self.grid.h_center
-        nv[:] = self.grid.nv.T  # need to fix shape
+        nv[:] = self.grid.nv
         time[:] = self.time.time
         Times[:] = [list(t) for t in self.time.Times]  # 2D array of characters
         Itime[:] = self.time.Itime
@@ -303,6 +310,7 @@ class StubFile():
         _temp = np.linspace(9, 15, self.dims.actual_time)
         _ww = self._make_tide(amplitude / 150, phase + 90, period)
         _ua = self._make_tide(amplitude / 10, phase + 45, period / 2)
+        _va = self._make_tide(amplitude / 20, phase + 135, period / 4)
         _zeta = self._make_tide(amplitude, phase, period)
         omega[:] = np.tile(_omega, (self.dims.node, self.dims.siglev, 1)).T * (1 - self.grid.siglev)
         temp[:] = np.tile(_temp, (self.dims.node, self.dims.siglay, 1)).T * (1 - self.grid.siglev[1:, :])
@@ -310,6 +318,7 @@ class StubFile():
         u[:] = np.tile(_ua, (self.dims.nele, self.dims.siglay, 1)).T * (1 - self.grid.siglev_center[1:, :])
         v[:] = np.tile(_ua, (self.dims.nele, self.dims.siglay, 1)).T * (1 - self.grid.siglev_center[1:, :])
         ua[:] = np.tile(_ua * 0.9, (self.dims.nele, 1)).T
+        va[:] = np.tile(_va * 0.9, (self.dims.nele, 1)).T
         zeta[:] = np.tile(_zeta, (self.dims.node, 1)).T
 
         self.ds.close()
@@ -336,34 +345,6 @@ class StubFile():
                 setattr(array, attribute, attributes[attribute])
 
         setattr(self.data, name, array)
-
-    def _make_time(self, start, end, inc=1):
-        """
-        Make a list of datetimes between two dates.
-
-        Parameters
-        ----------
-        start_time, end_time : datetime
-            Start and end time as datetime objects.
-        inc : float, optional
-            Specify a time increment for the list of dates in days. If omitted,
-            defaults to 1 day.
-
-        Returns
-        -------
-        dates : list
-            List of datetimes.
-
-        """
-
-        start_seconds = int(start.strftime('%s'))
-        end_seconds = int(end.strftime('%s'))
-
-        inc *= 86400  # seconds
-        dates = np.arange(start_seconds, end_seconds + inc, inc)
-        dates = np.asarray([datetime.utcfromtimestamp(d) for d in dates])
-
-        return dates
 
     def _make_tide(self, amplitude, phase, period):
         """ Create a sinusoid of given amplitude, phase and period. """
@@ -541,6 +522,36 @@ def gregorian_date(julianDay, mjd=False):
     return greg
 
 
+def date_range(start_date, end_date, inc=1):
+    """
+    Make a list of datetimes from start_date to end_date (inclusive).
+
+    Parameters
+    ----------
+    start_date, end_date : datetime
+        Start and end time as datetime objects. `end_date' is inclusive.
+    inc : float, optional
+        Specify a time increment for the list of dates in days. If omitted,
+        defaults to 1 day.
+
+    Returns
+    -------
+    dates : list
+        List of datetimes.
+
+    """
+
+    start_seconds = int(start_date.strftime('%s'))
+    end_seconds = int(end_date.strftime('%s'))
+
+    inc *= 86400  # seconds
+    eps = np.finfo(np.float32).eps
+    dates = np.arange(start_seconds, end_seconds + eps * 2, inc)
+    dates = np.asarray([datetime.utcfromtimestamp(d) for d in dates])
+
+    return dates
+
+
 def overlap(t1start, t1end, t2start, t2end):
     """
     Find if two date ranges overlap.
@@ -600,6 +611,33 @@ def common_time(times1, times2):
     earliest_end = min(r1.end, r2.end)
 
     return latest_start, earliest_end
+
+
+def make_signal(time, amplitude=1, phase=0, period=1):
+    """
+    Make an arbitrary sinusoidal signal with given amplitude, phase and period over a specific time interval.
+
+    Parameters
+    ----------
+    time : np.ndarray
+        Time series in number of days.
+    amplitude : float, optional
+        A specific amplitude (defaults to 1).
+    phase : float, optional
+        A given phase offset in degrees (defaults to 0).
+    period : float, optional
+        A period for the sine wave (defaults to 1).
+
+    Returns
+    -------
+    signal : np.ndarray
+        The time series with the given parameters.
+
+    """
+
+    signal = (amplitude * np.sin((2 * np.pi * 1 / period * (time - np.min(time)) + np.deg2rad(phase))))
+
+    return signal
 
 
 def ind2sub(array_shape, index):

@@ -47,8 +47,8 @@ class Time:
         """
         Parameters
         ----------
-        dataset : Dataset, PyFVCOM.read_results.FileReader
-            netCDF4 Dataset or PyFVCOM.read_results.FileReader object.
+        dataset : Dataset, PyFVCOM.read.FileReader
+            netCDF4 Dataset or PyFVCOM.read.FileReader object.
         figure : Figure, optional
             Matplotlib Figure object. A figure object is created if not
             provided.
@@ -323,8 +323,8 @@ class Plotter:
         """
         Parameters:
         -----------
-        dataset : Dataset, PyFVCOM.read_results.FileReader
-            netCDF4 Dataset or PyFVCOM.read_results.FileReader object.
+        dataset : Dataset, PyFVCOM.read.FileReader
+            netCDF4 Dataset or PyFVCOM.read.FileReader object.
 
         stations : 2D array, optional
             List of station coordinates to be plotted ([[lons], [lats]])
