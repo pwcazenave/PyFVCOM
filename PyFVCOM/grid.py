@@ -2289,7 +2289,7 @@ def unstructured_grid_volume(area, depth, surface_elevation, thickness, depth_in
     else:
         return depth_volume
 
-def unstructured_grid_depths(h , zeta, siglev):
+def unstructured_grid_depths(h , zeta, sigma):
     """
     Calculate the depth seriex for cells in an unstructured grid.
 
@@ -2297,17 +2297,15 @@ def unstructured_grid_depths(h , zeta, siglev):
     ----------
     h - water depth 
     zeta - surface elevation time series 
-    siglev - sigma level layer thickness, range 0-1
+    sigma - sigma level layer thickness, range 0-1 (siglev or siglay)
 
     Returns
     -------
     allDepths : np.ndarray
     """
-    siglevDiff = np.abs(np.diff(siglev, axis=0))
-    tt, xx = zeta.shape  # time, node
-    ll = siglev.shape[0] - 1  # layers = levels - 1
-    allThickness = ((h + np.tile(zeta, [ll, 1, 1]).transpose(1, 0, 2)) * np.tile(siglevDiff, [tt, 1, 1]))
-    allDepths = np.flip(-np.cumsum(allThickness, axis=1) + h, axis=1)
+
+    abs_water_depth = zeta + h
+    allDepths = abs_water_depth[:,np.newaxis,:] * sigma[np.newaxis, :,:] + zeta[:, np.newaxis, :]
     return allDepths
 
 def elems2nodes(elems, tri, nvert=None):
@@ -2637,6 +2635,9 @@ def getcrossectiontriangles(cross_section_pnts, trinodes, X, Y, dist_res):
 
     tri_cross_log_1_2 = np.any(np.logical_and(np.logical_and(tri_X < max(cross_section_x), tri_X > min(cross_section_x)), np.logical_and(tri_Y < max(cross_section_y), tri_Y > min(cross_section_y))), axis = 1)
     tri_cross_log_1 = np.logical_or(tri_cross_log_1_1, tri_cross_log_1_2)
+    
+    # and add a buffer of one attached triangle
+    tri_cross_log_1 = np.any(np.isin(trinodes, np.unique(trinodes[tri_cross_log_1,:])), axis=1)
 
     # and reduce further by requiring every node to be within 1 line length + 10%
     line_len = np.sqrt((cross_section_x[0] - cross_section_x[1])**2 + (cross_section_y[0] - cross_section_y[1])**2)
