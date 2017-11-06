@@ -792,7 +792,7 @@ class CrossPlotter(Plotter):
         if self.title:
             self.axes.set_title(self.title)
 
-    def cross_section_init(self, cross_section_points, dist_res = 50):
+    def cross_section_init(self, cross_section_points, dist_res = 50, variable_at_cells=False):
         # sample the cross section
         [sub_samp, sample_cells, sample_nodes] = getcrossectiontriangles(cross_section_points[0], self.triangles, self.x, self.y, dist_res)
 
@@ -803,54 +803,66 @@ class CrossPlotter(Plotter):
                 sample_cells = np.append(sample_cells, this_sample_cells)
                 sample_nodes = np.append(sample_nodes, this_sample_nodes)
 
-        sel_node = np.asarray(np.unique(sample_nodes[sample_nodes!=-1]), dtype=int)
-        self.sel_node = sel_node
-        self.sub_sampe = sub_samp
-        self.sample_cells = sample_cells
-        self.sample_nodes = sample_nodes
+        if variable_at_cells:
+            self.sample_points = sample_cells
+        else:
+            self.sample_points = sample_nodes
+        self.sub_samp = sub_samp
 
-
-        sample_node_ind = np.zeros(len(sample_nodes))
-
-        for this_ind, this_node in enumerate(sel_node):
-            sample_node_ind[sample_nodes == this_node] = this_ind
-
-        sample_node_ind[sample_nodes == -1] = len(sel_node)
-        self.sample_node_ind = np.asarray(sample_node_ind, dtype=int)
+        self.sel_points = np.asarray(np.unique(self.sample_points[self.sample_points!=-1]), dtype=int)
+        sample_points_ind = np.zeros(len(self.sample_points))
+        for this_ind, this_point in enumerate(self.sel_points):
+            sample_points_ind[self.sample_points == this_point] = this_ind
+        sample_points_ind[self.sample_points == -1] = len(self.sel_points)
+        self.sample_points_ind = np.asarray(sample_points_ind, dtype=int)
 
         if not hasattr(self.ds.data, 'zeta'):
             self.ds.load_data(['zeta'])
 
-        depth_sel = -unstructured_grid_depths(self.ds.grid.h[sel_node], self.ds.data.zeta[:,sel_node]
-                                                            , self.ds.grid.siglay[:,sel_node])
+        if variable_at_cells:
+            siglay = self.ds.grid.siglay_center[:,self.sel_points]
+            siglev = self.ds.grid.siglev_center[:,self.sel_points]
+            h = self.ds.grid.h_center[self.sel_points]
+            zeta = np.mean(self.ds.data.zeta[:,self.ds.grid.nv -1], axis=1)[:,self.sel_points]
 
-        depth_sel_pcolor = -unstructured_grid_depths(self.ds.grid.h[sel_node], self.ds.data.zeta[:,sel_node]
-                                                            , self.ds.grid.siglev[:,sel_node])
+        else:
+            siglay = self.ds.grid.siglay[:,self.sel_points]
+            siglev = self.ds.grid.siglev[:,self.sel_points]
+            h = self.ds.grid.h[self.sel_points]
+            zeta = self.ds.data.zeta[:,self.sel_points]
+
+
+        depth_sel = -unstructured_grid_depths(h, zeta, siglay)
+        depth_sel_pcolor = -unstructured_grid_depths(h, zeta, siglev)
 
         depth_sel = self._nan_extend(depth_sel)
         depth_sel_pcolor = self._nan_extend(depth_sel_pcolor)
 
         # set up the x and y for the plots
-        self.cross_plot_x = np.tile(np.arange(0, len(sample_cells)), [depth_sel.shape[1], 1])*dist_res + dist_res*1/2
-        self.cross_plot_x_pcolor = np.tile(np.arange(0, len(sample_cells)+1), [depth_sel_pcolor.shape[1], 1])*dist_res
+        self.cross_plot_x = np.tile(np.arange(0, len(self.sample_points)), [depth_sel.shape[1], 1])*dist_res + dist_res*1/2
+        self.cross_plot_x_pcolor = np.tile(np.arange(0, len(self.sample_points)+1), [depth_sel_pcolor.shape[1], 1])*dist_res
 
-        self.cross_plot_y = -depth_sel[:,:,self.sample_node_ind]
-        insert_ind = np.min(np.where(self.sample_node_ind != np.max(self.sample_node_ind))[0])        
-        self.sample_node_ind_pcolor = np.insert(self.sample_node_ind, insert_ind, self.sample_node_ind[insert_ind])
-        self.cross_plot_y_pcolor = -depth_sel_pcolor[:,:,self.sample_node_ind_pcolor]
+        self.cross_plot_y = -depth_sel[:,:,self.sample_points_ind]
+        insert_ind = np.min(np.where(self.sample_points_ind != np.max(self.sample_points_ind))[0])        
+        self.sample_points_ind_pcolor = np.insert(self.sample_points_ind, insert_ind, self.sample_points_ind[insert_ind])
+        self.cross_plot_y_pcolor = -depth_sel_pcolor[:,:,self.sample_points_ind_pcolor]
 
         # pre process the channel variables
         chan_y_raw = np.min(self.cross_plot_y_pcolor, axis=1)[0,:]
         chan_x_raw = self.cross_plot_x_pcolor[-1,:]
-        max_zeta = np.ceil(np.max(self.ds.data.zeta[:,sel_node]))
+        max_zeta = np.ceil(np.max(zeta))
         if np.any(np.isnan(chan_y_raw)):
             chan_y_raw[np.min(np.where(~np.isnan(chan_y_raw)))] = max_zeta # bodge to get left bank adjacent
             chan_y_raw[np.isnan(chan_y_raw)] = max_zeta
         self.chan_x, self.chan_y = self._chan_corners(chan_x_raw, chan_y_raw)
 
         # sort out wetting and drying nodes
-        self.ds.load_data(['wet_nodes'])
-        self.wet_node_data = np.asarray(self.ds.data.wet_nodes[:,self.sel_node], dtype=bool)
+        if variable_at_cells:
+            self.ds.load_data(['wet_cells'])
+            self.wet_points_data = np.asarray(self.ds.data.wet_cells[:,self.sel_points], dtype=bool)
+        else:
+            self.ds.load_data(['wet_nodes'])
+            self.wet_points_data = np.asarray(self.ds.data.wet_nodes[:,self.sel_points], dtype=bool)
 
         self.ylim_vals = [np.floor(np.nanmin(self.cross_plot_y_pcolor)), np.ceil(np.nanmax(self.cross_plot_y_pcolor)) + 1]
         self.xlim_vals = [np.nanmin(self.cross_plot_x_pcolor), np.nanmax(self.cross_plot_x_pcolor)]
@@ -866,9 +878,9 @@ class CrossPlotter(Plotter):
         if self.vmax is None:
             self.vmax = np.nanmax(plot_z)
 
-        for this_node in self.sel_node:
-            choose_horiz = np.asarray(self.sample_nodes == this_node, dtype=bool)
-            choose_horiz = np.asarray(np.where(self.sample_nodes == this_node)[0], dtype=int)
+        for this_node in self.sel_points:
+            choose_horiz = np.asarray(self.sample_points == this_node, dtype=bool)
+            choose_horiz = np.asarray(np.where(self.sample_points == this_node)[0], dtype=int)
             choose_horiz_extend = np.asarray(np.append(choose_horiz, np.max(choose_horiz) +1), dtype=int)
 
             y_uniform = np.tile(np.median(plot_y[choose_horiz_extend,:], axis=0), [len(choose_horiz_extend),1])
@@ -882,14 +894,14 @@ class CrossPlotter(Plotter):
 
     def _var_prep(self, var, timestep):
         self.ds.load_data([var], start=timestep, end=timestep+1)
-        var_sel = np.squeeze(getattr(self.ds.data, var))[..., self.sel_node]
+        var_sel = np.squeeze(getattr(self.ds.data, var))[..., self.sel_points]
 
-        this_step_wet_nodes = np.asarray(self.wet_node_data[timestep,:], dtype=bool)
-        var_sel[:, ~this_step_wet_nodes] = np.NAN
+        this_step_wet_points = np.asarray(self.wet_points_data[timestep,:], dtype=bool)
+        var_sel[:, ~this_step_wet_points] = np.NAN
         self.var_sel = var_sel
         var_sel_ext = self._nan_extend(var_sel)
 
-        cross_plot_z = var_sel_ext[:, self.sample_node_ind]
+        cross_plot_z = var_sel_ext[:, self.sample_points_ind]
 
         return np.ma.masked_invalid(cross_plot_z)
 
