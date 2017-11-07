@@ -868,7 +868,10 @@ class CrossPlotter(Plotter):
         self.xlim_vals = [np.nanmin(self.cross_plot_x_pcolor), np.nanmax(self.cross_plot_x_pcolor)]
 
     def plot_pcolor_field(self, var, timestep):
-        plot_z = self._var_prep(var, timestep).T
+        if isinstance(var, str):
+            plot_z = self._var_prep(var, timestep).T
+        else:
+            plot_z = var
 
         plot_x = np.ma.masked_invalid(self.cross_plot_x_pcolor).T
         plot_y = np.ma.masked_invalid(self.cross_plot_y_pcolor[timestep,:,:]).T
@@ -892,6 +895,19 @@ class CrossPlotter(Plotter):
         self.axes.set_ylim(self.ylim_vals)
         self.axes.set_xlim(self.xlim_vals)
 
+    def plot_quiver(self, timestep, u_str='u', v_str='v', w_str='ww', w_factor=1):
+        raw_cross_u = self._var_prep(u_str, timestep)
+        raw_cross_v = self._var_prep(v_str, timestep)
+        raw_cross_w = self._var_prep(w_str, timestep)
+
+        cross_u, cross_v, cross_io = self._uvw_rectify(raw_cross_u, raw_cross_v, raw_cross_w)
+        
+        plot_x = np.ma.masked_invalid(self.cross_plot_x).T
+        plot_y = np.ma.masked_invalid(self.cross_plot_y[timestep,:,:]).T        
+
+        self.plot_pcolor_field(cross_io.T, timestep)            
+        self.axes.quiver(plot_x, plot_y, cross_u.T, cross_v.T*w_factor)
+
     def _var_prep(self, var, timestep):
         self.ds.load_data([var], start=timestep, end=timestep+1)
         var_sel = np.squeeze(getattr(self.ds.data, var))[..., self.sel_points]
@@ -905,8 +921,27 @@ class CrossPlotter(Plotter):
 
         return np.ma.masked_invalid(cross_plot_z)
 
-    def _uv_rectify(self, u_field, v_field):
-        pass
+    def _uvw_rectify(self, u_field, v_field, w_field):
+        cross_lr = np.empty(u_field.shape)
+        cross_io = np.empty(v_field.shape)
+        cross_ud = w_field    
+   
+        pll_vec = np.empty([len(self.sub_samp), 2]) 
+        for this_ind, (point_1, point_2) in enumerate(zip(self.sub_samp[0:-2], self.sub_samp[2:])):
+            # work out pll vectors
+            this_pll_vec = np.asarray([point_2[0] - point_1[0], point_2[1] - point_1[1]])
+            pll_vec[this_ind + 1,:] = this_pll_vec/np.sqrt(this_pll_vec[0]**2 + this_pll_vec[1]**2)
+            
+        pll_vec[0] = pll_vec[1]
+        pll_vec[-1] = pll_vec[-2] 
+        
+        for this_ind, this_samp in enumerate(zip(u_field, v_field)):
+            # dot product for parallel component
+            cross_lr[this_ind, :] = np.asarray([np.dot(this_uv, this_pll) for this_uv, this_pll in zip(np.asarray(this_samp).T, pll_vec)])    
+            # cross product for normal component    
+            cross_io[this_ind, :] = np.asarray([np.cross(this_uv, this_pll) for this_uv, this_pll in zip(np.asarray(this_samp).T, pll_vec)])
+
+        return np.ma.masked_invalid(cross_lr), cross_ud, np.ma.masked_invalid(cross_io)
     
 
     @staticmethod
