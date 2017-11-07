@@ -12,6 +12,7 @@ import numpy as np
 import math
 from matplotlib.tri.triangulation import Triangulation
 from matplotlib.tri import CubicTriInterpolator
+import matplotlib.path as mplPath
 from warnings import warn
 from functools import partial
 
@@ -1636,11 +1637,12 @@ def connectivity(p, t):
 
     return e, te, e2t, bnd
 
-
 def clip_domain(x, y, extents, noisy=False):
     """
     Function to find the indices for the positions in `x' and `y' which fall within the
-    bounding box defined in extents.
+    bounding box or polygon defined in extents. For a bounding box supply an array or list
+    of size (4,) with (xmin, xmax, ymin, ymax). For a polygon provide a list of x,y points
+    or an Nx2 array of x,y points.
 
     Parameters
     ----------
@@ -1648,7 +1650,8 @@ def clip_domain(x, y, extents, noisy=False):
         x and y coordinate arrays.
     extents : ndarray or list
         minimum and maximum of the extents of the x and y coordinates for the
-        bounding box (xmin, xmax, ymin, ymax).
+        bounding box (xmin, xmax, ymin, ymax) or for a polygon a list or array
+        of x,y coordinates
 
     Returns
     -------
@@ -1657,17 +1660,22 @@ def clip_domain(x, y, extents, noisy=False):
         of the positions in pos which fall within the bounding box.
 
     """
-
-    mask = np.where((x >= extents[0]) *
+    if np.asarray(extents).shape != (4,):
+        poly_path = mplPath.Path(extents)
+        mask = np.where(np.asarray(poly_path.contains_points(np.asarray([x,y]).T)))[0]
+    else:
+        mask = np.where((x >= extents[0]) *
             (x <= extents[1]) *
             (y >= extents[2]) *
             (y <= extents[3]))[0]
-
+    
     if noisy:
         print('Subset contains {} points of {} total.'.format(len(mask),
                                                               len(x)))
 
     return mask
+
+
 
 
 def find_connected_nodes(n, triangles):
