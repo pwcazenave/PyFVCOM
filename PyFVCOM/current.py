@@ -5,13 +5,14 @@ Tools to work with current data. Reuses some functions from PyFVCOM.tide.
 
 from __future__ import division
 
+import matplotlib.pyplot as plt
 import numpy as np
 import copy
 
 from datetime import datetime
-from PyFVCOM.grid import grid_metrics, shape_coefficients
 
 from PyFVCOM.utilities import common_time, principal_axis
+from PyFVCOM.grid import grid_metrics, shape_coefficients
 
 class Residuals:
 
@@ -102,7 +103,7 @@ class Residuals:
 
         # Cap the speed vectors at some maximum value for the quiver plots.
         if self._max_speed and 'instantaneous' in self._max_speed:
-            if noisy:
+            if self._noisy:
                 print('Capping maximum residual speed to {}m/s'.format(self._max_speed['instantaneous']))
             self.speed = self._clip(self.speed, self._max_speed['instantaneous'])
 
@@ -193,7 +194,7 @@ class Residuals:
             setattr(self.monthly, 'direction', np.rad2deg(np.arctan2(getattr(self.monthly, 'u_diff'), getattr(self.monthly, 'v_diff'))))
 
             if 'monthly' in self._max_speed:
-                if noisy:
+                if self._noisy:
                     print('Capping monthly residuals to {} m/s'.format(self._max_speed['monthly']))
                 self.monthly.speed = self._clip(self.monthly.speed, self._max_speed['monthly'])
             # Make the components after we've clipped so our plots look nice.
