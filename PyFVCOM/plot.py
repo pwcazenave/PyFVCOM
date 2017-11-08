@@ -736,17 +736,16 @@ class CrossPlotter(Plotter):
 
     Example
     -------
-    import numpy as np
-    import PyFVCOM as pf
-    import matplotlib.pyplot as plt
-
-    filestr = '/data/euryale2/scratch/mbe/Models_2/FVCOM/tamar/output/depth_tweak2_phys_only/2006/03/tamar_v2_0001.nc'
-    filereader = pf.read.FileReader(filestr)
-    cross_points = [np.asarray([[413889.37304891, 5589079.54545454], [415101.00156087, 5589616.47727273]])]
-    c_plot = pf.plot.CrossPlotter(filereader, cmap='bwr', vmin=5, vmax=10)
-    c_plot.cross_section_init(cross_points, dist_res=5)
-    c_plot.plot_pcolor_field('temp',150)
-    plt.show()
+    >>> import numpy as np
+    >>> import PyFVCOM as pf
+    >>> import matplotlib.pyplot as plt
+    >>> filestr = '/data/euryale2/scratch/mbe/Models_2/FVCOM/tamar/output/depth_tweak2_phys_only/2006/03/tamar_v2_0001.nc'
+    >>> filereader = pf.read.FileReader(filestr)
+    >>> cross_points = [np.asarray([[413889.37304891, 5589079.54545454], [415101.00156087, 5589616.47727273]])]
+    >>> c_plot = pf.plot.CrossPlotter(filereader, cmap='bwr', vmin=5, vmax=10)
+    >>> c_plot.cross_section_init(cross_points, dist_res=5)
+    >>> c_plot.plot_pcolor_field('temp',150)
+    >>> plt.show()
 
 
     TO DO
