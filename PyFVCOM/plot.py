@@ -715,7 +715,6 @@ class Plotter():
         plt.close(self.figure)
 
 
-
 class CrossPlotter(Plotter):
     """ Create plot objects based on output from the FVCOM.
 
@@ -969,7 +968,6 @@ class CrossPlotter(Plotter):
             new_chan_y.append(this_y)
 
         return np.asarray(new_chan_x), np.asarray(new_chan_y)
-
 
 
 def cm2inch(value):
