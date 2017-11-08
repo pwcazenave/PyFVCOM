@@ -723,7 +723,7 @@ class CrossPlotter(Plotter):
     Provides
     --------
 
-    cross_section_init(cross_section_points, dist_res) - 
+    cross_section_init(cross_section_points, dist_res) -
         Initialises the cross section working out the time varying y coordinates and wetting and drying.
         cross_section_points - list of 2x2 arrays defining the cross section (piecewise lines)
         dist_res - resolution to sample the cross section at
@@ -841,7 +841,7 @@ class CrossPlotter(Plotter):
         self.cross_plot_x_pcolor = np.tile(np.arange(0, len(self.sample_points)+1), [depth_sel_pcolor.shape[1], 1])*dist_res
 
         self.cross_plot_y = -depth_sel[:,:,self.sample_points_ind]
-        insert_ind = np.min(np.where(self.sample_points_ind != np.max(self.sample_points_ind))[0])        
+        insert_ind = np.min(np.where(self.sample_points_ind != np.max(self.sample_points_ind))[0])
         self.sample_points_ind_pcolor = np.insert(self.sample_points_ind, insert_ind, self.sample_points_ind[insert_ind])
         self.cross_plot_y_pcolor = -depth_sel_pcolor[:,:,self.sample_points_ind_pcolor]
 
@@ -885,7 +885,7 @@ class CrossPlotter(Plotter):
             choose_horiz_extend = np.asarray(np.append(choose_horiz, np.max(choose_horiz) +1), dtype=int)
 
             y_uniform = np.tile(np.median(plot_y[choose_horiz_extend,:], axis=0), [len(choose_horiz_extend),1])
-            pc = self.axes.pcolormesh(plot_x[choose_horiz_extend,:], y_uniform, 
+            pc = self.axes.pcolormesh(plot_x[choose_horiz_extend,:], y_uniform,
                                         plot_z[choose_horiz,:], cmap=self.cmap, vmin=self.vmin, vmax=self.vmax)
 
         self.axes.plot(self.chan_x, self.chan_y, linewidth=2, color='black')
@@ -899,11 +899,11 @@ class CrossPlotter(Plotter):
         raw_cross_w = self._var_prep(w_str, timestep)
 
         cross_u, cross_v, cross_io = self._uvw_rectify(raw_cross_u, raw_cross_v, raw_cross_w)
-        
-        plot_x = np.ma.masked_invalid(self.cross_plot_x).T
-        plot_y = np.ma.masked_invalid(self.cross_plot_y[timestep,:,:]).T        
 
-        self.plot_pcolor_field(cross_io.T, timestep)            
+        plot_x = np.ma.masked_invalid(self.cross_plot_x).T
+        plot_y = np.ma.masked_invalid(self.cross_plot_y[timestep,:,:]).T
+
+        self.plot_pcolor_field(cross_io.T, timestep)
         self.axes.quiver(plot_x, plot_y, cross_u.T, cross_v.T*w_factor)
 
     def _var_prep(self, var, timestep):
@@ -922,25 +922,25 @@ class CrossPlotter(Plotter):
     def _uvw_rectify(self, u_field, v_field, w_field):
         cross_lr = np.empty(u_field.shape)
         cross_io = np.empty(v_field.shape)
-        cross_ud = w_field    
-   
-        pll_vec = np.empty([len(self.sub_samp), 2]) 
+        cross_ud = w_field
+
+        pll_vec = np.empty([len(self.sub_samp), 2])
         for this_ind, (point_1, point_2) in enumerate(zip(self.sub_samp[0:-2], self.sub_samp[2:])):
             # work out pll vectors
             this_pll_vec = np.asarray([point_2[0] - point_1[0], point_2[1] - point_1[1]])
             pll_vec[this_ind + 1,:] = this_pll_vec/np.sqrt(this_pll_vec[0]**2 + this_pll_vec[1]**2)
-            
+
         pll_vec[0] = pll_vec[1]
-        pll_vec[-1] = pll_vec[-2] 
-        
+        pll_vec[-1] = pll_vec[-2]
+
         for this_ind, this_samp in enumerate(zip(u_field, v_field)):
             # dot product for parallel component
-            cross_lr[this_ind, :] = np.asarray([np.dot(this_uv, this_pll) for this_uv, this_pll in zip(np.asarray(this_samp).T, pll_vec)])    
-            # cross product for normal component    
+            cross_lr[this_ind, :] = np.asarray([np.dot(this_uv, this_pll) for this_uv, this_pll in zip(np.asarray(this_samp).T, pll_vec)])
+            # cross product for normal component
             cross_io[this_ind, :] = np.asarray([np.cross(this_uv, this_pll) for this_uv, this_pll in zip(np.asarray(this_samp).T, pll_vec)])
 
         return np.ma.masked_invalid(cross_lr), cross_ud, np.ma.masked_invalid(cross_io)
-    
+
 
     @staticmethod
     def _nan_extend(in_array):
@@ -948,7 +948,7 @@ class CrossPlotter(Plotter):
         if len(in_shape) == 3:
             nan_ext = np.empty([in_shape[0],in_shape[1],1])
         elif len(in_shape)==2:
-            nan_ext = np.empty([in_shape[0],1])        
+            nan_ext = np.empty([in_shape[0],1])
 
         nan_ext[:] = np.NAN
         return np.append(in_array, nan_ext, axis=len(in_shape)-1)
@@ -957,7 +957,7 @@ class CrossPlotter(Plotter):
     def _chan_corners(chan_x, chan_y):
         new_chan_x = [chan_x[0]]
         new_chan_y = [chan_y[0]]
-        
+
         for this_ind, this_y in enumerate(chan_y[1:]):
             if this_y != chan_y[this_ind] and not np.isnan(this_y) and not np.isnan(chan_y[this_ind]):
                 new_chan_x.append(chan_x[this_ind])
