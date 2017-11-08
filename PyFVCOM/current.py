@@ -8,9 +8,10 @@ from __future__ import division
 import numpy as np
 import copy
 
-from PyFVCOM.utilities import common_time
+from datetime import datetime
 from PyFVCOM.grid import grid_metrics, shape_coefficients
 
+from PyFVCOM.utilities import common_time, principal_axis
 
 class Residuals:
 
@@ -477,3 +478,97 @@ def vorticity(fvcom, depth_averaged=False):
     vort = dvdx - dudy
 
     return vort
+
+
+def ebb_flood(u, v, time, time_start=None, time_end=None):
+    """
+    Compute the flood and ebb windows for a given time series.
+
+    Notes
+    -----
+    This is lifted from PySeidon and adjusted to work with our FileReader class.
+
+    The definition of flood and ebb here is currents that are within +/- 90 degrees of the principal tidal axis.
+
+    Parameters
+    ----------
+    u, v : np.ndarray
+        Velocity component time series data ([time]).
+    time : np.ndarray
+        Array of datetime objects for the time series `u', `v'.
+    time_start : str, datetime
+        start time, as a string ('yyyy-mm-ddThh:mm:ss') or datetime object.
+    time_end : str, datetime
+        end time, as a string ('yyyy-mm-ddThh:mm:ss') or datetime object.
+
+    Returns
+    -------
+    flood_indices : np.ndarray
+        Indices indicating flood times.
+    ebb_indices : np.ndarray, optional
+        Indices indicating ebb times.
+    principal_tidal_axis : np.ndarray, optional
+        Principal flow axis (float number in degrees)
+    principal_tidal_axis_variance : np.ndarray
+        Associated variance (float number)
+
+    Notes
+    -----
+    - May take time to compute if time period too long
+    - Directions between -180 and 180 deg., i.e. 0=East, 90=North, +/-180=West, -90=South
+    - Assumes that flood is aligned with principal direction
+
+    """
+
+    def closest_time(time, when):
+        """ Find the index of the closest `time' to the supplied time `when' (datetime object). """
+        return np.argmin(np.abs(time - when))
+
+    nt = len(time)
+
+    # Find time interval to work in.
+    if isinstance(time_start, str):
+        time_start = datetime.strftime(time_start, '%Y-%m-%dT%H:%M:%S')
+
+    if isinstance(time_end, str):
+        time_end= datetime.strftime(time_end, '%Y-%m-%dT%H:%M:%S')
+
+    time_window = None
+    if time_start and time_end:
+        time_window = np.arange(closest_time(time, time_start), closest_time(time, time_end))
+    elif time_start and not time_end:
+        time_window = np.arange(closest_time(time, time_start), nt)
+    elif not time_start and time_end:
+        time_window = np.arange(0, closest_time(time, time_end))
+
+    # Subset in time if requested to do so.
+    if np.any(time_window):
+        U = u[time_window]
+        V = v[time_window]
+    else:
+        U = u[:]
+        V = v[:]
+
+    # WB version of BP's principal axis
+    # Assuming principal axis = flood heading. Determine principal axes - potentially a problem if axes are very
+    # kinked since this would misclassify part of ebb and flood.
+    principal_tide_axis, principal_tide_axis_variance = principal_axis(U, V)
+
+    # Put U and V the wrong way around in arctan2 to get north = 0 (otherwise east = 0).
+    dir_all = np.rad2deg(np.arctan2(V, U))
+    ind = np.where(dir_all < 0)
+    dir_all[ind] = dir_all[ind] + 360
+    # Sign speed - eliminating wrap-around
+    dir_PA = dir_all - principal_tide_axis
+    dir_PA[dir_PA < -90] += 360
+    dir_PA[dir_PA > 270] -= 360
+    # General direction of flood passed as input argument
+    flood_indices = np.where((dir_PA >= -90) & (dir_PA < 90))
+    ebb_indices = np.arange(dir_PA.shape[0])
+    ebb_indices = np.delete(ebb_indices, flood_indices[:])
+    # TR: quick fix
+    if type(flood_indices).__name__ == 'tuple':
+        flood_indices = flood_indices[0]
+
+    return flood_indices, ebb_indices, principal_tide_axis, principal_tide_axis_variance
+
