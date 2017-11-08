@@ -763,7 +763,7 @@ class Lanczos:
     2004. On pages 533-539.
 
     """
-    def __init__(self, dt=1, cutoff=None, samples=10, passtype='low'):
+    def __init__(self, dt=1, cutoff=None, samples=100, passtype='low'):
         """
 
         Parameters
@@ -773,7 +773,7 @@ class Lanczos:
         cutoff : float, optional
             Cutoff frequency in minutes at which to pass data. Defaults to the half the Nyquist frequency. (Cf in the MATLAB version).
         samples : int, optional
-            Number of samples in the window. Defaults to 10. (M in the MATLAB version)
+            Number of samples in the window. Defaults to 100. (M in the MATLAB version)
         passtype : str
             Set the filter to `low' to low-pass (default) or `high' to high-pass. (pass in the MATLAB version).
 
@@ -869,7 +869,7 @@ class Lanczos:
         return y
 
 
-def lanczos(x, dt=1, cutoff=None, samples=10, passtype='low'):
+def lanczos(x, dt=1, cutoff=None, samples=100, passtype='low'):
     """
     Apply a Lanczos low- or high-pass filter to a time series.
 
@@ -882,7 +882,7 @@ def lanczos(x, dt=1, cutoff=None, samples=10, passtype='low'):
     cutoff : float, optional
         Cutoff frequency in minutes at which to pass data. Defaults to the half the Nyquist frequency. (Cf in the MATLAB version).
     samples : int, optional
-        Number of samples in the window. Defaults to 10. (M in the MATLAB version)
+        Number of samples in the window. Defaults to 100. (M in the MATLAB version)
     passtype : str
         Set the filter to `low' to low-pass (default) or `high' to high-pass. (pass in the MATLAB version).
 
