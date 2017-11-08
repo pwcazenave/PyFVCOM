@@ -91,7 +91,7 @@ class FileReader:
             variables = [variables]
         self._variables = variables
 
-        # Prepare this object with all the objects we'll need later on (data, dims, time, grid).
+        # Prepare this object with all the objects we'll need later on (data, dims, time, grid, atts).
         self._prep()
 
         # Get the things to iterate over for a given object. This is a bit hacky, but until or if I create separate
