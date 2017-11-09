@@ -91,7 +91,7 @@ class FileReader:
             variables = [variables]
         self._variables = variables
 
-        # Prepare this object with all the objects we'll need later on (data, dims, time, grid).
+        # Prepare this object with all the objects we'll need later on (data, dims, time, grid, atts).
         self._prep()
 
         # Get the things to iterate over for a given object. This is a bit hacky, but until or if I create separate
@@ -948,6 +948,78 @@ def MFileReader(fvcom, *args, **kwargs):
                 FVCOM += FileReader(file, *args, **kwargs)
 
     return FVCOM
+
+
+class FileReaderFromDict(FileReader):
+    """
+    Convert an ncread dictionary into a (sparse) FileReader object. This does a passable job of impersonating a full
+    FileReader object if you've loaded data with ncread.
+
+    """
+
+    def __init__(self, fvcom):
+        """
+        Will initialise a FileReader object from an ncread dictionary. Some attempt is made to fill in missing
+        information (dimensions mainly).
+
+        Parameters
+        ----------
+        fvcom : dict
+            Output of ncread.
+
+        """
+
+        # Prepare this object with all the objects we'll need later on (data, dims, time, grid, atts).
+        self._prep()
+
+        self.obj_iter = lambda x: [a for a in dir(x) if not a.startswith('__')]
+
+        grid_names = ('lon', 'lat', 'lonc', 'latc', 'nv',
+                      'h', 'h_center',
+                      'nbe', 'ntsn', 'nbsn', 'ntve', 'nbve',
+                      'art1', 'art2', 'a1u', 'a2u',
+                      'siglay', 'siglev')
+        time_names = ('time', 'Times', 'datetime', 'Itime', 'Itime2')
+
+        for key in fvcom:
+            if key in grid_names:
+                setattr(self.grid, key, fvcom[key])
+            elif key in time_names:
+                setattr(self.time, key, fvcom[key])
+            else:  # assume data.
+                setattr(self.data, key, fvcom[key])
+        # Make some dimensions
+        self.dims.three = 3
+        self.dims.four = 4
+        self.dims.maxnode = 11
+        self.dims.maxelem = 9
+        for obj in self.obj_iter(self.data):
+            if obj in ('ua', 'va'):
+                try:
+                    self.dims.time, self.dims.nele = getattr(self.data, obj).shape
+                except ValueError:
+                    # Assume we've got a single position.
+                    self.dims.time = getattr(self.data, obj).shape[0]
+                    self.dims.nele = 1
+            elif obj in ('temp', 'salinity'):
+                try:
+                    self.dims.time, self.dims.siglay, self.dims.node = getattr(self.data, obj).shape
+                except ValueError:
+                    # Assume we've got a single position
+                    self.dims.time, self.dims.siglay = getattr(self.data, obj).shape[:2]
+                    self.dims.node = 1
+                self.dims.siglev = self.dims.siglay + 1
+            elif obj in ['zeta']:
+                try:
+                    self.dims.time, self.dims.node = getattr(self.data, obj).shape
+                except ValueError:
+                    # Assume we've got a single position
+                    self.dims.time = getattr(self.data, obj).shape[0]
+                    self.dims.node = 1
+            elif obj in ('Times'):
+                self.dims.time, self.dims.DateStrLen = getattr(self.time, obj).shape
+            elif obj in ('time', 'Itime', 'Itime2', 'datetime'):
+                self.dims.time = getattr(self.time, obj).shape
 
 
 class ncwrite():
