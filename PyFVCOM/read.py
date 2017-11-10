@@ -241,8 +241,7 @@ class FileReader:
                             "are automatically created."
 
     def _load_time(self):
-        """ Populate a time object with additional useful time representations from the netCDF time data.
-        """
+        """ Populate a time object with additional useful time representations from the netCDF time data. """
 
         time_variables = ('time', 'Times', 'Itime', 'Itime2')
         got_time, missing_time = [], []
@@ -438,7 +437,7 @@ class FileReader:
 
         # Add compatibility for FVCOM3 (these variables are only specified on the element centres in FVCOM4+ output
         # files). Only create the element centred values if we have the same number of nodes as in the triangulation.
-        # This does not occur if we've been asked to extract a different set of nodes and elements, for whatever
+        # This does not occur if we've been asked to extract an incompatible set of nodes and elements, for whatever
         # reason (e.g. testing). We don't add attributes for the data if we've created it as doing so is a pain.
         for var in 'h_center', 'siglay_center', 'siglev_center':
             try:
@@ -996,6 +995,8 @@ class FileReaderFromDict(FileReader):
         self.dims.four = 4
         self.dims.maxnode = 11
         self.dims.maxelem = 9
+        # This is a little repetitive (each dimension can be set multiple times), but it has simplicity to its
+        # advantage.
         for obj in self.obj_iter(self.data):
             if obj in ('ua', 'va'):
                 try:
