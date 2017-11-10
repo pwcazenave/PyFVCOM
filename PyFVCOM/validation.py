@@ -129,6 +129,7 @@ class validation_db():
             qry_string += ' order by ' + order_by_str
         if group_by_str:
             qry_string += ' group by ' + group_by_str
+
         return self.execute_sql(qry_string)
 
     def close_conn(self):
@@ -240,11 +241,11 @@ def plot_tides(fvcom_file_str_list, db_name, plot_map=False, threshold=500):
     """
 
     # check list
-    
+
     # check db_name
 
     tide_obs_database = db_tide(db_name)
-    for this_str in hmm: 
+    for this_str in hmm:
         if ind == 0:
             fvcom_data = FileReader(this_file_str, variables=['h', 'zeta'])
         else:
@@ -297,7 +298,7 @@ class db_tide(validation_db):
                 site_id = self.select_qry('sites', "site_tla == '" + this_file_obj.site_tla + "'", 'site_id')[0][0]
             except:
                 try:
-                    current_id_max = np.max(self.select_qry('sites', None, 'site_id')) 
+                    current_id_max = np.max(self.select_qry('sites', None, 'site_id'))
                     site_id = int(current_id_max + 1)
                 except:
                     site_id = 1
@@ -305,11 +306,11 @@ class db_tide(validation_db):
                 site_data = [(site_id, this_file_obj.site_tla, this_file_obj.site_name, this_file_obj.lon, this_file_obj.lat, '')]
                 self.debug_data = site_data
                 self.insert_into_table('sites', site_data)
-    
+
             site_id_list = [site_id] * len(this_file_obj.seconds_from_ref)
             table_data = list(zip(site_id_list, this_file_obj.seconds_from_ref, this_file_obj.elevation_data,
                             this_file_obj.elevation_flag, this_file_obj.residual_data, this_file_obj.residual_flag))
-            self.insert_into_table('gauge_obs', table_data) 
+            self.insert_into_table('gauge_obs', table_data)
 
     def get_tidal_series(self, station_identifier, start_date_dt=None, end_date_dt=None):
         """
@@ -333,7 +334,7 @@ class db_tide(validation_db):
         select_str = "time_int, elevation, elevation_flag"
         table_name = "gauge_obs as go"
         inner_join_str = "sites as st on st.site_id = go.site_id"
-        
+
         if isinstance(station_identifier, str):
             where_str = "st.site_tla = '" + station_identifier + "'"
         else:
@@ -345,7 +346,7 @@ class db_tide(validation_db):
         if end_date_dt is not None:
             end_sec = dt_to_epochsec(end_date_dt)
             where_str += " and go.time_int <= " + str(end_sec)
-        order_by_str = 'go.time_int'    
+        order_by_str = 'go.time_int'
         return_data = self.select_qry(table_name, where_str, select_str, order_by_str, inner_join_str)
         if not return_data:
             print('No data available')
@@ -422,18 +423,18 @@ class bodc_annual_tide_file():
         for this_line in header_lines:
             if 'ongitude' in this_line:
                 self.lon = [float(s) for s in this_line.split() if bodc_annual_tide_file._is_number(s)][0]
-            if 'atitude' in this_line:            
+            if 'atitude' in this_line:
                 self.lat = [float(s) for s in this_line.split() if bodc_annual_tide_file._is_number(s)][0]
             if 'Site' in this_line:
                 site_str_raw = this_line.split()[1:]
                 if len(site_str_raw) == 1:
                     site_str = site_str_raw[0]
                 else:
-                    site_str = ''            
+                    site_str = ''
                     for this_str in site_str_raw:
-                        site_str += this_str                
+                        site_str += this_str
         self.site_name = site_str
-        self.site_tla = file_name.split('/')[-1][4:7]            
+        self.site_tla = file_name.split('/')[-1][4:7]
 
         raw_data = np.loadtxt(file_name, skiprows=header_length, dtype=bytes).astype(str)
 
@@ -441,7 +442,7 @@ class bodc_annual_tide_file():
         for this_row in raw_data:
             this_dt_str = this_row[1] + ' ' + this_row[2]
             this_seconds_from_ref = dt_to_epochsec(dt.datetime.strptime(this_dt_str, '%Y/%m/%d %H:%M:%S'))
-            seconds_from_ref.append(int(this_seconds_from_ref))    
+            seconds_from_ref.append(int(this_seconds_from_ref))
         self.seconds_from_ref = seconds_from_ref
 
         elevation_data = []
@@ -463,7 +464,7 @@ class bodc_annual_tide_file():
     @staticmethod
     def _parse_tide_obs(in_str):
         error_code_dict = {'M':1, 'N':2, 'T':3}
-        try: 
+        try:
             int(in_str[-1])
             error_code = 0
             meas = float(in_str)
@@ -484,10 +485,11 @@ class bodc_annual_tide_file():
             return True
         except ValueError:
             return False
-    @staticmethod    
+
+    @staticmethod
     def _clean_tide_file(file_name, header_length):
         sed_str = "sed -i '"+ str(header_length + 1) + ",$ {/^ *[0-9]/!d}' " + file_name
-        sp.call([sed_str], shell=True)    
+        sp.call([sed_str], shell=True)
 
 
 #################################################################################################################
@@ -496,11 +498,11 @@ class bodc_annual_tide_file():
 
 Validation against L4 and E1 CTD and buoy data
 
-observations_meta_data = {'buoy_name':'E1', 'year':'2006', 'ctd_new_file_type': False, 
+observations_meta_data = {'buoy_name':'E1', 'year':'2006', 'ctd_new_file_type': False,
             'ctd_datadir':'/data/euryale4/backup/mbe/Data/WCO_data/E1/CTD_data/2006',
             'buoy_filepath':None, 'lon':-4.368, 'lat':50.035}
 
-observations_meta_data = {'buoy_name':'L4', 'year':'2015', 'ctd_new_file_type': True, 'ctd_filepath':'./data/e1_data_2015.txt', 
+observations_meta_data = {'buoy_name':'L4', 'year':'2015', 'ctd_new_file_type': True, 'ctd_filepath':'./data/e1_data_2015.txt',
             'buoy_filepath': , '/data/euryale4/backup/mbe/Data/WCO_data/L4/Buoy_data/l4_cont_data_2015.txt', 'lon':-4.217, 'lat':50.250}
 
 model_filestr_lambda = lambda m: '/data/euryale4/backup/mbe/Models/FVCOM/tamar_v2/run/output/depth_tweak2/2006/{:02d}/tamar_v2_0001.nc'.format(m)
@@ -557,12 +559,12 @@ class db_wco(validation_db):
 
     def _insert_obs(self, file_obj, buoy_id, measurement_id):
         epoch_sec_timelist = []
-        for this_time in file_obj.observation_dict['dt_time']: 
+        for this_time in file_obj.observation_dict['dt_time']:
             epoch_sec_timelist.append(dt_to_epochsec(this_time))
         buoy_id_list = np.tile(buoy_id, len(epoch_sec_timelist))
         measurement_id_list = np.tile(measurement_id, len(epoch_sec_timelist))
 
-        table_data = list(zip(buoy_id_list, epoch_sec_timelist, file_obj.observation_dict['depth'], file_obj.observation_dict['temp'], 
+        table_data = list(zip(buoy_id_list, epoch_sec_timelist, file_obj.observation_dict['depth'], file_obj.observation_dict['temp'],
                         file_obj.observation_dict['salinity'], measurement_id_list))
         self.insert_into_table('obs', table_data)
 
@@ -593,6 +595,7 @@ class db_wco(validation_db):
 
         return dates, data
 
+
 class WCO_obs_file():
     def __init__(self, filename, depth=None):
         self._setup_possible_vars()
@@ -602,21 +605,21 @@ class WCO_obs_file():
 
     def _add_file(self,filename,remove_undated=True):
         # remove duff lines
-        sed_str = "sed '/^-9.990e/d' " + filename + " > temp_file.txt" 
+        sed_str = "sed '/^-9.990e/d' " + filename + " > temp_file.txt"
         sp.call(sed_str, shell=True)
 
         # some files have multiple records of differing types...helpful
         temp_str = 'YKA123ASD'
-        file_split_str = '''awk '/^[^0-9]/{g++} { print $0 > "''' + temp_str + '''"g".txt"}' temp_file.txt''' 
+        file_split_str = '''awk '/^[^0-9]/{g++} { print $0 > "''' + temp_str + '''"g".txt"}' temp_file.txt'''
         sp.call(file_split_str, shell=True)
         temp_file_list = gb.glob(temp_str + '*')
-       
+
         obs_dict_list = []
         for this_file in temp_file_list:
             this_obs = self._add_file_part(this_file)
             if not remove_undated or 'dt_time' in this_obs:
                 obs_dict_list.append(this_obs)
-        rm_file = [os.remove(this_file) for this_file in temp_file_list] 
+        rm_file = [os.remove(this_file) for this_file in temp_file_list]
         return {this_key:np.hstack([this_dict[this_key] for this_dict in obs_dict_list]) for this_key in obs_dict_list[0]}
 
     def _add_file_part(self, filename):
@@ -628,7 +631,7 @@ class WCO_obs_file():
 
         # Load the files, some use semi-colon delimiters, some whitespace...
         if ';' in str(np.loadtxt('temp_header_file.txt', delimiter='no_delimination_needed', dtype=str)):
-            observations_raw = np.loadtxt('temp_file.txt', delimiter=';',dtype=str)            
+            observations_raw = np.loadtxt('temp_file.txt', delimiter=';',dtype=str)
             observations_header = np.loadtxt('temp_header_file.txt', delimiter=';',dtype=str)
         elif ',' in str(np.loadtxt('temp_header_file.txt', delimiter='no_delimination_needed', dtype=str)):
             observations_raw = np.loadtxt('temp_file.txt', delimiter=',',dtype=str)
@@ -636,10 +639,10 @@ class WCO_obs_file():
         else:
             observations_raw = np.loadtxt('temp_file.txt', dtype=str)
             observations_header = np.loadtxt('temp_header_file.txt', dtype=str)
-        
-        # Clean up temp files 
+
+        # Clean up temp files
         os.remove('temp_file.txt')
-        os.remove('temp_header_file.txt')        
+        os.remove('temp_header_file.txt')
 
         # Find the relevant columns and pull out temp, salinity, date, etc if available
         observation_dict = {}
@@ -653,8 +656,8 @@ class WCO_obs_file():
                     time_vars.append(this_possible[np.isin(this_possible, observations_header)])
                 else:
                     observation_dict[this_var] = np.squeeze(np.asarray(observations_raw[:,this_col], dtype=float))
-        if 'date' in observation_dict: 
-            observation_dict['dt_time'] = self._parse_dates_to_dt(observation_dict, time_vars)    
+        if 'date' in observation_dict:
+            observation_dict['dt_time'] = self._parse_dates_to_dt(observation_dict, time_vars)
         return observation_dict
 
     def _setup_possible_vars(self):
@@ -670,23 +673,24 @@ class WCO_obs_file():
                 dt_list.append(dt.datetime.strptime(this_date + ' ' + this_time, '%m/%d/%Y %H:%M:%S'))
         elif np.any(np.isin('Year', time_vars)):
             for this_time, (this_jd, this_year) in zip(obs_dict['time'], zip(obs_dict['julian_day'], obs_dict['date'])):
-                dt_list.append(dt.datetime(int(this_year),1,1) + dt.timedelta(days=int(this_jd) -1) + 
-                                dt.timedelta(hours=int(this_time.split('.')[0])) + dt.timedelta(minutes=int(this_time.split('.')[1])))    
+                dt_list.append(dt.datetime(int(this_year),1,1) + dt.timedelta(days=int(this_jd) -1) +
+                                dt.timedelta(hours=int(this_time.split('.')[0])) + dt.timedelta(minutes=int(this_time.split('.')[1])))
         elif np.any(np.isin(' Date (YYMMDD)', time_vars)):
             for this_time, this_date in zip(obs_dict['time'], obs_dict['date']):
                 dt_list.append(dt.datetime.strptime(this_date + ' ' + this_time, '%y%m%d %H%M%S'))
         else:
             print('Date parser not up to date with possible vars')
             dt_list = None
-        
+
         return np.asarray(dt_list)
+
 
 class CTD_dir(WCO_obs_file):
     def __init__(self, dirname):
         all_files = os.listdir(dirname)
         dt_list = []
         observation_dict_list = []
-        self._setup_possible_vars()   
+        self._setup_possible_vars()
 
         for this_file in all_files:
             print('Processing file {}'.format(this_file))
@@ -709,6 +713,7 @@ Do the comparison
 
 """
 
+
 class comp_data():
     def __init__(self, buoy_list, file_list_or_probe_dir, wco_database, max_time_threshold=dt.timedelta(hours=1), max_depth_threshold = 100, probe_depths=None):
         self.file_list_or_probe_dir
@@ -722,8 +727,8 @@ class comp_data():
 
         self.observations = {}
         for this_buoy in self.buoy_list:
-            self.observations[this_buoy] = {}    
-    
+            self.observations[this_buoy] = {}
+
     def retrieve_file_data(self):
         pass
 
@@ -752,8 +757,8 @@ class comp_data():
                 for var in var_list:
                     this_obs = self.observations[buoy_name][var][this_obs_choose]
                     this_model = np.squeeze(fvcom_data_reader.data.temp[this_time_close,...])
-                    this_model_interp = np.squeeze(np.interp(this_obs_deps, model_depths, this_model))                
-        
+                    this_model_interp = np.squeeze(np.interp(this_obs_deps, model_depths, this_model))
+
                     try:
                         obs_comp[var].append(this_comp)
                     except KeyError:
@@ -766,7 +771,7 @@ class comp_data():
 
     def comp_data_nearest(self, buoy_name, var_list):
         pass
-     
+
     def model_closest_time():
         pass
 
@@ -782,16 +787,16 @@ class comp_data_filereader(comp_data):
         first_file = True
         model_all_dicts = {}
 
-        for this_file in self.file_list:    
+        for this_file in self.file_list:
             if first_file:
                 fvcom_data_reader = FileReader(this_file, ['temp', 'salinity'])
                 close_node = []
                 for this_buoy_ll in buoy_lat_lons:
-                    close_node.append()    
-    
+                    close_node.append()
+
                 model_depths = fvcom_data_reader.grid.siglay * fvcom_data_reader.grid.h * -1
-            
-                for this_buoy in self.buoy_list:                        
+
+                for this_buoy in self.buoy_list:
                     model_all_dicts[this_buoy] = {'dt_time':mod_times, 'temp':mod_t_vals, 'salinity':mod_s_vals}
 
                 first_file = False
@@ -812,8 +817,9 @@ class comp_data_filereader(comp_data):
     def model_closest_time(self, find_time):
         return closest_time
 
+
 class comp_data_probe(comp_data):
-    def retrieve_file_data():        
+    def retrieve_file_data():
         for this_buoy in self.buoy_list:
             t_filelist = []
             s_filelist = []
@@ -822,12 +828,12 @@ class comp_data_probe(comp_data):
                 s_filelist.append(this_dir + this_buoy + '_s1.dat')
             mod_times, mod_t_vals, mod_pos = pf.read.read_probes(t_filelist, locations=True, datetimes=True)
             mod_times, mod_s_vals, mod_pos = pf.read.read_probes(s_filelist, locations=True, datetimes=True)
-            model_dict = {'dt_time':mod_times, 'temp':mod_t_vals, 'salinity':mod_s_vals}    
+            model_dict = {'dt_time':mod_times, 'temp':mod_t_vals, 'salinity':mod_s_vals}
             self.model_data[this_buoy] = model_dict
 
 
 def wco_model_comparison(model_file_list, obs_database_file):
-    
+
     temp_comp = []
     sal_comp = []
     dates_comp = []
@@ -854,12 +860,12 @@ def wco_model_comparison(model_file_list, obs_database_file):
             sal_comp.append(np.asarray([this_obs_salinity_interp, this_model_salinity]))
             dates_comp.append(this_obs_time)
             max_obs_depth.append(np.max(this_obs_deps))
-    
+
     ctd_comp = {'temp':temp_comp, 'salinity':sal_comp, 'dates':dates_comp, 'max_depth':max_obs_depth}
-    
+
     observations = get_buoy_obs(obs_meta_data)
-   
-    if observations: 
+
+    if observations:
         buoy_temp_comp = []
         buoy_sal_comp = []
         buoy_dates_comp = []
@@ -877,5 +883,3 @@ def wco_model_comparison(model_file_list, obs_database_file):
         buoy_comp = {}
 
     return ctd_comp, buoy_comp
-
-
