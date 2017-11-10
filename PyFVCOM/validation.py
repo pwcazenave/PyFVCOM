@@ -211,6 +211,7 @@ class db_tide(validation_db):
         else:
             tla_name = gauge_site_data[:, 1]
         lon_lat = np.asarray(gauge_site_data[:, 3:5], dtype=float)
+
         return tla_name, lon_lat
 
     def get_nearest_gauge_id(self, lat, lon):
