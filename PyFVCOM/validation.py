@@ -5,9 +5,12 @@ import subprocess as sp
 import glob as gb
 import os
 
+import matplotlib.pyplot as plt
+
 from PyFVCOM.grid import vincenty_distance
 from PyFVCOM.read import FileReader
 from PyFVCOM.plot import Time, Plotter
+from PyFVCOM.stats import calculate_coefficient, rmse
 
 SQL_UNIX_EPOCH = dt.datetime(1970, 1, 1, 0, 0, 0)
 
@@ -229,38 +232,101 @@ def plot_map(fvcom, tide_db_path, threshold=np.inf, legend=False, **kwargs):
     return plot
 
 
-def plot_tides(fvcom_file_str_list, db_name, plot_map=False, threshold=500):
+def plot_tides(fvcom, db_name, threshold=500, figsize=(10, 10), **kwargs):
     """
-    Function description
+    Plot model and tide gauge data.
 
+    Parameters
+    ----------
+    fvcom : PyFVCOM.read.FileReader
+        FVCOM model data as a FileReader object.
+    db_name : str
+        Database name to interrogate.
+    threshold : float, optional
+        Give a threshold distance (in spherical units) to exclude gauges too far from a model node.
+    figsize : tuple
+        Give a figure size (units are inches).
 
+    Remaining keyword arguments are passed to PyFVCOM.plot.Time.
 
-
-
+    Returns
+    -------
+    time : PyFVCOM.plot.Time
+        Time series plot object.
+    gauge_obs : dict
+        Dictionary with the gauge and model data.
 
     """
 
-    # check list
+    tide_db = db_tide(db_name)
 
-    # check db_name
+    # Get all the gauges in the database and find the corresponding model nodes.
+    gauge_names, gauge_locations = tide_db.get_gauge_locations(long_names=True)
 
-    tide_obs_database = db_tide(db_name)
-    for this_str in hmm:
-        if ind == 0:
-            fvcom_data = FileReader(this_file_str, variables=['h', 'zeta'])
-        else:
-            fvcom_data += FileReader(this_file_str, variables=['h', 'zeta'])
+    gauge_obs = {}
+    gauges_in_domain = []
+    fvcom_nodes = []
+    for gi, gauge in enumerate(gauge_locations):
+        river_index = fvcom.closest_node(gauge, threshold=threshold)
+        if river_index:
+            current_gauge = {}
+            current_gauge['gauge_id'], current_gauge['gauge_dist'] = tide_db.get_nearest_gauge_id(*gauge)
+            current_gauge['times'], current_gauge['data'] = tide_db.get_tidal_series(current_gauge['gauge_id'],
+                                                                                     np.min(fvcom.time.datetime),
+                                                                                     np.max(fvcom.time.datetime))
+            if not np.any(current_gauge['data']):
+                continue
 
-    tla_name, lon_lat = tide_obs_database.get_gauge_locations()
-    comparison_dict = {}
-    plot_dict = {}
+            current_gauge['lon'], current_gauge['lat'] = gauge_locations[gi, :]
 
-    for this_name, this_loc in zip(tla_name, lon_lat):
-        near_node = fvcom_data.closest_node(lon_lat, vincenty=True, threshold=threshold)
-        if near_node:
-            print('hmm')
+            current_gauge['gauge_clean'] = current_gauge['data'][:, 1] == 0
+            current_gauge['gauge_obs_clean'] = {'times': np.copy(current_gauge['times'])[current_gauge['gauge_clean']],
+                                                'data': np.copy(current_gauge['data'])[current_gauge['gauge_clean'], 0]}
+            current_gauge['rescale_zeta'] = fvcom.data.zeta[:, river_index] - np.mean(fvcom.data.zeta[:, river_index])
+            current_gauge['rescale_gauge_obs'] = current_gauge['gauge_obs_clean']['data'] - np.mean(current_gauge['gauge_obs_clean']['data'])
 
-    return plot_dict
+            current_gauge['dates_mod'] = np.isin(fvcom.time.datetime, current_gauge['gauge_obs_clean']['times'])
+            current_gauge['dates_obs'] = np.isin(current_gauge['gauge_obs_clean']['times'], fvcom.time.datetime)
+            # Skip out if we don't have any coincident data (might simply be a sampling issue) within the model
+            # period. We should interpolate here.
+            if not np.any(current_gauge['dates_mod']) or not np.any(current_gauge['dates_obs']):
+                continue
+
+            current_gauge['r'], current_gauge['p'] = calculate_coefficient(current_gauge['rescale_zeta'][current_gauge['dates_mod']], current_gauge['rescale_gauge_obs'][current_gauge['dates_obs']])
+            current_gauge['rms'] = rmse(current_gauge['rescale_zeta'][current_gauge['dates_mod']], current_gauge['rescale_gauge_obs'][current_gauge['dates_obs']])
+            current_gauge['std'] = np.std(current_gauge['rescale_zeta'][current_gauge['dates_mod']] - current_gauge['rescale_gauge_obs'][current_gauge['dates_obs']])
+
+            gauges_in_domain.append(gi)
+            fvcom_nodes.append(river_index)
+
+            name = gauge_names[gi]
+            gauge_obs[name] = current_gauge
+            del current_gauge
+
+    tide_db.close_conn()  # tidy up after ourselves
+
+    # Now make a figure of all that data.
+    if len(gauge_obs) > 5:
+        cols = np.ceil(len(gauge_obs) ** (1.0 / 3)).astype(int) + 1
+    else:
+        cols = 1
+    rows = np.ceil(len(gauge_obs) / cols).astype(int)
+    fig = plt.figure(figsize=figsize)
+    for count, site in enumerate(sorted(gauge_obs)):
+        ax = fig.add_subplot(rows, cols, count + 1)
+        time = Time(fvcom, figure=fig, axes=ax, hold=True, **kwargs)
+        time.plot_line(gauge_obs[site]['rescale_zeta'], label='Model', color='k')
+        # We have to use the raw plot function for the gauge data as the plot_line function assumes we're using model
+        # data.
+        time.axes.plot(gauge_obs[site]['gauge_obs_clean']['times'], gauge_obs[site]['rescale_gauge_obs'], label='Gauge', color='m')
+        # Should add the times of the flagged data here.
+        time.axes.set_xlim(fvcom.time.datetime.min(), fvcom.time.datetime.max())
+        time.axes.set_ylim(np.min((gauge_obs[site]['rescale_gauge_obs'].min(), gauge_obs[site]['rescale_zeta'].min())),
+                           np.max((gauge_obs[site]['rescale_gauge_obs'].max(), gauge_obs[site]['rescale_zeta'].max())))
+        time.axes.set_title(site)
+
+    return time, gauge_obs
+
 
 def _make_normal_tide_series(h_series):
     height_series = h_series - np.mean(h_series)
