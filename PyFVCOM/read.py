@@ -548,7 +548,7 @@ class FileReader:
             if short_dim in self._dims:
                 if short_dim in self.ds.variables[var].dimensions:
                     _temp = getattr(self.grid, var)[self._dims[short_dim], ...]
-                setattr(self.grid, var, _temp)
+                    setattr(self.grid, var, _temp)
 
         # Check ranges and if zero assume we're missing that particular type, so convert from the other accordingly.
         self.grid.lon_range = np.ptp(self.grid.lon)
