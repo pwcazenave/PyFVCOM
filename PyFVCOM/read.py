@@ -539,14 +539,21 @@ class FileReader:
                     _temp = np.zeros(var_shape)
                 setattr(self.grid, var, _temp)
 
-        # Check if we've been given vertical dimensions to subset in too, and if so, do that.
+        # Check if we've been given vertical dimensions to subset in too, and if so, do that. Check we haven't
+        # already done this if the 'node' and 'nele' sections above first.
         for var in 'siglay', 'siglev', 'siglay_center', 'siglev_center':
             short_dim = copy.copy(var)
+            # Assume we need to subset this one unless 'node' or 'nele' are missing from self._dims. If they're in
+            # self._dims, we've already subsetted in the 'node' and 'nele' sections above, so doing it again here
+            # would fail.
+            subset_variable = True
+            if 'node' in self._dims or 'nele' in self._dims:
+                subset_variable = False
             # Strip off the _center to match the dimension name.
             if short_dim.endswith('_center'):
                 short_dim = short_dim.split('_')[0]
             if short_dim in self._dims:
-                if short_dim in self.ds.variables[var].dimensions:
+                if short_dim in self.ds.variables[var].dimensions and subset_variable:
                     _temp = getattr(self.grid, var)[self._dims[short_dim], ...]
                     setattr(self.grid, var, _temp)
 
