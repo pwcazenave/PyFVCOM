@@ -311,7 +311,7 @@ class Plotter():
                  extents=None, vmin=None, vmax=None, mask=None, res='c', fs=10,
                  title=None, cmap='viridis', figsize=(10., 10.), axis_position=None,
                  edgecolors='none', s_stations=20, s_particles=20, linewidth=1.0,
-                 tick_inc=None, cb_label=None, norm=None, m=None):
+                 tick_inc=None, cb_label=None, extend='neither', norm=None, m=None):
         """
         Parameters:
         -----------
@@ -377,6 +377,10 @@ class Plotter():
         cb_label : str, optional
             Set the colour bar label.
 
+        extend : str, optional
+            Set the colour bar extension ('neither', 'both', 'min', 'max').
+            Defaults to 'neither').
+
         norm : matplotlib.colors.Normalize, optional
             Normalise the luminance to 0,1. For example, use from
             matplotlib.colors.LogNorm to do log plots of fields.
@@ -411,6 +415,7 @@ class Plotter():
         self.linewidth = linewidth
         self.tick_inc = tick_inc
         self.cb_label = cb_label
+        self.extend = extend
         self.norm = norm
         self.m = m
 
@@ -545,7 +550,7 @@ class Plotter():
         # Add colorbar scaled to axis width
         divider = make_axes_locatable(self.axes)
         cax = divider.append_axes("right", size="5%", pad=0.05)
-        self.cbar = self.figure.colorbar(self.tripcolor_plot, cax=cax)
+        self.cbar = self.figure.colorbar(self.tripcolor_plot, cax=cax, extend=self.extend)
         self.cbar.ax.tick_params(labelsize=self.fs)
         if self.cb_label:
             self.cbar.set_label(self.cb_label)
