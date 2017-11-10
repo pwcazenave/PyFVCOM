@@ -449,7 +449,11 @@ class FileReader:
                 setattr(self.atts, var, attributes)
             except KeyError:
                 if self.grid.nv.max() == len(self.grid.x):
-                    setattr(self.grid, var, nodes2elems(getattr(self.grid, var.split('_')[0]), self.grid.triangles))
+                    try:
+                        setattr(self.grid, var, nodes2elems(getattr(self.grid, var.split('_')[0]), self.grid.triangles))
+                    except IndexError:
+                        # Maybe the array's the wrong way around. Flip it and try again.
+                        setattr(self.grid, var, nodes2elems(getattr(self.grid, var.split('_')[0]).T, self.grid.triangles))
 
         # Convert the given W/E/S/N coordinates into node and element IDs to subset.
         if self._bounding_box:
