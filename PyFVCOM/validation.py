@@ -65,13 +65,13 @@ class validation_db():
 
     def select_qry(self, table_name, where_str, select_str='*', order_by_str=None, inner_join_str=None, group_by_str=None):
         qry_string = 'select ' + select_str + ' from ' + table_name
-        if inner_join_str is not None:
+        if inner_join_str:
             qry_string += ' inner join ' + inner_join_str
-        if where_str is not None:
+        if where_str:
             qry_string += ' where ' + where_str
-        if order_by_str is not None:
+        if order_by_str:
             qry_string += ' order by ' + order_by_str
-        if group_by_str is not None:
+        if group_by_str:
             qry_string += ' group by ' + group_by_str
         return self.execute_sql(qry_string)
 
