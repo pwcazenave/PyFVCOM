@@ -217,7 +217,7 @@ class db_tide(validation_db):
     def get_nearest_gauge_id(self, lat, lon):
         sites_lat_lon = np.asarray(self.select_qry('sites', None, 'site_id, lat, lon'))
         min_dist = np.inf
-        closest_gauge_id = -999
+        closest_gauge_id = -999  # we should make this False or None or something
         for this_row in sites_lat_lon:
             this_dist = vincenty_distance([lat, lon], [this_row[1], this_row[2]])
             if this_dist < min_dist:
