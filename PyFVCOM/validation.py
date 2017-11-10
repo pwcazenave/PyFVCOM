@@ -12,20 +12,15 @@ from PyFVCOM.plot import Time, Plotter
 SQL_UNIX_EPOCH = dt.datetime(1970, 1, 1, 0, 0, 0)
 
 """
-Validation a
+Validation of model outputs against in situ data stored and extracted from a database.
 
-This also includes the code to build the databases of 
-
-
-
-
+This also includes the code to build the databases of time series data sets.
 
 """
 
-
-#########
-# Generic code to build database
 class validation_db():
+    """ Work with an SQLite database. """
+
     def __init__(self, db_name):
         if db_name[-3:] != '.db':
             db_name += '.db'
@@ -35,10 +30,36 @@ class validation_db():
         self.c = self.conn.cursor()
 
     def execute_sql(self, sql_str):
+        """
+        Execute the given SQL statement.
+
+        Parameters
+        ----------
+        sql_str : str
+            SQL statement to execute.
+
+        Returns
+        -------
+        results : np.ndarray
+            Data from the database which matches the SQL statement.
+        """
+
         self.c.execute(sql_str)
+
         return self.c.fetchall()
 
     def make_create_table_sql(self, table_name, col_list):
+        """
+        Create an SQL table if no such table exists.
+
+        Parameters
+        ----------
+        table_name : str
+            Table name to create.
+        col_list : list
+            List of column names to add to the table.
+
+        """
 
         create_str = 'CREATE TABLE IF NOT EXISTS ' + table_name + ' ('
         for this_col in col_list:
@@ -49,6 +70,17 @@ class validation_db():
         self.create_table_sql['create_' + table_name] = create_str
 
     def insert_into_table(self, table_name, data):
+        """
+        Insert data into a table.
+
+        Parameters
+        ----------
+        table_name : str
+            Table name into which to insert the given data.
+        data : np.ndarray
+            Data to insert into the database.
+
+        """
         no_rows = len(data)
         no_cols = len(data[0])
         qs_string = '('
@@ -64,6 +96,30 @@ class validation_db():
         self.conn.commit()
 
     def select_qry(self, table_name, where_str, select_str='*', order_by_str=None, inner_join_str=None, group_by_str=None):
+        """
+        Extract data from the database which matches the given SQL query.
+
+        Parameters
+        ----------
+        table_name : str
+            Table name to query.
+        where_str : str
+            Where statement.
+        select_str : str, optional
+            Optionally give a set of columns to select.
+        order_by_str : str, optional
+            Optionally give a set of columns by which to order the results.
+        inner_join_str : str, optional
+            Optionally give an inner join string.
+        group_by_str : str, optional
+            Optionally give a string by which to group the results.
+
+        Returns
+        -------
+        results : np.ndarray
+            The data which matches the given query.
+
+        """
         qry_string = 'select ' + select_str + ' from ' + table_name
         if inner_join_str:
             qry_string += ' inner join ' + inner_join_str
@@ -76,28 +132,44 @@ class validation_db():
         return self.execute_sql(qry_string)
 
     def close_conn(self):
+        """ Close the connection to the database. """
         self.conn.close()
 
 
 def dt_to_epochsec(time_to_convert):
+    """
+    Convert a datetime to our SQL database epoch.
+
+    Parameters
+    ----------
+    time_to_convert : datetime.datetime
+        Datetime to convert.
+
+    Returns
+    -------
+    epoched : int
+        Converted datetime (in seconds).
+
+    """
+
     return (time_to_convert - SQL_UNIX_EPOCH).total_seconds()
 
+
 def epochsec_to_dt(time_to_convert):
+    """
+
+    Parameters
+    ----------
+    time_to_convert : int
+        Seconds in the SQL database epoch.
+
+    Return
+    ------
+    unepoched : datetime.datetime.
+        Converted time.
+
+    """
     return SQL_UNIX_EPOCH + dt.timedelta(seconds=time_to_convert)
-
-
-#########
-# Comparison against BODC tidal gauge dataset
-"""
-
-
-Example:
-
-
-
-
-
-"""
 
 
 def plot_map(fvcom, tide_db_path, threshold=np.inf, legend=False, **kwargs):
@@ -194,14 +266,12 @@ def _make_normal_tide_series(h_series):
     return height_series
 
 
-"""
-Code to define the database object and to construct the original database
-
-"""
-
 class db_tide(validation_db):
+    """ Create a time series database and query it. """
+
     def make_bodc_tables(self):
-        # Make the complete set of empty tables for data to be inserted into (as defined in _add_sql_strings)
+        """ Make the complete set of empty tables for data to be inserted into (as defined in _add_sql_strings) """
+
         # Insert information into the error flags table
         self._add_sql_strings()
         for this_table, this_str in self.create_table_sql.items():
@@ -211,6 +281,15 @@ class db_tide(validation_db):
         self.insert_into_table('error_flags', error_data)
 
     def insert_tide_file(self, file_list):
+        """
+        Add data from a set of files to the database.
+
+        Parameters
+        ----------
+        file_list : list
+            List of file names.
+
+        """
         for this_file in file_list:
             print('Inserting data from file: ' + this_file)
             this_file_obj = bodc_annual_tide_file(this_file)
@@ -233,6 +312,24 @@ class db_tide(validation_db):
             self.insert_into_table('gauge_obs', table_data) 
 
     def get_tidal_series(self, station_identifier, start_date_dt=None, end_date_dt=None):
+        """
+        Extract a time series of tidal elevations for a given station.
+
+        Parameters
+        ----------
+        station_identifier : str
+            Database station identifier.
+        start_date_dt, end_date_dt : datetime.datetime, optional
+            Give start and/or end times to extract from the database. If omitted, all data are returned.
+
+        Returns
+        -------
+        dates : np.ndarray
+            Array of datetime objects.
+        data : np.ndarray
+            Surface elevation and residuals from the database for the given station.
+
+        """
         select_str = "time_int, elevation, elevation_flag"
         table_name = "gauge_obs as go"
         inner_join_str = "sites as st on st.site_id = go.site_id"
@@ -261,6 +358,22 @@ class db_tide(validation_db):
         return dates, data
 
     def get_gauge_locations(self, long_names=False):
+        """
+        Extract locations and names of the tide gauges from the database.
+
+        Parameters
+        ----------
+        long_names : bool, optional
+            If True, return the 'nice' long names rather than the station identifiers.
+
+        Returns
+        -------
+        tla_name : np.ndarray
+            List of tide gauge names.
+        lon_lat : np.ndarray
+            Positions of the gauges.
+
+        """
         gauge_site_data = np.asarray(self.select_qry('sites', None))
         if long_names:
             tla_name = gauge_site_data[:, 2]
@@ -282,6 +395,7 @@ class db_tide(validation_db):
         return int(closest_gauge_id), min_dist
 
     def _add_sql_strings(self):
+        """ Function to define the database structure. """
         bodc_tables = {'gauge_obs': ['site_id integer NOT NULL', 'time_int integer NOT NULL',
                                      'elevation real NOT NULL', 'elevation_flag integer', 'residual real', 'residual_flag integer',
                                      'PRIMARY KEY (site_id, time_int)', 'FOREIGN KEY (site_id) REFERENCES sites(site_id)',
@@ -399,8 +513,14 @@ model_file_list = [model_filestr_lambda(this_month) for this_month in available_
 """
 
 class db_wco(validation_db):
+    """ Work with an SQL database of data from PML's Western Channel Observatory. """
+
     def make_wco_tables(self):
-        # Make the complete set of empty tables for data to be inserted into (as defined in _add_sql_strings)
+        """
+        Make the complete set of empty tables for data to be inserted into (as defined in _add_sql_strings).
+
+        """
+
         # Insert information into the error flags table
         self._add_sql_strings()
         for this_table, this_str in self.create_table_sql.items():
