@@ -2692,7 +2692,7 @@ def getcrossectiontriangles(cross_section_pnts, trinodes, X, Y, dist_res):
             sample_nodes[this_ind] = -1
         else:
             all_dist = np.sqrt((X[red_node_ind] - this_point[0])**2 + (Y[red_node_ind] - this_point[1])**2)
-            sample_nodes[this_ind] = red_node_ind[np.where(all_dist==all_dist.min())]
+            sample_nodes[this_ind] = red_node_ind[np.where(all_dist==all_dist.min())[0][0]]
 
     return sub_samp, sample_cells, sample_nodes
 
