@@ -945,7 +945,6 @@ class CrossPlotter(Plotter):
 
         return np.ma.masked_invalid(cross_lr), cross_ud, np.ma.masked_invalid(cross_io)
 
-
     @staticmethod
     def _nan_extend(in_array):
         in_shape = in_array.shape
