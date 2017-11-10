@@ -1675,9 +1675,6 @@ def clip_domain(x, y, extents, noisy=False):
 
     return mask
 
-
-
-
 def find_connected_nodes(n, triangles):
     """
     Return the IDs of the nodes surrounding node number `n'.
@@ -2571,7 +2568,6 @@ def reduce_triangulation(tri, nodes):
 
     """
 
-
     reduced_tri = tri[np.all(np.isin(tri, nodes), axis=1), :]
 
     # remap nodes to a new index
@@ -2656,6 +2652,15 @@ def getcrossectiontriangles(cross_section_pnts, trinodes, X, Y, dist_res):
 
     tri_cross_log_2 = np.logical_and(tri_dist_1.min(1) < line_len_plus, tri_dist_2.min(1) < line_len_plus)
     tri_cross_log = np.logical_and(tri_cross_log_1, tri_cross_log_2)
+
+    # but as a fall back for short lines add back in triangles within a threshold of 100m
+    tri_cross_log_3 = np.logical_or(tri_dist_1.min(1) < 100, tri_dist_2.min(1) < 100)
+    tri_cross_log = np.logical_or(tri_cross_log, tri_cross_log_3)
+
+    # and add a buffer of one attached triangle
+    tri_cross_log_1 = np.any(np.isin(trinodes, np.unique(trinodes[tri_cross_log,:])), axis=1)
+    tri_cross_log = np.logical_or(tri_cross_log, tri_cross_log_1)    
+
 
     # then subsample the line at a given resolution and find which triangle each sample falls in (if at all)
     sub_samp = np.asarray([np.linspace(cross_section_x[0], cross_section_x[1], res), np.linspace(cross_section_y[0], cross_section_y[1], res)]).T
