@@ -797,7 +797,7 @@ class CrossPlotter(Plotter):
         if len(cross_section_points) > 1:
             for this_cross_section in cross_section_points[1:]:
                 [this_sub_samp, this_sample_cells, this_sample_nodes] = getcrossectiontriangles(this_cross_section, self.triangles, self.x, self.y, dist_res)
-                sub_samp = np.append(sub_samp, this_sub_samp)
+                sub_samp = np.vstack([sub_samp, this_sub_samp])
                 sample_cells = np.append(sample_cells, this_sample_cells)
                 sample_nodes = np.append(sample_nodes, this_sample_nodes)
 
