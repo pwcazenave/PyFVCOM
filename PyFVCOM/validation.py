@@ -219,9 +219,9 @@ def plot_map(fvcom, tide_db_path, threshold=np.inf, legend=False, **kwargs):
     plot.axes.plot(fx[fvcom_nodes], fy[fvcom_nodes], 'ro', markersize=3, zorder=202, label='Model')
     # Add the gauge locations.
     rx, ry = plot.m(gauge_locations[:, 0], gauge_locations[:, 1])
-    plot.axes.plot(*plot.m(gauge_locations[:, 0], gauge_locations[:, 1]), 'wo', label='Gauges')
+    plot.axes.plot(rx, ry, 'wo', label='Gauges')
     for xx, yy, name in zip(rx, ry, gauge_names[gauges_in_domain]):
-        plot.axes.text(*plot.m(xx, yy), name, fontsize=10, rotation=45, rotation_mode='anchor', zorder=203)
+        plot.axes.text(xx, yy, name, fontsize=10, rotation=45, rotation_mode='anchor', zorder=203)
 
     if legend:
         plot.axes.legend(numpoints=1, scatterpoints=1, ncol=2, loc='upper center', fontsize=10)
