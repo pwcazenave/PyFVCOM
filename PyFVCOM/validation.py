@@ -204,9 +204,12 @@ class db_tide(validation_db):
 
         return dates, data
 
-    def get_gauge_locations(self):
+    def get_gauge_locations(self, long_names=False):
         gauge_site_data = np.asarray(self.select_qry('sites', None))
-        tla_name = gauge_site_data[:,1]
+        if long_names:
+            tla_name = gauge_site_data[:, 2]
+        else:
+            tla_name = gauge_site_data[:, 1]
         lon_lat = np.asarray(gauge_site_data[:, 3:5], dtype=float)
         return tla_name, lon_lat
 
