@@ -384,16 +384,21 @@ class db_tide(validation_db):
 
         return tla_name, lon_lat
 
-    def get_nearest_gauge_id(self, lon, lat):
+    def get_nearest_gauge_id(self, lon, lat, threshold=np.inf):
         sites_lat_lon = np.asarray(self.select_qry('sites', None, 'site_id, lat, lon'))
         min_dist = np.inf
-        closest_gauge_id = -999  # we should make this False or None or something
+        closest_gauge_id = None  # we should make this False or None or something
         for this_row in sites_lat_lon:
             this_dist = vincenty_distance([lat, lon], [this_row[1], this_row[2]])
             if this_dist < min_dist:
                 min_dist = this_dist
                 closest_gauge_id = this_row[0]
-        return int(closest_gauge_id), min_dist
+        if min_dist >= threshold:
+            closest_gauge_id = None
+        else:
+            closest_gauge_id = int(closest_gauge_id)
+
+        return closest_gauge_id, min_dist
 
     def _add_sql_strings(self):
         """ Function to define the database structure. """
