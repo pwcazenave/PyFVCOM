@@ -196,10 +196,13 @@ class db_tide(validation_db):
         return_data = self.select_qry(table_name, where_str, select_str, order_by_str, inner_join_str)
         if not return_data:
             print('No data available')
+            dates, data = None, None
         else:
             return_data = np.asarray(return_data)
             date_list = [epochsec_to_dt(this_time) for this_time in return_data[:,0]]
-            return np.asarray(date_list), return_data[:,1:]
+            dates, data = np.asarray(date_list), return_data[:, 1:]
+
+        return dates, data
 
     def get_gauge_locations(self):
         gauge_site_data = np.asarray(self.select_qry('sites', None))
@@ -401,11 +404,14 @@ class db_wco(validation_db):
         return_data = self.select_qry(table_name, where_str, select_str, order_by_str, inner_join_str)
 
         if not return_data:
+            dates, data = None, None
             print('No data available')
         else:
             return_data = np.asarray(return_data)
             date_list = [epochsec_to_dt(this_time) for this_time in return_data[:,0]]
-            return np.asarray(date_list), return_data[:,1:]
+            dates, data = np.asarray(date_list), return_data[:,1:]
+
+        return dates, data
 
 class WCO_obs_file():
     def __init__(self, filename, depth=None):
