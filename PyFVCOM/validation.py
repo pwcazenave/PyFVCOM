@@ -9,7 +9,7 @@ from PyFVCOM.grid import vincenty_distance
 from PyFVCOM.read import FileReader
 from PyFVCOM.plot import Time, Plotter
 
-SQL_UNIX_EPOCH = dt.datetime(1970,1,1,0,0,0)
+SQL_UNIX_EPOCH = dt.datetime(1970, 1, 1, 0, 0, 0)
 
 """
 Validation a
@@ -63,7 +63,7 @@ class validation_db():
             self.c.execute('insert into ' + table_name + ' values ' + qs_string, data[0])
         self.conn.commit()
 
-    def select_qry(self, table_name, where_str, select_str = '*', order_by_str = None, inner_join_str = None, group_by_str = None):
+    def select_qry(self, table_name, where_str, select_str='*', order_by_str=None, inner_join_str=None, group_by_str=None):
         qry_string = 'select ' + select_str + ' from ' + table_name
         if inner_join_str is not None:
             qry_string += ' inner join ' + inner_join_str
@@ -204,7 +204,7 @@ class db_tide(validation_db):
     def get_gauge_locations(self):
         gauge_site_data = np.asarray(self.select_qry('sites', None))
         tla_name = gauge_site_data[:,1]
-        lon_lat = np.asarray(gauge_site_data[:,3:5], dtype=float)
+        lon_lat = np.asarray(gauge_site_data[:, 3:5], dtype=float)
         return tla_name, lon_lat
 
     def get_nearest_gauge_id(self, lat, lon):
@@ -219,28 +219,28 @@ class db_tide(validation_db):
         return int(closest_gauge_id), min_dist
 
     def _add_sql_strings(self):
-        bodc_tables = {'gauge_obs':['site_id integer NOT NULL', 'time_int integer NOT NULL',
-                                    'elevation real NOT NULL', 'elevation_flag integer', 'residual real', 'residual_flag integer',
-                                    'PRIMARY KEY (site_id, time_int)', 'FOREIGN KEY (site_id) REFERENCES sites(site_id)',
-                                    'FOREIGN KEY (elevation_flag) REFERENCES error_flags(flag_id)',
-                                    'FOREIGN KEY (residual_flag) REFERENCES error_flags(flag_id)'],
-                        'sites':['site_id integer NOT NULL', 'site_tla text NOT NULL', 'site_name text', 'lon real', 'lat real',
-                                    'other_stuff text', 'PRIMARY KEY (site_id)'],
-                        'error_flags':['flag_id integer NOT NULL', 'flag_code text', 'flag_description text']}
+        bodc_tables = {'gauge_obs': ['site_id integer NOT NULL', 'time_int integer NOT NULL',
+                                     'elevation real NOT NULL', 'elevation_flag integer', 'residual real', 'residual_flag integer',
+                                     'PRIMARY KEY (site_id, time_int)', 'FOREIGN KEY (site_id) REFERENCES sites(site_id)',
+                                     'FOREIGN KEY (elevation_flag) REFERENCES error_flags(flag_id)',
+                                     'FOREIGN KEY (residual_flag) REFERENCES error_flags(flag_id)'],
+                       'sites': ['site_id integer NOT NULL', 'site_tla text NOT NULL', 'site_name text', 'lon real', 'lat real',
+                                 'other_stuff text', 'PRIMARY KEY (site_id)'],
+                       'error_flags': ['flag_id integer NOT NULL', 'flag_code text', 'flag_description text']}
 
         for this_key, this_val in bodc_tables.items():
             self.make_create_table_sql(this_key, this_val)
 
 
 class bodc_annual_tide_file():
-    def __init__(self, file_name, header_length = 11):
-        '''
-        Assumptions: file name of the form yearTLA.txt,        , 
+    def __init__(self, file_name, header_length=11):
+        """
+        Assumptions: file name of the form yearTLA.txt
 
-        '''
+        """
         bodc_annual_tide_file._clean_tide_file(file_name, header_length)
         with open(file_name) as f:
-            header_lines= [next(f) for this_line in range(header_length)]    
+            header_lines = [next(f) for this_line in range(header_length)]
 
         for this_line in header_lines:
             if 'ongitude' in this_line:
