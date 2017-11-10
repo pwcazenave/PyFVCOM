@@ -213,7 +213,6 @@ class Time:
                                                 scale_units='inches',
                                                 scale=scale,
                                                 **kwargs)
-            # Only add the colour bar if we're not being told to hold and this is the first time we're plotting.
             divider = make_axes_locatable(self.axes)
             cax = divider.append_axes("right", size="3%", pad=0.1)
             self.colorbar = self.figure.colorbar(self.quiver_plot, cax=cax)
