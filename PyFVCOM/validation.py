@@ -214,7 +214,7 @@ class db_tide(validation_db):
 
         return tla_name, lon_lat
 
-    def get_nearest_gauge_id(self, lat, lon):
+    def get_nearest_gauge_id(self, lon, lat):
         sites_lat_lon = np.asarray(self.select_qry('sites', None, 'site_id, lat, lon'))
         min_dist = np.inf
         closest_gauge_id = -999  # we should make this False or None or something
