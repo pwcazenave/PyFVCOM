@@ -17,7 +17,7 @@ from PyFVCOM.coordinate import lonlat_from_utm, utm_from_lonlat
 from PyFVCOM.grid import unstructured_grid_volume, nodes2elems, vincenty_distance
 
 
-class FileReader:
+class FileReader(object):
     """ Load FVCOM model output.
 
     Class simplifies the preparation of FVCOM model output for analysis with PyFVCOM.
@@ -1037,7 +1037,7 @@ class FileReaderFromDict(FileReader):
                 self.dims.time = getattr(self.time, obj).shape
 
 
-class ncwrite():
+class ncwrite(object):
     """
     Save data in a dict to a netCDF file.
 
