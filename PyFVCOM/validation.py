@@ -886,7 +886,7 @@ class comp_data_filereader(comp_data):
                 model_depths = fvcom_data_reader.grid.siglay * fvcom_data_reader.grid.h * -1
 
                 for this_buoy in self.buoy_list:
-                    model_all_dicts[this_buoy] = {'dt_time':mod_times, 'temp':mod_t_vals, 'salinity':mod_s_vals}
+                    model_all_dicts[this_buoy] = {'dt_time': mod_times, 'temp': mod_t_vals, 'salinity': mod_s_vals}
 
                 first_file = False
             else:
