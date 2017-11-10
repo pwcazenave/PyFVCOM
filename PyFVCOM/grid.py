@@ -2294,7 +2294,7 @@ def unstructured_grid_volume(area, depth, surface_elevation, thickness, depth_in
     else:
         return depth_volume
 
-def unstructured_grid_depths(h , zeta, sigma):
+def unstructured_grid_depths(h , zeta, sigma, nan_invalid=False):
     """
     Calculate the depth seriex for cells in an unstructured grid.
 
@@ -2309,8 +2309,13 @@ def unstructured_grid_depths(h , zeta, sigma):
     allDepths : np.ndarray
     """
 
+    if nan_invalid:
+        invalid = -zeta > h
+        zeta[invalid] = np.NAN
+
     abs_water_depth = zeta + h
     allDepths = abs_water_depth[:,np.newaxis,:] * sigma[np.newaxis, :,:] + zeta[:, np.newaxis, :]
+    
     return allDepths
 
 def elems2nodes(elems, tri, nvert=None):
@@ -2692,7 +2697,7 @@ def getcrossectiontriangles(cross_section_pnts, trinodes, X, Y, dist_res):
             sample_nodes[this_ind] = -1
         else:
             all_dist = np.sqrt((X[red_node_ind] - this_point[0])**2 + (Y[red_node_ind] - this_point[1])**2)
-            sample_nodes[this_ind] = red_node_ind[np.where(all_dist==all_dist.min())]
+            sample_nodes[this_ind] = red_node_ind[np.where(all_dist==all_dist.min())[0][0]]
 
     return sub_samp, sample_cells, sample_nodes
 

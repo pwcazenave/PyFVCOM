@@ -799,9 +799,9 @@ class CrossPlotter(Plotter):
         [sub_samp, sample_cells, sample_nodes] = getcrossectiontriangles(cross_section_points[0], self.triangles, self.x, self.y, dist_res)
 
         if len(cross_section_points) > 1:
-            for this_cross_section in cross_section_points:
+            for this_cross_section in cross_section_points[1:]:
                 [this_sub_samp, this_sample_cells, this_sample_nodes] = getcrossectiontriangles(this_cross_section, self.triangles, self.x, self.y, dist_res)
-                sub_samp = np.append(sub_samp, this_sub_samp)
+                sub_samp = np.vstack([sub_samp, this_sub_samp])
                 sample_cells = np.append(sample_cells, this_sample_cells)
                 sample_nodes = np.append(sample_nodes, this_sample_nodes)
 
@@ -834,8 +834,8 @@ class CrossPlotter(Plotter):
             zeta = self.ds.data.zeta[:,self.sel_points]
 
 
-        depth_sel = -unstructured_grid_depths(h, zeta, siglay)
-        depth_sel_pcolor = -unstructured_grid_depths(h, zeta, siglev)
+        depth_sel = -unstructured_grid_depths(h, zeta, siglay, nan_invalid=True)
+        depth_sel_pcolor = -unstructured_grid_depths(h, zeta, siglev, nan_invalid=True)
 
         depth_sel = self._nan_extend(depth_sel)
         depth_sel_pcolor = self._nan_extend(depth_sel_pcolor)
@@ -850,7 +850,7 @@ class CrossPlotter(Plotter):
         self.cross_plot_y_pcolor = -depth_sel_pcolor[:,:,self.sample_points_ind_pcolor]
 
         # pre process the channel variables
-        chan_y_raw = np.min(self.cross_plot_y_pcolor, axis=1)[0,:]
+        chan_y_raw = np.nanmin(self.cross_plot_y_pcolor, axis=1)[-1,:]
         chan_x_raw = self.cross_plot_x_pcolor[-1,:]
         max_zeta = np.ceil(np.max(zeta))
         if np.any(np.isnan(chan_y_raw)):
@@ -875,8 +875,8 @@ class CrossPlotter(Plotter):
         else:
             plot_z = var
 
-        plot_x = np.ma.masked_invalid(self.cross_plot_x_pcolor).T
-        plot_y = np.ma.masked_invalid(self.cross_plot_y_pcolor[timestep,:,:]).T
+        plot_x = self.cross_plot_x_pcolor.T
+        plot_y = self.cross_plot_y_pcolor[timestep,:,:].T
 
         if self.vmin is None:
             self.vmin = np.nanmin(plot_z)
