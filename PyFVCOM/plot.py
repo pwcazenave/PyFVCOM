@@ -795,7 +795,7 @@ class CrossPlotter(Plotter):
         [sub_samp, sample_cells, sample_nodes] = getcrossectiontriangles(cross_section_points[0], self.triangles, self.x, self.y, dist_res)
 
         if len(cross_section_points) > 1:
-            for this_cross_section in cross_section_points:
+            for this_cross_section in cross_section_points[1:]:
                 [this_sub_samp, this_sample_cells, this_sample_nodes] = getcrossectiontriangles(this_cross_section, self.triangles, self.x, self.y, dist_res)
                 sub_samp = np.append(sub_samp, this_sub_samp)
                 sample_cells = np.append(sample_cells, this_sample_cells)
@@ -871,8 +871,8 @@ class CrossPlotter(Plotter):
         else:
             plot_z = var
 
-        plot_x = np.ma.masked_invalid(self.cross_plot_x_pcolor).T
-        plot_y = np.ma.masked_invalid(self.cross_plot_y_pcolor[timestep,:,:]).T
+        plot_x = self.cross_plot_x_pcolor.T
+        plot_y = self.cross_plot_y_pcolor[timestep,:,:].T
 
         if self.vmin is None:
             self.vmin = np.nanmin(plot_z)
