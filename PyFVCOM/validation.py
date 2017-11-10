@@ -385,6 +385,24 @@ class db_tide(validation_db):
         return tla_name, lon_lat
 
     def get_nearest_gauge_id(self, lon, lat, threshold=np.inf):
+        """
+        Get the ID of the gauge closest to the position given by `lon' and `lat'.
+
+        lon, lat : float
+            Position for which to search for the nearest tide gauge.
+
+        Returns
+        -------
+        closest_gauge_id : int
+            Database ID for the gauge closest to `lon' and `lat'.
+        min_dist : float
+            Distance in metres between `lon' and `lat' and the gauge.
+        threshold : float
+            Threshold distance in metres (inclusive) within which gauges must be from the given position. If no
+            gauges are found within this distance, the gauge ID is None.
+
+        """
+
         sites_lat_lon = np.asarray(self.select_qry('sites', None, 'site_id, lat, lon'))
         min_dist = np.inf
         closest_gauge_id = None  # we should make this False or None or something
