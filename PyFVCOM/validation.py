@@ -100,6 +100,62 @@ Example:
 """
 
 
+def plot_map(fvcom, tide_db_path, threshold=np.inf, legend=False, **kwargs):
+    """
+    Plot the tide gauges which fall within the model domain (in space and time) defined by the given FileReader object.
+
+    Parameters
+    ----------
+    fvcom : PyFVCOM.read.FileReader
+        FVCOM model data as a FileReader object.
+    tide_db_path : str
+        Path to the tidal database.
+    threshold : float, optional
+        Give a threshold distance (in spherical units) beyond which a gauge is considered too far away.
+    legend : bool, optional
+        Set to True to add a legend to the plot. Defaults to False.
+
+    Any remaining keyword arguments are passed to PyFVCOM.plot.Plotter.
+
+    Returns
+    -------
+    plot : PyFVCOM.plot.Plotter
+        The Plotter object instance for the map
+
+    """
+
+    tide_db = db_tide(tide_db_path)
+    gauge_names, gauge_locations = tide_db.get_gauge_locations(long_names=True)
+
+    gauges_in_domain = []
+    fvcom_nodes = []
+    for gi, gauge in enumerate(gauge_locations):
+        river_index = fvcom.closest_node(gauge, threshold=threshold)
+        if river_index:
+            gauge_id, gauge_dist  = tide_db.get_nearest_gauge_id(*gauge)
+            times, data = tide_db.get_tidal_series(gauge_id, np.min(fvcom.time.datetime), np.max(fvcom.time.datetime))
+            if not np.any(data):
+                continue
+
+            gauges_in_domain.append(gi)
+            fvcom_nodes.append(river_index)
+
+    plot = Plotter(fvcom, **kwargs)
+    fx, fy = plot.m(fvcom.grid.lon, fvcom.grid.lat)
+    plot.plot_field(-fvcom.grid.h)
+    plot.axes.plot(fx[fvcom_nodes], fy[fvcom_nodes], 'ro', markersize=3, zorder=202, label='Model')
+    # Add the gauge locations.
+    rx, ry = plot.m(gauge_locations[:, 0], gauge_locations[:, 1])
+    plot.axes.plot(*plot.m(gauge_locations[:, 0], gauge_locations[:, 1]), 'wo', label='Gauges')
+    for xx, yy, name in zip(rx, ry, gauge_names[gauges_in_domain]):
+        plot.axes.text(*plot.m(xx, yy), name, fontsize=10, rotation=45, rotation_mode='anchor', zorder=203)
+
+    if legend:
+        plot.axes.legend(numpoints=1, scatterpoints=1, ncol=2, loc='upper center', fontsize=10)
+
+    return plot
+
+
 def plot_tides(fvcom_file_str_list, db_name, plot_map=False, threshold=500):
     """
     Function description
