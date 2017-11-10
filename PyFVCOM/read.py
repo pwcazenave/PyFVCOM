@@ -219,11 +219,14 @@ class FileReader:
         return idem
 
     def _prep(self):
-        # Create empty object for the grid, dimension, data and time data.
-        self.grid = type('grid', (object,), {})()
+        # Create empty object for the grid, dimension, data and time data. This ought to be possible with nested
+        # classes, but I can't figure it out. That approach would also mean we can set __iter__ to make the object
+        # iterable without the need for obj_iter, which is a bit of a hack. It might also make FileReader object
+        # pickleable, meaning we can pass them with multiprocessing. Another day, perhaps.
+        self.data = type('data', (object,), {})()
         self.dims = type('dims', (object,), {})()
         self.atts = type('atts', (object,), {})()
-        self.data = type('data', (object,), {})()
+        self.grid = type('grid', (object,), {})()
         self.time = type('time', (object,), {})()
 
         # Add docstrings for the relevant objects.
