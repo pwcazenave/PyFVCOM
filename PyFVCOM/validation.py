@@ -207,6 +207,17 @@ class db_tide(validation_db):
         lon_lat = np.asarray(gauge_site_data[:,3:5], dtype=float)
         return tla_name, lon_lat
 
+    def get_nearest_gauge_id(self, lat, lon):
+        sites_lat_lon = np.asarray(self.select_qry('sites', None, 'site_id, lat, lon'))
+        min_dist = 9999999999999
+        closest_gauge_id = -999
+        for this_row in sites_lat_lon:
+            this_dist = vincenty_distance([lat, lon], [this_row[1], this_row[2]])
+            if this_dist < min_dist:
+                min_dist = this_dist
+                closest_gauge_id = this_row[0]
+        return int(closest_gauge_id), min_dist
+
     def _add_sql_strings(self):
         bodc_tables = {'gauge_obs':['site_id integer NOT NULL', 'time_int integer NOT NULL',
                                     'elevation real NOT NULL', 'elevation_flag integer', 'residual real', 'residual_flag integer',
