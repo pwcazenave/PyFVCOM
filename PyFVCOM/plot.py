@@ -830,8 +830,8 @@ class CrossPlotter(Plotter):
             zeta = self.ds.data.zeta[:,self.sel_points]
 
 
-        depth_sel = -unstructured_grid_depths(h, zeta, siglay)
-        depth_sel_pcolor = -unstructured_grid_depths(h, zeta, siglev)
+        depth_sel = -unstructured_grid_depths(h, zeta, siglay, nan_invalid=True)
+        depth_sel_pcolor = -unstructured_grid_depths(h, zeta, siglev, nan_invalid=True)
 
         depth_sel = self._nan_extend(depth_sel)
         depth_sel_pcolor = self._nan_extend(depth_sel_pcolor)
@@ -846,7 +846,7 @@ class CrossPlotter(Plotter):
         self.cross_plot_y_pcolor = -depth_sel_pcolor[:,:,self.sample_points_ind_pcolor]
 
         # pre process the channel variables
-        chan_y_raw = np.min(self.cross_plot_y_pcolor, axis=1)[0,:]
+        chan_y_raw = np.nanmin(self.cross_plot_y_pcolor, axis=1)[-1,:]
         chan_x_raw = self.cross_plot_x_pcolor[-1,:]
         max_zeta = np.ceil(np.max(zeta))
         if np.any(np.isnan(chan_y_raw)):
