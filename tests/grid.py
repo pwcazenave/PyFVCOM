@@ -251,13 +251,13 @@ class GridToolsTest(TestCase):
         dist = vincenty_distance(boston, newyork, miles=True)
         test.assert_almost_equal(185.414657, dist)
 
-    def test_haversine(self):
+    def test_haversine_distance(self):
         # Tests lifted from http://uk.mathworks.com/matlabcentral/fileexchange/27785
         test_positions = np.array(((-1.8494, 53.1472), (0.1406, 52.2044)))
-        known_good = np.array((170.2547, 170.2508, 170.2563))  # in kilometres
+        known_good = np.array((170.25629247849704))  # in kilometres
         known_good_miles = known_good * 0.621371  # distances in miles
-        result = haversize(test_positions[0], test_positions[1])
-        result_miles = haversize(test_positions[0], test_positions[1], miles=True)
+        result = haversine_distance(test_positions[0], test_positions[1])
+        result_miles = haversine_distance(test_positions[0], test_positions[1], miles=True)
         test.assert_equal(known_good, result)
         test.assert_equal(known_good_miles, result_miles)
 
