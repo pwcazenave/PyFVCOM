@@ -30,8 +30,8 @@ class StubFile():
         interval : float
             Interval (in days) for the netCDF time series.
         lon, lat : list-like
-            Arrays of the spherical node positions (element centres will be automatically calculated). Cartesian 
-            coordinates for the given `zone' (default: 30N) will be calculated automatically. 
+            Arrays of the spherical node positions (element centres will be automatically calculated). Cartesian
+            coordinates for the given `zone' (default: 30N) will be calculated automatically.
         triangles : list-like
             Triangulation table for the nodes in `lon' and `lat'. Must be zero-indexed.
 
@@ -326,8 +326,8 @@ class StubFile():
         self.ds.close()
 
     def create_variable(self, name, dimensions, type='f4', attributes=None):
-        """ 
-        Add a variable to the current netCDF object. 
+        """
+        Add a variable to the current netCDF object.
 
         Parameters
         ----------
@@ -339,7 +339,7 @@ class StubFile():
             Variable data type (defaults to 'f4').
         attributes: dict, optional
             Dictionary of attributes to add.
-            
+
         """
         array = self.ds.createVariable(name, type, dimensions)
         if attributes:

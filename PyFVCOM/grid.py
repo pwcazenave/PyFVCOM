@@ -1637,6 +1637,7 @@ def connectivity(p, t):
 
     return e, te, e2t, bnd
 
+
 def clip_domain(x, y, extents, noisy=False):
     """
     Function to find the indices for the positions in `x' and `y' which fall within the
@@ -1668,12 +1669,13 @@ def clip_domain(x, y, extents, noisy=False):
             (x <= extents[1]) *
             (y >= extents[2]) *
             (y <= extents[3]))[0]
-    
+
     if noisy:
         print('Subset contains {} points of {} total.'.format(len(mask),
                                                               len(x)))
 
     return mask
+
 
 def find_connected_nodes(n, triangles):
     """
@@ -2294,14 +2296,15 @@ def unstructured_grid_volume(area, depth, surface_elevation, thickness, depth_in
     else:
         return depth_volume
 
+
 def unstructured_grid_depths(h , zeta, sigma, nan_invalid=False):
     """
     Calculate the depth seriex for cells in an unstructured grid.
 
     Parameters
     ----------
-    h - water depth 
-    zeta - surface elevation time series 
+    h - water depth
+    zeta - surface elevation time series
     sigma - sigma level layer thickness, range 0-1 (siglev or siglay)
 
     Returns
@@ -2315,8 +2318,9 @@ def unstructured_grid_depths(h , zeta, sigma, nan_invalid=False):
 
     abs_water_depth = zeta + h
     allDepths = abs_water_depth[:,np.newaxis,:] * sigma[np.newaxis, :,:] + zeta[:, np.newaxis, :]
-    
+
     return allDepths
+
 
 def elems2nodes(elems, tri, nvert=None):
     """
@@ -2582,17 +2586,18 @@ def reduce_triangulation(tri, nodes):
 
     return reduced_tri
 
+
 def getcrossectiontriangles(cross_section_pnts, trinodes, X, Y, dist_res):
     """
     Subsamples the line defined by cross_section_pnts at the resolution dist_res on the grid defined by
-    the triangulation trinodes, X, Y. Returns the location of the sub sampled points (sub_samp), which 
+    the triangulation trinodes, X, Y. Returns the location of the sub sampled points (sub_samp), which
     triangle they are in (sample_cells) and their nearest nodes (sample_nodes).
 
 
     Parameters
     ----------
     cross_section_pnts : 2x2 list_like
-        The two ends of the cross section line. 
+        The two ends of the cross section line.
 
     trinodes : list-like
         Unstructured grid triangulation table
@@ -2613,7 +2618,7 @@ def getcrossectiontriangles(cross_section_pnts, trinodes, X, Y, dist_res):
 
     sample_nodes : N list
         The nodes nearest the subsample points. -1 indicates that the point is outside the grid.
-    
+
 
     Example
     -------
@@ -2635,7 +2640,7 @@ def getcrossectiontriangles(cross_section_pnts, trinodes, X, Y, dist_res):
     # first reduce the number of points to consider by only including triangles which cross the line through the two points
     tri_X = X[trinodes]
     tri_Y = Y[trinodes]
-    
+
     tri_cross_log_1_1 = np.logical_or(np.logical_and(tri_X.min(1) < min(cross_section_x), tri_X.max(1) > max(cross_section_x)),
                             np.logical_and(tri_Y.min(1) < min(cross_section_y), tri_Y.max(1) > max(cross_section_y)))
 
@@ -2644,7 +2649,7 @@ def getcrossectiontriangles(cross_section_pnts, trinodes, X, Y, dist_res):
 
     tri_cross_log_1_2 = np.any(np.logical_and(np.logical_and(tri_X < max(cross_section_x), tri_X > min(cross_section_x)), np.logical_and(tri_Y < max(cross_section_y), tri_Y > min(cross_section_y))), axis = 1)
     tri_cross_log_1 = np.logical_or(tri_cross_log_1_1, tri_cross_log_1_2)
-    
+
     # and add a buffer of one attached triangle
     tri_cross_log_1 = np.any(np.isin(trinodes, np.unique(trinodes[tri_cross_log_1,:])), axis=1)
 
@@ -2664,7 +2669,7 @@ def getcrossectiontriangles(cross_section_pnts, trinodes, X, Y, dist_res):
 
     # and add a buffer of one attached triangle
     tri_cross_log_1 = np.any(np.isin(trinodes, np.unique(trinodes[tri_cross_log,:])), axis=1)
-    tri_cross_log = np.logical_or(tri_cross_log, tri_cross_log_1)    
+    tri_cross_log = np.logical_or(tri_cross_log, tri_cross_log_1)
 
 
     # then subsample the line at a given resolution and find which triangle each sample falls in (if at all)
@@ -2700,6 +2705,7 @@ def getcrossectiontriangles(cross_section_pnts, trinodes, X, Y, dist_res):
             sample_nodes[this_ind] = red_node_ind[np.where(all_dist==all_dist.min())[0][0]]
 
     return sub_samp, sample_cells, sample_nodes
+
 
 def isintriange(tri_x, tri_y, point_x, point_y):
     # Returns a boolean as to whether the point (point_x, point_y) is within the triangle (tri_x, tri_y)
