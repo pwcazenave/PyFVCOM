@@ -2682,7 +2682,7 @@ def getcrossectiontriangles(cross_section_pnts, trinodes, X, Y, dist_res):
         this_tri_ind = 0
         while in_this_tri is False:
             this_tri = red_tri_list_ind[this_tri_ind]
-            is_in = isintriange(tri_X[this_tri,:], tri_Y[this_tri,:], this_point[0], this_point[1])
+            is_in = isintriangle(tri_X[this_tri,:], tri_Y[this_tri,:], this_point[0], this_point[1])
 
             if is_in:
                 sample_cells[this_ind] = this_tri
@@ -2707,7 +2707,7 @@ def getcrossectiontriangles(cross_section_pnts, trinodes, X, Y, dist_res):
     return sub_samp, sample_cells, sample_nodes
 
 
-def isintriange(tri_x, tri_y, point_x, point_y):
+def isintriangle(tri_x, tri_y, point_x, point_y):
     # Returns a boolean as to whether the point (point_x, point_y) is within the triangle (tri_x, tri_y)
     # method from http://totologic.blogspot.co.uk/2014/01/accurate-point-in-triangle-test.html without edge test
     # used in getcrossectiontriangles
