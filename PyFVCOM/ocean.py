@@ -61,7 +61,7 @@ Provides functions:
       definition.
     - stokes : calculate the Stokes parameter.
     - dissipation : calculate the tidal dissipation from a current speed.
-    - calculate_rhum : calculate relative humidity from dew point temperature
+    - rhum : calculate relative humidity from dew point temperature
       and ambient temperature.
 
 Pierre Cazenave (Plymouth Marine Laboratory)
@@ -179,9 +179,9 @@ def _tests():
     print('Tidal dissipation\nKnown good:\t0.0400390625\ndissipation():\t{}'.format(res_dissipation))
 
     valid_rhum = np.array((487.36529085, 270.83391406, 160.16590946, 100.0, 65.47545095, 44.70251971, 31.67003471))
-    rhum = calculate_rhum(test_dew, test_temp)
-    for hum in zip(rhum, valid_rhum):
-        print('Relative humidity:\tvalid: {:.3f}\tcalculate_rhum: {:.3f}\t(difference = {:.3f})'.format(hum[1], hum[0], np.diff(hum)[0]))
+    calculated_rhum = rhum(test_dew, test_temp)
+    for hum in zip(calculated_rhum, valid_rhum):
+        print('Relative humidity:\tvalid: {:.3f}\trhum: {:.3f}\t(difference = {:.3f})'.format(hum[1], hum[0], np.diff(hum)[0]))
 
 
 def pressure2depth(p, lat):
@@ -1239,7 +1239,7 @@ def dissipation(rho, U, Cd=2.5e-3):
     return D
 
 
-def calculate_rhum(dew, temperature):
+def rhum(dew, temperature):
     """
     Calculate relative humidity from dew temperature and ambient temperature.
 
