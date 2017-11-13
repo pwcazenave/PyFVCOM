@@ -2529,14 +2529,20 @@ def haversine_distance(point1, point2, miles=False):
 
     """
 
-    R = 6371000                        # Earth's mean radius in metres
+    # Convert all decimal degree inputs to radians.
+    point1 = np.deg2rad(point1)
+    point2 = np.deg2rad(point2)
+
+    R = 6371                           # Earth's mean radius in kilometres
     delta_lat = point2[1] - point1[1]  # difference in latitude
     delta_lon = point2[0] - point1[0]  # difference in longitude
+    print(delta_lon, delta_lat)
     # Magic follows
-    a = np.sin(delta_lat / 2)**2 + np.cos(lat1) * np.cos(lat2) * np.sin(delta_lon / 2)**2
-    c = 2 * np.arctan2(sqrt(a), sqrt(1 - a))
-    distance = R * c                   # distance in metres
-    distance /= 1000                   # distance in kilometres
+    a = np.sin(delta_lat / 2)**2 + np.cos(point1[1]) * np.cos(point2[1]) * np.sin(delta_lon / 2)**2
+    print(a)
+    c = 2 * np.arctan2(np.sqrt(a), np.sqrt(1 - a))
+    print(c)
+    distance = R * c                   # distance in kilometres
 
     if miles:
         distance *= 0.621371
