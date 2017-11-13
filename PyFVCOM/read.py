@@ -850,7 +850,7 @@ class FileReader(object):
             beyond threshold.
         vincenty : bool, optional
             Use vincenty distance calculation. Allows specification of point in lat/lon but threshold in metres
- 
+
         Returns
         -------
         index : int, None
@@ -868,7 +868,7 @@ class FileReader(object):
             grid_pts = np.asarray([self.grid.lonc, self.grid.latc]).T
             where_pt_rep = np.tile(np.asarray(where), (len(self.grid.lonc),1))
             dist = np.asarray([vincenty_distance(pt_1, pt_2) for pt_1, pt_2 in zip(grid_pts, where_pt_rep)])*1000
-        
+
         index = np.argmin(dist)
         if threshold:
             if dist.min() < threshold:
