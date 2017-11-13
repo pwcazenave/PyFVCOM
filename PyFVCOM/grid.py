@@ -2297,7 +2297,7 @@ def unstructured_grid_volume(area, depth, surface_elevation, thickness, depth_in
         return depth_volume
 
 
-def unstructured_grid_depths(h , zeta, sigma, nan_invalid=False):
+def unstructured_grid_depths(h, zeta, sigma, nan_invalid=False):
     """
     Calculate the depth time series for cells in an unstructured grid.
 
