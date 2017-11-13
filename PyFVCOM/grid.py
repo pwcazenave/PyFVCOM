@@ -2426,7 +2426,22 @@ def vincenty_distance(point1, point2, miles=False):
     Vincenty's formula (inverse method) to calculate the distance (in
     kilometers or miles) between two points on the surface of a spheroid
 
+    Parameters
+    ----------
+    point1 : list, tuple, np.ndarray
+        Longitude and latitude for the start.
+    point2 : list, tuple, np.ndarray
+        Longitude and latitude for the end.
+    miles : bool
+        Set to True to return the distance in miles. Defaults to False (kilometres).
+
+    Returns
+    -------
+    distance : float
+        Distance between point1 and point2 in kilometres.
+
     """
+
     a = 6378137  # meters
     f = 1 / 298.257223563
     b = 6356752.314245  # meters; b = (1 - f)a
