@@ -2557,14 +2557,14 @@ def shape_coefficients(xc, yc, nbe, isbce):
 
 def reduce_triangulation(tri, nodes):
     """
-    Returns the triangulation for a subset of grid nodes. 
+    Returns the triangulation for a subset of grid nodes.
 
     Parameters
     ----------
     tri : np.ndarray Nx3
-        Grid triangulation (e.g. triangle as returned from read_fvcom_mesh
-    nodes : np.ndarray M 
-        Selected subset of nodes for re triangulating
+        Grid triangulation (e.g. triangle as returned from read_fvcom_mesh)
+    nodes : np.ndarray M
+        Selected subset of nodes for re-triangulating
 
     Returns
     -------
