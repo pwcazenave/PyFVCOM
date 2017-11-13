@@ -100,8 +100,8 @@ class OceanToolsTest(TestCase):
         res_dissipation = dissipation(self.rho, self.U)
         test.assert_equal(res_dissipation, test_dissipation)
 
-    def test_calculate_rhum(self):
+    def test_rhum(self):
         """ Relative humidity from dew temperature and air temperature """
         test_rhum = np.array((487.36529085, 270.83391406, 160.16590946, 100.0, 65.47545095, 44.70251971, 31.67003471))
-        res_rhum = calculate_rhum(self.dew, self.temp)
+        res_rhum = rhum(self.dew, self.temp)
         test.assert_almost_equal(res_rhum, test_rhum)

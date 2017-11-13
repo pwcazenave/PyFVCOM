@@ -30,8 +30,8 @@ class StubFile():
         interval : float
             Interval (in days) for the netCDF time series.
         lon, lat : list-like
-            Arrays of the spherical node positions (element centres will be automatically calculated). Cartesian 
-            coordinates for the given `zone' (default: 30N) will be calculated automatically. 
+            Arrays of the spherical node positions (element centres will be automatically calculated). Cartesian
+            coordinates for the given `zone' (default: 30N) will be calculated automatically.
         triangles : list-like
             Triangulation table for the nodes in `lon' and `lat'. Must be zero-indexed.
 
@@ -326,8 +326,8 @@ class StubFile():
         self.ds.close()
 
     def create_variable(self, name, dimensions, type='f4', attributes=None):
-        """ 
-        Add a variable to the current netCDF object. 
+        """
+        Add a variable to the current netCDF object.
 
         Parameters
         ----------
@@ -339,7 +339,7 @@ class StubFile():
             Variable data type (defaults to 'f4').
         attributes: dict, optional
             Dictionary of attributes to add.
-            
+
         """
         array = self.ds.createVariable(name, type, dimensions)
         if attributes:
@@ -675,60 +675,3 @@ def ind2sub(array_shape, index):
 
     return np.unravel_index(index, array_shape)
 
-
-def principal_axis(u, v):
-    """
-    For a given pair of velocity components, compute the principal axis.
-
-    Parameters
-    ----------
-    u, v : np.ndarray
-        Velocity vectors ([x, time] or [x, depth, time])
-
-    Returns
-    -------
-    principal_axis : float
-        Principal axis in degrees.
-    axis_variance : float
-        Variance of the principal axis (in degrees).
-
-    Notes
-    -----
-    This is slightly modified from PySeidon.utilities.BP_tools.
-
-    """
-
-    # Create velocity matrix
-    U = np.vstack((u, v)).T
-    # Eliminate NaN values
-    U = U[~np.any(np.isnan(U), axis=1), ...]  # any time with a NaN in it
-    # Convert matrix to deviate from
-    rep = np.tile(np.mean(U, axis=0), [len(U), 1])
-    U -= rep  # remove mean velocity so everything is centred about zero
-    # Compute covariance matrix
-    R = np.dot(U.T, U) / (len(U) - 1)
-
-    # Calculate Eigenvalues and Eigenvectors for covariance matrix
-    R[np.where(np.isnan(R))] = 0.0
-    R[np.where(np.isinf(R))] = 0.0
-    R[np.where(np.isneginf(R))] = 0.0
-    lamb, V = np.linalg.eig(R)
-    # Sort Eigenvalues in descending order so that major axis is given by first Eigenvector
-    # Sort in descending order with indices
-    ilamb = sorted(range(len(lamb)), key=lambda k: lamb[k], reverse=True)
-    lamb = sorted(lamb, reverse=True)
-    # Reconstruct the Eigenvalue matrix.
-    lamb = np.diag(lamb)
-    # Reorder the Eigenvectors.
-    V = V[:, ilamb]
-
-    # Rotation angle of major axis in radians relative to cartesian coordinates
-    # ra = np.arctan2(V[0,1], V[1,1])
-    ra = atan2(V[0,1], V[1,1])
-    # Express principal axis in compass coordinates.
-    # TR: still not sure here
-    principal_axis = np.rad2deg(-ra)
-    # Variance captured by principal axis.
-    axis_variance = np.diag(lamb[0]) / np.trace(lamb)
-
-    return principal_axis, axis_variance
