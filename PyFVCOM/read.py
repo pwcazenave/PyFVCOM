@@ -17,7 +17,7 @@ from PyFVCOM.coordinate import lonlat_from_utm, utm_from_lonlat
 from PyFVCOM.grid import unstructured_grid_volume, nodes2elems, vincenty_distance
 
 
-class FileReader:
+class FileReader(object):
     """ Load FVCOM model output.
 
     Class simplifies the preparation of FVCOM model output for analysis with PyFVCOM.
@@ -91,7 +91,7 @@ class FileReader:
             variables = [variables]
         self._variables = variables
 
-        # Prepare this object with all the objects we'll need later on (data, dims, time, grid).
+        # Prepare this object with all the objects we'll need later on (data, dims, time, grid, atts).
         self._prep()
 
         # Get the things to iterate over for a given object. This is a bit hacky, but until or if I create separate
@@ -219,11 +219,14 @@ class FileReader:
         return idem
 
     def _prep(self):
-        # Create empty object for the grid, dimension, data and time data.
-        self.grid = type('grid', (object,), {})()
+        # Create empty object for the grid, dimension, data and time data. This ought to be possible with nested
+        # classes, but I can't figure it out. That approach would also mean we can set __iter__ to make the object
+        # iterable without the need for obj_iter, which is a bit of a hack. It might also make FileReader object
+        # pickleable, meaning we can pass them with multiprocessing. Another day, perhaps.
+        self.data = type('data', (object,), {})()
         self.dims = type('dims', (object,), {})()
         self.atts = type('atts', (object,), {})()
-        self.data = type('data', (object,), {})()
+        self.grid = type('grid', (object,), {})()
         self.time = type('time', (object,), {})()
 
         # Add docstrings for the relevant objects.
@@ -238,8 +241,7 @@ class FileReader:
                             "are automatically created."
 
     def _load_time(self):
-        """ Populate a time object with additional useful time representations from the netCDF time data.
-        """
+        """ Populate a time object with additional useful time representations from the netCDF time data. """
 
         time_variables = ('time', 'Times', 'Itime', 'Itime2')
         got_time, missing_time = [], []
@@ -435,7 +437,7 @@ class FileReader:
 
         # Add compatibility for FVCOM3 (these variables are only specified on the element centres in FVCOM4+ output
         # files). Only create the element centred values if we have the same number of nodes as in the triangulation.
-        # This does not occur if we've been asked to extract a different set of nodes and elements, for whatever
+        # This does not occur if we've been asked to extract an incompatible set of nodes and elements, for whatever
         # reason (e.g. testing). We don't add attributes for the data if we've created it as doing so is a pain.
         for var in 'h_center', 'siglay_center', 'siglev_center':
             try:
@@ -447,7 +449,11 @@ class FileReader:
                 setattr(self.atts, var, attributes)
             except KeyError:
                 if self.grid.nv.max() == len(self.grid.x):
-                    setattr(self.grid, var, nodes2elems(getattr(self.grid, var.split('_')[0]), self.grid.triangles))
+                    try:
+                        setattr(self.grid, var, nodes2elems(getattr(self.grid, var.split('_')[0]), self.grid.triangles))
+                    except IndexError:
+                        # Maybe the array's the wrong way around. Flip it and try again.
+                        setattr(self.grid, var, nodes2elems(getattr(self.grid, var.split('_')[0]).T, self.grid.triangles))
 
         # Convert the given W/E/S/N coordinates into node and element IDs to subset.
         if self._bounding_box:
@@ -537,16 +543,23 @@ class FileReader:
                     _temp = np.zeros(var_shape)
                 setattr(self.grid, var, _temp)
 
-        # Check if we've been given vertical dimensions to subset in too, and if so, do that.
+        # Check if we've been given vertical dimensions to subset in too, and if so, do that. Check we haven't
+        # already done this if the 'node' and 'nele' sections above first.
         for var in 'siglay', 'siglev', 'siglay_center', 'siglev_center':
             short_dim = copy.copy(var)
+            # Assume we need to subset this one unless 'node' or 'nele' are missing from self._dims. If they're in
+            # self._dims, we've already subsetted in the 'node' and 'nele' sections above, so doing it again here
+            # would fail.
+            subset_variable = True
+            if 'node' in self._dims or 'nele' in self._dims:
+                subset_variable = False
             # Strip off the _center to match the dimension name.
             if short_dim.endswith('_center'):
                 short_dim = short_dim.split('_')[0]
             if short_dim in self._dims:
-                if short_dim in self.ds.variables[var].dimensions:
+                if short_dim in self.ds.variables[var].dimensions and subset_variable:
                     _temp = getattr(self.grid, var)[self._dims[short_dim], ...]
-                setattr(self.grid, var, _temp)
+                    setattr(self.grid, var, _temp)
 
         # Check ranges and if zero assume we're missing that particular type, so convert from the other accordingly.
         self.grid.lon_range = np.ptp(self.grid.lon)
@@ -950,7 +963,81 @@ def MFileReader(fvcom, *args, **kwargs):
     return FVCOM
 
 
-class ncwrite():
+class FileReaderFromDict(FileReader):
+    """
+    Convert an ncread dictionary into a (sparse) FileReader object. This does a passable job of impersonating a full
+    FileReader object if you've loaded data with ncread.
+
+    """
+
+    def __init__(self, fvcom):
+        """
+        Will initialise a FileReader object from an ncread dictionary. Some attempt is made to fill in missing
+        information (dimensions mainly).
+
+        Parameters
+        ----------
+        fvcom : dict
+            Output of ncread.
+
+        """
+
+        # Prepare this object with all the objects we'll need later on (data, dims, time, grid, atts).
+        self._prep()
+
+        self.obj_iter = lambda x: [a for a in dir(x) if not a.startswith('__')]
+
+        grid_names = ('lon', 'lat', 'lonc', 'latc', 'nv',
+                      'h', 'h_center',
+                      'nbe', 'ntsn', 'nbsn', 'ntve', 'nbve',
+                      'art1', 'art2', 'a1u', 'a2u',
+                      'siglay', 'siglev')
+        time_names = ('time', 'Times', 'datetime', 'Itime', 'Itime2')
+
+        for key in fvcom:
+            if key in grid_names:
+                setattr(self.grid, key, fvcom[key])
+            elif key in time_names:
+                setattr(self.time, key, fvcom[key])
+            else:  # assume data.
+                setattr(self.data, key, fvcom[key])
+        # Make some dimensions
+        self.dims.three = 3
+        self.dims.four = 4
+        self.dims.maxnode = 11
+        self.dims.maxelem = 9
+        # This is a little repetitive (each dimension can be set multiple times), but it has simplicity to its
+        # advantage.
+        for obj in self.obj_iter(self.data):
+            if obj in ('ua', 'va'):
+                try:
+                    self.dims.time, self.dims.nele = getattr(self.data, obj).shape
+                except ValueError:
+                    # Assume we've got a single position.
+                    self.dims.time = getattr(self.data, obj).shape[0]
+                    self.dims.nele = 1
+            elif obj in ('temp', 'salinity'):
+                try:
+                    self.dims.time, self.dims.siglay, self.dims.node = getattr(self.data, obj).shape
+                except ValueError:
+                    # Assume we've got a single position
+                    self.dims.time, self.dims.siglay = getattr(self.data, obj).shape[:2]
+                    self.dims.node = 1
+                self.dims.siglev = self.dims.siglay + 1
+            elif obj in ['zeta']:
+                try:
+                    self.dims.time, self.dims.node = getattr(self.data, obj).shape
+                except ValueError:
+                    # Assume we've got a single position
+                    self.dims.time = getattr(self.data, obj).shape[0]
+                    self.dims.node = 1
+            elif obj in ('Times'):
+                self.dims.time, self.dims.DateStrLen = getattr(self.time, obj).shape
+            elif obj in ('time', 'Itime', 'Itime2', 'datetime'):
+                self.dims.time = getattr(self.time, obj).shape
+
+
+class ncwrite(object):
     """
     Save data in a dict to a netCDF file.
 

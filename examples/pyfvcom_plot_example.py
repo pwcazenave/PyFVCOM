@@ -9,9 +9,9 @@ get_ipython().magic('matplotlib inline')
 # In[2]:
 
 # Load an FVCOM model output and plot a surface.
-from PyFVCOM.read_results import FileReader
+from PyFVCOM.read import FileReader
 from PyFVCOM.plot import Plotter, Time
-from PyFVCOM.tide_tools import make_water_column
+from PyFVCOM.tide import make_water_column
 from cmocean import cm
 import matplotlib.pyplot as plt
 

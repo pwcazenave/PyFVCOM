@@ -12,6 +12,7 @@ import numpy as np
 import math
 from matplotlib.tri.triangulation import Triangulation
 from matplotlib.tri import CubicTriInterpolator
+import matplotlib.path as mplPath
 from warnings import warn
 from functools import partial
 
@@ -1636,11 +1637,12 @@ def connectivity(p, t):
 
     return e, te, e2t, bnd
 
-
 def clip_domain(x, y, extents, noisy=False):
     """
     Function to find the indices for the positions in `x' and `y' which fall within the
-    bounding box defined in extents.
+    bounding box or polygon defined in extents. For a bounding box supply an array or list
+    of size (4,) with (xmin, xmax, ymin, ymax). For a polygon provide a list of x,y points
+    or an Nx2 array of x,y points.
 
     Parameters
     ----------
@@ -1648,7 +1650,8 @@ def clip_domain(x, y, extents, noisy=False):
         x and y coordinate arrays.
     extents : ndarray or list
         minimum and maximum of the extents of the x and y coordinates for the
-        bounding box (xmin, xmax, ymin, ymax).
+        bounding box (xmin, xmax, ymin, ymax) or for a polygon a list or array
+        of x,y coordinates
 
     Returns
     -------
@@ -1657,18 +1660,20 @@ def clip_domain(x, y, extents, noisy=False):
         of the positions in pos which fall within the bounding box.
 
     """
-
-    mask = np.where((x >= extents[0]) *
+    if np.asarray(extents).shape != (4,):
+        poly_path = mplPath.Path(extents)
+        mask = np.where(np.asarray(poly_path.contains_points(np.asarray([x,y]).T)))[0]
+    else:
+        mask = np.where((x >= extents[0]) *
             (x <= extents[1]) *
             (y >= extents[2]) *
             (y <= extents[3]))[0]
-
+    
     if noisy:
         print('Subset contains {} points of {} total.'.format(len(mask),
                                                               len(x)))
 
     return mask
-
 
 def find_connected_nodes(n, triangles):
     """
@@ -2289,7 +2294,7 @@ def unstructured_grid_volume(area, depth, surface_elevation, thickness, depth_in
     else:
         return depth_volume
 
-def unstructured_grid_depths(h , zeta, siglev):
+def unstructured_grid_depths(h , zeta, sigma, nan_invalid=False):
     """
     Calculate the depth seriex for cells in an unstructured grid.
 
@@ -2297,17 +2302,20 @@ def unstructured_grid_depths(h , zeta, siglev):
     ----------
     h - water depth 
     zeta - surface elevation time series 
-    siglev - sigma level layer thickness, range 0-1
+    sigma - sigma level layer thickness, range 0-1 (siglev or siglay)
 
     Returns
     -------
     allDepths : np.ndarray
     """
-    siglevDiff = np.abs(np.diff(siglev, axis=0))
-    tt, xx = zeta.shape  # time, node
-    ll = siglev.shape[0] - 1  # layers = levels - 1
-    allThickness = ((h + np.tile(zeta, [ll, 1, 1]).transpose(1, 0, 2)) * np.tile(siglevDiff, [tt, 1, 1]))
-    allDepths = np.flip(-np.cumsum(allThickness, axis=1) + h, axis=1)
+
+    if nan_invalid:
+        invalid = -zeta > h
+        zeta[invalid] = np.NAN
+
+    abs_water_depth = zeta + h
+    allDepths = abs_water_depth[:,np.newaxis,:] * sigma[np.newaxis, :,:] + zeta[:, np.newaxis, :]
+    
     return allDepths
 
 def elems2nodes(elems, tri, nvert=None):
@@ -2565,7 +2573,6 @@ def reduce_triangulation(tri, nodes):
 
     """
 
-
     reduced_tri = tri[np.all(np.isin(tri, nodes), axis=1), :]
 
     # remap nodes to a new index
@@ -2637,6 +2644,9 @@ def getcrossectiontriangles(cross_section_pnts, trinodes, X, Y, dist_res):
 
     tri_cross_log_1_2 = np.any(np.logical_and(np.logical_and(tri_X < max(cross_section_x), tri_X > min(cross_section_x)), np.logical_and(tri_Y < max(cross_section_y), tri_Y > min(cross_section_y))), axis = 1)
     tri_cross_log_1 = np.logical_or(tri_cross_log_1_1, tri_cross_log_1_2)
+    
+    # and add a buffer of one attached triangle
+    tri_cross_log_1 = np.any(np.isin(trinodes, np.unique(trinodes[tri_cross_log_1,:])), axis=1)
 
     # and reduce further by requiring every node to be within 1 line length + 10%
     line_len = np.sqrt((cross_section_x[0] - cross_section_x[1])**2 + (cross_section_y[0] - cross_section_y[1])**2)
@@ -2647,6 +2657,15 @@ def getcrossectiontriangles(cross_section_pnts, trinodes, X, Y, dist_res):
 
     tri_cross_log_2 = np.logical_and(tri_dist_1.min(1) < line_len_plus, tri_dist_2.min(1) < line_len_plus)
     tri_cross_log = np.logical_and(tri_cross_log_1, tri_cross_log_2)
+
+    # but as a fall back for short lines add back in triangles within a threshold of 100m
+    tri_cross_log_3 = np.logical_or(tri_dist_1.min(1) < 100, tri_dist_2.min(1) < 100)
+    tri_cross_log = np.logical_or(tri_cross_log, tri_cross_log_3)
+
+    # and add a buffer of one attached triangle
+    tri_cross_log_1 = np.any(np.isin(trinodes, np.unique(trinodes[tri_cross_log,:])), axis=1)
+    tri_cross_log = np.logical_or(tri_cross_log, tri_cross_log_1)    
+
 
     # then subsample the line at a given resolution and find which triangle each sample falls in (if at all)
     sub_samp = np.asarray([np.linspace(cross_section_x[0], cross_section_x[1], res), np.linspace(cross_section_y[0], cross_section_y[1], res)]).T
@@ -2678,7 +2697,7 @@ def getcrossectiontriangles(cross_section_pnts, trinodes, X, Y, dist_res):
             sample_nodes[this_ind] = -1
         else:
             all_dist = np.sqrt((X[red_node_ind] - this_point[0])**2 + (Y[red_node_ind] - this_point[1])**2)
-            sample_nodes[this_ind] = red_node_ind[np.where(all_dist==all_dist.min())]
+            sample_nodes[this_ind] = red_node_ind[np.where(all_dist==all_dist.min())[0][0]]
 
     return sub_samp, sample_cells, sample_nodes
 

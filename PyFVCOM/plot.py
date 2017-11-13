@@ -11,6 +11,7 @@ from datetime import datetime
 
 from PyFVCOM.coordinate import lonlat_from_utm
 from PyFVCOM.read import FileReader
+from PyFVCOM.grid import getcrossectiontriangles, unstructured_grid_depths
 
 import numpy as np
 
@@ -220,7 +221,6 @@ class Time:
                                                 scale_units='inches',
                                                 scale=scale,
                                                 **kwargs)
-            # Only add the colour bar if we're not being told to hold and this is the first time we're plotting.
             divider = make_axes_locatable(self.axes)
             cax = divider.append_axes("right", size="3%", pad=0.1)
             self.colorbar = self.figure.colorbar(self.quiver_plot, cax=cax)
@@ -294,7 +294,7 @@ class Time:
             self.surface_plot
 
 
-class Plotter:
+class Plotter():
     """ Create plot objects based on output from the FVCOM.
 
     Class to assist in the creation of plots and animations based on output
@@ -319,7 +319,7 @@ class Plotter:
                  extents=None, vmin=None, vmax=None, mask=None, res='c', fs=10,
                  title=None, cmap='viridis', figsize=(10., 10.), axis_position=None,
                  edgecolors='none', s_stations=20, s_particles=20, linewidth=1.0,
-                 tick_inc=None, cb_label=None, norm=None, m=None):
+                 tick_inc=None, cb_label=None, extend='neither', norm=None, m=None):
         """
         Parameters:
         -----------
@@ -385,6 +385,10 @@ class Plotter:
         cb_label : str, optional
             Set the colour bar label.
 
+        extend : str, optional
+            Set the colour bar extension ('neither', 'both', 'min', 'max').
+            Defaults to 'neither').
+
         norm : matplotlib.colors.Normalize, optional
             Normalise the luminance to 0,1. For example, use from
             matplotlib.colors.LogNorm to do log plots of fields.
@@ -419,6 +423,7 @@ class Plotter:
         self.linewidth = linewidth
         self.tick_inc = tick_inc
         self.cb_label = cb_label
+        self.extend = extend
         self.norm = norm
         self.m = m
 
@@ -437,9 +442,9 @@ class Plotter:
             self._FileReader = True
 
         # Initialise the figure
-        self.__init_figure()
+        self._init_figure()
 
-    def __init_figure(self):
+    def _init_figure(self):
         # Read in required grid variables
         if self._FileReader:
             self.n_nodes = getattr(self.ds.dims, 'node')
@@ -513,6 +518,10 @@ class Plotter:
             self.m.drawparallels(parallels, labels=[1, 0, 0, 0], fontsize=self.fs, linewidth=0, ax=self.axes)
             self.m.drawmeridians(meridians, labels=[0, 0, 0, 1], fontsize=self.fs, linewidth=0, ax=self.axes)
 
+    def replot(self):
+        self.axes.cla()
+        self._init_figure()
+
     def plot_field(self, field):
         """ Map the given field.
 
@@ -552,7 +561,7 @@ class Plotter:
         # Add colorbar scaled to axis width
         divider = make_axes_locatable(self.axes)
         cax = divider.append_axes("right", size="5%", pad=0.05)
-        self.cbar = self.figure.colorbar(self.tripcolor_plot, cax=cax)
+        self.cbar = self.figure.colorbar(self.tripcolor_plot, cax=cax, extend=self.extend)
         self.cbar.ax.tick_params(labelsize=self.fs)
         if self.cb_label:
             self.cbar.set_label(self.cb_label)
@@ -719,6 +728,259 @@ class Plotter:
     def close(self):
         """ Close the current figure. """
         plt.close(self.figure)
+
+
+class CrossPlotter(Plotter):
+    """ Create plot objects based on output from the FVCOM.
+
+    Class to assist in the creation of cross section plots of FVCOM data
+
+    Provides
+    --------
+
+    cross_section_init(cross_section_points, dist_res) -
+        Initialises the cross section working out the time varying y coordinates and wetting and drying.
+        cross_section_points - list of 2x2 arrays defining the cross section (piecewise lines)
+        dist_res - resolution to sample the cross section at
+
+    plot_pcolor_field(var, timestep) -
+        Plot pcolor of variable at given timestep index
+        var - string of variable name
+        timestep - integer timestep index
+
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> import PyFVCOM as pf
+    >>> import matplotlib.pyplot as plt
+    >>> filestr = '/data/euryale2/scratch/mbe/Models_2/FVCOM/tamar/output/depth_tweak2_phys_only/2006/03/tamar_v2_0001.nc'
+    >>> filereader = pf.read.FileReader(filestr)
+    >>> cross_points = [np.asarray([[413889.37304891, 5589079.54545454], [415101.00156087, 5589616.47727273]])]
+    >>> c_plot = pf.plot.CrossPlotter(filereader, cmap='bwr', vmin=5, vmax=10)
+    >>> c_plot.cross_section_init(cross_points, dist_res=5)
+    >>> c_plot.plot_pcolor_field('temp',150)
+    >>> plt.show()
+
+
+    TO DO
+    -----
+    Currently only works for scalar variables, want to get it working for vectors to do u/v/w plots
+    Add quiver plots
+    Sort colorbars
+    Sort left hand channel justification for multiple channels.
+    Error handling for no wet/dry, no land
+    Plus a lot of other stuff. And tidy it up.
+
+    Notes
+    -----
+    Only works with FileReader data. No plans to change this.
+
+    """
+
+    def _init_figure(self):
+        if self._FileReader:
+            self.nv = self.ds.grid.nv
+            self.x = self.ds.grid.x
+            self.y = self.ds.grid.y
+        else:
+            print('Only implemented for file reader input')
+            raise NotImplementedError
+
+        if self.nv.min() != 1:
+            self.nv -= self.nv.min()
+
+        self.triangles = self.nv.transpose() - 1
+
+        if self.figure is None:
+            figsize = (cm2inch(self.figsize[0]), cm2inch(self.figsize[1]))
+            self.figure = plt.figure(figsize=figsize)
+            self.figure.set_facecolor('white')
+
+        if not self.axes:
+            self.axes = self.figure.add_subplot(1, 1, 1)
+            if self.axis_position:
+                self.axes.set_position(self.axis_position)
+
+        if self.title:
+            self.axes.set_title(self.title)
+
+    def cross_section_init(self, cross_section_points, dist_res = 50, variable_at_cells=False):
+        # sample the cross section
+        [sub_samp, sample_cells, sample_nodes] = getcrossectiontriangles(cross_section_points[0], self.triangles, self.x, self.y, dist_res)
+
+        if len(cross_section_points) > 1:
+            for this_cross_section in cross_section_points[1:]:
+                [this_sub_samp, this_sample_cells, this_sample_nodes] = getcrossectiontriangles(this_cross_section, self.triangles, self.x, self.y, dist_res)
+                sub_samp = np.vstack([sub_samp, this_sub_samp])
+                sample_cells = np.append(sample_cells, this_sample_cells)
+                sample_nodes = np.append(sample_nodes, this_sample_nodes)
+
+        if variable_at_cells:
+            self.sample_points = sample_cells
+        else:
+            self.sample_points = sample_nodes
+        self.sub_samp = sub_samp
+
+        self.sel_points = np.asarray(np.unique(self.sample_points[self.sample_points!=-1]), dtype=int)
+        sample_points_ind = np.zeros(len(self.sample_points))
+        for this_ind, this_point in enumerate(self.sel_points):
+            sample_points_ind[self.sample_points == this_point] = this_ind
+        sample_points_ind[self.sample_points == -1] = len(self.sel_points)
+        self.sample_points_ind = np.asarray(sample_points_ind, dtype=int)
+
+        if not hasattr(self.ds.data, 'zeta'):
+            self.ds.load_data(['zeta'])
+
+        if variable_at_cells:
+            siglay = self.ds.grid.siglay_center[:,self.sel_points]
+            siglev = self.ds.grid.siglev_center[:,self.sel_points]
+            h = self.ds.grid.h_center[self.sel_points]
+            zeta = np.mean(self.ds.data.zeta[:,self.ds.grid.nv -1], axis=1)[:,self.sel_points]
+
+        else:
+            siglay = self.ds.grid.siglay[:,self.sel_points]
+            siglev = self.ds.grid.siglev[:,self.sel_points]
+            h = self.ds.grid.h[self.sel_points]
+            zeta = self.ds.data.zeta[:,self.sel_points]
+
+
+        depth_sel = -unstructured_grid_depths(h, zeta, siglay, nan_invalid=True)
+        depth_sel_pcolor = -unstructured_grid_depths(h, zeta, siglev, nan_invalid=True)
+
+        depth_sel = self._nan_extend(depth_sel)
+        depth_sel_pcolor = self._nan_extend(depth_sel_pcolor)
+
+        # set up the x and y for the plots
+        self.cross_plot_x = np.tile(np.arange(0, len(self.sample_points)), [depth_sel.shape[1], 1])*dist_res + dist_res*1/2
+        self.cross_plot_x_pcolor = np.tile(np.arange(0, len(self.sample_points)+1), [depth_sel_pcolor.shape[1], 1])*dist_res
+
+        self.cross_plot_y = -depth_sel[:,:,self.sample_points_ind]
+        insert_ind = np.min(np.where(self.sample_points_ind != np.max(self.sample_points_ind))[0])
+        self.sample_points_ind_pcolor = np.insert(self.sample_points_ind, insert_ind, self.sample_points_ind[insert_ind])
+        self.cross_plot_y_pcolor = -depth_sel_pcolor[:,:,self.sample_points_ind_pcolor]
+
+        # pre process the channel variables
+        chan_y_raw = np.nanmin(self.cross_plot_y_pcolor, axis=1)[-1,:]
+        chan_x_raw = self.cross_plot_x_pcolor[-1,:]
+        max_zeta = np.ceil(np.max(zeta))
+        if np.any(np.isnan(chan_y_raw)):
+            chan_y_raw[np.min(np.where(~np.isnan(chan_y_raw)))] = max_zeta # bodge to get left bank adjacent
+            chan_y_raw[np.isnan(chan_y_raw)] = max_zeta
+        self.chan_x, self.chan_y = self._chan_corners(chan_x_raw, chan_y_raw)
+
+        # sort out wetting and drying nodes
+        if variable_at_cells:
+            self.ds.load_data(['wet_cells'])
+            self.wet_points_data = np.asarray(self.ds.data.wet_cells[:,self.sel_points], dtype=bool)
+        else:
+            self.ds.load_data(['wet_nodes'])
+            self.wet_points_data = np.asarray(self.ds.data.wet_nodes[:,self.sel_points], dtype=bool)
+
+        self.ylim_vals = [np.floor(np.nanmin(self.cross_plot_y_pcolor)), np.ceil(np.nanmax(self.cross_plot_y_pcolor)) + 1]
+        self.xlim_vals = [np.nanmin(self.cross_plot_x_pcolor), np.nanmax(self.cross_plot_x_pcolor)]
+
+    def plot_pcolor_field(self, var, timestep):
+        if isinstance(var, str):
+            plot_z = self._var_prep(var, timestep).T
+        else:
+            plot_z = var
+
+        plot_x = self.cross_plot_x_pcolor.T
+        plot_y = self.cross_plot_y_pcolor[timestep,:,:].T
+
+        if self.vmin is None:
+            self.vmin = np.nanmin(plot_z)
+        if self.vmax is None:
+            self.vmax = np.nanmax(plot_z)
+
+        for this_node in self.sel_points:
+            choose_horiz = np.asarray(self.sample_points == this_node, dtype=bool)
+            choose_horiz = np.asarray(np.where(self.sample_points == this_node)[0], dtype=int)
+            choose_horiz_extend = np.asarray(np.append(choose_horiz, np.max(choose_horiz) +1), dtype=int)
+
+            y_uniform = np.tile(np.median(plot_y[choose_horiz_extend,:], axis=0), [len(choose_horiz_extend),1])
+            pc = self.axes.pcolormesh(plot_x[choose_horiz_extend,:], y_uniform,
+                                        plot_z[choose_horiz,:], cmap=self.cmap, vmin=self.vmin, vmax=self.vmax)
+
+        self.axes.plot(self.chan_x, self.chan_y, linewidth=2, color='black')
+        self.figure.colorbar(pc)
+        self.axes.set_ylim(self.ylim_vals)
+        self.axes.set_xlim(self.xlim_vals)
+
+    def plot_quiver(self, timestep, u_str='u', v_str='v', w_str='ww', w_factor=1):
+        raw_cross_u = self._var_prep(u_str, timestep)
+        raw_cross_v = self._var_prep(v_str, timestep)
+        raw_cross_w = self._var_prep(w_str, timestep)
+
+        cross_u, cross_v, cross_io = self._uvw_rectify(raw_cross_u, raw_cross_v, raw_cross_w)
+
+        plot_x = np.ma.masked_invalid(self.cross_plot_x).T
+        plot_y = np.ma.masked_invalid(self.cross_plot_y[timestep,:,:]).T
+
+        self.plot_pcolor_field(cross_io.T, timestep)
+        self.axes.quiver(plot_x, plot_y, cross_u.T, cross_v.T*w_factor)
+
+    def _var_prep(self, var, timestep):
+        self.ds.load_data([var], start=timestep, end=timestep+1)
+        var_sel = np.squeeze(getattr(self.ds.data, var))[..., self.sel_points]
+
+        this_step_wet_points = np.asarray(self.wet_points_data[timestep,:], dtype=bool)
+        var_sel[:, ~this_step_wet_points] = np.NAN
+        self.var_sel = var_sel
+        var_sel_ext = self._nan_extend(var_sel)
+
+        cross_plot_z = var_sel_ext[:, self.sample_points_ind]
+
+        return np.ma.masked_invalid(cross_plot_z)
+
+    def _uvw_rectify(self, u_field, v_field, w_field):
+        cross_lr = np.empty(u_field.shape)
+        cross_io = np.empty(v_field.shape)
+        cross_ud = w_field
+
+        pll_vec = np.empty([len(self.sub_samp), 2])
+        for this_ind, (point_1, point_2) in enumerate(zip(self.sub_samp[0:-2], self.sub_samp[2:])):
+            # work out pll vectors
+            this_pll_vec = np.asarray([point_2[0] - point_1[0], point_2[1] - point_1[1]])
+            pll_vec[this_ind + 1,:] = this_pll_vec/np.sqrt(this_pll_vec[0]**2 + this_pll_vec[1]**2)
+
+        pll_vec[0] = pll_vec[1]
+        pll_vec[-1] = pll_vec[-2]
+
+        for this_ind, this_samp in enumerate(zip(u_field, v_field)):
+            # dot product for parallel component
+            cross_lr[this_ind, :] = np.asarray([np.dot(this_uv, this_pll) for this_uv, this_pll in zip(np.asarray(this_samp).T, pll_vec)])
+            # cross product for normal component
+            cross_io[this_ind, :] = np.asarray([np.cross(this_uv, this_pll) for this_uv, this_pll in zip(np.asarray(this_samp).T, pll_vec)])
+
+        return np.ma.masked_invalid(cross_lr), cross_ud, np.ma.masked_invalid(cross_io)
+
+    @staticmethod
+    def _nan_extend(in_array):
+        in_shape = in_array.shape
+        if len(in_shape) == 3:
+            nan_ext = np.empty([in_shape[0],in_shape[1],1])
+        elif len(in_shape)==2:
+            nan_ext = np.empty([in_shape[0],1])
+
+        nan_ext[:] = np.NAN
+        return np.append(in_array, nan_ext, axis=len(in_shape)-1)
+
+    @staticmethod
+    def _chan_corners(chan_x, chan_y):
+        new_chan_x = [chan_x[0]]
+        new_chan_y = [chan_y[0]]
+
+        for this_ind, this_y in enumerate(chan_y[1:]):
+            if this_y != chan_y[this_ind] and not np.isnan(this_y) and not np.isnan(chan_y[this_ind]):
+                new_chan_x.append(chan_x[this_ind])
+                new_chan_y.append(this_y)
+
+            new_chan_x.append(chan_x[this_ind +1])
+            new_chan_y.append(this_y)
+
+        return np.asarray(new_chan_x), np.asarray(new_chan_y)
 
 
 def cm2inch(value):

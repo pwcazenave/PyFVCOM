@@ -6,6 +6,7 @@
 *.swo
 .nfs*
 .idea
+*.pyc
 
 # Installation directories and PyPI junk
 build
