@@ -2297,19 +2297,23 @@ def unstructured_grid_volume(area, depth, surface_elevation, thickness, depth_in
         return depth_volume
 
 
-def unstructured_grid_depths(h , zeta, sigma, nan_invalid=False):
+def unstructured_grid_depths(h, zeta, sigma, nan_invalid=False):
     """
-    Calculate the depth seriex for cells in an unstructured grid.
+    Calculate the depth time series for cells in an unstructured grid.
 
     Parameters
     ----------
-    h - water depth
-    zeta - surface elevation time series
-    sigma - sigma level layer thickness, range 0-1 (siglev or siglay)
+    h : np.ndarray
+        Water depth
+    zeta : np.ndarray
+        Surface elevation time series
+    sigma : np.ndarray
+        Sigma level layer thickness, range 0-1 (siglev or siglay)
 
     Returns
     -------
     allDepths : np.ndarray
+        Time series of model depths.
     """
 
     if nan_invalid:
@@ -2317,7 +2321,7 @@ def unstructured_grid_depths(h , zeta, sigma, nan_invalid=False):
         zeta[invalid] = np.NAN
 
     abs_water_depth = zeta + h
-    allDepths = abs_water_depth[:,np.newaxis,:] * sigma[np.newaxis, :,:] + zeta[:, np.newaxis, :]
+    allDepths = abs_water_depth[:, np.newaxis,:] * sigma[np.newaxis, :,:] + zeta[:, np.newaxis, :]
 
     return allDepths
 
