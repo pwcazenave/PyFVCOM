@@ -14,7 +14,7 @@ from datetime import datetime, timedelta
 from netCDF4 import Dataset, MFDataset, num2date, date2num
 
 from PyFVCOM.coordinate import lonlat_from_utm, utm_from_lonlat
-from PyFVCOM.grid import unstructured_grid_volume, nodes2elems, vincenty_distance
+from PyFVCOM.grid import unstructured_grid_volume, nodes2elems, vincenty_distance, haversine_distance
 
 
 class FileReader(object):
@@ -782,7 +782,7 @@ class FileReader(object):
             self.load_time()
             return np.argmin(np.abs(self.time.datetime - when))
 
-    def closest_node(self, where, cartesian=False, threshold=None, vincenty=False):
+    def closest_node(self, where, cartesian=False, threshold=None, vincenty=False, haversine=False):
         """
         Find the index of the closest node to the supplied position (x, y). Set `cartesian' to True for cartesian
         coordinates (defaults to spherical).
@@ -798,8 +798,10 @@ class FileReader(object):
             the coordinates in `where', unless using lat/lon and vincenty when it is in metres. Return None when
             beyond threshold.
         vincenty : bool, optional
-            Use vincenty distance calculation. Allows specification of point in lat/lon but threshold in metres 
-        
+            Use vincenty distance calculation. Allows specification of point in lat/lon but threshold in metres.
+        haversine : bool, optional
+            Use the simpler but much faster Haversine distance calculation. Allows specification of point in lat/lon but threshold in metres.
+
         Returns
         -------
         index : int, None
@@ -808,16 +810,20 @@ class FileReader(object):
 
         """
 
-        if not vincenty:
+        if not vincenty or not haversine:
             if cartesian:
                 x, y = self.grid.x, self.grid.y
             else:
                 x, y = self.grid.lon, self.grid.lat
-            dist = np.sqrt((x - where[0])**2 + (y - where[1])**2)        
-        else:
+            dist = np.sqrt((x - where[0])**2 + (y - where[1])**2)
+        elif vincenty:
             grid_pts = np.asarray([self.grid.lon, self.grid.lat]).T
             where_pt_rep = np.tile(np.asarray(where), (len(self.grid.lon),1))
             dist = np.asarray([vincenty_distance(pt_1, pt_2) for pt_1, pt_2 in zip(grid_pts, where_pt_rep)])*1000
+        elif haversine:
+            grid_pts = np.asarray([self.grid.lon, self.grid.lat]).T
+            where_pt_rep = np.tile(np.asarray(where), (len(self.grid.lon),1))
+            dist = np.asarray([haversine_distance(pt_1, pt_2) for pt_1, pt_2 in zip(grid_pts, where_pt_rep)])*1000
         index = np.argmin(dist)
         if threshold:
             if dist.min() < threshold:
