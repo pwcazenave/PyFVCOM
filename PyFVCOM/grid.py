@@ -2429,9 +2429,9 @@ def vincenty_distance(point1, point2, miles=False):
     Parameters
     ----------
     point1 : list, tuple, np.ndarray
-        Longitude and latitude for the start.
+        Decimal degree longitude and latitude for the start.
     point2 : list, tuple, np.ndarray
-        Longitude and latitude for the end.
+        Decimal degree longitude and latitude for the end.
     miles : bool
         Set to True to return the distance in miles. Defaults to False (kilometres).
 
@@ -2516,9 +2516,9 @@ def haversine_distance(point1, point2, miles=False):
     Parameters
     ----------
     point1 : list, tuple, np.ndarray
-        Longitude and latitude for the start.
+        Decimal degree longitude and latitude for the start.
     point2 : list, tuple, np.ndarray
-        Longitude and latitude for the end.
+        Decimal degree longitude and latitude for the end.
     miles : bool
         Set to True to return the distance in miles. Defaults to False (kilometres).
 
