@@ -31,9 +31,9 @@ PyFVCOM.grid.OSGB36_to_WGS84). The old LL_to_UTM and UTM_to_LL functions are
 deprecated (in favour of lonlat_from_utm and utm_from_lonlat, respectively).
 
 - PyFVCOM.current has a new Residual class which calculates residual vectors
-(that is the difference between the two) from two time series of currents. We
-mostly use this to identify the non-tidal currents by comparing modelled
-currents with currents predicted from tidal constituents.
+(that is the difference) from two time series of currents. We mostly use this
+to identify the non-tidal currents by comparing modelled currents with
+currents predicted from tidal constituents.
 
 - PyFVCOM.process_tools has had most of its outdated CO2 functions removed and
 the remaining function has been subsumed into PyFVCOM.current.
