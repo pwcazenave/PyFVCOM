@@ -2506,6 +2506,44 @@ def vincenty_distance(point1, point2, miles=False):
     return round(s, 6)
 
 
+def haversine_distance(point1, point2, miles=False):
+    """
+    Haversine function to calculate first order distance measurement. Assumes
+    spherical Earth surface. Converted from MATLAB function:
+
+    http://www.mathworks.com/matlabcentral/fileexchange/27785
+
+    Parameters
+    ----------
+    point1 : list, tuple, np.ndarray
+        Longitude and latitude for the start.
+    point2 : list, tuple, np.ndarray
+        Longitude and latitude for the end.
+    miles : bool
+        Set to True to return the distance in miles. Defaults to False (kilometres).
+
+    Returns
+    -------
+    distance : np.ndarray
+        Distance between point1 and point2 in kilometres.
+
+    """
+
+    R = 6371000                        # Earth's mean radius in metres
+    delta_lat = point2[1] - point1[1]  # difference in latitude
+    delta_lon = point2[0] - point1[0]  # difference in longitude
+    # Magic follows
+    a = np.sin(delta_lat / 2)**2 + np.cos(lat1) * np.cos(lat2) * np.sin(delta_lon / 2)**2
+    c = 2 * np.arctan2(sqrt(a), sqrt(1 - a))
+    distance = R * c                   # distance in metres
+    distance /= 1000                   # distance in kilometres
+
+    if miles:
+        distance *= 0.621371
+
+    return distance
+
+
 def shape_coefficients(xc, yc, nbe, isbce):
     """
     This function is used to calculate the coefficients for a linear function on the x-y plane:
