@@ -21,6 +21,7 @@ ocean_tools   -> ocean
 read_results  -> read
 stats_tools   -> stats
 tide_tools    -> tide
+              -> validation
 
 Major changes
 -------------
@@ -49,6 +50,11 @@ the remaining function has been subsumed into PyFVCOM.current.
     - control_volumes
     - node_control_area
     - element_control_area
+    - vincenty_distance
+    - haversine_distance
+    - shape_coefficients
+    - getcrosssectiontriangles
+    - isintriangle
 
 - PyFVCOM.grid is also the new home of:
     - unstructured_grid_volume (formerly in PyFVCOM.process_results)
@@ -88,6 +94,9 @@ reflect its function and make the name shorted.
 
 - PyFVCOM.tide has also lost julian_day, gregorian_date, common_time and overlap
 to PyFVCOM.utilities.
+
+- PyFVCOM.validation has been added and provides some tools for comparing
+FVCOM model output with observations.
 
 - Finally, the top-level tests subdirectory contains some nosetests for most of
 the toolbox. The aim is that all new functions have corresponding tests added
