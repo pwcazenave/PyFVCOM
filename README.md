@@ -50,29 +50,29 @@ We recommend Jupyter (formerly iPython) for interactive use of PyFVCOM (and pyth
 Provides
 --------
 
-* buoy - read data from an SQLite3 database of BODC buoy data.
+* `buoy` - read data from an SQLite3 database of BODC buoy data.
     - `get_buoy_metadata`
     - `get_buoy_data`
 
-* coast - work with coastlines
+* `coast` - work with coastlines
     - `read_ESRI_shapefile`
     - `read_arc_MIKE`
     - `read_CST`
     - `write_CST`
 
-* ctd - interrogate an SQLite data base of CTD casts.
+* `ctd` - interrogate an SQLite data base of CTD casts.
     - `get_CTD_metadata`
     - `get_CTD_data`
     - `get_ferrybox_data`
 
-* current - tools related to processing currents
+* `current` - tools related to processing currents
     - `Residuals`
     - `scalar2vector`
     - `vector2scalar`
     - `residual_flow`
     - `vorticity`
 
-* grid - tools to parse SMS, DHI MIKE, GMSH and FVCOM unstructured grids. Also provides functionality to add coasts and clip triangulations to a given domain. Functions to parse FVCOM river files are also included, as is a function to resample an unstructured grid onto a regular grid (without interpolation, simply finding the nearest point within a threshold distance). This module contains a number of generally useful tools related to unstructured grids (node and element lookups, grid connectivity, grid metrics, area tools).
+* `grid` - tools to parse SMS, DHI MIKE, GMSH and FVCOM unstructured grids. Also provides functionality to add coasts and clip triangulations to a given domain. Functions to parse FVCOM river files are also included, as is a function to resample an unstructured grid onto a regular grid (without interpolation, simply finding the nearest point within a threshold distance). This module contains a number of generally useful tools related to unstructured grids (node and element lookups, grid connectivity, grid metrics, area tools).
     - `read_sms_mesh`
     - `read_fvcom_mesh`
     - `read_mike_mesh`
@@ -106,12 +106,12 @@ Provides
     - `elems2nodes`
     - `nodes2elems`
 
-* coordinate - convert from spherical and cartesian (UTM) coordinates. Also work with British National Grid coordinates and spherical.
+* `coordinate` - convert from spherical and cartesian (UTM) coordinates. Also work with British National Grid coordinates and spherical.
     - `utm_from_lonlat`
     - `lonlat_from_utm`
     - `british_national_grid_to_lonlat`
 
-* ocean - a number of routines to convert between combinations of temperature, salinity, pressure, depth and density.
+* `ocean` - a number of routines to convert between combinations of temperature, salinity, pressure, depth and density.
     - `pressure2depth`
     - `depth2pressure`
     - `dT_adiab_sw`
@@ -133,7 +133,7 @@ Provides
     - `dissipation`
     - `calculate_rhum`
 
-* plot - plotting class for FVCOM outputs.
+* `plot` - plotting class for FVCOM outputs.
     - `Time.plot_line`
     - `Time.plot_scatter`
     - `Time.plot_quiver`
@@ -144,7 +144,7 @@ Provides
     - `Plotter.remove_line_plots`
     - `Plotter.plot_scatter`
 
-* read - parse the netCDF model output and extract a subset of the variables.
+* `read` - parse the netCDF model output and extract a subset of the variables.
     - `FileReader`
     - `MFileReader`
     - `ncwrite`
@@ -152,13 +152,13 @@ Provides
     - `read_probes`
     - `write_probes`
 
-* stats - some basic statistics tools.
+* `stats` - some basic statistics tools.
     - `calculate_regression`
     - `calculate_polyfit`
     - `rmse`
     - `calculate_coefficient`
 
-* tidal_ellipse - Python version of the Tidal Ellipse MATLAB toolbox <http://woodshole.er.usgs.gov/operations/sea-mat/tidal_ellipse-html/index.html>.
+* `tidal_ellipse` - Python version of the Tidal Ellipse MATLAB toolbox <http://woodshole.er.usgs.gov/operations/sea-mat/tidal_ellipse-html/index.html>.
     - `ap2ep`
     - `ep2ap`
     - `cBEpm`
@@ -168,7 +168,7 @@ Provides
     - `do_the_plot`
     - `prep_plot`
 
-* tide - tools to use and abuse tidal data from an SQLite database of tidal time series.
+* `tide` - tools to use and abuse tidal data from an SQLite database of tidal time series.
     - `add_harmonic_results`
     - `get_observed_data`
     - `get_observed_metadata`
@@ -180,7 +180,7 @@ Provides
     - `get_harmonics_POLPRED`
     - `make_water_column`
 
-* utilities - general utilities (including time utilities)
+* `utilities` - general utilities (including time utilities)
     - `StubFile`
     - `fix_range`
     - `julian_day`
