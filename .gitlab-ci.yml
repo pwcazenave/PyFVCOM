@@ -1,0 +1,13 @@
+image: pmlmodelling/gitlab-ci-host
+
+stages:
+  - build
+
+job1:
+  only:
+    - master
+    - dev
+  stage: build
+  script:
+    - python3 --version
+    - nosetests-3.4 tests/*
