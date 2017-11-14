@@ -51,26 +51,26 @@ Provides
 --------
 
 * buoy - read data from an SQLite3 database of BODC buoy data.
-    - get_buoy_metadata
-    - get_buoy_data
+    - `get_buoy_metadata`
+    - `get_buoy_data`
 
 * coast - work with coastlines
-    - read_ESRI_shapefile
-    - read_arc_MIKE
-    - read_CST
-    - write_CST
+    - `read_ESRI_shapefile`
+    - `read_arc_MIKE`
+    - `read_CST`
+    - `write_CST`
 
 * ctd - interrogate an SQLite data base of CTD casts.
-    - get_CTD_metadata
-    - get_CTD_data
-    - get_ferrybox_data
+    - `get_CTD_metadata`
+    - `get_CTD_data`
+    - `get_ferrybox_data`
 
 * current - tools related to processing currents
-    - Residuals
-    - scalar2vector
-    - vector2scalar
-    - residual_flow
-    - vorticity
+    - `Residuals`
+    - `scalar2vector`
+    - `vector2scalar`
+    - `residual_flow`
+    - `vorticity`
 
 * grid - tools to parse SMS, DHI MIKE, GMSH and FVCOM unstructured grids. Also provides functionality to add coasts and clip triangulations to a given domain. Functions to parse FVCOM river files are also included, as is a function to resample an unstructured grid onto a regular grid (without interpolation, simply finding the nearest point within a threshold distance). This module contains a number of generally useful tools related to unstructured grids (node and element lookups, grid connectivity, grid metrics, area tools).
     - `read_sms_mesh`
