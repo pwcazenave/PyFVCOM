@@ -197,7 +197,8 @@ The examples directory includes some Jupyter notebooks of some brief examples of
 
 Quick oneliners:
 
-# Grid tools
+Grid tools
+==========
 - Read SMS grid: `triangle, nodes, x, y, z, types, nodestrings = PyFVCOM.grid.read_sms_mesh('mesh.2dm', nodestrings=True)`
 - Read FVCOM grid: `triangle, nodes, x, y, z = PyFVCOM.grid.read_fvcom_mesh('mesh.dat')`
 - Find elements connected to node: `elements = PyFVCOM.grid.find_connected_elements(n, triangles)`
@@ -205,11 +206,16 @@ Quick oneliners:
 - Find model boundary from a grid: `coast = PyFVCOM.grid.get_boundary_polygons(triangles)`
 - Calculate element areas: `area = PyFVCOM.grid.get_area(np.asarray((fvcom.grid.x[fvcom.grid.triangles[:, 0]], fvcom.grid.y[fvcom.grid.triangles[:, 0]])).T, np.asarray((fvcom.grid.x[fvcom.grid.triangles[:, 1]], fvcom.grid.y[fvcom.grid.triangles[:, 1]])).T, np.asarray((fvcom.grid.x[fvcom.grid.triangles[:, 2]], fvcom.grid.y[fvcom.grid.triangles[:, 2]])).T)`
 - Calculate node control areas: `node_control_area = [PyFVCOM.grid.node_control_area(n) for n in len(fvcom.dims.node)]`
-- Calculate element control areas: `element_control_area = [PyFVCOM.grid.element_control_area(e, fvcom.grid.triangles, area) for e in len(fvcom.dims.nele)]
+- Calculate element control areas: `element_control_area = [PyFVCOM.grid.element_control_area(e, fvcom.grid.triangles, area) for e in len(fvcom.dims.nele)]`
 - Move a field from elements to nodes: `on_nodes = elems2nodes(fvcom.data.field, fvcom.grid.triangles)`
 - Move a field from nodes to elements: `on_elements = nodes2elems(fvcom.data.field, fvcom.grid.triangles)`
-# Model data
+
+Model data
+==========
+
 - Read model output: `fvcom = PyFVCOM.read.FileReader('casename_0001.nc')`
 - Calculate density from temperature and salinity: `density = PyFVCOM.ocean.dens_jackett(fvcom.data.temp, fvcom.data.salinity)`
-# Miscellaneous tools
+
+Miscellaneous tools
+===================
 - Make an array of datetime objects: `times = PyFVCOM.utilities.date_range(start, end, inc=0.5)`
