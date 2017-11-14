@@ -51,9 +51,9 @@ class validation_db():
 
         return self.c.fetchall()
 
-    def make_create_table_sql(self, table_name, col_list):
+    def create_table(self, table_name, col_list):
         """
-        Create an SQL table if no such table exists.
+        Create a database table if no such table exists.
 
         Parameters
         ----------
@@ -70,7 +70,7 @@ class validation_db():
             create_str += ', '
         create_str = create_str[0:-2]
         create_str += ');'
-        self.create_table_sql['create_' + table_name] = create_str
+        self.execute_sql(create_str)
 
     def insert_into_table(self, table_name, data):
         """
@@ -341,8 +341,8 @@ class db_tide(validation_db):
 
         # Insert information into the error flags table
         self._add_sql_strings()
-        for this_table, this_str in self.create_table_sql.items():
-            self.execute_sql(this_str)
+        for this_key, this_val in self.bodc_tables.items():
+            self.create_table(this_key, this_val)
         error_data = [(0, '', 'No error'), (1, 'M', 'Improbable value flagged by QC'),
                         (2, 'N', 'Null Value'), (3, 'T', 'Value interpolated from adjacent values')]
         self.insert_into_table('error_flags', error_data)
@@ -486,7 +486,7 @@ class db_tide(validation_db):
 
     def _add_sql_strings(self):
         """ Function to define the database structure. """
-        bodc_tables = {'gauge_obs': ['site_id integer NOT NULL', 'time_int integer NOT NULL',
+        self.bodc_tables = {'gauge_obs': ['site_id integer NOT NULL', 'time_int integer NOT NULL',
                                      'elevation real NOT NULL', 'elevation_flag integer', 'residual real', 'residual_flag integer',
                                      'PRIMARY KEY (site_id, time_int)', 'FOREIGN KEY (site_id) REFERENCES sites(site_id)',
                                      'FOREIGN KEY (elevation_flag) REFERENCES error_flags(flag_id)',
@@ -494,9 +494,6 @@ class db_tide(validation_db):
                        'sites': ['site_id integer NOT NULL', 'site_tla text NOT NULL', 'site_name text', 'lon real', 'lat real',
                                  'other_stuff text', 'PRIMARY KEY (site_id)'],
                        'error_flags': ['flag_id integer NOT NULL', 'flag_code text', 'flag_description text']}
-
-        for this_key, this_val in bodc_tables.items():
-            self.make_create_table_sql(this_key, this_val)
 
 
 class bodc_annual_tide_file():
@@ -614,8 +611,8 @@ class db_wco(validation_db):
 
         # Insert information into the error flags table
         self._add_sql_strings()
-        for this_table, this_str in self.create_table_sql.items():
-            self.execute_sql(this_str)
+        for this_table, this_str in self.wco_tables.items():
+            self.create_table(this_key, this_val)
         sites_data = [(0, 'L4',-4.217,50.250, ' '), (1, 'E1',-4.368,50.035,' ')]
         self.insert_into_table('sites', sites_data)
         measurement_type_data = [(0,'CTD measurements'), (1, 'Surface buoy measurements')]
@@ -623,16 +620,16 @@ class db_wco(validation_db):
         self.execute_sql('create index date_index on obs (time_int);')
 
     def _add_sql_strings(self):
-        wco_tables = {'obs':['buoy_id integer NOT NULL', 'time_int integer NOT NULL',
+        self.wco_tables = {'obs':['buoy_id integer NOT NULL', 'time_int integer NOT NULL',
                                     'depth real NOT NULL', 'temp real', 'salinity real', 'measurement_flag integer NOT NULL',
                                     'PRIMARY KEY (buoy_id, depth, measurement_flag, time_int)', 'FOREIGN KEY (buoy_id) REFERENCES sites(buoy_id)',
                                     'FOREIGN KEY (measurement_flag) REFERENCES measurement_types(measurement_flag)'],
                        'sites':['buoy_id integer NOT NULL', 'buoy_name text', 'lon real', 'lat real',
                                     'other_stuff text', 'PRIMARY KEY (buoy_id)'],
                        'measurement_types':['measurement_flag integer NOT NULL', 'measurement_description text', 'PRIMARY KEY (measurement_flag)']}
-
-        for this_key, this_val in wco_tables.items():
-            self.make_create_table_sql(this_key, this_val)
+    
+    def _add_new_variable_table(self, variable):
+        pass
 
     def insert_CTD_file(self, filestr, buoy_id):
         file_obj = WCO_obs_file(filestr)
