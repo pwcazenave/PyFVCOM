@@ -705,7 +705,7 @@ class FileReader(object):
             var_size_dict = dict(zip(var_dim, var_shape))
             if 'time' not in var_dim:
                 # Should we error here or carry on having warned?
-                warn('{} does not contain a time dimension.'.format(v))
+                warn('variable {} does not contain a time dimension.'.format(v))
                 possible_indices = {}
             else:
                 # make the end of the stride if not supplied
