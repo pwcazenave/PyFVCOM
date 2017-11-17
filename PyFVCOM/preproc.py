@@ -218,7 +218,7 @@ def write_sstgrd(output_file, domain, data, time, ncopts={'zlib': True, 'complev
                'institution': 'Plymouth Marine Laboratory',
                'source': 'FVCOM grid (unstructured) surface forcing',
                'history': 'File created using PyFVCOM',
-               'references': 'http://fvcom.smast.umassd.edu, http://codfish.smast.umassd.edu',
+               'references': 'http://fvcom.smast.umassd.edu, http://codfish.smast.umassd.edu, http://pml.ac.uk/modelling',
                'Conventions': 'CF-1.0',
                'CoordinateProjection': 'init=WGS84'}
     dims = {'nele': domain.dims.nele, 'node': domain.dims.node, 'time': 0, 'DateStrLen': 26, 'three': 3}
