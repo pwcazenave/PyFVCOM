@@ -294,7 +294,7 @@ class Time:
             self.surface_plot
 
 
-class Plotter():
+class Plotter:
     """ Create plot objects based on output from the FVCOM.
 
     Class to assist in the creation of plots and animations based on output
