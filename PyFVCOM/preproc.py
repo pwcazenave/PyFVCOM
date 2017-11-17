@@ -179,7 +179,12 @@ class WriteForcing:
 
         var[:] = data
 
-    def close(self):
+        setattr(self, name, var)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
         """ Tidy up the netCDF file handle. """
         self.nc.close()
 
@@ -214,7 +219,7 @@ def write_sstgrd(output_file, domain, data, time, ncopts={'zlib': True, 'complev
                'CoordinateProjection': 'init=WGS84'}
     dims = {'nele': domain.dims.nele, 'node': domain.dims.node, 'time': 0, 'DateStrLen': 26, 'three': 3}
 
-    with WriteForcing(output_file, dims, global_attributes=globals, clobber=True, format='NETCDF4', **kwargs) as sstgrd:
+    with WriteForcing(str(output_file), dims, global_attributes=globals, clobber=True, format='NETCDF4', **kwargs) as sstgrd:
         # Add the variables.
         atts = {'long_name': 'nodel longitude', 'units': 'degrees_east'}
         sstgrd.add_variable('lon', domain.lon, ['node'], attributes=atts, ncopts=ncopts)
