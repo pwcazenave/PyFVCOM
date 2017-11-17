@@ -240,7 +240,7 @@ def write_sstgrd(output_file, domain, data, time, ncopts={'zlib': True, 'complev
                 'units': 'Celsius Degree',
                 'grid': 'fvcom_grid',
                 'type': 'data'}
-        sstgrd.add_variable('sst', data, ['node'], attributes=atts, ncopts=ncopts)
+        sstgrd.add_variable('sst', data, ['time', 'node'], attributes=atts, ncopts=ncopts)
 
 
 def add_open_boundaries(domain, obcfile, reload=False):
