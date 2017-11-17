@@ -5,6 +5,7 @@ Tools for manipulating and converting unstructured grids in a range of formats.
 
 from __future__ import print_function, division
 
+import os
 import sys
 import multiprocessing
 import numpy as np
@@ -15,6 +16,148 @@ import matplotlib.path as mplPath
 from functools import partial
 
 from PyFVCOM.coordinate import utm_from_lonlat, lonlat_from_utm
+
+
+class Domain:
+    """
+    Class to hold information for unstructured grid from a range of file types. The aim is to abstract away the file
+    format into a consistent object.
+
+    Its structure is based on PyFVCOM.read.FileReader.
+
+    """
+
+    def __init__(self, grid, native_coordinates, zone=None, noisy=False, debug=False):
+        """
+        Read in a grid and parse its structure into a format similar to a PyFVCOM.read.FileReader object.
+
+        Parameters
+        ----------
+        grid : str, pathlib.Path
+            Path to the model grid file. Supported formats includes:
+                - SMS .2dm
+                - FVCOM .dat
+                - GMSH .gmsh
+                - DHI MIKE21 .m21fm
+        native_coordinates : str
+            Defined the coordinate system used in the grid ('spherical' or 'cartesian'). Defaults to `spherical'.
+        zone : str, optional
+            If `native_coordinates' is 'cartesian', give the UTM zone as a string, formatted as, for example,
+            '30N'. Ignored if `native_coordinates' is 'spherical'.
+        noisy : bool, optional
+            Set to True to enable verbose output. Defaults to False.
+        debug : bool, optional
+            Set to True to enable debugging output. Defaults to False.
+
+        """
+
+        self._debug = debug
+        self._noisy = noisy
+
+        # Prepare this object with all the objects we'll need later on (dims, time, grid).
+        self._prep()
+
+        # Get the things to iterate over for a given object. This is a bit hacky, but until or if I create separate
+        # classes for the dims, time, grid and data objects, this'll have to do.
+        self.obj_iter = lambda x: [a for a in dir(x) if not a.startswith('__')]
+
+        self.grid.native_coordinates = native_coordinates
+        self.grid.zone = zone
+        # Initialise everything to None so we don't get caught out expecting something to exist when it doesn't.
+        self.domain_plot = None
+        self.grid.nodestrings = None
+        self.grid.filename = grid
+
+        if self.grid.native_coordinates.lower() == 'cartesian' and not self.grid.zone:
+            raise ValueError('For cartesian coordinates, a UTM Zone for the grid is required.')
+
+        self._load_grid()
+
+        # Make the relevant dimensions.
+        self.dims.nele = len(self.grid.xc)
+        self.dims.node = len(self.grid.x)
+        self.dims.obc = len(self.grid.obc_nodes)
+
+    def _prep(self):
+        # Create empty object for the grid and dimension data. This ought to be possible with nested classes,
+        # but I can't figure it out. That approach would also mean we can set __iter__ to make the object iterable
+        # without the need for obj_iter, which is a bit of a hack. It might also make FileReader object pickleable,
+        # meaning we can pass them with multiprocessing. Another day, perhaps.
+        self.dims = type('dims', (object,), {})()
+        self.grid = type('grid', (object,), {})()
+        # self.time = type('time', (object,), {})()
+
+        # Add docstrings for the relevant objects.
+        self.dims.__doc__ = "This contains the dimensions of the data from the given grid file."
+        self.grid.__doc__ = "Unstructured grid information. Missing spherical or cartesian coordinates are " \
+                            "automatically created depending on which is missing."
+        # self.time.__doc__ = "This contains the time data for the given netCDFs. Missing standard FVCOM time variables " \
+        #                     "are automatically created."
+
+    def _load_grid(self):
+        """ Load the model grid. """
+
+        # Default to no node strings. Only the SMS read function can parse them as they're stored within that file.
+        # We'll try and grab them from the FVCOM file assuming the standard FVCOM naming conventions.
+        nodestrings = None
+        types = None
+        try:
+            basedir = str(self.grid.filename.parent)
+            basename = self.grid.filename.stem
+            extension = self.grid.filename.suffix
+            self.grid.filename = str(self.grid.filename)  # most stuff will want a string later.
+        except AttributeError:
+            extension = os.path.splitext(self.grid.filename)[-1]
+            basedir, basename = os.path.split(self.grid.filename)
+
+        if extension == '.2dm':
+            if self._noisy:
+                print('Loading SMS grid {}'.format(self.grid.filename))
+            triangle, nodes, x, y, z, types, nodestrings = read_sms_mesh(self.grid.filename, nodestrings=True)
+        elif extension == '.dat':
+            if self._noisy:
+                print('Loading FVCOM grid {}'.format(self.grid.filename))
+            triangle, nodes, x, y, z = read_fvcom_mesh(self.grid.filename)
+            try:
+                obcname = basename.replace('_grd', '_obc')
+                obcfile = os.path.join(basedir, '{}.dat'.format(obcname))
+                nodestrings, types, count = read_fvcom_obc(obcfile)
+                if self._noisy:
+                    print('Found and parsed open boundary file {}'.format(obcfile))
+            except OSError:
+                # File probably doesn't exist, so just carry on.
+                pass
+        elif extension == '.gmsh':
+            if self._noisy:
+                print('Loading GMSH grid {}'.format(self.grid.filename))
+            triangle, nodes, x, y, z = read_gmsh_mesh(self.grid.filename)
+        elif extension == '.m21fm':
+            if self._noisy:
+                print('Loading MIKE21 grid {}'.format(self.grid.filename))
+            triangle, nodes, x, y, z = read_mike_mesh(self.grid.filename)
+
+        if self.grid.native_coordinates.lower() != 'spherical':
+            # Convert from UTM.
+            self.grid.lon, self.grid.lat = lonlat_from_utm(x, y, self.grid.zone)
+            self.grid.x, self.grid.y = x, y
+        else:
+            # Convert to UTM.
+            self.grid.lon, self.grid.lat = x, y
+            self.grid.x, self.grid.y = utm_from_lonlat(x, y, zone=self.grid.zone)
+
+        self.grid.triangles = triangle
+        self.grid.nv = triangle.T + 1  # for compatibility with FileReader
+        self.grid.h = z
+        self.grid.nodes = nodes
+        self.grid.types = types
+        self.grid.obc_nodes = nodestrings
+
+        # Make element centred versions of everything.
+        self.grid.xc = nodes2elems(self.grid.x, self.grid.triangles)
+        self.grid.yc = nodes2elems(self.grid.y, self.grid.triangles)
+        self.grid.lonc = nodes2elems(self.grid.lon, self.grid.triangles)
+        self.grid.latc = nodes2elems(self.grid.lat, self.grid.triangles)
+        self.grid.hcenter = nodes2elems(self.grid.h, self.grid.triangles)
 
 
 def read_sms_mesh(mesh, nodestrings=False):
