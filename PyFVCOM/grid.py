@@ -6,14 +6,12 @@ Tools for manipulating and converting unstructured grids in a range of formats.
 from __future__ import print_function, division
 
 import sys
-import inspect
 import multiprocessing
 import numpy as np
 import math
 from matplotlib.tri.triangulation import Triangulation
 from matplotlib.tri import CubicTriInterpolator
 import matplotlib.path as mplPath
-from warnings import warn
 from functools import partial
 
 from PyFVCOM.coordinate import UTM_to_LL
