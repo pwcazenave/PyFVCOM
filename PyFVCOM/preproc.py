@@ -173,11 +173,11 @@ class WriteForcing:
 
         """
 
-        setattr(self, name, self.nc.createVariable(name, format, dimensions), **ncopts)
+        var = self.nc.createVariable(name, format, dimensions, **ncopts)
         for attribute in attributes:
-            setattr(getattr(self, name), attribute, attributes[attribute])
+            setattr(var, attribute, attributes[attribute])
 
-        setattr(getattr(self, name), data)
+        var[:] = data
 
     def close(self):
         """ Tidy up the netCDF file handle. """
