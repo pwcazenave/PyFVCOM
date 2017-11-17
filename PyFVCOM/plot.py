@@ -449,11 +449,11 @@ class Plotter:
         if self._FileReader:
             self.n_nodes = getattr(self.ds.dims, 'node')
             self.n_elems = getattr(self.ds.dims, 'nele')
-            self.lon = self.ds.grid.lon
-            self.lat = self.ds.grid.lat
-            self.lonc = self.ds.grid.lonc
-            self.latc = self.ds.grid.latc
-            self.nv = self.ds.grid.nv
+            self.lon = getattr(self.ds.grid, 'lon')
+            self.lat = getattr(self.ds.grid, 'lat')
+            self.lonc = getattr(self.ds.grid, 'lonc')
+            self.latc = getattr(self.ds.grid, 'latc')
+            self.nv = getattr(self.ds.grid, 'nv')
         else:
             self.n_nodes = len(self.ds.dimensions['node'])
             self.n_elems = len(self.ds.dimensions['nele'])
