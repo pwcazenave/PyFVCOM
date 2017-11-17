@@ -2425,6 +2425,8 @@ def unstructured_grid_depths(h, zeta, sigma, nan_invalid=False):
     """
     Calculate the depth time series for cells in an unstructured grid.
 
+    I think this is a reimplementation of PyFVCOM.tide.make_water_column.
+
     Parameters
     ----------
     h : np.ndarray
