@@ -5,18 +5,159 @@ Tools for manipulating and converting unstructured grids in a range of formats.
 
 from __future__ import print_function, division
 
+import os
 import sys
-import inspect
 import multiprocessing
 import numpy as np
 import math
 from matplotlib.tri.triangulation import Triangulation
 from matplotlib.tri import CubicTriInterpolator
 import matplotlib.path as mplPath
-from warnings import warn
 from functools import partial
 
-from PyFVCOM.coordinate import UTM_to_LL
+from PyFVCOM.coordinate import utm_from_lonlat, lonlat_from_utm
+
+
+class Domain:
+    """
+    Class to hold information for unstructured grid from a range of file types. The aim is to abstract away the file
+    format into a consistent object.
+
+    Its structure is based on PyFVCOM.read.FileReader.
+
+    """
+
+    def __init__(self, grid, native_coordinates, zone=None, noisy=False, debug=False):
+        """
+        Read in a grid and parse its structure into a format similar to a PyFVCOM.read.FileReader object.
+
+        Parameters
+        ----------
+        grid : str, pathlib.Path
+            Path to the model grid file. Supported formats includes:
+                - SMS .2dm
+                - FVCOM .dat
+                - GMSH .gmsh
+                - DHI MIKE21 .m21fm
+        native_coordinates : str
+            Defined the coordinate system used in the grid ('spherical' or 'cartesian'). Defaults to `spherical'.
+        zone : str, optional
+            If `native_coordinates' is 'cartesian', give the UTM zone as a string, formatted as, for example,
+            '30N'. Ignored if `native_coordinates' is 'spherical'.
+        noisy : bool, optional
+            Set to True to enable verbose output. Defaults to False.
+        debug : bool, optional
+            Set to True to enable debugging output. Defaults to False.
+
+        """
+
+        self._debug = debug
+        self._noisy = noisy
+
+        # Prepare this object with all the objects we'll need later on (dims, time, grid).
+        self._prep()
+
+        # Get the things to iterate over for a given object. This is a bit hacky, but until or if I create separate
+        # classes for the dims, time, grid and data objects, this'll have to do.
+        self.obj_iter = lambda x: [a for a in dir(x) if not a.startswith('__')]
+
+        self.grid.native_coordinates = native_coordinates
+        self.grid.zone = zone
+        # Initialise everything to None so we don't get caught out expecting something to exist when it doesn't.
+        self.domain_plot = None
+        self.grid.nodestrings = None
+        self.grid.filename = grid
+
+        if self.grid.native_coordinates.lower() == 'cartesian' and not self.grid.zone:
+            raise ValueError('For cartesian coordinates, a UTM Zone for the grid is required.')
+
+        self._load_grid()
+
+        # Make the relevant dimensions.
+        self.dims.nele = len(self.grid.xc)
+        self.dims.node = len(self.grid.x)
+        self.dims.obc = len(self.grid.obc_nodes)
+
+    def _prep(self):
+        # Create empty object for the grid and dimension data. This ought to be possible with nested classes,
+        # but I can't figure it out. That approach would also mean we can set __iter__ to make the object iterable
+        # without the need for obj_iter, which is a bit of a hack. It might also make FileReader object pickleable,
+        # meaning we can pass them with multiprocessing. Another day, perhaps.
+        self.dims = type('dims', (object,), {})()
+        self.grid = type('grid', (object,), {})()
+        # self.time = type('time', (object,), {})()
+
+        # Add docstrings for the relevant objects.
+        self.dims.__doc__ = "This contains the dimensions of the data from the given grid file."
+        self.grid.__doc__ = "Unstructured grid information. Missing spherical or cartesian coordinates are " \
+                            "automatically created depending on which is missing."
+        # self.time.__doc__ = "This contains the time data for the given netCDFs. Missing standard FVCOM time variables " \
+        #                     "are automatically created."
+
+    def _load_grid(self):
+        """ Load the model grid. """
+
+        # Default to no node strings. Only the SMS read function can parse them as they're stored within that file.
+        # We'll try and grab them from the FVCOM file assuming the standard FVCOM naming conventions.
+        nodestrings = None
+        types = None
+        try:
+            basedir = str(self.grid.filename.parent)
+            basename = self.grid.filename.stem
+            extension = self.grid.filename.suffix
+            self.grid.filename = str(self.grid.filename)  # most stuff will want a string later.
+        except AttributeError:
+            extension = os.path.splitext(self.grid.filename)[-1]
+            basedir, basename = os.path.split(self.grid.filename)
+
+        if extension == '.2dm':
+            if self._noisy:
+                print('Loading SMS grid {}'.format(self.grid.filename))
+            triangle, nodes, x, y, z, types, nodestrings = read_sms_mesh(self.grid.filename, nodestrings=True)
+        elif extension == '.dat':
+            if self._noisy:
+                print('Loading FVCOM grid {}'.format(self.grid.filename))
+            triangle, nodes, x, y, z = read_fvcom_mesh(self.grid.filename)
+            try:
+                obcname = basename.replace('_grd', '_obc')
+                obcfile = os.path.join(basedir, '{}.dat'.format(obcname))
+                nodestrings, types, count = read_fvcom_obc(obcfile)
+                if self._noisy:
+                    print('Found and parsed open boundary file {}'.format(obcfile))
+            except OSError:
+                # File probably doesn't exist, so just carry on.
+                pass
+        elif extension == '.gmsh':
+            if self._noisy:
+                print('Loading GMSH grid {}'.format(self.grid.filename))
+            triangle, nodes, x, y, z = read_gmsh_mesh(self.grid.filename)
+        elif extension == '.m21fm':
+            if self._noisy:
+                print('Loading MIKE21 grid {}'.format(self.grid.filename))
+            triangle, nodes, x, y, z = read_mike_mesh(self.grid.filename)
+
+        if self.grid.native_coordinates.lower() != 'spherical':
+            # Convert from UTM.
+            self.grid.lon, self.grid.lat = lonlat_from_utm(x, y, self.grid.zone)
+            self.grid.x, self.grid.y = x, y
+        else:
+            # Convert to UTM.
+            self.grid.lon, self.grid.lat = x, y
+            self.grid.x, self.grid.y = utm_from_lonlat(x, y, zone=self.grid.zone)
+
+        self.grid.triangles = triangle
+        self.grid.nv = triangle.T + 1  # for compatibility with FileReader
+        self.grid.h = z
+        self.grid.nodes = nodes
+        self.grid.types = types
+        self.grid.obc_nodes = nodestrings
+
+        # Make element centred versions of everything.
+        self.grid.xc = nodes2elems(self.grid.x, self.grid.triangles)
+        self.grid.yc = nodes2elems(self.grid.y, self.grid.triangles)
+        self.grid.lonc = nodes2elems(self.grid.lon, self.grid.triangles)
+        self.grid.latc = nodes2elems(self.grid.lat, self.grid.triangles)
+        self.grid.hcenter = nodes2elems(self.grid.h, self.grid.triangles)
 
 
 def read_sms_mesh(mesh, nodestrings=False):
@@ -833,8 +974,8 @@ def element_side_lengths(triangles, x, y):
 
 def fix_coordinates(FVCOM, UTMZone, inVars=['x', 'y']):
     """
-    Use the UTM_to_LL function to convert the grid from UTM to Lat/Long. Returns
-    longitude and latitude in the range -180 to 180.
+    Use the lonlat_from_utm function to convert the grid from UTM to Lat/Long.
+    Returns longitude and latitude in the range -180 to 180.
 
     By default, the variables which will be converted from UTM to Lat/Long are
     'x' and 'y'. To specify a different pair, give inVars=['xc', 'yc'], for
@@ -844,7 +985,7 @@ def fix_coordinates(FVCOM, UTMZone, inVars=['x', 'y']):
     Parameters
     ----------
     FVCOM : dict
-        Dict of the FVCOM model results (see read_FVCOM_results.readFVCOM).
+        Dict of the FVCOM model results (see PyFVCOM.read.ncread).
     UTMZone : str
         UTM Zone (e.g. '30N').
     inVars : list, optional
@@ -860,27 +1001,10 @@ def fix_coordinates(FVCOM, UTMZone, inVars=['x', 'y']):
     """
 
     try:
-        Y = np.zeros(np.shape(FVCOM[inVars[1]])) * np.nan
-        X = np.zeros(np.shape(FVCOM[inVars[0]])) * np.nan
+        X, Y = lonlat_from_utm(FVCOM[inVars[0]], FVCOM[inVars[1]], zone=UTMZone)
     except IOError:
-        print(
-            "Couldn't find the {} or {} variables in the FVCOM dict.".format(
-                inVars[0], inVars[1],
-                end=''
-            )
-        )
+        print("Couldn't find the {} or {} variables in the FVCOM dict.".format(inVars[0], inVars[1], end=''))
         print('Check you loaded them and try again.')
-
-    for count, posXY in enumerate(zip(FVCOM[inVars[0]], FVCOM[inVars[1]])):
-
-        posX = posXY[0]
-        posY = posXY[1]
-
-        # 23 is the WGS84 ellipsoid
-        tmpLat, tmpLon = UTM_to_LL(23, posY, posX, UTMZone)
-
-        Y[count] = tmpLat
-        X[count] = tmpLon
 
     # Make the range -180 to 180 rather than 0 to 360.
     if np.min(X) >= 0:
@@ -1748,7 +1872,7 @@ def find_connected_elements(n, triangles):
 
     See Also
     --------
-    PyFVCOM.grid.surrounders().
+    PyFVCOM.grid.find_connected_nodes().
 
     """
 
@@ -2301,6 +2425,8 @@ def unstructured_grid_depths(h, zeta, sigma, nan_invalid=False):
     """
     Calculate the depth time series for cells in an unstructured grid.
 
+    I think this is a reimplementation of PyFVCOM.tide.make_water_column.
+
     Parameters
     ----------
     h : np.ndarray
@@ -2321,7 +2447,7 @@ def unstructured_grid_depths(h, zeta, sigma, nan_invalid=False):
         zeta[invalid] = np.NAN
 
     abs_water_depth = zeta + h
-    allDepths = abs_water_depth[:, np.newaxis,:] * sigma[np.newaxis, :,:] + zeta[:, np.newaxis, :]
+    allDepths = abs_water_depth[:, np.newaxis,:] * sigma[np.newaxis, :, :] + zeta[:, np.newaxis, :]
 
     return allDepths
 
@@ -2790,98 +2916,3 @@ def isintriangle(tri_x, tri_y, point_x, point_y):
 
     return is_in
 
-
-# For backwards compatibility.
-def parseUnstructuredGridSMS(*args, **kwargs):
-    warn('{} is deprecated. Use read_sms_mesh instead.'.format(inspect.stack()[0][3]))
-    return read_sms_mesh(*args, **kwargs)
-
-
-def parseUnstructuredGridFVCOM(*args, **kwargs):
-    warn('{} is deprecated. Use read_fvcom_mesh instead.'.format(inspect.stack()[0][3]))
-    return read_fvcom_mesh(*args, **kwargs)
-
-
-def parseUnstructuredGridMIKE(*args, **kwargs):
-    warn('{} is deprecated. Use read_mike_mesh instead.'.format(inspect.stack()[0][3]))
-    return read_mike_mesh(*args, **kwargs)
-
-
-def parseUnstructuredGridGMSH(*args, **kwargs):
-    warn('{} is deprecated. Use read_gmsh_mesh instead.'.format(inspect.stack()[0][3]))
-    return read_gmsh_mesh(*args, **kwargs)
-
-
-def writeUnstructuredGridSMS(*args, **kwargs):
-    warn('{} is deprecated. Use write_sms_mesh instead.'.format(inspect.stack()[0][3]))
-    return write_sms_mesh(*args, **kwargs)
-
-
-def writeUnstructuredGridSMSBathy(*args, **kwargs):
-    warn('{} is deprecated. Use write_sms_bathy instead.'.format(inspect.stack()[0][3]))
-    return write_sms_bathy(*args, **kwargs)
-
-
-def writeUnstructuredGridMIKE(*args, **kwargs):
-    warn('{} is deprecated. Use write_mike_mesh instead.'.format(inspect.stack()[0][3]))
-    return write_mike_mesh(*args, **kwargs)
-
-
-def findNearestPoint(*args, **kwargs):
-    warn('{} is deprecated. Use find_nearest_point instead.'.format(inspect.stack()[0][3]))
-    return find_nearest_point(*args, **kwargs)
-
-
-def elementSideLengths(*args, **kwargs):
-    warn('{} is deprecated. Use element_side_lengths instead.'.format(inspect.stack()[0][3]))
-    return element_side_lengths(*args, **kwargs)
-
-
-def fixCoordinates(*args, **kwargs):
-    warn('{} is deprecated. Use fix_coordinates instead.'.format(inspect.stack()[0][3]))
-    return fix_coordinates(*args, **kwargs)
-
-
-def clipTri(*args, **kwargs):
-    warn('{} is deprecated. Use clip_triangulation instead.'.format(inspect.stack()[0][3]))
-    return clip_triangulation(*args, **kwargs)
-
-
-def getRiverConfig(*args, **kwargs):
-    warn('{} is deprecated. Use get_river_config instead.'.format(inspect.stack()[0][3]))
-    return get_river_config(*args, **kwargs)
-
-
-def getRivers(*args, **kwargs):
-    warn('{} is deprecated. Use get_rivers instead.'.format(inspect.stack()[0][3]))
-    return get_rivers(*args, **kwargs)
-
-
-def lineSample(*args, **kwargs):
-    warn('{} is deprecated. Use line_sample instead.'.format(inspect.stack()[0][3]))
-    return line_sample(*args, **kwargs)
-
-
-def clipDomain(*args, **kwargs):
-    warn('{} is deprecated. Use clip_domain instead.'.format(inspect.stack()[0][3]))
-    return clip_domain(*args, **kwargs)
-
-
-def OSGB36toWGS84(*args, **kwargs):
-    warn('{} is deprecated. Use OSGB36_to_WGS84 instead.'.format(inspect.stack()[0][3]))
-    return OSGB36_to_WGS84(*args, **kwargs)
-
-
-def UTMtoLL(*args, **kwargs):
-    warn('{} is deprecated. Use UTM_to_LL instead.'.format(inspect.stack()[0][3]))
-    return UTM_to_LL(*args, **kwargs)
-
-
-def heron(*args):
-    warn('{} is deprecated. Use get_area instead.'.format(inspect.stack()[0][3]))
-    return get_area(*args)
-
-
-def surrounders(*args):
-    warn('{} is deprecated. Use find_connected_nodes instead.'.format(inspect.stack()[0][3]))
-    return find_connected_nodes(*args)

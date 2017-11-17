@@ -11,7 +11,7 @@ from datetime import datetime
 
 from PyFVCOM.coordinate import lonlat_from_utm
 from PyFVCOM.read import FileReader
-from PyFVCOM.grid import getcrossectiontriangles, unstructured_grid_depths
+from PyFVCOM.grid import getcrossectiontriangles, unstructured_grid_depths, Domain
 
 import numpy as np
 
@@ -99,7 +99,7 @@ class Time:
 
         # Are we working with a FileReader object or a bog-standard netCDF4 Dataset?
         self._FileReader = False
-        if isinstance(dataset, FileReader):
+        if isinstance(dataset, (FileReader, Domain)):
             self._FileReader = True
 
         # Initialise the figure
@@ -294,7 +294,7 @@ class Time:
             self.surface_plot
 
 
-class Plotter():
+class Plotter:
     """ Create plot objects based on output from the FVCOM.
 
     Class to assist in the creation of plots and animations based on output
@@ -438,7 +438,7 @@ class Plotter():
 
         # Are we working with a FileReader object or a bog-standard netCDF4 Dataset?
         self._FileReader = False
-        if isinstance(dataset, FileReader):
+        if isinstance(dataset, (FileReader, Domain)):
             self._FileReader = True
 
         # Initialise the figure
@@ -449,11 +449,11 @@ class Plotter():
         if self._FileReader:
             self.n_nodes = getattr(self.ds.dims, 'node')
             self.n_elems = getattr(self.ds.dims, 'nele')
-            self.lon = self.ds.grid.lon
-            self.lat = self.ds.grid.lat
-            self.lonc = self.ds.grid.lonc
-            self.latc = self.ds.grid.latc
-            self.nv = self.ds.grid.nv
+            self.lon = getattr(self.ds.grid, 'lon')
+            self.lat = getattr(self.ds.grid, 'lat')
+            self.lonc = getattr(self.ds.grid, 'lonc')
+            self.latc = getattr(self.ds.grid, 'latc')
+            self.nv = getattr(self.ds.grid, 'nv')
         else:
             self.n_nodes = len(self.ds.dimensions['node'])
             self.n_elems = len(self.ds.dimensions['nele'])
@@ -981,6 +981,35 @@ class CrossPlotter(Plotter):
             new_chan_y.append(this_y)
 
         return np.asarray(new_chan_x), np.asarray(new_chan_y)
+
+
+def plot_domain(domain, mesh=False, depth=False, **kwargs):
+    """
+
+    Parameters
+    ----------
+    mesh : bool
+        Set to True to overlay the model mesh. Defaults to False.
+    depth : bool
+        Set to True to plot water depth. Defaults to False. If enabled, a colour bar is added to the figure.
+
+    All remaining arguments are passed to PyFVCOM.plot.Plotter.
+
+    Returns
+    -------
+    plot : PyFVCOM.plot.Plotter
+        The plot object.
+    """
+
+    domain.domain_plot = Plotter(domain, **kwargs)
+
+    x, y = domain.domain_plot.m(domain.grid.lon, domain.grid.lat)
+
+    if mesh:
+        domain.mesh_plot = domain.domain_plot.axes.triplot(x, y, domain.grid.triangles, 'k-')
+
+    if depth:
+        domain.domain_plot.plot_field(domain.grid.h)
 
 
 def cm2inch(value):

@@ -13,7 +13,7 @@ __email__ = 'pica@pml.ac.uk'
 import inspect
 from warnings import warn
 
-# Import everything!
+# Import everything! Eventually, we're going to hit a circular dependency here...
 from PyFVCOM import buoy
 from PyFVCOM import coast
 from PyFVCOM import ctd
@@ -25,6 +25,7 @@ from PyFVCOM import stats
 from PyFVCOM import tidal_ellipse
 from PyFVCOM import tide
 from PyFVCOM import plot
+from PyFVCOM import preproc
 from PyFVCOM import read
 from PyFVCOM import utilities
 from PyFVCOM import validation
