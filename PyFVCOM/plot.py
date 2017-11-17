@@ -983,6 +983,35 @@ class CrossPlotter(Plotter):
         return np.asarray(new_chan_x), np.asarray(new_chan_y)
 
 
+def plot_domain(domain, mesh=False, depth=False, **kwargs):
+    """
+
+    Parameters
+    ----------
+    mesh : bool
+        Set to True to overlay the model mesh. Defaults to False.
+    depth : bool
+        Set to True to plot water depth. Defaults to False. If enabled, a colour bar is added to the figure.
+
+    All remaining arguments are passed to PyFVCOM.plot.Plotter.
+
+    Returns
+    -------
+    plot : PyFVCOM.plot.Plotter
+        The plot object.
+    """
+
+    domain.domain_plot = Plotter(domain, **kwargs)
+
+    x, y = domain.domain_plot.m(domain.grid.lon, domain.grid.lat)
+
+    if mesh:
+        domain.mesh_plot = domain.domain_plot.axes.triplot(x, y, domain.grid.triangles, 'k-')
+
+    if depth:
+        domain.domain_plot.plot_field(domain.grid.h)
+
+
 def cm2inch(value):
     """
     Convert centimetres to inches.
