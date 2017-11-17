@@ -57,7 +57,7 @@ def interp_sst_assimilation(domain, sst_dir, year, serial=False, pool_size=None,
     >>> sst_dir = '/home/mbe/Data/SST_data/2006/'
     >>> domain = Domain('/home/mbe/Models/FVCOM/tamar/tamar_v2_grd.dat',
     >>>     native_coordinates='cartesian', zone='30N')
-    >>> sst, dates = interp_sst_assimilation(domain, sst_dir, 2006, serial=False, pool_size=20)
+    >>> sst, dates = interp_sst_assimilation(domain, sst_dir, 2006, pool_size=20)
     >>> # Save to netCDF
     >>> write_sstgrd('casename_sstgrd.nc', domain, sst, dates)
 
