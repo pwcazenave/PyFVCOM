@@ -14,7 +14,7 @@ from matplotlib.tri import CubicTriInterpolator
 import matplotlib.path as mplPath
 from functools import partial
 
-from PyFVCOM.coordinate import UTM_to_LL
+from PyFVCOM.coordinate import utm_from_lonlat, lonlat_from_utm
 
 
 def read_sms_mesh(mesh, nodestrings=False):
@@ -831,8 +831,8 @@ def element_side_lengths(triangles, x, y):
 
 def fix_coordinates(FVCOM, UTMZone, inVars=['x', 'y']):
     """
-    Use the UTM_to_LL function to convert the grid from UTM to Lat/Long. Returns
-    longitude and latitude in the range -180 to 180.
+    Use the lonlat_from_utm function to convert the grid from UTM to Lat/Long.
+    Returns longitude and latitude in the range -180 to 180.
 
     By default, the variables which will be converted from UTM to Lat/Long are
     'x' and 'y'. To specify a different pair, give inVars=['xc', 'yc'], for
@@ -842,7 +842,7 @@ def fix_coordinates(FVCOM, UTMZone, inVars=['x', 'y']):
     Parameters
     ----------
     FVCOM : dict
-        Dict of the FVCOM model results (see read_FVCOM_results.readFVCOM).
+        Dict of the FVCOM model results (see PyFVCOM.read.ncread).
     UTMZone : str
         UTM Zone (e.g. '30N').
     inVars : list, optional
@@ -858,27 +858,10 @@ def fix_coordinates(FVCOM, UTMZone, inVars=['x', 'y']):
     """
 
     try:
-        Y = np.zeros(np.shape(FVCOM[inVars[1]])) * np.nan
-        X = np.zeros(np.shape(FVCOM[inVars[0]])) * np.nan
+        X, Y = lonlat_from_utm(FVCOM[inVars[0]], FVCOM[inVars[1]], zone=UTMZone)
     except IOError:
-        print(
-            "Couldn't find the {} or {} variables in the FVCOM dict.".format(
-                inVars[0], inVars[1],
-                end=''
-            )
-        )
+        print("Couldn't find the {} or {} variables in the FVCOM dict.".format(inVars[0], inVars[1], end=''))
         print('Check you loaded them and try again.')
-
-    for count, posXY in enumerate(zip(FVCOM[inVars[0]], FVCOM[inVars[1]])):
-
-        posX = posXY[0]
-        posY = posXY[1]
-
-        # 23 is the WGS84 ellipsoid
-        tmpLat, tmpLon = UTM_to_LL(23, posY, posX, UTMZone)
-
-        Y[count] = tmpLat
-        X[count] = tmpLon
 
     # Make the range -180 to 180 rather than 0 to 360.
     if np.min(X) >= 0:
