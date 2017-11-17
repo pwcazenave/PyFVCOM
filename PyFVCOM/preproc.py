@@ -213,7 +213,7 @@ def write_sstgrd(output_file, domain, data, time, ncopts={'zlib': True, 'complev
     Remaining arguments are passed to WriteForcing.
     """
 
-    globals = {'year': time[0].year,
+    globals = {'year': str(np.argmax(np.bincount([i.year for i in time]))),  # gets the most common year value
                'title': 'FVCOM SST 1km merged product File',
                'institution': 'Plymouth Marine Laboratory',
                'source': 'FVCOM grid (unstructured) surface forcing',
