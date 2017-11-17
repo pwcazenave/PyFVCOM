@@ -101,22 +101,21 @@ def interp_sst_assimilation(domain, sst_dir, year, serial=False, pool_size=None,
     return sst, dates
 
 
-def _inter_sst_worker(fvcom_ll, sst_file, noisy=False):
+def _inter_sst_worker(fvcom_lonlat, sst_file, noisy=False):
     """ Multiprocessing worker function for the SST interpolation. """
     if noisy:
         print('.', end='', flush=True)
+
     with Dataset(sst_file, 'r') as sst_file_nc:
         sst_eo = np.squeeze(sst_file_nc.variables['analysed_sst'][:]) - 273.15  # Kelvin to Celsius
         mask = sst_file_nc.variables['mask']
         sst_eo[mask == 1] = np.nan
-
         sst_lon = sst_file_nc.variables['lon'][:]
         sst_lat = sst_file_nc.variables['lat'][:]
-
-        ft = RegularGridInterpolator((sst_lon, sst_lat), sst_eo.T, method='nearest', fill_value=None)
-        interp_sst = ft(np.asarray(fvcom_ll).T)
-
         time_out_dt = num2date(sst_file_nc.variables['time'][:], units=sst_file_nc.variables['time'].units)
+
+    ft = RegularGridInterpolator((sst_lon, sst_lat), sst_eo.T, method='nearest', fill_value=None)
+    interp_sst = ft(fvcom_lonlat.T)
 
     return time_out_dt, interp_sst
 
