@@ -15,15 +15,19 @@ import numpy as np
 import multiprocessing as mp
 
 from netCDF4 import Dataset, date2num, num2date
+from matplotlib.dates import date2num as mtime
 from scipy.interpolate import RegularGridInterpolator
 from dateutil.relativedelta import relativedelta
 from datetime import datetime
 from functools import partial
 from warnings import warn
+from utide import reconstruct, ut_constants
+from utide.utilities import Bunch
 
 from PyFVCOM.grid import *
 from PyFVCOM.coordinate import *
 from PyFVCOM.grid import Domain
+from PyFVCOM.utilities import date_range
 
 
 class Model(Domain):
@@ -216,6 +220,135 @@ class Model(Domain):
         """ Calculate grid metrics. """
         pass
 
+    def add_tpxo_tides(self, tpxo_harmonics, predict='zeta', interval=1, constituents=['M2'], serial=False, pool_size=None, noisy=False):
+        """
+        Add TPXO tides at the open boundary nodes.
+
+        Parameters
+        ----------
+        tpxo_harmonics : str, pathlib.Path
+            Path to the TPXO harmonics netCDF file to use.
+        predict : str, optional
+            Type of data to predict. Select 'zeta' (default), 'u' or 'v'.
+        interval : float, optional
+            Interval in hours at which to generate predicted tides.
+        constituents : list, optional
+            List of constituent names to use in UTide.reconstruct. Defaults to ['M2'].
+        serial : bool, optional
+            Run in serial rather than parallel. Defaults to parallel.
+        pool_size : int, optional
+            Specify number of processes for parallel run. By default it uses all available.
+        noisy : bool, optional
+            Set to True to enable some sort of progress output. Defaults to False.
+
+        """
+
+        # Store everything in an object.
+        self.tide = type('tide', (object,), {})()
+        forcing = []
+
+        dates = date_range(self.start + relativedelta(days=-1), self.end + relativedelta(days=1), inc=interval)
+        self.tide.time = dates
+        # UTide needs MATLAB times.
+        times = mtime(dates)
+
+        for obc in self.grid.obc_nodes:
+            latitudes = self.grid.lat[obc]
+
+            if predict == 'zeta':
+                amplitude_var, phase_var = 'ha', 'hp'
+                xdim = len(obc)
+            elif predict == 'u':
+                amplitude_var, phase_var = 'ua', 'up'
+                xdim = len(obc)
+            elif predict == 'v':
+                amplitude_var, phase_var = 'va', 'vp'
+                xdim = len(obc)
+
+            with Dataset(tpxo_harmonics, 'r') as tides:
+                tpxo_const = [''.join(i).upper().strip() for i in tides.variables['con'][:].astype(str)]
+                cidx = [tpxo_const.index(i) for i in constituents]
+                amplitudes = np.empty((xdim, len(constituents))) * np.nan
+                phases = np.empty((xdim, len(constituents))) * np.nan
+
+                for xi, xy in enumerate(zip(self.grid.lon[obc], self.grid.lat[obc])):
+                    idx = [np.argmin(np.abs(tides['lon_z'][:, 0] - xy[0])),
+                           np.argmin(np.abs(tides['lat_z'][0, :] - xy[1]))]
+                    amplitudes[xi, :] = tides.variables[amplitude_var][cidx, idx[0], idx[1]]
+                    phases[xi, :] = tides.variables[phase_var][cidx, idx[0], idx[1]]
+
+            # Prepare the UTide inputs.
+            const_idx = np.asarray([ut_constants['const']['name'].tolist().index(i) for i in constituents])
+            frq = ut_constants['const']['freq'][const_idx]
+
+            coef = Bunch(name=constituents, mean=0, slope=0)
+            coef['aux'] = Bunch(reftime=729572.47916666674, lind=const_idx, frq=frq)
+            coef['aux']['opt'] = Bunch(twodim=False, nodsatlint=False, nodsatnone=False,
+                                       gwchlint=False, gwchnone=False, notrend=False, prefilt=[])
+
+            args = [(latitudes[i], times, coef, amplitudes[i], phases[i], noisy) for i in range(xdim)]
+            if serial:
+                results = []
+                for arg in args:
+                    results.append(self._predict_tide(arg))
+            else:
+                if not pool_size:
+                    pool = mp.Pool()
+                else:
+                    pool = mp.Pool(pool_size)
+                results = pool.map(self._predict_tide, args)
+                pool.close()
+
+            forcing.append(np.asarray(results))
+
+        # Dump the results into the object.
+        setattr(self.tide, predict, forcing)
+
+    @staticmethod
+    def _predict_tide(args):
+        """
+        For the given time and coefficients (in coef) reconstruct the tidal elevation or current component time
+        series at the given latitude.
+
+        Parameters
+        ----------
+        A single tuple with the following variables:
+
+        lats : np.ndarray
+            Latitudes of the positions to predict.
+        times : ndarray
+            Array of matplotlib datenums (see `matplotlib.dates.num2date').
+        coef : utide.utilities.Bunch
+            Configuration options for utide.
+        amplituds : ndarray
+            Amplitude of the relevant constituents shaped [nconst].
+        phases : ndarray
+            Array of the phase of the relevant constituents shaped [nconst].
+        noisy : bool
+            Set to true to enable verbose output. Defaults to False (no output).
+
+        Returns
+        -------
+        zeta : ndarray
+            Time series of surface elevations.
+
+        Notes
+        -----
+        Uses utide.reconstruct() for the predicted tide.
+
+        """
+        lats, times, coef, amplitude, phase, noisy = args
+        if np.isnan(lats):
+            return None
+        coef['aux']['lat'] = lats  # float
+        coef['A'] = amplitude
+        coef['g'] = phase
+        coef['A_ci'] = np.zeros(amplitude.shape)
+        coef['g_ci'] = np.zeros(phase.shape)
+        pred = reconstruct(times, coef, verbose=False)
+        zeta = pred['h']
+
+        return zeta
 
     def add_rivers(self, positions):
         """
