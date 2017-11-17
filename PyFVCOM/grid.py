@@ -2447,7 +2447,7 @@ def unstructured_grid_depths(h, zeta, sigma, nan_invalid=False):
         zeta[invalid] = np.NAN
 
     abs_water_depth = zeta + h
-    allDepths = abs_water_depth[:, np.newaxis,:] * sigma[np.newaxis, :,:] + zeta[:, np.newaxis, :]
+    allDepths = abs_water_depth[:, np.newaxis,:] * sigma[np.newaxis, :, :] + zeta[:, np.newaxis, :]
 
     return allDepths
 
