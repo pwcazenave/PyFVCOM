@@ -135,6 +135,10 @@ class validation_db():
 
         return self.execute_sql(qry_string)
 
+    def table_exists(self, variable):
+        pass    
+        #return table_exist    
+
     def close_conn(self):
         """ Close the connection to the database. """
         self.conn.close()
@@ -620,16 +624,17 @@ class db_wco(validation_db):
         self.execute_sql('create index date_index on obs (time_int);')
 
     def _add_sql_strings(self):
-        self.wco_tables = {'obs':['buoy_id integer NOT NULL', 'time_int integer NOT NULL',
-                                    'depth real NOT NULL', 'temp real', 'salinity real', 'measurement_flag integer NOT NULL',
-                                    'PRIMARY KEY (buoy_id, depth, measurement_flag, time_int)', 'FOREIGN KEY (buoy_id) REFERENCES sites(buoy_id)',
-                                    'FOREIGN KEY (measurement_flag) REFERENCES measurement_types(measurement_flag)'],
-                       'sites':['buoy_id integer NOT NULL', 'buoy_name text', 'lon real', 'lat real',
+        self.wco_tables = {'sites':['buoy_id integer NOT NULL', 'buoy_name text', 'lon real', 'lat real',
                                     'other_stuff text', 'PRIMARY KEY (buoy_id)'],
-                       'measurement_types':['measurement_flag integer NOT NULL', 'measurement_description text', 'PRIMARY KEY (measurement_flag)']}
+                           'measurement_types':['measurement_flag integer NOT NULL', 'measurement_description text',
+                                    'PRIMARY KEY (measurement_flag)']}
     
     def _add_new_variable_table(self, variable):
-        pass
+        this_table_sql = ['buoy_id integer NOT NULL', 'time_int integer NOT NULL',
+                                    'depth real NOT NULL', variable + ' real', 'measurement_flag integer NOT NULL',
+                                    'PRIMARY KEY (buoy_id, depth, measurement_flag, time_int)', 'FOREIGN KEY (buoy_id) REFERENCES sites(buoy_id)',
+                                    'FOREIGN KEY (measurement_flag) REFERENCES measurement_types(measurement_flag)']
+        self.create_table(variable, this_variable_table_sql)
 
     def insert_CTD_file(self, filestr, buoy_id):
         file_obj = WCO_obs_file(filestr)
@@ -642,6 +647,10 @@ class db_wco(validation_db):
     def insert_CTD_dir(self, dirstr, buoy_id):
         file_obj = CTD_dir(dirstr)
         self._insert_obs(file_obj, buoy_id, 0.0)
+
+    def insert_csv_file(self, filestr, buoy_id):
+        file_obj = csv_formatted(filstr)
+        self._insert_obs(file_obj, buoy_id)
 
     def _insert_obs(self, file_obj, buoy_id, measurement_id):
         epoch_sec_timelist = []
@@ -793,12 +802,15 @@ class CTD_dir(WCO_obs_file):
         self.observation_dict['dt_time'] = np.hstack(dt_list)
 
 
+class csv_formatted():
+    def __init__(self, filename):
+        pass
+
 """
 Do the comparison
 
 
 """
-
 
 class comp_data():
     def __init__(self, buoy_list, file_list_or_probe_dir, wco_database, max_time_threshold=dt.timedelta(hours=1), max_depth_threshold = 100, probe_depths=None):
@@ -854,7 +866,6 @@ class comp_data():
 
         self.comp_dict[buoy_name] = obs_comp
 
-
     def comp_data_nearest(self, buoy_name, var_list):
         pass
 
@@ -891,13 +902,9 @@ class comp_data_filereader(comp_data):
                 for this_buoy in self.buoy_list:
                     model_all_dicts
 
-
         model_depths = fvcom_data_reader.grid.siglay * fvcom_data_reader.grid.h * -1
         for this_buoy in self.buoy_list:
             model_all_dicts[this_buoy]['depth'] = model_dp
-
-
-        for this_buoy in self.buoy_list:
             self.model_data[this_buoy] = model_all_dicts[this_buoy]
 
     def model_closest_time(self, find_time):
@@ -916,56 +923,3 @@ class comp_data_probe(comp_data):
             mod_times, mod_s_vals, mod_pos = pf.read.read_probes(s_filelist, locations=True, datetimes=True)
             model_dict = {'dt_time':mod_times, 'temp':mod_t_vals, 'salinity':mod_s_vals}
             self.model_data[this_buoy] = model_dict
-
-
-def wco_model_comparison(model_file_list, obs_database_file):
-
-    temp_comp = []
-    sal_comp = []
-    dates_comp = []
-    max_obs_depth = []
-
-    obs_dates = np.unique([this_date.date() for this_date in observations['time']])
-    for this_ind, this_obs_date in enumerate(obs_dates):
-        if this_obs_date >= model_time_mm[0].date() and this_obs_date <= model_time_mm[1].date():
-            this_obs_choose = [this_time.date() == this_obs_date for this_time in observations['time']]
-            this_obs_time = np.min(observations['time'][this_obs_choose])
-            this_time_close = fvcom_data_reader.closest_time(this_obs_time)
-
-            this_obs_deps = observations['h'][this_obs_choose]
-            this_obs_temp = observations['temp'][this_obs_choose]
-            this_obs_salinity = observations['salinity'][this_obs_choose]
-
-            this_obs_temp_interp = np.squeeze(np.interp(model_depths, this_obs_deps, this_obs_temp))
-            this_obs_salinity_interp = np.squeeze(np.interp(model_depths, this_obs_deps, this_obs_salinity))
-
-            this_model_temp = np.squeeze(fvcom_data_reader.data.temp[this_time_close,...])
-            this_model_salinity = np.squeeze(fvcom_data_reader.data.salinity[this_time_close,...])
-
-            temp_comp.append(np.asarray([this_obs_temp_interp, this_model_temp]))
-            sal_comp.append(np.asarray([this_obs_salinity_interp, this_model_salinity]))
-            dates_comp.append(this_obs_time)
-            max_obs_depth.append(np.max(this_obs_deps))
-
-    ctd_comp = {'temp':temp_comp, 'salinity':sal_comp, 'dates':dates_comp, 'max_depth':max_obs_depth}
-
-    observations = get_buoy_obs(obs_meta_data)
-
-    if observations:
-        buoy_temp_comp = []
-        buoy_sal_comp = []
-        buoy_dates_comp = []
-
-        for this_ind, this_obs_time in enumerate(observations['time']):
-            if this_obs_time >= model_time_mm[0] and this_obs_time <= model_time_mm[1]:
-                this_time_close = fvcom_data_reader.closest_time(this_obs_time)
-                buoy_temp_comp.append([observations['temp'][this_ind], fvcom_data_reader.data.temp[this_time_close,0]])
-                buoy_sal_comp.append([observations['salinity'][this_ind], fvcom_data_reader.data.salinity[this_time_close,0]])
-                buoy_dates_comp.append([this_obs_time, this_time_close])
-
-        buoy_comp = {'temp':buoy_temp_comp, 'salinity':buoy_sal_comp, 'dates':buoy_dates_comp}
-
-    else:
-        buoy_comp = {}
-
-    return ctd_comp, buoy_comp
