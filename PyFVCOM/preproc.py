@@ -98,6 +98,11 @@ def interp_sst_assimilation(domain, sst_dir, year, serial=False, pool_size=None,
         dates[i] = result[0][0] + relativedelta(hours=12)  # FVCOM wants times at midday whilst the data are at midnight
         sst[i, :] = result[1]
 
+    # Sort by time.
+    idx = np.argsort(dates)
+    dates = dates[idx]
+    sst = sst[idx, :]
+
     return sst, dates
 
 
