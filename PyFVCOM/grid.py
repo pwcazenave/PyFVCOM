@@ -1872,7 +1872,7 @@ def find_connected_elements(n, triangles):
 
     See Also
     --------
-    PyFVCOM.grid.surrounders().
+    PyFVCOM.grid.find_connected_nodes().
 
     """
 
