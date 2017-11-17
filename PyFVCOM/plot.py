@@ -11,7 +11,7 @@ from datetime import datetime
 
 from PyFVCOM.coordinate import lonlat_from_utm
 from PyFVCOM.read import FileReader
-from PyFVCOM.grid import getcrossectiontriangles, unstructured_grid_depths
+from PyFVCOM.grid import getcrossectiontriangles, unstructured_grid_depths, Domain
 
 import numpy as np
 
@@ -99,7 +99,7 @@ class Time:
 
         # Are we working with a FileReader object or a bog-standard netCDF4 Dataset?
         self._FileReader = False
-        if isinstance(dataset, FileReader):
+        if isinstance(dataset, (FileReader, Domain)):
             self._FileReader = True
 
         # Initialise the figure
@@ -438,7 +438,7 @@ class Plotter:
 
         # Are we working with a FileReader object or a bog-standard netCDF4 Dataset?
         self._FileReader = False
-        if isinstance(dataset, FileReader):
+        if isinstance(dataset, (FileReader, Domain)):
             self._FileReader = True
 
         # Initialise the figure
