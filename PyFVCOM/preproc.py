@@ -222,9 +222,9 @@ def write_sstgrd(output_file, domain, data, time, ncopts={'zlib': True, 'complev
     with WriteForcing(str(output_file), dims, global_attributes=globals, clobber=True, format='NETCDF4', **kwargs) as sstgrd:
         # Add the variables.
         atts = {'long_name': 'nodel longitude', 'units': 'degrees_east'}
-        sstgrd.add_variable('lon', domain.lon, ['node'], attributes=atts, ncopts=ncopts)
+        sstgrd.add_variable('lon', domain.grid.lon, ['node'], attributes=atts, ncopts=ncopts)
         atts = {'long_name': 'nodel latitude', 'units': 'degrees_north'}
-        sstgrd.add_variable('lat', domain.lat, ['node'], attributes=atts, ncopts=ncopts)
+        sstgrd.add_variable('lat', domain.grid.lat, ['node'], attributes=atts, ncopts=ncopts)
         atts = {'units': 'days since 1858-11-17 00:00:00',
                 'delta_t': '0000-00-00 01:00:00',
                 'format': 'modified julian day (MJD)',
