@@ -95,7 +95,7 @@ def interp_sst_assimilation(domain, sst_dir, year, serial=False, pool_size=None,
     dates = np.empty(len(results)).astype(datetime)
     sst = np.empty((len(results), domain.dims.node))
     for i, result in enumerate(results):
-        dates[i] = result[0][0] + relativedelta(hours=12)  # FVCOM wants times at midday whislt the data are a midnight
+        dates[i] = result[0][0] + relativedelta(hours=12)  # FVCOM wants times at midday whilst the data are at midnight
         sst[i, :] = result[1]
 
     return sst, dates
