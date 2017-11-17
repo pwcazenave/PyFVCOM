@@ -17,6 +17,7 @@ import multiprocessing as mp
 from netCDF4 import Dataset, date2num, num2date
 from scipy.interpolate import RegularGridInterpolator
 from dateutil.relativedelta import relativedelta
+from datetime import datetime
 from functools import partial
 from warnings import warn
 
@@ -91,10 +92,10 @@ def interp_sst_assimilation(domain, sst_dir, year, serial=False, pool_size=None,
         pool.close()
 
     # Sort data and prepare date lists
-    dates = np.empty(len(results))
+    dates = np.empty(len(results)).astype(datetime)
     sst = np.empty((len(results), domain.dims.node))
     for i, result in enumerate(results):
-        dates[i] = result[0] + relativedelta(hours=12)  # FVCOM wants times at midday whislt the data are a midnight
+        dates[i] = result[0][0] + relativedelta(hours=12)  # FVCOM wants times at midday whislt the data are a midnight
         sst[i, :] = result[1]
 
     return sst, dates
