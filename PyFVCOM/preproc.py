@@ -108,7 +108,7 @@ def _inter_sst_worker(fvcom_ll, sst_file, noisy=False):
     with Dataset(sst_file, 'r') as sst_file_nc:
         sst_eo = np.squeeze(sst_file_nc.variables['analysed_sst'][:]) - 273.15  # Kelvin to Celsius
         mask = sst_file_nc.variables['mask']
-        sst_eo[mask != 1] = np.nan
+        sst_eo[mask == 1] = np.nan
 
         sst_lon = sst_file_nc.variables['lon'][:]
         sst_lat = sst_file_nc.variables['lat'][:]
