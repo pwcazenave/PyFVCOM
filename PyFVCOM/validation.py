@@ -4,10 +4,12 @@ import datetime as dt
 import subprocess as sp
 import glob as gb
 import os
+from pandas import read_hdf,DataFrame
+import matplotlib.path as mplPath
 
 import matplotlib.pyplot as plt
 
-from PyFVCOM.grid import vincenty_distance
+from PyFVCOM.grid import get_boundary_polygons, vincenty_distance
 from PyFVCOM.read import FileReader
 from PyFVCOM.plot import Time, Plotter
 from PyFVCOM.stats import calculate_coefficient, rmse
@@ -51,9 +53,9 @@ class validation_db():
 
         return self.c.fetchall()
 
-    def make_create_table_sql(self, table_name, col_list):
+    def create_table(self, table_name, col_list):
         """
-        Create an SQL table if no such table exists.
+        Create a database table if no such table exists.
 
         Parameters
         ----------
@@ -70,7 +72,7 @@ class validation_db():
             create_str += ', '
         create_str = create_str[0:-2]
         create_str += ');'
-        self.create_table_sql['create_' + table_name] = create_str
+        self.execute_sql(create_str)
 
     def insert_into_table(self, table_name, data):
         """
@@ -134,6 +136,10 @@ class validation_db():
             qry_string += ' group by ' + group_by_str
 
         return self.execute_sql(qry_string)
+
+    def table_exists(self, variable):
+        pass    
+        #return table_exist    
 
     def close_conn(self):
         """ Close the connection to the database. """
@@ -341,8 +347,8 @@ class db_tide(validation_db):
 
         # Insert information into the error flags table
         self._add_sql_strings()
-        for this_table, this_str in self.create_table_sql.items():
-            self.execute_sql(this_str)
+        for this_key, this_val in self.bodc_tables.items():
+            self.create_table(this_key, this_val)
         error_data = [(0, '', 'No error'), (1, 'M', 'Improbable value flagged by QC'),
                         (2, 'N', 'Null Value'), (3, 'T', 'Value interpolated from adjacent values')]
         self.insert_into_table('error_flags', error_data)
@@ -486,7 +492,7 @@ class db_tide(validation_db):
 
     def _add_sql_strings(self):
         """ Function to define the database structure. """
-        bodc_tables = {'gauge_obs': ['site_id integer NOT NULL', 'time_int integer NOT NULL',
+        self.bodc_tables = {'gauge_obs': ['site_id integer NOT NULL', 'time_int integer NOT NULL',
                                      'elevation real NOT NULL', 'elevation_flag integer', 'residual real', 'residual_flag integer',
                                      'PRIMARY KEY (site_id, time_int)', 'FOREIGN KEY (site_id) REFERENCES sites(site_id)',
                                      'FOREIGN KEY (elevation_flag) REFERENCES error_flags(flag_id)',
@@ -494,9 +500,6 @@ class db_tide(validation_db):
                        'sites': ['site_id integer NOT NULL', 'site_tla text NOT NULL', 'site_name text', 'lon real', 'lat real',
                                  'other_stuff text', 'PRIMARY KEY (site_id)'],
                        'error_flags': ['flag_id integer NOT NULL', 'flag_code text', 'flag_description text']}
-
-        for this_key, this_val in bodc_tables.items():
-            self.make_create_table_sql(this_key, this_val)
 
 
 class bodc_annual_tide_file():
@@ -614,8 +617,8 @@ class db_wco(validation_db):
 
         # Insert information into the error flags table
         self._add_sql_strings()
-        for this_table, this_str in self.create_table_sql.items():
-            self.execute_sql(this_str)
+        for this_table, this_str in self.wco_tables.items():
+            self.create_table(this_key, this_val)
         sites_data = [(0, 'L4',-4.217,50.250, ' '), (1, 'E1',-4.368,50.035,' ')]
         self.insert_into_table('sites', sites_data)
         measurement_type_data = [(0,'CTD measurements'), (1, 'Surface buoy measurements')]
@@ -623,16 +626,17 @@ class db_wco(validation_db):
         self.execute_sql('create index date_index on obs (time_int);')
 
     def _add_sql_strings(self):
-        wco_tables = {'obs':['buoy_id integer NOT NULL', 'time_int integer NOT NULL',
-                                    'depth real NOT NULL', 'temp real', 'salinity real', 'measurement_flag integer NOT NULL',
-                                    'PRIMARY KEY (buoy_id, depth, measurement_flag, time_int)', 'FOREIGN KEY (buoy_id) REFERENCES sites(buoy_id)',
-                                    'FOREIGN KEY (measurement_flag) REFERENCES measurement_types(measurement_flag)'],
-                       'sites':['buoy_id integer NOT NULL', 'buoy_name text', 'lon real', 'lat real',
+        self.wco_tables = {'sites':['buoy_id integer NOT NULL', 'buoy_name text', 'lon real', 'lat real',
                                     'other_stuff text', 'PRIMARY KEY (buoy_id)'],
-                       'measurement_types':['measurement_flag integer NOT NULL', 'measurement_description text', 'PRIMARY KEY (measurement_flag)']}
-
-        for this_key, this_val in wco_tables.items():
-            self.make_create_table_sql(this_key, this_val)
+                           'measurement_types':['measurement_flag integer NOT NULL', 'measurement_description text',
+                                    'PRIMARY KEY (measurement_flag)']}
+    
+    def _add_new_variable_table(self, variable):
+        this_table_sql = ['buoy_id integer NOT NULL', 'time_int integer NOT NULL',
+                                    'depth real NOT NULL', variable + ' real', 'measurement_flag integer NOT NULL',
+                                    'PRIMARY KEY (buoy_id, depth, measurement_flag, time_int)', 'FOREIGN KEY (buoy_id) REFERENCES sites(buoy_id)',
+                                    'FOREIGN KEY (measurement_flag) REFERENCES measurement_types(measurement_flag)']
+        self.create_table(variable, this_variable_table_sql)
 
     def insert_CTD_file(self, filestr, buoy_id):
         file_obj = WCO_obs_file(filestr)
@@ -645,6 +649,10 @@ class db_wco(validation_db):
     def insert_CTD_dir(self, dirstr, buoy_id):
         file_obj = CTD_dir(dirstr)
         self._insert_obs(file_obj, buoy_id, 0.0)
+
+    def insert_csv_file(self, filestr, buoy_id):
+        file_obj = csv_formatted(filstr)
+        self._insert_obs(file_obj, buoy_id)
 
     def _insert_obs(self, file_obj, buoy_id, measurement_id):
         epoch_sec_timelist = []
@@ -796,12 +804,15 @@ class CTD_dir(WCO_obs_file):
         self.observation_dict['dt_time'] = np.hstack(dt_list)
 
 
+class csv_formatted():
+    def __init__(self, filename):
+        pass
+
 """
 Do the comparison
 
 
 """
-
 
 class comp_data():
     def __init__(self, buoy_list, file_list_or_probe_dir, wco_database, max_time_threshold=dt.timedelta(hours=1), max_depth_threshold = 100, probe_depths=None):
@@ -857,7 +868,6 @@ class comp_data():
 
         self.comp_dict[buoy_name] = obs_comp
 
-
     def comp_data_nearest(self, buoy_name, var_list):
         pass
 
@@ -894,13 +904,9 @@ class comp_data_filereader(comp_data):
                 for this_buoy in self.buoy_list:
                     model_all_dicts
 
-
         model_depths = fvcom_data_reader.grid.siglay * fvcom_data_reader.grid.h * -1
         for this_buoy in self.buoy_list:
             model_all_dicts[this_buoy]['depth'] = model_dp
-
-
-        for this_buoy in self.buoy_list:
             self.model_data[this_buoy] = model_all_dicts[this_buoy]
 
     def model_closest_time(self, find_time):
@@ -921,54 +927,297 @@ class comp_data_probe(comp_data):
             self.model_data[this_buoy] = model_dict
 
 
-def wco_model_comparison(model_file_list, obs_database_file):
+######################################################################################################################
 
-    temp_comp = []
-    sal_comp = []
-    dates_comp = []
-    max_obs_depth = []
+""" 
+Validation against ICES bottle data
+"""
 
-    obs_dates = np.unique([this_date.date() for this_date in observations['time']])
-    for this_ind, this_obs_date in enumerate(obs_dates):
-        if this_obs_date >= model_time_mm[0].date() and this_obs_date <= model_time_mm[1].date():
-            this_obs_choose = [this_time.date() == this_obs_date for this_time in observations['time']]
-            this_obs_time = np.min(observations['time'][this_obs_choose])
-            this_time_close = fvcom_data_reader.closest_time(this_obs_time)
+class ICES_comp():
+    """
+    A class for comparing FVCOM(-ERSEM) models to ICES bottle data. It is a fvcom-ised and class-ised version of code written 
+    by Momme Butenschon for NEMO output.
 
-            this_obs_deps = observations['h'][this_obs_choose]
-            this_obs_temp = observations['temp'][this_obs_choose]
-            this_obs_salinity = observations['salinity'][this_obs_choose]
+    The ICES data used is in a premade h5 file. This how it was inherited and should be updated to a form we can reproduce. 
 
-            this_obs_temp_interp = np.squeeze(np.interp(model_depths, this_obs_deps, this_obs_temp))
-            this_obs_salinity_interp = np.squeeze(np.interp(model_depths, this_obs_deps, this_obs_salinity))
 
-            this_model_temp = np.squeeze(fvcom_data_reader.data.temp[this_time_close,...])
-            this_model_salinity = np.squeeze(fvcom_data_reader.data.salinity[this_time_close,...])
+    Example
+    -------
+    from PyFVCOM.validation import ICES_comp
+    import matplotlib.pyplot as plt
 
-            temp_comp.append(np.asarray([this_obs_temp_interp, this_model_temp]))
-            sal_comp.append(np.asarray([this_obs_salinity_interp, this_model_salinity]))
-            dates_comp.append(this_obs_time)
-            max_obs_depth.append(np.max(this_obs_deps))
+    datafile="/data/euryale4/backup/momm/Data/ICES-data/CTD-bottle/EX187716.averaged.sorted.reindexed.h5"
+    modelroot="/data/euryale2/scratch/mbe/Models_2/FVCOM/rosa/output"
+    years=[2005]
+    months = [2,3]
+    modelfile=lambda y,m: "{}/{}/{:02d}/aqua_v16_0001.nc".format(modelroot,y,m)
+    modelfilelist = [modelfile(years[0], this_month) for this_month in months]
 
-    ctd_comp = {'temp':temp_comp, 'salinity':sal_comp, 'dates':dates_comp, 'max_depth':max_obs_depth}
+    test_comp = ICES_comp(modelfilelist, datafile, noisy=True)
+    temp_ices, temp_model = test_comp.get_var_comp('TEMP')
+    plt.scatter(temp_model, temp_ices)
+    plt.xlabel('Modelled temperature')
+    plt.ylabel('Observed temperature')
 
-    observations = get_buoy_obs(obs_meta_data)
 
-    if observations:
-        buoy_temp_comp = []
-        buoy_sal_comp = []
-        buoy_dates_comp = []
+    To Do
+    -----
+    Make script to generate the ICES datafile
+    Parrellelelise
+    Add plotting
+    Change null value to non numeric
 
-        for this_ind, this_obs_time in enumerate(observations['time']):
-            if this_obs_time >= model_time_mm[0] and this_obs_time <= model_time_mm[1]:
-                this_time_close = fvcom_data_reader.closest_time(this_obs_time)
-                buoy_temp_comp.append([observations['temp'][this_ind], fvcom_data_reader.data.temp[this_time_close,0]])
-                buoy_sal_comp.append([observations['salinity'][this_ind], fvcom_data_reader.data.salinity[this_time_close,0]])
-                buoy_dates_comp.append([this_obs_time, this_time_close])
 
-        buoy_comp = {'temp':buoy_temp_comp, 'salinity':buoy_sal_comp, 'dates':buoy_dates_comp}
+    """
 
-    else:
-        buoy_comp = {}
+    def __init__(self, modelfilelist, ices_hdf_file, var_list=None, daily_avg=False, noisy=False):
+        """
+        Retrieves the ICES data from the timeperiod of the model run and from within its bounding polygon, then for
+        each observation retrieves the nearest model output in space and time. These data are held in dicts self.ices_data
+        and self.model_data, with keys corresponding to the ICES variable names.
 
-    return ctd_comp, buoy_comp
+
+        Parameters
+        ----------
+        modelfilelist : list-like
+            List of strings of the locations of . It is assumed the files are in sequential time order.
+        ices_hdf_file : string
+            The path to the hdf file of ICES data.
+        var_list : list-like, optional
+            The variables for comparison (ICES names). If not specified then defaults to all available (see self._add_default_varlist)
+        daily_avg : boolean, optional
+            Set to true if comparing daily averaged FVCOM output
+        noisy : boolean, optional
+            Output progress strings
+
+        """
+        self.model_files = modelfilelist
+        self.ices_file = ices_hdf_file
+        self.daily_avg = daily_avg
+        self._add_ICES_model_varnames()
+        self._add_data_dicts()
+        self.noisy = noisy        
+
+        if var_list:
+            self.var_keys = var_list
+        else:
+            self._add_default_varlist()
+
+        model_varkeys = []
+        for this_key in self.var_keys:
+            this_model_key = self.ices_model_conversion[this_key] 
+            if "+" in this_model_key:
+                vlist = this_model_key.split('+')
+                for v in vlist:
+                    model_varkeys.append(v)
+            else:
+                model_varkeys.append(this_model_key)                   
+        self.model_varkeys = model_varkeys
+
+        self.zeta_filereader = FileReader(self.model_files[0], ['zeta'])
+        if len(self.model_files) > 1:
+            for this_file in self.model_files[1:]:
+                self.zeta_filereader += FileReader(this_file, ['zeta'])
+        self.lon_mm = [np.min(self.zeta_filereader.grid.lon), np.max(self.zeta_filereader.grid.lon)]
+        self.lat_mm = [np.min(self.zeta_filereader.grid.lat), np.max(self.zeta_filereader.grid.lat)]
+        bn_list = get_boundary_polygons(self.zeta_filereader.grid.triangles)[0] # Assumes first poly is outer boundary
+        self.bnd_poly = mplPath.Path(np.asarray([self.zeta_filereader.grid.lon[bn_list], self.zeta_filereader.grid.lat[bn_list]]).T)
+        self._ICES_dataget()
+        self._model_dataget()
+
+    def get_var_comp(self, var, return_locs_depths_dates = False):
+        """
+        Retreive the comparison data for a single variable
+
+        Parameters
+        ----------
+        var : string
+            The variable to return, this must be the same as something in the self.var_keys (i.e. the ICES name)
+        return_locs_depths_dates : boolean, optional
+            As well as data return the locations, depths, and dates of the ICES observations to allow subsetting of results
+
+
+        Returns
+        -------
+        ices_data : array or dict
+            array of observations or (if return_locs_depths_dates) a dict with observations, depths, dates, and locations
+        model_data : array
+            array of nearest model data corresponding to observations
+        """
+
+        if var not in self.var_keys:
+            print('Variable not in retrieved data')
+            return None, None
+
+        ices_data = np.asarray(self.ices_data[var])
+        model_data = np.asarray(self.model_data[var])
+    
+        remove_data = model_data < -100
+        ices_data = ices_data[~remove_data]
+        model_data = model_data[~remove_data]
+
+        if return_locs_depths_dates:
+            ices_dates = np.asarray(ices_data['time_dt'])[~remove_data]    
+            ices_depths = np.asarray(ices_data['z'])[~remove_data]
+            ices_lon = np.asarray(ices_data['lon'])[~remove_data]
+            ices_lat = np.asarray(ices_data['lat'])[~remove_data]
+
+            ices_data = {var:ices_data, 'depths':ices_depths, 'dates':ices_dates, 'lon':ices_lon, 'lat':ices_lat}    
+        
+        return ices_data, model_data
+
+    def _ICES_dataget(self):
+        # Read the ices datafile
+        df=read_hdf(self.ices_file,"df")
+
+        start_step_len = 1000000
+        end_step_len = 10
+        start_index = 0
+
+        # The dataframe is huge so skip through to the approriate start point
+        while start_step_len >= end_step_len:
+            start_index = self._year_start(np.min(self.zeta_filereader.time.datetime).year, start_index, start_step_len, df)
+            start_step_len = start_step_len/10
+        df = df[int(start_index):]
+
+        for n,sample in df.iterrows():
+            if self.noisy:
+                print('ICES sample {}'.format(n))
+
+            h = int(np.floor(sample['Hr']/100))
+            sample_dt = dt.datetime(int(sample['Year']),int(sample['Mnth']),int(sample['Dy']),h,int(sample['Hr'] - h*100))
+            if sample_dt > np.max(self.zeta_filereader.time.datetime):
+                break
+            
+            if self.lon_mm[0]<=sample['Longdeg']<=self.lon_mm[1] and self.lat_mm[0]<=sample['Latdeg']<=self.lat_mm[1] and \
+                                    sample_dt >= np.min(self.zeta_filereader.time.datetime):
+
+                if self.bnd_poly.contains_point(np.asarray([sample['Longdeg'], sample['Latdeg']])):
+                    node_ind = self.zeta_filereader.closest_node([sample['Longdeg'], sample['Latdeg']], haversine=True)
+
+                    if self.daily_avg: # For daily averages match by day, otherwise use nearest time
+                        sample_dt = dt.datetime(y,m,d)
+
+                    model_time_ind = self.zeta_filereader.closest_time(sample_dt)
+                    model_dt = self.zeta_filereader.time.datetime[model_time_ind]
+
+                    sample_depth=sample['d/p']
+                    this_depth = self.zeta_filereader.grid.h[node_ind] + self.zeta_filereader.data.zeta[model_time_ind, node_ind]
+                    dep_layers = this_depth * -1 * self.zeta_filereader.grid.siglay[:, node_ind]
+                    z_ind = self._checkDepth(sample_depth, dep_layers)
+
+                    if z_ind>=0 and self._checkSample(sample):
+                        self._addICESsample(sample, sample_dt, model_dt, node_ind, z_ind)
+
+    def _addICESsample(self, sample, sample_dt, model_dt, node_ind, z_ind):
+        self.ices_data['time_dt'].append(sample_dt)    
+        self.model_data['time_dt'].append(model_dt)
+                        
+        self.ices_data['lat'].append(sample['Latdeg'])
+        self.ices_data['lon'].append(sample['Longdeg'])
+        self.ices_data['z'].append(sample["d/p"])
+        self.model_data['node_ind'].append(node_ind)
+        self.model_data['z_ind'].append(z_ind)
+    
+        for key in self.var_keys:
+            if sample[key]<-8.999999:
+                mvalue=-1.e15
+                dvalue=-1.e15
+            else:
+                dvalue=sample[key]
+                mvalue=-1.e10
+            self.ices_data[key].append(dvalue)
+            self.model_data[key].append(mvalue)
+        
+        if 'NTRA(umol/l)' in self.var_keys:
+            if sample['NTRA(umol/l)']>-8.999999 and sample['NTRI(umol/l)']>-8.999999:
+                dvalue=sample['NTRI(umol/l)']
+                mvalue=-1.e10
+            else:
+                dvalue=-1.e15
+                mvalue=-1.e15
+            self.ices_data['NTRI(umol/l)'].append(dvalue)
+            self.model_data['NTRI(umol/l)'].append(mvalue)    
+
+    def _model_dataget(self):
+        if len(self.ices_data['time_dt']) == 0:
+            print('No ICES data loaded for comparison')
+            return
+        
+        current_modelfile_ind = 0
+        current_modelfile_dt = [this_date.date() for this_date in FileReader(self.model_files[current_modelfile_ind]).time.datetime]
+        unique_obs_days = np.unique([this_date.date() for this_date in self.ices_data['time_dt']])
+        for counter_ind, this_day in enumerate(unique_obs_days):
+            if self.noisy:
+                print('Getting model data from day {} of {}'.format(counter_ind +1, len(unique_obs_days)))
+
+            if this_day > current_modelfile_dt[-1]:
+                current_modelfile_ind += 1
+                if current_modelfile_ind < len(self.model_files):
+                    current_modelfile_dt = [this_date.date() for this_date in FileReader(self.model_files[current_modelfile_ind]).time.datetime]
+                else:
+                    return
+            this_day_index = np.where(np.asarray(current_modelfile_dt) == this_day)[0]
+            this_day_fr = FileReader(self.model_files[current_modelfile_ind], self.model_varkeys, 
+                                                                    dims={'time':[np.min(this_day_index),np.max(this_day_index)+1]}) 
+            this_day_obs_inds = np.where(np.asarray([this_dt.date() for this_dt in self.ices_data['time_dt']]) == this_day)[0]
+    
+            for this_record_ind in this_day_obs_inds:
+                for key in self.var_keys:
+                    if self.ices_data[key][this_record_ind] >-9.99e9:
+                        this_model_key = self.ices_model_conversion[key]
+                        space_ind = self.model_data['node_ind'][this_record_ind]
+                        dep_ind = self.model_data['z_ind'][this_record_ind] 
+                        time_ind = this_day_fr.closest_time(self.ices_data['time_dt'][this_record_ind])
+
+                        if "+" in this_model_key:
+                            vlist = this_model_key.split('+')
+                            mbuffer = 0
+                            for v in vlist:
+                                mbuffer += getattr(this_day_fr.data, v)[time_ind, dep_ind, space_ind]
+                            self.model_data[key][this_record_ind] = mbuffer
+                        else:
+                            self.model_data[key][this_record_ind] = getattr(this_day_fr.data, this_model_key)[time_ind, dep_ind, space_ind]
+
+    def _add_ICES_model_varnames(self):
+        self.ices_model_conversion = {'TEMP':'temp', 'PSAL':'salinity', 'PHOS(umol/l)':'N1_p', 'SLCA(umol/l)':'N5_s',
+                        'PHPH':'O3_pH', 'ALKY(mmol/l)':'O3_TA', 'NTRA(umol/l)':'N3_n', 'AMON(umol/l)':'N4_n',
+                        'DOXY(umol/l)':'O2_o', 'CPHL(mg/m^3)':'P1_Chl+P2_Chl+P3_Chl+P4_Chl'}
+
+    def _add_data_dicts(self):
+        self.ices_data = {'lat':[], 'lon':[], 'z':[], 'time_dt':[], 'NTRI(umol/l)':[]}
+        self.model_data = {'node_ind':[], 'z_ind':[], 'time_dt':[], 'NTRI(umol/l)':[]}
+        for this_key in self.ices_model_conversion:
+            self.ices_data[this_key] = []
+            self.model_data[this_key] = []
+
+    def _add_default_varlist(self):
+        self.var_keys = ['TEMP','PSAL', 'DOXY(umol/l)', 'PHOS(umol/l)', 'SLCA(umol/l)', 'NTRA(umol/l)', 'AMON(umol/l)',
+                            'PHPH', 'ALKY(mmol/l)', 'CPHL(mg/m^3)']
+
+    def _checkSample(self, sample):
+        hasData=False
+        for key in self.var_keys:
+            if sample[key]>-8.999999:
+                hasData=True
+        return hasData
+
+    @staticmethod
+    def _checkDepth(z,dep_lays_choose):
+        if z>dep_lays_choose[-1]:
+            return -1
+        else:
+            k=((z-dep_lays_choose)**2).argmin()
+            return k
+
+    @staticmethod
+    def _year_start(year_find, start_index, step, df):
+        year_found = 0
+        this_ind = start_index
+        while year_found == 0:
+            this_year = df.loc[this_ind]['Year']
+            if this_year >=year_find:
+                year_found = 1
+                return_step = this_ind - step
+            this_ind = this_ind + step
+        return int(return_step)
