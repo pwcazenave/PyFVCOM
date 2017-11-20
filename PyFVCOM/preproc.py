@@ -47,8 +47,6 @@ class Model(Domain):
 
         Parameters
         ----------
-        domain : PyFVCOM.grid.Domain
-            Model domain object.
         sst_dir : str
             Path to directory containing the SST data. Assumes there are directories per year within this directory.
         year : int
@@ -146,16 +144,12 @@ class Model(Domain):
 
     def write_sstgrd(self, output_file, ncopts={'zlib': True, 'complevel': 7}, **kwargs):
         """
-        Generate a sea surface temperature data assimilation file for the given FVCOM domain.
+        Generate a sea surface temperature data assimilation file for the given FVCOM domain from the self.sst data.
 
         Parameters
         ----------
         output_file : str, pathlib.Path
             File to which to write SST data.
-        data : np.ndarray
-            The data to write ([time, node]).
-        time : np.ndarray
-            The time series for the data as datetime objects.
         ncopts : dict
             Dictionary of options to use when creating the netCDF variables. Defaults to compression on.
 
