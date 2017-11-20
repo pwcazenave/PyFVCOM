@@ -157,7 +157,7 @@ class Domain:
         self.grid.yc = nodes2elems(self.grid.y, self.grid.triangles)
         self.grid.lonc = nodes2elems(self.grid.lon, self.grid.triangles)
         self.grid.latc = nodes2elems(self.grid.lat, self.grid.triangles)
-        self.grid.hcenter = nodes2elems(self.grid.h, self.grid.triangles)
+        self.grid.h_center = nodes2elems(self.grid.h, self.grid.triangles)
 
     def closest_node(self, where, cartesian=False, threshold=None, vincenty=False, haversine=False):
         """
