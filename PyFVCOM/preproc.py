@@ -429,6 +429,9 @@ class Model(Domain):
         """
         pass
 
+    def write_rivers(self, output_file):
+        pass
+
     def add_probes(self, positions, names, variables, interval, max_distance=np.inf):
         """
         Generate probe locations closest to the given locations.
@@ -557,7 +560,6 @@ class Model(Domain):
             Path to the output file name list to create.
 
         """
-        pass
 
         if not hasattr(self, 'probes'):
             raise AttributeError('No probes object found. Please run PyFVCOM.preproc.add_probes() first.')
@@ -589,6 +591,8 @@ class Model(Domain):
                     f.write(' PROBE_VARIABLE = "{}",\n'.format(variable))
                     f.write(' PROBE_VAR_NAME = "{}"\n'.format(long_name))
                     f.write('/\n')
+
+        pass
 
 class WriteForcing:
     """ Create an FVCOM netCDF input file. """
