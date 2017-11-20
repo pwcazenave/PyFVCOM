@@ -342,7 +342,7 @@ class Model(Domain):
 
         """
 
-        dist = np.emtpy(self.dims.layers) * np.nan
+        dist = np.empty(self.dims.levels) * np.nan
 
         if h < hmin:
             dist[0] = 0
