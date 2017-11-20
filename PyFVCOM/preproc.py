@@ -207,9 +207,36 @@ class Model(Domain):
         else:
             self.grid.nodestrings, self.grid.types, _ = read_fvcom_obc(str(obcfile))
 
-    def add_sponge_layer(self, radius=None):
-        """ Add a sponge layer. """
-        pass
+    def add_sponge_layer(self, nodes, radius, coefficient):
+        """
+        Add a sponge layer. If radius or coefficient are floats, apply the same value to all nodes.
+
+        Parameters
+        ----------
+        nodes : list, np.ndarray
+            Grid nodes at which to add the sponge layer.
+        radius : float, list, np.ndarray
+            The sponge layer radius at the given nodes.
+        coefficient : float, list, np.ndarray
+            The sponge layer coefficient at the given nodes.
+
+        """
+
+        if not np.any(self.gridobc_nodes):
+            raise ValueError('No open boundary nodes specified; sponge nodes cannot be defined.')
+
+        if isinstance(radius, (float, int)):
+            radius = np.repeat(radius, np.shape(nodes))
+        if isinstance(coefficient, (float, int)):
+            coefficient = np.repeat(radius), np.shape(nodes)
+
+        self.grid.sponge_radius = radius
+        self.grid.sponge_coefficient = coefficient
+
+        if hasattr(self.grid, 'sponge_nodes'):
+            self.grid.sponge_nodes.append(nodes)
+        else:
+            self.grid.sponge_nodes = nodes
 
     def add_grid_metrics(self):
         """ Calculate grid metrics. """
