@@ -634,12 +634,12 @@ class Model(Domain):
                 f.write('{:4.1f}'.format(ii))
             f.write(f, '\n')
 
-    def add_open_boundaries(self, obcfile, reload=False):
+    def add_open_boundaries(self, obc_file, reload=False):
         """
 
         Parameters
         ----------
-        obcfile : str, pathlib.Path
+        obc_file : str, pathlib.Path
             FVCOM open boundary specification file.
         reload : bool
             Set to True to overwrite any automatically or already loaded open boundary nodes. Defaults to False.
@@ -650,7 +650,7 @@ class Model(Domain):
             warn('Open boundary nodes already loaded and reload set to False.')
             return
         else:
-            self.grid.nodestrings, self.grid.types, _ = read_fvcom_obc(str(obcfile))
+            self.grid.nodestrings, self.grid.types, _ = read_fvcom_obc(str(obc_file))
 
     def add_sponge_layer(self, nodes, radius, coefficient):
         """
