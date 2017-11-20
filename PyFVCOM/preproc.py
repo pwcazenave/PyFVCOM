@@ -546,79 +546,65 @@ class Model(Domain):
         # plot(y,ones(size(y)).*-Hmin)
         # fprintf('Calculated minimum depth: %.2f\n', Hmin)
 
-    def __hybrid_coordinate_hmin(H, nlev, DU, DL, KU, KL, ZKU, ZKL):
-        """ Helper function to find the relevant minimum depth. I think.
-        #
-        #   ZZ = hybrid_coordinate_hmin(H, nlev, DU, DL, KU, KL, ZKU, ZKL)
-        #
-        # INPUT:
-        #   H: transition depth of the hybrid coordinates?
-        #   nlev: number of vertical levels (layers + 1)
-        #   DU: upper water boundary thickness (metres)
-        #   DL: lower water boundary thickness (metres)
-        #   KU: layer number in the water column of DU
-        #   KL: layer number in the water column of DL
-        #
-        # OUTPUT:
-        #   ZZ: minimum water depth?
-        #
-        # Author(s):
-        #   Ricard Torres (Plymouth Marine Laboratory)
+    @staticmethod
+    def __hybrid_coordinate_hmin(H, levels, DU, DL, KU, KL, ZKU, ZKL):
+        """
+        Helper function to find the relevant minimum depth.
+
+        Parameters
+        ----------
+        H : float
+            Transition depth of the hybrid coordinates?
+        levels : int
+            Number of vertical levels (layers + 1)
+        DU : float
+            Upper water boundary thickness (metres)
+        DL : float
+            Lower water boundary thickness (metres)
+        KU : int
+            Layer number in the water column of DU
+        KL : int
+            Layer number in the water column of DL
+
+        Returns
+        -------
+        ZZ : float
+            Minimum water depth.
+
         """
 
-        Z0 = np.empty(nlev) * np.nan
+        Z0 = np.zeros(levels)
         Z2 = Z0.copy()
-        Z0[0] = 0
+
         dl2 = 0.001
         du2 = 0.001
-        for k in range(nlev):
+        kbm1 = levels - 1
+        for nn in range(levels - 1):
             x1 = dl2 + du2
-            x1 = x1 * nlev - k / nlev
+            x1 = x1 * (kbm1 - nn) / kbm1
             x1 = x1 - dl2
             x1 = np.tanh(x1)
             x2 = np.tanh(dl2)
             x3 = x2 + np.tanh(du2)
-            Z0[k + 1] = (x1 + x2) / x3 - 1
-
-        z0 = np.zeros(nlev)
-        z2 = z0
-        z0[0] = 0
-        dl2 = 0.001
-        du2 = 0.001
-        kbm1 = nlev - 1
-        for nn = 1:nlev - 1
-            x1 = dl2 + du2
-            x1 = x1 * (kbm1 - nn) / kbm1
-            x1 = x1 - dl2
-            x1 = tanh(x1)
-            x2 = tanh(dl2)
-            x3 = x2 + tanh(du2)
-
-            z0(nn + 1, 1)=((x1 + x2) / x3) - 1
-        end
+            Z0[nn + 1] = ((x1 + x2) / x3) - 1
 
         # s-coordinates
         X1 = (H - DU - DL)
-        X2 = X1 ./ H
-        DR = X2 ./ (nlev - KU - KL - 1)
+        X2 = X1 / H
+        DR = X2 / (levels - KU - KL - 1)
 
-        Z2(1,1) = 0.0
+        for K in range(1, KU + 1):
+            Z2[K] = Z2[K - 1] - (ZKU[K - 1] / H)
 
-        for K = 2:KU + 1
-            Z2(K, 1) = Z2(K - 1, 1) - (ZKU(K - 1) ./ H)
-        end
-
-        for K= KU + 2:nlev - KL
-            Z2(K, 1) = Z2(K - 1, 1) - DR
-        end
+        for K in range(KU + 2, levels - KL):
+            Z2[K] = Z2[K - 1] - DR
 
         KK = 0
-        for K = nlev - KL + 1:nlev
-            KK = KK + 1
-            Z2(K, 1) = Z2(K - 1, 1) - (ZKL(KK) ./ H)
-        end
-        ZZ = max(H*(Z0) - H*(Z2))
-        # ZZ = max(abs(diff(H*(Z0)) - diff(H*(Z2))))
+        for K in range(levels - KL + 1, levels):
+            KK += 1
+            Z2[K] = Z2[K - 1] - (ZKL[KK] / H)
+
+        ZZ = np.max(H * Z0 - H * Z2)
 
         return ZZ
 
