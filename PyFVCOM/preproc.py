@@ -12,6 +12,8 @@ Pierre Cazenave (Plymouth Marine Laboratory)
 """
 
 import os
+import scipy.optimize
+
 import numpy as np
 import multiprocessing as mp
 
@@ -188,6 +190,451 @@ class Model(Domain):
                     'grid': 'fvcom_grid',
                     'type': 'data'}
             sstgrd.add_variable('sst', self.sst.sst, ['time', 'node'], attributes=atts, ncopts=ncopts)
+
+    # There's a lot of repetition in this sigma coordinate stuff. It need splitting into multiple smaller functions
+    # which can be reused.
+    def add_sigma_coordinates(self, sigma_file, noisy=False):
+        """
+        Read in a sigma coordinates file and apply to the grid object.
+
+        Parameters
+        ----------
+        sigma_file : str, pathlib.Path
+            FVCOM sigma coordinates .dat file.
+
+        Notes
+        -----
+        This is more or less a direct python translation of the original MATLAB fvcom-toolbox function read_sigma.m
+
+        """
+
+        sigma_file = str(sigma_file)
+
+        with open(sigma_file, 'r') as f:
+            lines = f.readlines()
+            for line in lines:
+                line = line.strip()
+                option, value = line.split('=')
+                option = option.strip().lower()
+                value = value.strip()
+
+                # Grab the various bits we need.
+                if option == 'number of sigma levels':
+                    nlev = int(value)
+                elif option == 'sigma coordinate type':
+                    sigtype = value
+                elif option == 'sigma power':
+                    sigpow = float(value)
+                elif option == 'du':
+                    du = float(value)
+                elif option == 'dl':
+                    dl = float(value)
+                elif option == 'min constant depth':
+                    min_constant_depth = float(value)
+                elif option == 'ku':
+                    ku = float(value)
+                elif option == 'kl':
+                    kl = float(value)
+                elif option == 'zku':
+                    s = [float(i) for i in value.split(' ')]
+                    zku = np.zeros(ku)
+                    for i in range(len(ku)):
+                        zku[i] = s[i]
+                elif option == 'zkl':
+                    s = [float(i) for i in value.split(' ')]
+                    zkl = np.zeros(kl)
+                    for i in range(len(kl)):
+                        zkl[i] = s[i]
+
+        # Do some checks if we've got uniform or generalised coordinates to make sure the input is correct.
+        if sigtype == 'GENERALIZED':
+            if len(zku) != ku:
+                raise ValueError('Number of zku values does not match the number specified in ku')
+            if len(zkl) != kl:
+                raise ValueError('Number of zkl values does not match the number specified in kl')
+
+        # Calculate the sigma level distributions at each grid node.
+        if sigtype.lower() == 'generalized':
+            z = np.empty((self.dims.node, nlev)) * np.nan
+            for i in range(self.dims.node):
+                z[i, :] = self._sigma_gen(dl, du, kl, ku, zkl, zku, self.grid.h[i], min_constant_depth)
+        if sigtype.lower() == 'uniform':
+            z = np.repeat(self._sigma_geo(1), [self.dims.node, 1])
+        if sigtype.lower() == 'geometric':
+            z = np.repeat(self._sigma_geo(sigpow), [self.dims.node, 1])
+        else:
+            raise ValueError('Unrecognised sigtype {} (is it supported?)'.format(sigtype))
+
+        # Create a sigma layer variable (i.e. midpoint in the sigma levels).
+        zlay = z[:, 1:-2] + (np.diff(z, axis=1) / 2)
+        zlayc = np.empty(self.dims.nele, nlev - 1) * np.nan
+        zc = np.empty(self.dims.nele, nlev) * np.nan
+        for i in range(nlev):
+            zc[:, i] = nodes2elems(z[:, i], self.grid.triangles)
+            if i != nlev:
+                zlayc[:, i] = nodes2elems(zlay[:, i], self.grid.triangles)
+
+        self.grid.sigma_layers = zlay
+        self.grid.sigma_levels = z
+        self.grid.sigma_layers_center = nodes2elems(self.grid.sigma_layers, self.grid.triangles)
+        self.grid.sigma_levels_center = nodes2elems(self.grid.sigma_levels, self.grid.triangles)
+
+        # Make some depth-resolved sigma distributions.
+        self.grid.sigma_layers_z = self.grid.h * self.grid.sigma_layers
+        self.grid.sigma_layers_center_z = self.grid.h_center * self.grid.sigma_layers_center
+        self.grid.sigma_levels_z = self.grid.h * self.grid.sigma_levels
+        self.grid.sigma_levels_center_z = self.grid.h_center * self.grid.sigma_levels_center
+
+        # Make some dimensions
+        self.dims.layers = nlev - 1
+        self.dims.levels = nlev
+
+        # Print the sigma file configuration we've parsed.
+        if noisy:
+            # Should be present in all sigma files.
+            print('nlev\t{:d}\n'.format(nlev))
+            print('sigtype\t%s\n'.format(sigtype))
+
+            # Only present in geometric sigma files.
+            if sigtype == 'GEOMETRIC':
+                print('sigpow\t{:d}\n'.format(sigpow))
+
+            # Only in the generalised or uniform sigma files.
+            if sigtype == 'GENERALIZED':
+                print('du\t{:d}\n'.format(du))
+                print('dl\t{:d}\n'.format(dl))
+                print('min_constant_depth\t%f\n'.format(min_constant_depth))
+                print('ku\t{:d}\n'.format(ku))
+                print('kl\t{:d}\n'.format(kl))
+                print('zku\t{:d}\n'.format(zku))
+                print('zkl\t{:d}\n'.format(zkl))
+
+    def _sigma_gen(self, dl, du, kl, ku, zkl, zku, h, hmin):
+        """
+        Generate a generalised sigma coordinate distribution.
+
+        Parameters
+        ----------
+        dl : float
+            The lower depth boundary from the bottom, down to which the coordinates are parallel with uniform thickness.
+        du : float
+            The upper depth boundary from the surface, up to which the coordinates are parallel with uniform thickness.
+        kl : float
+            ?
+        ku : float
+            ?
+        zkl : list, np.ndarray
+            ?
+        zku : list, np.ndarray
+            ?
+        h : float
+            Water depth.
+        hmin : float
+            Minimum water depth.
+
+        Returns
+        -------
+        dist : np.ndarray
+            Generalised vertical sigma coordinate distribution.
+
+        """
+
+        dist = np.emtpy(self.dims.layers) * np.nan
+
+        if h < hmin:
+            dist[0] = 0
+            dl2 = 0.001
+            du2 = 0.001
+            for k in range(self.dims.layers):
+                x1 = dl2 + du2
+                x1 = x1 * self.dims.layers - k / self.dims.layers
+                x1 = x1 - dl2
+                x1 = np.tanh(x1)
+                x2 = np.tanh(dl2)
+                x3 = x2 + np.tanh(du2)
+                dist[k + 1] = (x1 + x2) / x3 - 1
+        else:
+            dr = (h - du - dl) / h / (self.dims.levels - ku - kl - 1)
+            dist[1] = 0
+
+            for k in range(1, ku + 1):
+                dist[k] = dist[k - 1] - zku[k - 1] / h
+
+            for k in range(ku + 1, self.dims.levels - kl):
+                dist[k] = dist[k - 1] - dr
+
+            kk = 0
+            for k in range(self.dims.levels - kl + 1, self.dims.levels):
+                kk += 1
+                dist[k] = dist[k - 1] - zkl[kk] / h
+
+        return dist
+
+    def _sigma_geo(self, p_sigma):
+        """
+        Generate a geometric sigma coordinate distribution.
+
+        Parameters
+        ----------
+        p_sigma : float
+            Power value. 1 for uniform sigma layers, 2 for parabolic function. See page 308-309 in the FVCOM manual
+            for examples.
+
+        Returns
+        -------
+        dist : np.ndarray
+            Geometric vertical sigma coordinate distribution.
+
+        """
+        kb = self.dims.levels
+        dist = np.empty(kb)
+
+        if p_sigma == 1:
+            for k in range(self.dims.levels):
+                dist[k] = -((k - 1) / (kb - 1))**p_sigma
+
+        else:
+            for k in range((kb + 1) / 2):
+                dist[k] = -((k - 1) / ((kb + 1) / 2 - 1))**p_sigma / 2
+
+            for k in range((kb + 1) / 2 + 1, kb):
+                dist[k] = ((kb - k) / ((kb + 1) / 2 - 1))**p_sigma / 2 - 1
+
+        return dist
+
+    def hybrid_sigma_coordinate(self, H0, DU, DL, KU, KL, noisy=False):
+        """
+        Create a hybrid vertical coordinate system.
+
+        Parameters
+        ----------
+        H0 : float
+            Transition depth of the hybrid coordinates
+        DU : float
+            Upper water boundary thickness (metres)
+        DL : float
+            Lower water boundary thickness (metres)
+        KU : int
+            Number of layers in the DU water column
+        KL : int
+            Number of layers in the DL water column
+
+        Populates
+        ---------
+        self.dims.layers : int
+            Number of sigma layers.
+        self.dims.levels : int
+            Number of sigma levels.
+        self.grid.sigma_levels : np.ndarray
+            Sigma levels at the nodes
+        self.grid.sigma_layers : np.ndarray
+            Sigma layers at the nodes
+        self.grid.sigma_levels_z : np.ndarray
+            Water depth levels at the nodes
+        self.grid.sigma_layers_z : np.ndarray
+            Water depth layers at the nodes
+        self.grid.sigma_levels_center : np.ndarray
+            Sigma levels at the elements
+        self.grid.sigma_layers_center : np.ndarray
+            Sigma layers at the elements
+        self.grid.sigma_levels_z_center : np.ndarray
+            Water depth levels at the elements
+        self.grid.sigma_layers_z_center : np.ndarray
+            Water depth layers at the elements
+
+        """
+
+        nlev = self.dims.levels
+
+        if noisy:
+            print('Optimising the hybrid coordinates... ')
+
+        ZKU = np.repeat(DU / KU, 1, KU)
+        ZKL = np.repeat(DL / KL, 1, KL)
+
+        # Limits on the optimisation run.
+        # optimisation_settings = optimset('MaxFunEvals', 5000, 'MaxIter', 5000, 'TolFun', 10e-5, 'TolX', 1e-7)
+        # fparams = @(H)hybrid_coordinate_hmin(H, nlev, DU, DL, KU, KL, ZKU, ZKL)
+        # [Hmin, minError] = fminsearch(fparams, H0, optimisation_settings)
+
+        # Solve for Z0-Z2 to find Hmin parameter.
+        optimisation_settings = {'maxfun': 5000, 'maxiter': 5000, 'ftol': 10e-5, 'xtol': 1e-7}
+        fparams = lambda H: self.__hybrid_coordinate_hmin(H, nlev, DU, DL, KL, ZKU, ZKL)
+        Hmin, Fmin, *_ = scipy.optimize.fmin(func=fparams, x0=H0, **optimisation_settings)
+        min_error = H0 - Hmin  # this isn't right
+
+        if noisy:
+            print('Hmin found {} with a maximum error in vertical distribution of {} metres\n'.format(Hmin, min_error))
+
+        # Calculate the sigma level distributions at each grid node.
+        z = np.empty((self.dims.node, self.dims.levels)) * np.nan
+        for i in range(self.dims.node):
+            z[i, :] = self._sigma_gen(DL, DU, KL, KU, ZKL, ZKU, self.grid.h[i], Hmin)
+
+        # Create a sigma layer variable (i.e. midpoint in the sigma levels).
+        zlay = z[:, 1:-2] + (np.diff(z, axis=1) / 2)
+        zlayc = np.empty(self.dims.nele, nlev - 1) * np.nan
+        zc = np.empty(self.dims.nele, nlev) * np.nan
+        for i in range(nlev):
+            zc[:, i] = nodes2elems(z[:, i], self.grid.triangles)
+            if i != nlev:
+                zlayc[:, i] = nodes2elems(zlay[:, i], self.grid.triangles)
+        self.grid.sigma_layers = zlay
+        self.grid.sigma_levels = z
+        self.grid.sigma_layers_center = nodes2elems(self.grid.sigma_layers, self.grid.triangles)
+        self.grid.sigma_levels_center = nodes2elems(self.grid.sigma_levels, self.grid.triangles)
+
+        # Make some depth-resolved sigma distributions.
+        self.grid.sigma_layers_z = self.grid.h * self.grid.sigma_layers
+        self.grid.sigma_layers_center_z = self.grid.h_center * self.grid.sigma_layers_center
+        self.grid.sigma_levels_z = self.grid.h * self.grid.sigma_levels
+        self.grid.sigma_levels_center_z = self.grid.h_center * self.grid.sigma_levels_center
+
+        # Add the following into a test at some point.
+        # function debug_mode()
+        # # Test with made up data. This isn't actually used at all, but it's handy
+        # # to leave around for debugging things.
+        #
+        # conf.nlev = 25; # vertical levels (layers + 1)
+        # conf.H0 = 30; # threshold depth for the transition (metres)
+        # conf.DU = 3; # upper water boundary thickness
+        # conf.DL = 3; # lower water boundary thickness
+        # conf.KU = 3; # layer number in the water column of DU (maximum of 5 m thickness)
+        # conf.KL = 3; # layer number in the water column of DL (maximum of 5m thickness)
+        #
+        #
+        # Mobj = hybrid_coordinate(conf, Mobj)
+        #
+        # nlev = conf.nlev
+        # H0 = conf.H0
+        # DU = conf.DU
+        # DL = conf.DL
+        # KU = conf.KU
+        # KL = conf.KL
+        # ZKU = repmat(DU./KU, 1, KU)
+        # ZKL = repmat(DL./KL, 1, KL)
+        #
+        # Hmin=24
+        # Hmax=Hmin + 200
+        # y = 0:0.1:100
+        # B = 70
+        # H = Hmax .* exp(-((y./B-0.15).^2./0.5.^2))
+        # # H = [Hmin,H]; H=sort(H)
+        # nlev = conf.nlev
+        # Z2=[]
+        # # Loop through all nodes to create sigma coordinates.
+        # for xx=1:length(H)
+        #     Z2(xx, :) = sigma_gen(nlev, DL, DU, KL, KU, ZKL, ZKU, H(xx), Hmin)
+        # end
+        #
+        # clf
+        # plot(y,Z2 .* repmat(H', 1, nlev));hold on
+        # plot(y,ones(size(y)).*-Hmin)
+        # fprintf('Calculated minimum depth: %.2f\n', Hmin)
+
+    def __hybrid_coordinate_hmin(H, nlev, DU, DL, KU, KL, ZKU, ZKL):
+        """ Helper function to find the relevant minimum depth. I think.
+        #
+        #   ZZ = hybrid_coordinate_hmin(H, nlev, DU, DL, KU, KL, ZKU, ZKL)
+        #
+        # INPUT:
+        #   H: transition depth of the hybrid coordinates?
+        #   nlev: number of vertical levels (layers + 1)
+        #   DU: upper water boundary thickness (metres)
+        #   DL: lower water boundary thickness (metres)
+        #   KU: layer number in the water column of DU
+        #   KL: layer number in the water column of DL
+        #
+        # OUTPUT:
+        #   ZZ: minimum water depth?
+        #
+        # Author(s):
+        #   Ricard Torres (Plymouth Marine Laboratory)
+        """
+
+        Z0 = np.empty(nlev) * np.nan
+        Z2 = Z0.copy()
+        Z0[0] = 0
+        dl2 = 0.001
+        du2 = 0.001
+        for k in range(nlev):
+            x1 = dl2 + du2
+            x1 = x1 * nlev - k / nlev
+            x1 = x1 - dl2
+            x1 = np.tanh(x1)
+            x2 = np.tanh(dl2)
+            x3 = x2 + np.tanh(du2)
+            Z0[k + 1] = (x1 + x2) / x3 - 1
+
+        z0 = np.zeros(nlev)
+        z2 = z0
+        z0[0] = 0
+        dl2 = 0.001
+        du2 = 0.001
+        kbm1 = nlev - 1
+        for nn = 1:nlev - 1
+            x1 = dl2 + du2
+            x1 = x1 * (kbm1 - nn) / kbm1
+            x1 = x1 - dl2
+            x1 = tanh(x1)
+            x2 = tanh(dl2)
+            x3 = x2 + tanh(du2)
+
+            z0(nn + 1, 1)=((x1 + x2) / x3) - 1
+        end
+
+        # s-coordinates
+        X1 = (H - DU - DL)
+        X2 = X1 ./ H
+        DR = X2 ./ (nlev - KU - KL - 1)
+
+        Z2(1,1) = 0.0
+
+        for K = 2:KU + 1
+            Z2(K, 1) = Z2(K - 1, 1) - (ZKU(K - 1) ./ H)
+        end
+
+        for K= KU + 2:nlev - KL
+            Z2(K, 1) = Z2(K - 1, 1) - DR
+        end
+
+        KK = 0
+        for K = nlev - KL + 1:nlev
+            KK = KK + 1
+            Z2(K, 1) = Z2(K - 1, 1) - (ZKL(KK) ./ H)
+        end
+        ZZ = max(H*(Z0) - H*(Z2))
+        # ZZ = max(abs(diff(H*(Z0)) - diff(H*(Z2))))
+
+        return ZZ
+
+    def write_sigma(self, sigma_file):
+        """
+        Write the sigma distribution to file.
+
+        Parameters
+        ----------
+        sigma_file : str, pathlib.Path
+            Path to which to save sigma data.
+        """
+
+        with open(sigma_file, 'w') as f:
+            f.write('NUMBER OF SIGMA LEVELS = {:d}\n'.format(self.dims.levels))
+            f.write('SIGMA COORDINATE TYPE = GENERALIZED\n')
+            f.write('DU = {:4.1f}\n'.format(self.sigma.DU))
+            f.write('DL = {:4.1f}\n'.format(self.sigma.DL))
+            f.write('MIN CONSTANT DEPTH = {:10.1f}\n'.format(round(self.sigma.Hmin)))
+            f.write('KU = {:d}\n'.format(self.sigma.KU))
+            f.write('KL = {:d}\n'.format(self.sigma.KL))
+            # Add the thicknesses with a loop.
+            f.write('ZKU = ')
+            for ii in self.sigma.ZKU:
+                f.write('{:4.1f}'.format(ii))
+            f.write('\n')
+            f.write('ZKL = ')
+            for ii in self.sigma.ZKL:
+                f.write('{:4.1f}'.format(ii))
+            f.write(f, '\n')
 
     def add_open_boundaries(self, obcfile, reload=False):
         """
