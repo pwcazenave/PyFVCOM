@@ -358,7 +358,7 @@ class Model(Domain):
                 dist[k + 1] = (x1 + x2) / x3 - 1
         else:
             dr = (h - du - dl) / h / (self.dims.levels - ku - kl - 1)
-            dist[1] = 0
+            dist[0] = 0
 
             for k in range(1, ku + 1):
                 dist[k] = dist[k - 1] - zku[k - 1] / h
