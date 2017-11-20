@@ -359,20 +359,166 @@ class Model(Domain):
         """
         pass
 
-    def add_probes(self, positions):
+    def add_probes(self, positions, names, variables, interval, max_distance=np.inf):
         """
         Generate probe locations closest to the given locations.
 
         Parameters
         ----------
-        domain : PyFVCOM.grid.Domain
-            Model domain object.
         positions : np.ndarray
             Positions (in longitude/latitude).
+        names : np.ndarray, list
+            Names of the probes defined by `positions'.
+        variables : list, np.ndarray
+            Variables for which to extract probe data.
+        interval : float
+            Interval (in seconds) at which to sample the model.
+        max_distance : float, optional
+            Give a maximum distance (in kilometres) beyond which the closest model grid position is considered too
+            far away and thus that probe is skipped. By default, no distance filtering is applied.
+
+        Provides
+        --------
+        A `probes' object is created in `self' which contains the following objects:
+
+        file : list
+            The file name to which the output will be saved.
+        name : list
+            The probe station names.
+        grid : list
+            The closest node or element IDs in the grid, depending in variable type (node-centred vs. element-centred).
+        levels : list
+            The vertical levels for the requested depth-resolved outputs (if any, otherwise None)
+        description : list
+            The descriptions of each requested variable.
+        variables : list
+            The variables requested for each position.
+        long_name : list
+            The long names of each variable.
+        interval : float
+            The interval at which the model is sampled.
+
+        """
+
+        # Store everything in an object to make it cleaner passing stuff around.
+        self.probes = type('probes', (object,), {})()
+
+        self.probes.interval = interval  # currently assuming the same for all probes
+
+        # These lists are incomplete! Missing values just use the current variable name and no units.
+        description_prefixes = {'el': 'Surface elevation at {}',
+                                'u': 'u-velocity component at {}',
+                                'v': 'v-velocity component at {}',
+                                'ua': 'Depth-averaged u-velocity component at {}',
+                                'va': 'Depth-averaged v-velocity component at {}',
+                                'ww': 'Vertical velocity at {}',
+                                'w': 'Vertical velocity on sigma levels at {}',
+                                'rho1': 'Density at {}',
+                                't1': 'Temperature at {}',
+                                's1': 'Salinity at {}'}
+        long_names_choices = {'el': 'Surface elevation (m)',
+                              'v': 'u-velocity (ms^{-1})',
+                              'u': 'v-velocity (ms^{-1})',
+                              'va': 'Depth-averaged u-velocity (ms^{-1})',
+                              'ua': 'Depth-averaged v-velocity (ms^{-1})',
+                              'ww': 'Vertical velocity (ms^{-1})',
+                              'w': 'Vertical velocity on sigma levels (ms^{-1})',
+                              'rho1': 'Density (kg/m^{3})',
+                              't1': 'Temperature (Celsius)',
+                              's1': 'Salinity (PSU)'}
+
+        self.probes.name = []
+        self.probes.variables = []
+        self.probes.grid = []
+        self.probes.levels = []
+        self.probes.description = []
+        self.probes.long_names = []
+
+        # We need to check whether we're a node- or element-based variable. Since there are only a small number of
+        # element-centred variables available as probe output, check for those, otherwise assume node-based.
+        element_variables = ['u', 'v', 'ua', 'va', 'w', 'ww', 'uice2', 'vice2']
+        depth_variables = ['u', 'v', 'w', 'ww']
+
+        for (position, site) in zip(positions, names):
+            current_name = []
+            current_grid = []
+            current_levels = []
+            current_description = []
+            current_long_names = []
+            current_variables = []
+            for variable in variables:
+                if variable in element_variables:
+                    grid_id = self.closest_element(position, threshold=max_distance, vincenty=True)
+                else:
+                    grid_id = self.closest_node(position, threshold=max_distance, vincenty=True)
+                if variable in depth_variables:
+                    sigma = [1, len(self.grid.siglay)]
+                else:
+                    sigma = None
+                current_grid.append(grid_id)
+                current_name.append('{}_{}.dat'.format(site, variable))
+                current_levels.append(sigma)
+                if variable in description_prefixes:
+                    desc = description_prefixes[variable].format(site)
+                else:
+                    desc = '{} at {}'.format(variable, site)
+                current_description.append(desc)
+                if variable in long_names_choices:
+                    long = long_names_choices[variable]
+                else:
+                    long = '{}'.format(variable)
+                current_long_names.append(long)
+                current_variables.append(variable)
+
+            self.probes.grid.append(current_grid)
+            self.probes.name.append(current_name)
+            self.probes.variables.append(current_variables)
+            self.probes.levels.append(current_levels)
+            self.probes.description.append(current_description)
+            self.probes.long_names.append(current_long_names)
+
+    def write_probes(self, output_file):
+        """
+        Take the output of add_probes and write it to FVCOM-formatted ASCII.
+
+        Parameters
+        ----------
+        output_file : str
+            Path to the output file name list to create.
 
         """
         pass
 
+        if not hasattr(self, 'probes'):
+            raise AttributeError('No probes object found. Please run PyFVCOM.preproc.add_probes() first.')
+
+        with open(output_file, 'w') as f:
+            grid = self.probes.grid
+            name = self.probes.name
+            levels = self.probes.levels
+            description = self.probes.description
+            long_names = self.probes.long_names
+            variables = self.probes.variables
+            # First level of iteration is the site. Transpose with map.
+            for probes in list(map(list, zip(*[grid, name, levels, description, long_names, variables]))):
+                # Second level is the variable
+                for loc, site, sigma, desc, long_name, variable in list(map(list, zip(*probes))):
+                    # Skip positions with grid IDs as None. These are sites which were too far from the nearest grid
+                    # point.
+                    if not grid:
+                        continue
+
+                    f.write('&NML_PROBE\n')
+                    f.write(' PROBE_INTERVAL = "seconds={:.1f}",\n'.format(self.probes.interval))
+                    f.write(' PROBE_LOCATION = {:d},\n'.format(loc))
+                    f.write(' PROBE_TITLE = "{}",\n'.format(site))
+                    # If we've got something which is vertically resolved, output the vertical levels.
+                    if np.any(sigma):
+                        f.write(' PROBE_LEVELS = {:d} {:d},\n'.format(*sigma))
+                    f.write(' PROBE_DESCRIPTION = "{}",\n'.format(desc))
+                    f.write(' PROBE_VARIABLE = "{}",\n'.format(variable))
+                    f.write(' PROBE_VAR_NAME = "{}"\n'.format(long_name))
+                    f.write('/\n')
 
 class WriteForcing:
     """ Create an FVCOM netCDF input file. """
