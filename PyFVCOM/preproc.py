@@ -41,6 +41,9 @@ class Model(Domain):
 
         self.start = start
         self.end = end
+        self.sigma = None
+        self.tide = None
+        self.sst = None
 
     def interp_sst_assimilation(self, sst_dir, year, serial=False, pool_size=None, noisy=False):
         """
