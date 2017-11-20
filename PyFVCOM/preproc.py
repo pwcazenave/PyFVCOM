@@ -614,25 +614,34 @@ class Model(Domain):
         ----------
         sigma_file : str, pathlib.Path
             Path to which to save sigma data.
+
+        TODO:
+        -----
+        - Add support for writing all the sigma file formats.
+
         """
 
         with open(sigma_file, 'w') as f:
+            # All types of sigma distribution have the two following lines.
             f.write('NUMBER OF SIGMA LEVELS = {:d}\n'.format(self.dims.levels))
-            f.write('SIGMA COORDINATE TYPE = GENERALIZED\n')
-            f.write('DU = {:4.1f}\n'.format(self.sigma.DU))
-            f.write('DL = {:4.1f}\n'.format(self.sigma.DL))
-            f.write('MIN CONSTANT DEPTH = {:10.1f}\n'.format(round(self.sigma.Hmin)))
-            f.write('KU = {:d}\n'.format(self.sigma.KU))
-            f.write('KL = {:d}\n'.format(self.sigma.KL))
-            # Add the thicknesses with a loop.
-            f.write('ZKU = ')
-            for ii in self.sigma.ZKU:
-                f.write('{:4.1f}'.format(ii))
-            f.write('\n')
-            f.write('ZKL = ')
-            for ii in self.sigma.ZKL:
-                f.write('{:4.1f}'.format(ii))
-            f.write(f, '\n')
+            f.write('SIGMA COORDINATE TYPE = {}\n'.format(self.sigma.type))
+            if self.sigma.type.lower() == 'generalized':
+                f.write('DU = {:4.1f}\n'.format(self.sigma.upper_layer_depth))
+                f.write('DL = {:4.1f}\n'.format(self.sigma.lower_layer_depth))
+                f.write('MIN CONSTANT DEPTH = {:10.1f}\n'.format(np.round(self.sigma.transition_depth[0])))  # don't like the [0]
+                f.write('KU = {:d}\n'.format(self.sigma.total_upper_layers))
+                f.write('KL = {:d}\n'.format(self.sigma.total_lower_layers))
+                # Add the thicknesses with a loop.
+                f.write('ZKU = ')
+                for ii in self.sigma.upper_layer_thickness:
+                    f.write('{:4.1f}'.format(ii))
+                f.write('\n')
+                f.write('ZKL = ')
+                for ii in self.sigma.lower_layer_thickness:
+                    f.write('{:4.1f}'.format(ii))
+                f.write('\n')
+            elif self.sigma.type.lower() == 'geometric':
+                f.write('POWER = {:d}\n'.format(self.sigma.power))
 
     def add_open_boundaries(self, obc_file, reload=False):
         """
