@@ -405,21 +405,24 @@ class Model(Domain):
 
         return dist
 
-    def hybrid_sigma_coordinate(self, H0, DU, DL, KU, KL, noisy=False):
+    def hybrid_sigma_coordinate(self, levels, transition_depth, upper_layer_depth, lower_layer_depth,
+                                total_upper_layers, total_lower_layers, noisy=False):
         """
         Create a hybrid vertical coordinate system.
 
         Parameters
         ----------
-        H0 : float
+        levels : int
+            Number of vertical levels.
+        transition_depth : float
             Transition depth of the hybrid coordinates
-        DU : float
+        upper_layer_depth : float
             Upper water boundary thickness (metres)
-        DL : float
+        lower_layer_depth : float
             Lower water boundary thickness (metres)
-        KU : int
+        total_upper_layers : int
             Number of layers in the DU water column
-        KL : int
+        total_lower_layers : int
             Number of layers in the DL water column
 
         Populates
@@ -428,70 +431,78 @@ class Model(Domain):
             Number of sigma layers.
         self.dims.levels : int
             Number of sigma levels.
-        self.grid.sigma_levels : np.ndarray
+        self.sigma.levels : np.ndarray
             Sigma levels at the nodes
-        self.grid.sigma_layers : np.ndarray
+        self.sigma.layers : np.ndarray
             Sigma layers at the nodes
-        self.grid.sigma_levels_z : np.ndarray
+        self.sigma.levels_z : np.ndarray
             Water depth levels at the nodes
-        self.grid.sigma_layers_z : np.ndarray
+        self.sigma.layers_z : np.ndarray
             Water depth layers at the nodes
-        self.grid.sigma_levels_center : np.ndarray
+        self.sigma.levels_center : np.ndarray
             Sigma levels at the elements
-        self.grid.sigma_layers_center : np.ndarray
+        self.sigma.layers_center : np.ndarray
             Sigma layers at the elements
-        self.grid.sigma_levels_z_center : np.ndarray
+        self.sigma.levels_z_center : np.ndarray
             Water depth levels at the elements
-        self.grid.sigma_layers_z_center : np.ndarray
+        self.sigma.layers_z_center : np.ndarray
             Water depth layers at the elements
 
         """
 
-        nlev = self.dims.levels
+        # Make an object to store the sigma data.
+        self.sigma = type('sigma', (object,), {})()
 
+        self.dims.levels = levels
+        self.dims.layers = self.dims.levels - 1
+
+        # Optimise the transition depth to minimise the error between the uniform region and the hybrid region.
         if noisy:
             print('Optimising the hybrid coordinates... ')
-
-        ZKU = np.repeat(DU / KU, 1, KU)
-        ZKL = np.repeat(DL / KL, 1, KL)
-
-        # Limits on the optimisation run.
-        # optimisation_settings = optimset('MaxFunEvals', 5000, 'MaxIter', 5000, 'TolFun', 10e-5, 'TolX', 1e-7)
-        # fparams = @(H)hybrid_coordinate_hmin(H, nlev, DU, DL, KU, KL, ZKU, ZKL)
-        # [Hmin, minError] = fminsearch(fparams, H0, optimisation_settings)
-
-        # Solve for Z0-Z2 to find Hmin parameter.
+        upper_layer_thickness = np.repeat(upper_layer_depth / total_upper_layers, total_upper_layers)
+        lower_layer_thickness = np.repeat(lower_layer_depth / total_lower_layers, total_lower_layers)
         optimisation_settings = {'maxfun': 5000, 'maxiter': 5000, 'ftol': 10e-5, 'xtol': 1e-7}
-        fparams = lambda H: self.__hybrid_coordinate_hmin(H, nlev, DU, DL, KL, ZKU, ZKL)
-        Hmin, Fmin, *_ = scipy.optimize.fmin(func=fparams, x0=H0, **optimisation_settings)
-        min_error = H0 - Hmin  # this isn't right
+        fparams = lambda depth_guess: self.__hybrid_coordinate_hmin(depth_guess, self.dims.levels, upper_layer_depth,
+                                                                    lower_layer_depth, total_upper_layers,
+                                                                    total_lower_layers, upper_layer_thickness, lower_layer_thickness)
+        optimised_depth = scipy.optimize.fmin(func=fparams, x0=transition_depth, **optimisation_settings)
+        min_error = transition_depth - optimised_depth  # this isn't right
+        self.sigma.transition_depth = optimised_depth
 
         if noisy:
-            print('Hmin found {} with a maximum error in vertical distribution of {} metres\n'.format(Hmin, min_error))
+            print('Hmin found {} with a maximum error in vertical distribution of {} metres\n'.format(optimised_depth,
+                                                                                                      min_error))
 
         # Calculate the sigma level distributions at each grid node.
-        z = np.empty((self.dims.node, self.dims.levels)) * np.nan
+        sigma_levels = np.empty((self.dims.node, self.dims.levels)) * np.nan
         for i in range(self.dims.node):
-            z[i, :] = self._sigma_gen(DL, DU, KL, KU, ZKL, ZKU, self.grid.h[i], Hmin)
+            sigma_levels[i, :] = self._sigma_gen(lower_layer_depth, upper_layer_depth,
+                                                 total_lower_layers, total_upper_layers,
+                                                 lower_layer_thickness, upper_layer_thickness,
+                                                 self.grid.h[i], optimised_depth)
 
         # Create a sigma layer variable (i.e. midpoint in the sigma levels).
-        zlay = z[:, 1:-2] + (np.diff(z, axis=1) / 2)
-        zlayc = np.empty(self.dims.nele, nlev - 1) * np.nan
-        zc = np.empty(self.dims.nele, nlev) * np.nan
-        for i in range(nlev):
-            zc[:, i] = nodes2elems(z[:, i], self.grid.triangles)
-            if i != nlev:
-                zlayc[:, i] = nodes2elems(zlay[:, i], self.grid.triangles)
-        self.grid.sigma_layers = zlay
-        self.grid.sigma_levels = z
-        self.grid.sigma_layers_center = nodes2elems(self.grid.sigma_layers, self.grid.triangles)
-        self.grid.sigma_levels_center = nodes2elems(self.grid.sigma_levels, self.grid.triangles)
+        sigma_layers = sigma_levels[:, 0:-1] + (np.diff(sigma_levels, axis=1) / 2)
+
+        # Add to the grid object.
+        self.sigma.type = 'GENERALIZED'  # hybrid is a special case of generalised vertical coordinates
+        self.sigma.upper_layer_depth = upper_layer_depth
+        self.sigma.lower_layer_depth = lower_layer_depth
+        self.sigma.total_upper_layers = total_upper_layers
+        self.sigma.total_lower_layers = total_lower_layers
+        self.sigma.upper_layer_thickness = upper_layer_thickness
+        self.sigma.lower_layer_thickness = lower_layer_thickness
+        self.sigma.layers = sigma_layers
+        self.sigma.levels = sigma_levels
+        # Transpose on the way in and out so the slicing within nodes2elems works properly.
+        self.sigma.layers_center = nodes2elems(self.sigma.layers.T, self.grid.triangles).T
+        self.sigma.levels_center = nodes2elems(self.sigma.levels.T, self.grid.triangles).T
 
         # Make some depth-resolved sigma distributions.
-        self.grid.sigma_layers_z = self.grid.h * self.grid.sigma_layers
-        self.grid.sigma_layers_center_z = self.grid.h_center * self.grid.sigma_layers_center
-        self.grid.sigma_levels_z = self.grid.h * self.grid.sigma_levels
-        self.grid.sigma_levels_center_z = self.grid.h_center * self.grid.sigma_levels_center
+        self.sigma.layers_z = self.grid.h[:, np.newaxis] * self.sigma.layers
+        self.sigma.layers_center_z = self.grid.h_center[:, np.newaxis] * self.sigma.layers_center
+        self.sigma.levels_z = self.grid.h [:, np.newaxis] * self.sigma.levels
+        self.sigma.levels_center_z = self.grid.h_center[:, np.newaxis]  * self.sigma.levels_center
 
         # Add the following into a test at some point.
         # function debug_mode()
