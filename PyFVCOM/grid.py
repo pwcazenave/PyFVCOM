@@ -159,6 +159,103 @@ class Domain:
         self.grid.latc = nodes2elems(self.grid.lat, self.grid.triangles)
         self.grid.hcenter = nodes2elems(self.grid.h, self.grid.triangles)
 
+    def closest_node(self, where, cartesian=False, threshold=None, vincenty=False, haversine=False):
+        """
+        Find the index of the closest node to the supplied position (x, y). Set `cartesian' to True for cartesian
+        coordinates (defaults to spherical).
+
+        Parameters
+        ----------
+        where : list-like
+            Arbitrary x, y position for which to find the closest model grid position.
+        cartesian : bool, optional
+            Set to True to use cartesian coordinates. Defaults to False.
+        threshold : float, optional
+            Give a threshold distance beyond which the closest grid is considered too far away. Units are the same as
+            the coordinates in `where', unless using lat/lon and vincenty when it is in metres. Return None when
+            beyond threshold.
+        vincenty : bool, optional
+            Use vincenty distance calculation. Allows specification of point in lat/lon but threshold in metres.
+        haversine : bool, optional
+            Use the simpler but much faster Haversine distance calculation. Allows specification of point in lat/lon but threshold in metres.
+
+        Returns
+        -------
+        index : int, None
+            Grid index which falls closest to the supplied position. If `threshold' is set and the distance from the
+            supplied position to the nearest model node exceeds that threshold, `index' is None.
+
+        """
+
+        if not vincenty or not haversine:
+            if cartesian:
+                x, y = self.grid.x, self.grid.y
+            else:
+                x, y = self.grid.lon, self.grid.lat
+            dist = np.sqrt((x - where[0])**2 + (y - where[1])**2)
+        elif vincenty:
+            grid_pts = np.asarray([self.grid.lon, self.grid.lat]).T
+            where_pt_rep = np.tile(np.asarray(where), (len(self.grid.lon),1))
+            dist = np.asarray([vincenty_distance(pt_1, pt_2) for pt_1, pt_2 in zip(grid_pts, where_pt_rep)])*1000
+        elif haversine:
+            grid_pts = np.asarray([self.grid.lon, self.grid.lat]).T
+            where_pt_rep = np.tile(np.asarray(where), (len(self.grid.lon),1))
+            dist = np.asarray([haversine_distance(pt_1, pt_2) for pt_1, pt_2 in zip(grid_pts, where_pt_rep)])*1000
+        index = np.argmin(dist)
+        if threshold:
+            if dist.min() < threshold:
+                index = np.argmin(dist)
+            else:
+                index = None
+
+        return index
+
+    def closest_element(self, where, cartesian=False, threshold=None, vincenty=False):
+        """
+        Find the index of the closest element to the supplied position (x, y). Set `cartesian' to True for cartesian
+        coordinates (defaults to spherical).
+
+        Parameters
+        ----------
+        where : list-like
+            Arbitrary x, y position for which to find the closest model grid position.
+        cartesian : bool, optional
+            Set to True to use cartesian coordinates. Defaults to False.
+        threshold : float, optional
+            Give a threshold distance beyond which the closest grid is considered too far away. Units are the same as
+            the coordinates in `where', unless using lat/lon and vincenty when it is in metres. Return None when
+            beyond threshold.
+        vincenty : bool, optional
+            Use vincenty distance calculation. Allows specification of point in lat/lon but threshold in metres
+
+        Returns
+        -------
+        index : int, None
+            Grid index which falls closest to the supplied position. If `threshold' is set and the distance from the
+            supplied position to the nearest model node exceeds that threshold, `index' is None.
+
+        """
+        if not vincenty:
+            if cartesian:
+                x, y = self.grid.xc, self.grid.yc
+            else:
+                x, y = self.grid.lonc, self.grid.latc
+            dist = np.sqrt((x - where[0])**2 + (y - where[1])**2)
+        else:
+            grid_pts = np.asarray([self.grid.lonc, self.grid.latc]).T
+            where_pt_rep = np.tile(np.asarray(where), (len(self.grid.lonc),1))
+            dist = np.asarray([vincenty_distance(pt_1, pt_2) for pt_1, pt_2 in zip(grid_pts, where_pt_rep)])*1000
+
+        index = np.argmin(dist)
+        if threshold:
+            if dist.min() < threshold:
+                index = np.argmin(dist)
+            else:
+                index = None
+
+        return index
+
+
 
 def read_sms_mesh(mesh, nodestrings=False):
     """
