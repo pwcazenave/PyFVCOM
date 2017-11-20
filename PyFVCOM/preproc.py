@@ -372,6 +372,48 @@ class Model(Domain):
 
         return zeta
 
+    def write_tides(self, output_file, ncopts={'zlib': True, 'complevel': 7}, **kwargs):
+        """
+        Generate a tidal elevation forcing file for the given FVCOM domain from the self.tides data.
+
+        Parameters
+        ----------
+        output_file : str, pathlib.Path
+            File to which to write open boundary tidal elevation forcing data.
+        ncopts : dict
+            Dictionary of options to use when creating the netCDF variables. Defaults to compression on.
+
+        Remaining arguments are passed to WriteForcing.
+
+        """
+
+        globals = {'type': 'FVCOM TIME SERIES ELEVATION FORCING FILE',
+                   'title': 'TPXO tides',
+                   'history': 'File created using PyFVCOM'}
+        dims = {'nobc': np.sum(self.dims.nobc), 'time': 0, 'DateStrLen': 26}
+
+        with WriteForcing(str(output_file), dims, global_attributes=globals, clobber=True, format='NETCDF4', **kwargs) as elev:
+            # Add the variables.
+            atts = {'long_name': 'Open Boundary Node Number', 'grid': 'obc_grid'}
+            elev.add_variable('obc_nodes', self.grid.obc_nodes, ['nobc'], attributes=atts, ncopts=ncopts)
+            atts = {'long_name': 'internal mode iteration number'}
+            # Not sure this variable is actually necessary.
+            elev.add_variable('iint', np.arange(len(self.tides.time)), ['time'], attributes=atts, ncopts=ncopts, format=int)
+            atts = {'units': 'days since 1858-11-17 00:00:00',
+                    'delta_t': '0000-00-00 01:00:00',
+                    'format': 'modified julian day (MJD)',
+                    'time_zone': 'UTC'}
+            elev.add_variable('time', date2num(self.tides.time, units='days since 1858-11-17 00:00:00'),
+                                ['time'], attributes=atts, ncopts=ncopts)
+            atts = {'long_name': 'Calendar Date',
+                    'format': 'String: Calendar Time',
+                    'time_zone': 'UTC'}
+            elev.add_variable('Times', [t.strftime('%Y-%m-%dT%H:%M:%S.%f') for t in self.tides.time],
+                                ['time', 'DateStrLen'], format='c', attributes=atts, ncopts=ncopts)
+            atts = {'long_name': 'Open Boundary Elevation',
+                    'units': 'meters'}
+            elev.add_variable('elevation', self.tides.zeta, ['time', 'nobc'], attributes=atts, ncopts=ncopts)
+
     def add_rivers(self, positions):
         """
         Add river nodes closest to the given locations.
