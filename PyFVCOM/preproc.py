@@ -238,9 +238,10 @@ class Model(Domain):
         else:
             self.grid.sponge_nodes = nodes
 
-    def add_grid_metrics(self):
+    def add_grid_metrics(self, noisy=False):
         """ Calculate grid metrics. """
-        pass
+
+        grid_metrics(self.grid.tri, noisy=noisy)
 
     def add_tpxo_tides(self, tpxo_harmonics, predict='zeta', interval=1, constituents=['M2'], serial=False, pool_size=None, noisy=False):
         """
