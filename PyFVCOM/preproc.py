@@ -33,9 +33,10 @@ from PyFVCOM.utilities import date_range
 class Model(Domain):
     """ Hold all the model inputs. """
     def __init__(self, start, end, *args, **kwargs):
+
+        # Inherit everything from PyFVCOM.grid.Domain, but extend it for our purposes.
         super().__init__(*args, **kwargs)
 
-        # Add the other things we need for making inputs.
         self.start = start
         self.end = end
 
