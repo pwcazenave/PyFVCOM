@@ -627,6 +627,7 @@ class Model(Domain):
             if self.sigma.type.lower() == 'generalized':
                 f.write('DU = {:4.1f}\n'.format(self.sigma.upper_layer_depth))
                 f.write('DL = {:4.1f}\n'.format(self.sigma.lower_layer_depth))
+                # Why do we go to all the trouble of finding the transition depth only to round it anyway?
                 f.write('MIN CONSTANT DEPTH = {:10.1f}\n'.format(np.round(self.sigma.transition_depth[0])))  # don't like the [0]
                 f.write('KU = {:d}\n'.format(self.sigma.total_upper_layers))
                 f.write('KL = {:d}\n'.format(self.sigma.total_lower_layers))
