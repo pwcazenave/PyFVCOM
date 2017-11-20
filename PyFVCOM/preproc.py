@@ -213,6 +213,9 @@ class Model(Domain):
 
         sigma_file = str(sigma_file)
 
+        # Make an object to store the sigma data.
+        self.sigma = type('sigma', (object,), {})()
+
         with open(sigma_file, 'r') as f:
             lines = f.readlines()
             for line in lines:
@@ -258,39 +261,34 @@ class Model(Domain):
 
         # Calculate the sigma level distributions at each grid node.
         if sigtype.lower() == 'generalized':
-            z = np.empty((self.dims.node, nlev)) * np.nan
+            sigma_levels = np.empty((self.dims.node, nlev)) * np.nan
             for i in range(self.dims.node):
-                z[i, :] = self._sigma_gen(dl, du, kl, ku, zkl, zku, self.grid.h[i], min_constant_depth)
-        if sigtype.lower() == 'uniform':
-            z = np.repeat(self._sigma_geo(1), [self.dims.node, 1])
-        if sigtype.lower() == 'geometric':
-            z = np.repeat(self._sigma_geo(sigpow), [self.dims.node, 1])
+                sigma_levels[i, :] = self._sigma_gen(dl, du, kl, ku, zkl, zku, self.grid.h[i], min_constant_depth)
+        elif sigtype.lower() == 'uniform':
+            sigma_levels = np.repeat(self._sigma_geo(1), [self.dims.node, 1])
+        elif sigtype.lower() == 'geometric':
+            sigma_levels = np.repeat(self._sigma_geo(sigpow), [self.dims.node, 1])
         else:
             raise ValueError('Unrecognised sigtype {} (is it supported?)'.format(sigtype))
 
         # Create a sigma layer variable (i.e. midpoint in the sigma levels).
-        zlay = z[:, 1:-2] + (np.diff(z, axis=1) / 2)
-        zlayc = np.empty(self.dims.nele, nlev - 1) * np.nan
-        zc = np.empty(self.dims.nele, nlev) * np.nan
-        for i in range(nlev):
-            zc[:, i] = nodes2elems(z[:, i], self.grid.triangles)
-            if i != nlev:
-                zlayc[:, i] = nodes2elems(zlay[:, i], self.grid.triangles)
+        sigma_layers = sigma_levels[:, 0:-1] + (np.diff(sigma_levels, axis=1) / 2)
 
-        self.grid.sigma_layers = zlay
-        self.grid.sigma_levels = z
-        self.grid.sigma_layers_center = nodes2elems(self.grid.sigma_layers, self.grid.triangles)
-        self.grid.sigma_levels_center = nodes2elems(self.grid.sigma_levels, self.grid.triangles)
+        self.sigma.type = sigtype
+        self.sigma.layers = sigma_layers
+        self.sigma.levels = sigma_levels
+        self.sigma.layers_center = nodes2elems(self.sigma.layers.T, self.grid.triangles).T
+        self.sigma.levels_center = nodes2elems(self.sigma.levels.T, self.grid.triangles).T
 
         # Make some depth-resolved sigma distributions.
-        self.grid.sigma_layers_z = self.grid.h * self.grid.sigma_layers
-        self.grid.sigma_layers_center_z = self.grid.h_center * self.grid.sigma_layers_center
-        self.grid.sigma_levels_z = self.grid.h * self.grid.sigma_levels
-        self.grid.sigma_levels_center_z = self.grid.h_center * self.grid.sigma_levels_center
+        self.sigma.layers_z = self.grid.h[:, np.newaxis] * self.sigma.layers
+        self.sigma.layers_center_z = self.grid.h_center[:, np.newaxis] * self.sigma.layers_center
+        self.sigma.levels_z = self.grid.h [:, np.newaxis] * self.sigma.levels
+        self.sigma.levels_center_z = self.grid.h_center[:, np.newaxis]  * self.sigma.levels_center
 
         # Make some dimensions
-        self.dims.layers = nlev - 1
         self.dims.levels = nlev
+        self.dims.layers = self.dims.levels - 1
 
         # Print the sigma file configuration we've parsed.
         if noisy:
