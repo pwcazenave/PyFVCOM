@@ -939,7 +939,8 @@ class ICES_comp():
     by Momme Butenschon for NEMO output.
 
     The ICES data used is in a premade h5 file. This how it was inherited and should be updated to a form we can reproduce. 
-
+	Default ICES variables: 'TEMP','PSAL', 'DOXY(umol/l)', 'PHOS(umol/l)', 'SLCA(umol/l)', 'NTRA(umol/l)', 'AMON(umol/l)',
+                            'PHPH', 'ALKY(mmol/l)', 'CPHL(mg/m^3)'
 
     Example
     -------
