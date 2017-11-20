@@ -25,9 +25,8 @@ from warnings import warn
 from utide import reconstruct, ut_constants
 from utide.utilities import Bunch
 
-from PyFVCOM.grid import *
 from PyFVCOM.coordinate import *
-from PyFVCOM.grid import Domain
+from PyFVCOM.grid import Domain, grid_metrics, read_fvcom_obc, nodes2elems
 from PyFVCOM.utilities import date_range
 
 
