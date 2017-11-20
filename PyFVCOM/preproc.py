@@ -319,17 +319,17 @@ class Model(Domain):
         Parameters
         ----------
         dl : float
-            The lower depth boundary from the bottom, down to which the coordinates are parallel with uniform thickness.
+            The lower depth boundary from the bottom, down to which the layers are uniform thickness.
         du : float
-            The upper depth boundary from the surface, up to which the coordinates are parallel with uniform thickness.
+            The upper depth boundary from the surface, up to which the layers are uniform thickness.
         kl : float
-            ?
+            Number of layers in the upper water column
         ku : float
-            ?
+            Number of layers in the lower water column
         zkl : list, np.ndarray
-            ?
+            Upper water column layer thicknesses.
         zku : list, np.ndarray
-            ?
+            Lower water column layer thicknesses.
         h : float
             Water depth.
         hmin : float
