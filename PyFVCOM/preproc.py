@@ -102,6 +102,45 @@ class Model(Domain):
             for line in zip(x, y, self.grid.lat):
                 f.write('{:.6f} {:.6f} {:.6f}\n'.format(*line))
 
+    def add_bed_roughness(self, roughness):
+        """
+        Add a uniform or spatially varying bed roughness to the model.
+
+        Parameters
+        ----------
+        roughness : float, np.ndarray
+            The bed roughness (in metres).
+
+        """
+
+        setattr(self.grid, 'roughness', roughness)
+
+    def write_bed_roughness(self, roughness_file, ncopts={'zlib': True, 'complevel': 7}, **kwargs):
+        """
+        Write the bed roughness to netCDF.
+
+        Parameters
+        ----------
+        roughness_file:
+            File to which to write bed roughness data.
+        ncopts : dict, optional
+            Dictionary of options to use when creating the netCDF variables. Defaults to compression on.
+
+        Remaining arguments are passed to WriteForcing.
+
+        """
+        globals = {'title': 'bottom roughness',
+                   'history': 'File created using PyFVCOM'}
+        dims = {'nele': self.dims.nele}
+
+        with WriteForcing(str(roughness_file), dims, global_attributes=globals, clobber=True, format='NETCDF4', **kwargs) as z0:
+            # Add the variables.
+            atts = {'long_name': 'bottom roughness', 'units': 'm', 'type': 'data'}
+            z0.add_variable('z0b', self.grid.roughness, ['nele'], attributes=atts, ncopts=ncopts)
+            # Pretty sure this variable isn't necessary for an ordinary physics run. At least, we've never written it
+            #  to file to date.
+            atts = {'long_name': 'bottom roughness minimum', 'units': 'None', 'type': 'data'}
+            z0.add_variable('cbcmin', None, ['nele'], attributes=atts, ncopts=ncopts)
 
     def interp_sst_assimilation(self, sst_dir, year, serial=False, pool_size=None, noisy=False):
         """
