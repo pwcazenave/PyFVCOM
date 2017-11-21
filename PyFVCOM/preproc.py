@@ -1080,10 +1080,19 @@ class Model(Domain):
             - names : list of river names
             - nodes : list of grid nodes
             - time : list of datetimes
-            - flux : river discharge data
-            - temperature : river temperature data
-            - salinity : river salinity data
-
+            - flux : river discharge data [time, river]
+            - temperature : river temperature data [time, river]
+            - salinity : river salinity data [time, river]
+        The `ersem' dictionary should contain at least:
+            - N1_p : phosphate [time, river]
+            - N3_n : nitrate [time, river]
+            - N4_n : ammonium [time, river]
+            - N5_s : silicate [time, river]
+            - O2_o : oxygen [time, river]
+            - O3_TA : total alkalinity [time, river]
+            - O3_c : dissolved inorganic carbon [time, river]
+            - O3_bioalk : bio-alkalinity [time, river]
+            - Z4_c : mesozooplankton carbon [time, river]
 
         Uses self.river.source for the 'title' global attribute in the netCDF and self.river.history for the 'info'
         global attribute. Both of these default to empty strings.
