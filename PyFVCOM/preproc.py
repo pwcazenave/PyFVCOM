@@ -274,17 +274,7 @@ class Model(Domain):
             sstgrd.add_variable('lon', self.grid.lon, ['node'], attributes=atts, ncopts=ncopts)
             atts = {'long_name': 'nodel latitude', 'units': 'degrees_north'}
             sstgrd.add_variable('lat', self.grid.lat, ['node'], attributes=atts, ncopts=ncopts)
-            atts = {'units': 'days since 1858-11-17 00:00:00',
-                    'delta_t': '0000-00-00 01:00:00',
-                    'format': 'modified julian day (MJD)',
-                    'time_zone': 'UTC'}
-            sstgrd.add_variable('time', date2num(self.sst.time, units='days since 1858-11-17 00:00:00'),
-                                ['time'], attributes=atts, ncopts=ncopts)
-            atts = {'long_name': 'Calendar Date',
-                    'format': 'String: Calendar Time',
-                    'time_zone': 'UTC'}
-            sstgrd.add_variable('Times', [t.strftime('%Y-%m-%dT%H:%M:%S.%f') for t in self.sst.time],
-                                ['time', 'DateStrLen'], format='c', attributes=atts, ncopts=ncopts)
+            sstgrd.write_fvcom_time(self.sst.time)
             atts = {'long_name': 'sea surface Temperature',
                     'units': 'Celsius Degree',
                     'grid': 'fvcom_grid',
@@ -976,17 +966,7 @@ class Model(Domain):
             atts = {'long_name': 'internal mode iteration number'}
             # Not sure this variable is actually necessary.
             elev.add_variable('iint', np.arange(len(self.tides.time)), ['time'], attributes=atts, ncopts=ncopts, format=int)
-            atts = {'units': 'days since 1858-11-17 00:00:00',
-                    'delta_t': '0000-00-00 01:00:00',
-                    'format': 'modified julian day (MJD)',
-                    'time_zone': 'UTC'}
-            elev.add_variable('time', date2num(self.tides.time, units='days since 1858-11-17 00:00:00'),
-                                ['time'], attributes=atts, ncopts=ncopts)
-            atts = {'long_name': 'Calendar Date',
-                    'format': 'String: Calendar Time',
-                    'time_zone': 'UTC'}
-            elev.add_variable('Times', [t.strftime('%Y-%m-%dT%H:%M:%S.%f') for t in self.tides.time],
-                                ['time', 'DateStrLen'], format='c', attributes=atts, ncopts=ncopts)
+            elev.write_fvcom_time(self.tides.time)
             atts = {'long_name': 'Open Boundary Elevation',
                     'units': 'meters'}
             elev.add_variable('elevation', self.tides.zeta, ['time', 'nobc'], attributes=atts, ncopts=ncopts)
@@ -1107,18 +1087,6 @@ class Model(Domain):
             # We need to force the river names to be right-padded to 80 characters and transposed for the netCDF array.
             river_names = map(list, zip(*[list('{:80s}'.format(i)) for i in self.river.names]))
             river.add_variable('river_names', river_names, ['namelen', 'rivers'], format='c', ncopts=ncopts)
-            atts = {'units': 'days since 1858-11-17 00:00:00',
-                    'delta_t': '0000-00-00 01:00:00',
-                    'format': 'modified julian day (MJD)',
-                    'time_zone': 'UTC'}
-            river.add_variable('time', date2num(self.river.time, units='days since 1858-11-17 00:00:00'),
-                               ['time'], attributes=atts, ncopts=ncopts)
-            atts = {'long_name': 'Calendar Date',
-                    'format': 'String: Calendar Time',
-                    'time_zone': 'UTC'}
-            river.add_variable('Times', [t.strftime('%Y-%m-%dT%H:%M:%S.%f') for t in self.river.time],
-                               ['time', 'DateStrLen'], format='c', attributes=atts, ncopts=ncopts)
-
         atts = {'long_name': 'river runoff volume flux', 'units': 'm^3s^-1'}
         river.add_variable('river_flux', self.river.river_flux, ['rivers', 'time'], attributes=atts, ncopts=ncopts)
 
@@ -1128,6 +1096,7 @@ class Model(Domain):
         atts = {'units': 'PSU'}
         river.add_variable('river_salt', self.river.river_salt, ['rivers', 'time'], attributes=atts, ncopts=ncopts)
 
+            river.write_fvcom_time(self.river.time, ncopts=ncopts)
         if ersem:
             atts = {'long_name': 'phosphate phosphorus', 'units': 'mmol P/m^3'}
             river.add_variable('N1_p', self.river.N1_p, ['rivers', 'time'], attributes=atts, ncopts=ncopts)
@@ -1516,6 +1485,39 @@ class WriteForcing:
         var[:] = data
 
         setattr(self, name, var)
+
+    def write_fvcom_time(self, time, **kwargs):
+        """
+        Write the four standard FVCOM time variables (time, Times, Itime, Itime2) for the given time series.
+
+        Parameters
+        ----------
+        time : np.ndarray, list, tuple
+            Times as date time objects.
+
+        """
+
+        mjd = date2num(time, units='days since 1858-11-17 00:00:00')
+        itime = np.floor(mjd)  # integer Modified Julian Days
+        itime2 = (mjd - itime) * 24 * 60 * 60 * 1000  # milliseconds since midnight
+
+        atts = {'units': 'days since 1858-11-17 00:00:00',
+                'delta_t': '0000-00-00 01:00:00',
+                'format': 'modified julian day (MJD)',
+                'time_zone': 'UTC'}
+        self.add_variable('time', mjd, ['time'], attributes=atts, **kwargs)
+        atts = {'units': 'days since 1858-11-17 00:00:00',
+                'format': 'modified julian day (MJD)',
+                'time_zone': 'UTC'}
+        self.add_variable('Itime', itime, ['time'], attributes=atts, **kwargs)
+        atts = {'units': 'msec since 00:00:00', 'time_zone': 'UTC'}
+        self.add_variable('Itime2', itime2, ['time'], attributes=atts, **kwargs)
+
+        atts = {'long_name': 'Calendar Date',
+                'format': 'String: Calendar Time',
+                'time_zone': 'UTC'}
+        self.add_variable('Times', [t.strftime('%Y-%m-%dT%H:%M:%S.%f') for t in time],
+                          ['time', 'DateStrLen'], format='c', attributes=atts, **kwargs)
 
     def __enter__(self):
         return self
