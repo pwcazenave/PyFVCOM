@@ -1111,46 +1111,46 @@ class Model(Domain):
         with WriteForcing(str(output_file), dims, global_attributes=globals, clobber=True, format='NETCDF4', **kwargs) as river:
             # We need to force the river names to be right-padded to 80 characters and transposed for the netCDF array.
             river_names = map(list, zip(*[list('{:80s}'.format(i)) for i in self.river.names]))
-            river.add_variable('river_names', river_names, ['namelen', 'rivers'], format='c', ncopts=ncopts)
+            river.add_variable('river_names', river_names, ['rivers', 'namelen'], format='c', ncopts=ncopts)
 
             river.write_fvcom_time(self.river.time, ncopts=ncopts)
 
             atts = {'long_name': 'river runoff volume flux', 'units': 'm^3s^-1'}
-            river.add_variable('river_flux', self.river.flux, ['rivers', 'time'], attributes=atts, ncopts=ncopts)
+            river.add_variable('river_flux', self.river.flux, ['time', 'rivers'], attributes=atts, ncopts=ncopts)
 
             atts = {'long_name': 'river runoff temperature', 'units': 'Celsius'}
-            river.add_variable('river_temp', self.river.temperature, ['rivers', 'time'], attributes=atts, ncopts=ncopts)
+            river.add_variable('river_temp', self.river.temperature, ['time', 'rivers'], attributes=atts, ncopts=ncopts)
 
             atts = {'units': 'PSU'}
-            river.add_variable('river_salt', self.river.salinity, ['rivers', 'time'], attributes=atts, ncopts=ncopts)
+            river.add_variable('river_salt', self.river.salinity, ['time', 'rivers'], attributes=atts, ncopts=ncopts)
 
             if ersem:
                 atts = {'long_name': 'phosphate phosphorus', 'units': 'mmol P/m^3'}
-                river.add_variable('N1_p', self.river.N1_p, ['rivers', 'time'], attributes=atts, ncopts=ncopts)
+                river.add_variable('N1_p', self.river.N1_p, ['time', 'rivers'], attributes=atts, ncopts=ncopts)
 
                 atts = {'long_name': 'nitrate nitrogen', 'units': 'mmol N/m^3'}
-                river.add_variable('N3_n', self.river.N3_n, ['rivers', 'time'], attributes=atts, ncopts=ncopts)
+                river.add_variable('N3_n', self.river.N3_n, ['time', 'rivers'], attributes=atts, ncopts=ncopts)
 
                 atts = {'long_name': 'ammonium nitrogen', 'units': 'mmol N/m^3'}
-                river.add_variable('N4_n', self.river.N4_n, ['rivers', 'time'], attributes=atts, ncopts=ncopts)
+                river.add_variable('N4_n', self.river.N4_n, ['time', 'rivers'], attributes=atts, ncopts=ncopts)
 
                 atts = {'long_name': 'silicate silicate', 'units': 'mmol Si/m^3'}
-                river.add_variable('N5_s', self.river.N5_s, ['rivers', 'time'], attributes=atts, ncopts=ncopts)
+                river.add_variable('N5_s', self.river.N5_s, ['time', 'rivers'], attributes=atts, ncopts=ncopts)
 
                 atts = {'long_name': 'dissolved Oxygen', 'units': 'mmol O_2/m^3'}
-                river.add_variable('O2_o', self.river.O2_o, ['rivers', 'time'], attributes=atts, ncopts=ncopts)
+                river.add_variable('O2_o', self.river.O2_o, ['time', 'rivers'], attributes=atts, ncopts=ncopts)
 
                 atts = {'long_name': 'carbonate total alkalinity', 'units': 'mmol C/m^3'}
-                river.add_variable('O3_TA', self.river.O3_TA, ['rivers', 'time'], attributes=atts, ncopts=ncopts)
+                river.add_variable('O3_TA', self.river.O3_TA, ['time', 'rivers'], attributes=atts, ncopts=ncopts)
 
                 atts = {'long_name': 'carbonate total dissolved inorganic carbon', 'units': 'mmol C/m^3'}
-                river.add_variable('O3_c', self.river.O3_c, ['rivers', 'time'], attributes=atts, ncopts=ncopts)
+                river.add_variable('O3_c', self.river.O3_c, ['time', 'rivers'], attributes=atts, ncopts=ncopts)
 
                 atts = {'long_name': 'carbonate bioalkalinity', 'units': 'umol/kg'}
-                river.add_variable('O3_bioalk', self.river.O3_bioalk, ['rivers', 'time'], attributes=atts, ncopts=ncopts)
+                river.add_variable('O3_bioalk', self.river.O3_bioalk, ['time', 'rivers'], attributes=atts, ncopts=ncopts)
 
                 atts = {'long_name': 'mesozooplankton carbon', 'units': 'mg C/m^3'}
-                river.add_variable('Z4_c', self.river.Z4_c, ['rivers', 'time'], attributes=atts, ncopts=ncopts)
+                river.add_variable('Z4_c', self.river.Z4_c, ['time', 'rivers'], attributes=atts, ncopts=ncopts)
 
                 # Additional zooplankton variables.
                 zooplankton_prefixes = ['Z5', 'Z6']
@@ -1167,7 +1167,7 @@ class Model(Domain):
                                     'units': units}
                             river.add_variable('{}_{}'.format(prefix, suffix),
                                                getattr(self.river, '{}_{}'.format(prefix, suffix)),
-                                               ['rivers', 'time'],
+                                               ['time', 'rivers'],
                                                attributes=atts,
                                                ncopts=ncopts)
 
@@ -1214,25 +1214,25 @@ class Model(Domain):
             names : np.ndarray
                 NEMO river names.
             flux : np.ndarray
-                NEMO river discharge (m^3s^{-1}) [river, time]
+                NEMO river discharge (m^3s^{-1}) [time, river]
             temperature : np.ndarray
-                NEMO river temperature (degrees Celsius) [river, time]
+                NEMO river temperature (degrees Celsius) [time, river]
             N4_n : np.ndarray
-                NEMO river ammonia (mmol/m^3) [river, time]
+                NEMO river ammonia (mmol/m^3) [time, river]
             N3_n : np.ndarray
-                NEMO river nitrate (mmol/m^3) [river, time]
+                NEMO river nitrate (mmol/m^3) [time, river]
             O2_o : np.ndarray
-                NEMO river oxygen (mmol/m^3) [river, time]
+                NEMO river oxygen (mmol/m^3) [time, river]
             N1_p : np.ndarray
-                NEMO river phosphate (mmol/m^3) [river, time]
+                NEMO river phosphate (mmol/m^3) [time, river]
             N5_s : np.ndarray
-                NEMO river silicate (mmol/m^3) [river, time]
+                NEMO river silicate (mmol/m^3) [time, river]
             O3_c : np.ndarray
-                NEMO river dissolved inorganic carbon (mmol/m^3) [river, time]
+                NEMO river dissolved inorganic carbon (mmol/m^3) [time, river]
             O3_TA : np.ndarray
-                NEMO river total alkalinity (mmol/m^3) [river, time]
+                NEMO river total alkalinity (mmol/m^3) [time, river]
             O3_bioalk : np.ndarray
-                NEMO river bio-alkalinity (umol/m^3 - note different units) [river, time]
+                NEMO river bio-alkalinity (umol/m^3 - note different units) [time, river]
 
         Notes
         -----
@@ -1282,9 +1282,9 @@ class Model(Domain):
             if key != 'times':
                 try:
                     # Don't like having to tile since we should be able to do this with a np.newaxis, but, for some
-                    # reason, it doesn't seem to work here. Make the array time dimension appear last for
-                    # compatibility with add_rivers.
-                    nemo[key] = nemo[key][np.tile(mask, [number_of_times, 1, 1])].reshape(-1, number_of_times)
+                    # reason, it doesn't seem to work here. Make the array time dimension appear first for
+                    # compatibility with self.add_rivers.
+                    nemo[key] = nemo[key][np.tile(mask, [number_of_times, 1, 1])].reshape(number_of_times, -1)
                 except IndexError:
                     nemo[key] = nemo[key][mask]
 
