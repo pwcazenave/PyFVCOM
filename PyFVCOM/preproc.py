@@ -1036,6 +1036,9 @@ class Model(Domain):
                 nodes.append(node)
                 river_index.append(ri)
 
+        self.river.node = nodes
+        self.dims.river = len(river_index)
+
         setattr(self.river, 'flux', flux[river_index, :])
         setattr(self.river, 'salinity', salinity[river_index, :])
         setattr(self.river, 'temperature', temperature[river_index, :])
