@@ -32,10 +32,11 @@ from PyFVCOM.utilities import date_range
 
 
 class Model(Domain):
-    """ Hold all the model inputs. """
+    """ Everything related to making a new model run. """
+
     def __init__(self, start, end, *args, **kwargs):
 
-        # Inherit everything from PyFVCOM.grid.Domain, but extend it for our purposes.
+        # Inherit everything from PyFVCOM.grid.Domain, but extend it for our purposes. This doesn't work with Python 2.
         super().__init__(*args, **kwargs)
 
         self.start = start
@@ -835,7 +836,7 @@ class Model(Domain):
         ----------
         output_file : str, pathlib.Path
             File to which to write open boundary tidal elevation forcing data.
-        ncopts : dict
+        ncopts : dict, optional
             Dictionary of options to use when creating the netCDF variables. Defaults to compression on.
 
         Remaining arguments are passed to WriteForcing.
