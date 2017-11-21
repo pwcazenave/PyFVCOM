@@ -1048,15 +1048,15 @@ class Model(Domain):
                 setattr(self.river, variable, ersem[variable][river_index, :])
 
             # Add small zooplankton values if we haven't been given any already. Taken to be 10^-6 of Western Channel
-            # Observatory L4 initial conditions. Only add these if we haven't already been given these data.
+            # Observatory L4 initial conditions.
             fac = 10**-6
-            extra_data = {'Z4c': 1.2 * fac,
-                          'Z5c': 7.2 * fac,
-                          'Z5n': 0.12 * fac,
-                          'Z5p': 0.0113 * fac,
-                          'Z6c': 2.4 * fac,
-                          'Z6n': 0.0505 * fac,
-                          'Z6p': 0.0047 * fac}
+            extra_data = {'Z4_c': 1.2 * fac,
+                          'Z5_c': 7.2 * fac,
+                          'Z5_n': 0.12 * fac,
+                          'Z5_p': 0.0113 * fac,
+                          'Z6_c': 2.4 * fac,
+                          'Z6_n': 0.0505 * fac,
+                          'Z6_p': 0.0047 * fac}
             for extra in extra_data:
                 if not hasattr(self.river, extra):
                     setattr(self.river, extra, extra_data[extra])
