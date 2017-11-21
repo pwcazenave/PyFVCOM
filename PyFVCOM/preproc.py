@@ -1298,7 +1298,7 @@ class Model(Domain):
 
         # Now we've got the data, use the flux data to find the indices of the rivers in the arrays and extract those
         # as time series per location. These data can then be passed to self.add_rivers fairly straightforwardly.
-        mask = np.any(nemo['flux'], axis=0)
+        mask = np.any(nemo['flux'].data, axis=0)
         for key in nemo:
             if key != 'times':
                 try:
