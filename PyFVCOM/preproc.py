@@ -1549,26 +1549,27 @@ class WriteForcing:
         """
 
         mjd = date2num(time, units='days since 1858-11-17 00:00:00')
-        itime = np.floor(mjd)  # integer Modified Julian Days
-        itime2 = (mjd - itime) * 24 * 60 * 60 * 1000  # milliseconds since midnight
+        Itime = np.floor(mjd)  # integer Modified Julian Days
+        Itime2 = (mjd - Itime) * 24 * 60 * 60 * 1000  # milliseconds since midnight
+        Times = [t.strftime('%Y-%m-%dT%H:%M:%S.%f') for t in time]
 
+        # time
         atts = {'units': 'days since 1858-11-17 00:00:00',
-                'delta_t': '0000-00-00 01:00:00',
                 'format': 'modified julian day (MJD)',
+                'long_name': 'time',
                 'time_zone': 'UTC'}
         self.add_variable('time', mjd, ['time'], attributes=atts, **kwargs)
+        # Itime
         atts = {'units': 'days since 1858-11-17 00:00:00',
                 'format': 'modified julian day (MJD)',
                 'time_zone': 'UTC'}
-        self.add_variable('Itime', itime, ['time'], attributes=atts, **kwargs)
+        self.add_variable('Itime', Itime, ['time'], attributes=atts, format='i', **kwargs)
+        # Itime2
         atts = {'units': 'msec since 00:00:00', 'time_zone': 'UTC'}
-        self.add_variable('Itime2', itime2, ['time'], attributes=atts, **kwargs)
-
-        atts = {'long_name': 'Calendar Date',
-                'format': 'String: Calendar Time',
-                'time_zone': 'UTC'}
-        self.add_variable('Times', [t.strftime('%Y-%m-%dT%H:%M:%S.%f') for t in time],
-                          ['time', 'DateStrLen'], format='c', attributes=atts, **kwargs)
+        self.add_variable('Itime2', Itime2, ['time'], attributes=atts, format='i', **kwargs)
+        # Times
+        atts = {'long_name': 'Calendar Date', 'format': 'String: Calendar Time', 'time_zone': 'UTC'}
+        self.add_variable('Times', Times, ['time', 'DateStrLen'], format='c', attributes=atts, **kwargs)
 
     def __enter__(self):
         return self
