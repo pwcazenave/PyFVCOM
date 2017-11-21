@@ -1102,6 +1102,7 @@ class Model(Domain):
             river_names = map(list, zip(*[list('{:80s}'.format(i)) for i in self.river.names]))
             river.add_variable('river_names', river_names, ['namelen', 'rivers'], format='c', ncopts=ncopts)
 
+            river.write_fvcom_time(self.river.time, ncopts=ncopts)
 
             atts = {'long_name': 'river runoff volume flux', 'units': 'm^3s^-1'}
             river.add_variable('river_flux', self.river.flux, ['rivers', 'time'], attributes=atts, ncopts=ncopts)
