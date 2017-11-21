@@ -1471,8 +1471,9 @@ class WriteForcing:
         for dimension in dimensions:
             self.nc.createDimension(dimension, dimensions[dimension])
 
-        for attribute in global_attributes:
-            setattr(self.nc, attribute, global_attributes[attribute])
+        if global_attributes:
+            for attribute in global_attributes:
+                setattr(self.nc, attribute, global_attributes[attribute])
 
     def add_variable(self, name, data, dimensions, attributes=None, format='f4', ncopts={}):
         """
@@ -1496,8 +1497,9 @@ class WriteForcing:
         """
 
         var = self.nc.createVariable(name, format, dimensions, **ncopts)
-        for attribute in attributes:
-            setattr(var, attribute, attributes[attribute])
+        if attributes:
+            for attribute in attributes:
+                setattr(var, attribute, attributes[attribute])
 
         var[:] = data
 
