@@ -256,7 +256,6 @@ class Domain:
         return index
 
 
-
 def read_sms_mesh(mesh, nodestrings=False):
     """
     Reads in the SMS unstructured grid format. Also creates IDs for output to
