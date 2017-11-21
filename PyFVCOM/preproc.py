@@ -870,20 +870,42 @@ class Model(Domain):
                     'units': 'meters'}
             elev.add_variable('elevation', self.tides.zeta, ['time', 'nobc'], attributes=atts, ncopts=ncopts)
 
-    def add_rivers(self, positions):
+    def add_rivers(self, positions, history='', info='', ersem=False):
         """
         Add river nodes closest to the given locations.
 
         Parameters
         ----------
-        domain : PyFVCOM.grid.Domain
-            Model domain object.
         positions : np.ndarray
             Positions (in longitude/latitude).
+        history : str
+            String added to the `history' global attribute.
+        info : str
+            String added to the `info' global attribute.
+        ersem : bool
+            If True, generate ERSEM data too. Defaults to False.
 
         """
 
-        pass
+        self.river = type('river', (object,), {})()
+        self.dims.river = 0  # assume no rivers.
+
+        self.river.history = history
+        self.river.info = info
+
+        if ersem:
+            # Add small zooplankton values. Taken to be 10^-6 of Western Channel Observatory L4 initial conditions.
+            fac = 10**-6
+
+            self.river.Z4c = 1.2 * fac
+            self.river.Z5c = 7.2 * fac
+            self.river.Z5n = 0.12 * fac
+            self.river.Z5p = 0.0113 * fac
+            self.river.Z6c = 2.4 * fac
+            self.river.Z6n = 0.0505 * fac
+            # Not quite the initial values in fabm.yaml... but they are not in carbon balance.
+            self.river.Z6p = 0.0047 * fac
+
     def write_river_forcing(self, output_file, ersem=False, ncopts={'zlib': True, 'complevel': 7}, **kwargs):
         """
         Write out an FVCOM river forcing netCDF file.
