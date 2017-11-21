@@ -862,7 +862,7 @@ class Model(Domain):
         globals = {'type': 'FVCOM TIME SERIES ELEVATION FORCING FILE',
                    'title': 'TPXO tides',
                    'history': 'File created using PyFVCOM'}
-        dims = {'nobc': np.sum(self.dims.nobc), 'time': 0, 'DateStrLen': 26}
+        dims = {'nobc': self.dims.obc, 'time': 0, 'DateStrLen': 26}
 
         with WriteForcing(str(output_file), dims, global_attributes=globals, clobber=True, format='NETCDF4', **kwargs) as elev:
             # Add the variables.
