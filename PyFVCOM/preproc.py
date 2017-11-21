@@ -991,7 +991,7 @@ class Model(Domain):
                     'units': 'meters'}
             elev.add_variable('elevation', self.tides.zeta, ['time', 'nobc'], attributes=atts, ncopts=ncopts)
 
-    def add_rivers(self, positions, times, flux, temperature, salinity, threshold=np.inf, history='', info='', ersem=None):
+    def add_rivers(self, positions, names, times, flux, temperature, salinity, threshold=np.inf, history='', info='', ersem=None):
         """
         Add river nodes closest to the given locations.
 
@@ -999,6 +999,8 @@ class Model(Domain):
         ----------
         positions : np.ndarray
             Positions (in longitude/latitude).
+        names : np.ndarray
+            River names as strings.
         times : np.ndarray
             Array of datetime objects for the river data.
         flux : np.ndarray
@@ -1044,6 +1046,7 @@ class Model(Domain):
             self.river.info = info
 
         self.river.time = times
+        self.river.names = names
 
         nodes = []
         river_index = []
@@ -1101,7 +1104,9 @@ class Model(Domain):
                    'history', 'File created using PyFVCOM.'}
         dims = {'namelen': 80, 'rivers': self.dims.river, 'time': 0, 'DateStrLen': 26}
         with WriteForcing(str(output_file), dims, global_attributes=globals, clobber=True, format='NETCDF4', **kwargs) as river:
-            river.add_variable('river_names', self.river.names, ['namelen', 'rivers'], format='c', ncopts=ncopts)
+            # We need to force the river names to be right-padded to 80 characters and transposed for the netCDF array.
+            river_names = map(list, zip(*[list('{:80s}'.format(i)) for i in self.river.names]))
+            river.add_variable('river_names', river_names, ['namelen', 'rivers'], format='c', ncopts=ncopts)
             atts = {'units': 'days since 1858-11-17 00:00:00',
                     'delta_t': '0000-00-00 01:00:00',
                     'format': 'modified julian day (MJD)',
