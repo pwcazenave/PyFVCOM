@@ -1174,7 +1174,6 @@ class Model(Domain):
                     f.write(' PROBE_VAR_NAME = "{}"\n'.format(long_name))
                     f.write('/\n')
 
-        pass
 
 class WriteForcing:
     """ Create an FVCOM netCDF input file. """
