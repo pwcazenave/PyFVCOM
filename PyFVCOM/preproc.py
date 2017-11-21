@@ -882,7 +882,6 @@ class Model(Domain):
             Positions (in longitude/latitude).
 
         """
-        pass
 
         pass
     def write_river_forcing(self, output_file, ersem=False, ncopts={'zlib': True, 'complevel': 7}, **kwargs):
