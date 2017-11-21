@@ -981,6 +981,18 @@ class Model(Domain):
                                        ['rivers', 'time'],
                                        attributes=atts,
                                        ncopts=ncopts)
+
+    def write_river_namelist(self, output_file):
+        """
+
+        Parameters
+        ----------
+        output_file : str, pathlib.Path
+            Output file to which to write the river configuration.
+
+        """
+        pass
+
     def add_probes(self, positions, names, variables, interval, max_distance=np.inf):
         """
         Generate probe locations closest to the given locations.
