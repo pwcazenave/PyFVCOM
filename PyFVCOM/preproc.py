@@ -1080,11 +1080,10 @@ class Model(Domain):
 
         output_file = str(output_file)  # in case we've been given a pathlib.Path
 
-        # global variables
-        globals = {'type', 'FVCOM RIVER FORCING FILE',
-                   'title', self.river.source,
-                   'info', self.river.history,
-                   'history', 'File created using PyFVCOM.'}
+        globals = {'type': 'FVCOM RIVER FORCING FILE',
+                   'title': self.river.source,
+                   'info': self.river.history,
+                   'history': 'File created using PyFVCOM.'}
         dims = {'namelen': 80, 'rivers': self.dims.river, 'time': 0, 'DateStrLen': 26}
         with WriteForcing(str(output_file), dims, global_attributes=globals, clobber=True, format='NETCDF4', **kwargs) as river:
             # We need to force the river names to be right-padded to 80 characters and transposed for the netCDF array.
