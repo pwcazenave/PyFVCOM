@@ -1285,7 +1285,7 @@ class Model(Domain):
         nemo['flux'] *= area
         # Set zero values to a very small number instead to avoid divide by zero errors below.
         temporary_flux = nemo['flux']
-        temporary_flux[temporary_flux == 0] = 1E-8
+        temporary_flux[temporary_flux == 0] = 1e-8
         # Convert units from grams to millimoles where appropriate.
         nemo['N4_n'] = (nemo['N4_n'] / 14) * 1000 / temporary_flux  # g/s to mmol/m3
         nemo['N3_n'] = (nemo['N3_n'] / 14) * 1000 / temporary_flux  # g/s to mmol/m3
