@@ -16,6 +16,7 @@ import scipy.optimize
 
 import numpy as np
 import multiprocessing as mp
+import itertools
 
 from netCDF4 import Dataset, date2num, num2date
 from matplotlib.dates import date2num as mtime
@@ -44,6 +45,11 @@ class Model(Domain):
         self.sigma = None
         self.tide = None
         self.sst = None
+
+    @staticmethod
+    def __flatten_list(nest):
+        """ Flatten a list of lists. """
+        return list(itertools.chain(*nest))
 
     def interp_sst_assimilation(self, sst_dir, year, serial=False, pool_size=None, noisy=False):
         """
