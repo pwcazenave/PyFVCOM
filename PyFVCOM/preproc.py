@@ -1224,7 +1224,7 @@ class Model(Domain):
         nemo = {}
         with Dataset(nemo_file, 'r') as nc:
             number_of_times = nc.dimensions['time_counter'].size
-            nemo['times'] = np.linspace(0, number_of_times, endpoint=True)
+            nemo['times'] = np.linspace(0, number_of_times, number_of_times + 1, endpoint=True)
             nemo['times'] = [self.start + relativedelta(days=i) for i in nemo['times']]
             nemo['lon'], nemo['lat'] = np.meshgrid(nc.variables['x'][:], nc.variables['y'][:])
             for vi, var in enumerate(nemo_variables):
