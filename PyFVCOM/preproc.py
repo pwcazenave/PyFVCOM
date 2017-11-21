@@ -1193,13 +1193,17 @@ class Model(Domain):
                 f.write('  RIVER_VERTICAL_DISTRIBUTION = {}\n'.format(vertical_distribution))
                 f.write('  /\n')
 
-    def read_nemo_rivers(self, nemo_file):
+    def read_nemo_rivers(self, nemo_file, remove_baltic=True):
         """
 
         Parameters
         ----------
         nemo_file : str, pathlib.Path
             Path to the NEMO forcing file.
+        remove_baltic : bool, optional
+            Remove the 'Baltic' rivers. These are included in the NEMO forcing since there is no open boundary for
+            the Baltic; instead, the Baltic is represented as two river inputs. This messes up all sorts of things
+            generally, so the default for this option is to remove them. Set to False to keep them.
 
         Returns
         -------
@@ -1240,19 +1244,36 @@ class Model(Domain):
 
         """
 
+        baltic_lon = [10.7777, 12.5555]
+        baltic_lat = [55.5998, 56.1331]
+
         nemo_variables = ['rodic', 'ronh4', 'rono3', 'roo', 'rop', 'rorunoff', 'rosio2',
                           'rotemper', 'rototalk', 'robioalk']
         sensible_names = ['O3_c', 'N4_n', 'N3_n', 'O2_o', 'N1_p', 'flux', 'N5_s',
                           'temperature', 'O3_TA', 'O3_bioalk']
 
         nemo = {}
+        # NEMO river data are stored ['time', 'y', 'x'].
         with Dataset(nemo_file, 'r') as nc:
             number_of_times = nc.dimensions['time_counter'].size
             nemo['times'] = np.linspace(0, number_of_times, number_of_times + 1, endpoint=True)
             nemo['times'] = [self.start + relativedelta(days=i) for i in nemo['times']]
             nemo['lon'], nemo['lat'] = np.meshgrid(nc.variables['x'][:], nc.variables['y'][:])
+            if remove_baltic:
+                # Find the indices of the 'Baltic' rivers and drop them from everything we load.
+                baltic_indices = []
+                for baltic in zip(baltic_lon, baltic_lat):
+                    x_index = np.argmin(np.abs(nc.variables['x'][:] - baltic[0]))
+                    y_index = np.argmin(np.abs(nc.variables['y'][:] - baltic[1]))
+                    baltic_indices.append((y_index, x_index))  # make the indices match the dimensions in the netCDF arrays
+
             for vi, var in enumerate(nemo_variables):
                 nemo[sensible_names[vi]] = nc.variables[var][:]
+                if remove_baltic:
+                    for baltic_index in baltic_indices:
+                        # Replace with zeros to match the other non-river data in the netCDF. Dimensions of the arrays are
+                        # [time, y, x].
+                        nemo[sensible_names[vi]][:, baltic_index[0], baltic_index[1]] = 0
 
             # Get the NEMO grid area for correcting units.
             area = nc.variables['dA'][:]
