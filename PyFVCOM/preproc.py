@@ -1087,64 +1087,63 @@ class Model(Domain):
             # We need to force the river names to be right-padded to 80 characters and transposed for the netCDF array.
             river_names = map(list, zip(*[list('{:80s}'.format(i)) for i in self.river.names]))
             river.add_variable('river_names', river_names, ['namelen', 'rivers'], format='c', ncopts=ncopts)
-        atts = {'long_name': 'river runoff volume flux', 'units': 'm^3s^-1'}
-        river.add_variable('river_flux', self.river.river_flux, ['rivers', 'time'], attributes=atts, ncopts=ncopts)
 
-        atts = {'long_name': 'river runoff temperature', 'units': 'Celsius'}
-        river.add_variable('river_temp', self.river.river_temp, ['rivers', 'time'], attributes=atts, ncopts=ncopts)
 
-        atts = {'units': 'PSU'}
-        river.add_variable('river_salt', self.river.river_salt, ['rivers', 'time'], attributes=atts, ncopts=ncopts)
+            atts = {'long_name': 'river runoff volume flux', 'units': 'm^3s^-1'}
+            river.add_variable('river_flux', self.river.flux, ['rivers', 'time'], attributes=atts, ncopts=ncopts)
 
-            river.write_fvcom_time(self.river.time, ncopts=ncopts)
-        if ersem:
-            atts = {'long_name': 'phosphate phosphorus', 'units': 'mmol P/m^3'}
-            river.add_variable('N1_p', self.river.N1_p, ['rivers', 'time'], attributes=atts, ncopts=ncopts)
+            atts = {'long_name': 'river runoff temperature', 'units': 'Celsius'}
+            river.add_variable('river_temp', self.river.temperature, ['rivers', 'time'], attributes=atts, ncopts=ncopts)
 
-            atts = {'long_name': 'nitrate nitrogen', 'units': 'mmol N/m^3'}
-            river.add_variable('N3_n', self.river.N3_n, ['rivers', 'time'], attributes=atts, ncopts=ncopts)
+            atts = {'units': 'PSU'}
+            river.add_variable('river_salt', self.river.salinity, ['rivers', 'time'], attributes=atts, ncopts=ncopts)
 
-            atts = {'long_name': 'ammonium nitrogen', 'units': 'mmol N/m^3'}
-            river.add_variable('N4_n', self.river.N4_n, ['rivers', 'time'], attributes=atts, ncopts=ncopts)
+            if ersem:
+                atts = {'long_name': 'phosphate phosphorus', 'units': 'mmol P/m^3'}
+                river.add_variable('N1_p', self.river.N1_p, ['rivers', 'time'], attributes=atts, ncopts=ncopts)
 
-            atts = {'long_name': 'silicate silicate', 'units': 'mmol Si/m^3'}
-            river.add_variable('N5_s', self.river.N5_s, ['rivers', 'time'], attributes=atts, ncopts=ncopts)
+                atts = {'long_name': 'nitrate nitrogen', 'units': 'mmol N/m^3'}
+                river.add_variable('N3_n', self.river.N3_n, ['rivers', 'time'], attributes=atts, ncopts=ncopts)
 
-            atts = {'long_name': 'dissolved Oxygen', 'units': 'mmol O_2/m^3'}
-            river.add_variable('O2_o', self.river.O2_o, ['rivers', 'time'], attributes=atts, ncopts=ncopts)
+                atts = {'long_name': 'ammonium nitrogen', 'units': 'mmol N/m^3'}
+                river.add_variable('N4_n', self.river.N4_n, ['rivers', 'time'], attributes=atts, ncopts=ncopts)
 
-            atts = {'long_name': 'carbonate total alkalinity', 'units': 'mmol C/m^3'}
-            river.add_variable('O3_TA', self.river.O3_TA, ['rivers', 'time'], attributes=atts, ncopts=ncopts)
+                atts = {'long_name': 'silicate silicate', 'units': 'mmol Si/m^3'}
+                river.add_variable('N5_s', self.river.N5_s, ['rivers', 'time'], attributes=atts, ncopts=ncopts)
 
-            atts = {'long_name': 'carbonate total dissolved inorganic carbon', 'units': 'mmol C/m^3'}
-            river.add_variable('O3_c', self.river.O3_c, ['rivers', 'time'], attributes=atts, ncopts=ncopts)
+                atts = {'long_name': 'dissolved Oxygen', 'units': 'mmol O_2/m^3'}
+                river.add_variable('O2_o', self.river.O2_o, ['rivers', 'time'], attributes=atts, ncopts=ncopts)
 
-            atts = {'long_name': 'carbonate bioalkalinity', 'units': 'umol/kg'}
-            river.add_variable('O3_bioalk', self.river.O3_bioalk, ['rivers', 'time'], attributes=atts, ncopts=ncopts)
+                atts = {'long_name': 'carbonate total alkalinity', 'units': 'mmol C/m^3'}
+                river.add_variable('O3_TA', self.river.O3_TA, ['rivers', 'time'], attributes=atts, ncopts=ncopts)
 
-            atts = {'long_name': 'mesozooplankton carbon', 'units': 'mg C/m^3'}
-            river.add_variable('Z4_c', self.river.Z4_c, ['rivers', 'time'], attributes=atts, ncopts=ncopts)
+                atts = {'long_name': 'carbonate total dissolved inorganic carbon', 'units': 'mmol C/m^3'}
+                river.add_variable('O3_c', self.river.O3_c, ['rivers', 'time'], attributes=atts, ncopts=ncopts)
 
-            atts = {'long_name': 'mesozooplankton carbon', 'units': 'mg C/m^3'}
-            river.add_variable('Z4_c', self.river.Z4_c, ['rivers', 'time'], attributes=atts, ncopts=ncopts)
+                atts = {'long_name': 'carbonate bioalkalinity', 'units': 'umol/kg'}
+                river.add_variable('O3_bioalk', self.river.O3_bioalk, ['rivers', 'time'], attributes=atts, ncopts=ncopts)
 
-            # Additional zooplankton variables.
-            zooplankton_prefixes = ['Z5', 'Z6']
-            zooplankton_suffixes = ['n', 'c', 'p']
-            zooplankton_long_names = ['microzooplankton', 'nanoflagellates']
-            nutrient_long_names = ['nitrogen', 'phosphorus', 'nitrogen']
-            nutrient_units = {'mmol N/m^3', 'mmol P/m^3', 'mg C/m^3'}
+                atts = {'long_name': 'mesozooplankton carbon', 'units': 'mg C/m^3'}
+                river.add_variable('Z4_c', self.river.Z4_c, ['rivers', 'time'], attributes=atts, ncopts=ncopts)
 
-            # Make the new variable names and add accordingly.
-            for prefix, zooplankton_name in zip(zooplankton_prefixes, zooplankton_long_names):
-                for suffix, nutrient_name, units in zip(zooplankton_suffixes, nutrient_long_names, nutrient_units):
-                    atts = {'long_name': '{} {}'.format(zooplankton_name, nutrient_name),
-                            'units': units}
-                    river.add_variable('{}_{}'.format(prefix, suffix),
-                                       getattr(self.river, '{}_{}'.format(prefix, suffix)),
-                                       ['rivers', 'time'],
-                                       attributes=atts,
-                                       ncopts=ncopts)
+                # Additional zooplankton variables.
+                zooplankton_prefixes = ['Z5', 'Z6']
+                zooplankton_suffixes = ['n', 'c', 'p']
+                zooplankton_long_names = ['microzooplankton', 'nanoflagellates']
+                nutrient_long_names = ['nitrogen', 'phosphorus', 'nitrogen']
+                nutrient_units = {'mmol N/m^3', 'mmol P/m^3', 'mg C/m^3'}
+
+                # Make the new variable names and add accordingly, but only if we don't already have them in the file.
+                for prefix, zooplankton_name in zip(zooplankton_prefixes, zooplankton_long_names):
+                    for suffix, nutrient_name, units in zip(zooplankton_suffixes, nutrient_long_names, nutrient_units):
+                        if '{} {}'.format(zooplankton_name, nutrient_name) not in river.nc.variables:
+                            atts = {'long_name': '{} {}'.format(zooplankton_name, nutrient_name),
+                                    'units': units}
+                            river.add_variable('{}_{}'.format(prefix, suffix),
+                                               getattr(self.river, '{}_{}'.format(prefix, suffix)),
+                                               ['rivers', 'time'],
+                                               attributes=atts,
+                                               ncopts=ncopts)
 
     def write_river_namelist(self, output_file, forcing_file, vertical_distribution='uniform'):
         """
