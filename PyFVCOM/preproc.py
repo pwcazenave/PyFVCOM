@@ -1260,7 +1260,7 @@ class Model(Domain):
                     # Don't like having to tile since we should be able to do this with a np.newaxis, but, for some
                     # reason, it doesn't seem to work here. Make the array time dimension appear last for
                     # compatibility with add_rivers.
-                    nemo[key] = nemo[key][np.tile(mask, [number_of_times, 1, 1])].reshape(number_of_times, -1)
+                    nemo[key] = nemo[key][np.tile(mask, [number_of_times, 1, 1])].reshape(-1, number_of_times)
                 except IndexError:
                     nemo[key] = nemo[key][mask]
 
