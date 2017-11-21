@@ -82,6 +82,26 @@ class Model(Domain):
 
         write_fvcom_mesh(self.grid.triangles, nodes, x, y, self.grid.h, grid_file, extra_depth=depth_file)
 
+    def write_coriolis(self, coriolis_file):
+        """
+
+        Parameters
+        ----------
+        coriolis_file : str, pathlib.Path
+            Name of the file to which to write the coriolis data.
+
+        """
+
+        with open(coriolis_file, 'w') as f:
+            if self.grid.native_coordinates.lower() == 'spherical':
+                x, y = self.grid.lon, self.grid.lat
+            else:
+                x, y = self.grid.x, self.grid.y
+
+            f.write('Node Number = {:d}\n'.format(self.dims.node))
+            for line in zip(x, y, self.grid.lat):
+                f.write('{:.6f} {:.6f} {:.6f}\n'.format(*line))
+
 
     def interp_sst_assimilation(self, sst_dir, year, serial=False, pool_size=None, noisy=False):
         """
