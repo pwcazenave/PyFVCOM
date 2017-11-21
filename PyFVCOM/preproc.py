@@ -46,10 +46,20 @@ class Model(Domain):
         self.tide = None
         self.sst = None
 
+        # Initialise the river structure.
+        self.__prep_rivers()
+
     @staticmethod
     def __flatten_list(nest):
         """ Flatten a list of lists. """
         return list(itertools.chain(*nest))
+
+    def __prep_rivers(self):
+        self.river = type('river', (object,), {})()
+        self.dims.river = 0  # assume no rivers.
+
+        self.river.history = ''
+        self.river.info = ''
 
     def interp_sst_assimilation(self, sst_dir, year, serial=False, pool_size=None, noisy=False):
         """
@@ -876,7 +886,7 @@ class Model(Domain):
                     'units': 'meters'}
             elev.add_variable('elevation', self.tides.zeta, ['time', 'nobc'], attributes=atts, ncopts=ncopts)
 
-    def add_rivers(self, positions, history='', info='', ersem=False):
+    def add_rivers(self, positions, times, flux, temperature, salinity, threshold=np.inf, history='', info='', ersem=None):
         """
         Add river nodes closest to the given locations.
 
@@ -884,33 +894,81 @@ class Model(Domain):
         ----------
         positions : np.ndarray
             Positions (in longitude/latitude).
+        times : np.ndarray
+            Array of datetime objects for the river data.
+        flux : np.ndarray
+            River discharge data (m^3s{^-1}) [river, time]
+        temperature : np.ndarray
+            River temperature data (degrees Celsius) [river, time]
+        salinity : np.ndarray
+            River salinity data (PSU) [river, time]
+        threshold : float, optional
+            Distance beyond which a model node is considered too far from the current river position. Such rivers are
+            omitted from the forcing.
         history : str
             String added to the `history' global attribute.
         info : str
             String added to the `info' global attribute.
-        ersem : bool
-            If True, generate ERSEM data too. Defaults to False.
+        ersem : dict
+            If supplied, a dictionary whose keys are variable names to add to the river object and whose values are
+            the corresponding river data. These should match the shape of the flux, temperature and salinity data.
+
+        Provides
+        --------
+        node : list, np.ndarray
+            List of model grid nodes at which rivers will be discharged.
+        flux : np.ndarray
+            Time series of the river flux.
+        temperature : np.ndarray
+            Time series of the river temperature.
+        salinity : np.ndarray
+            Time series of the river salinity.
+
+        If `ersem' is True, then the variables supplied in the `ersem' dict are also added to the `river' object.
+        Note: a number of variables are automatically created if not given within the `ersem' dict, based on values
+        from PML's Western Channel Observatory L4 buoy data. These are: 'Z4_c', 'Z5c', 'Z5n', 'Z5p', 'Z6c', 'Z6n' and
+        'Z6p'.
 
         """
 
-        self.river = type('river', (object,), {})()
-        self.dims.river = 0  # assume no rivers.
+        # Overwrite history/info attributes if we've been given them.
+        if history:
+            self.river.history = history
 
-        self.river.history = history
-        self.river.info = info
+        if info:
+            self.river.info = info
+
+        self.river.time = times
+
+        nodes = []
+        river_index = []
+        for ri, position in enumerate(positions):
+            node = self.closest_node(position, threshold=threshold, haversine=True)
+            if node:
+                nodes.append(node)
+                river_index.append(ri)
+
+        setattr(self.river, 'flux', flux[ri, :])
+        setattr(self.river, 'salinity', salinity[ri, :])
+        setattr(self.river, 'temperature', temperature[ri, :])
 
         if ersem:
-            # Add small zooplankton values. Taken to be 10^-6 of Western Channel Observatory L4 initial conditions.
-            fac = 10**-6
+            for variable in ersem:
+                setattr(self.river, variable, ersem[variable][ri, :])
 
-            self.river.Z4c = 1.2 * fac
-            self.river.Z5c = 7.2 * fac
-            self.river.Z5n = 0.12 * fac
-            self.river.Z5p = 0.0113 * fac
-            self.river.Z6c = 2.4 * fac
-            self.river.Z6n = 0.0505 * fac
-            # Not quite the initial values in fabm.yaml... but they are not in carbon balance.
-            self.river.Z6p = 0.0047 * fac
+            # Add small zooplankton values if we haven't been given any already. Taken to be 10^-6 of Western Channel
+            # Observatory L4 initial conditions. Only add these if we haven't already been given these data.
+            fac = 10**-6
+            extra_data = {'Z4c': 1.2 * fac,
+                          'Z5c': 7.2 * fac,
+                          'Z5n': 0.12 * fac,
+                          'Z5p': 0.0113 * fac,
+                          'Z6c': 2.4 * fac,
+                          'Z6n': 0.0505 * fac,
+                          'Z6p': 0.0047 * fac}
+            for extra in extra_data:
+                if not hasattr(self.river, extra):
+                    setattr(self.river, extra, extra_data[extra])
 
     def write_river_forcing(self, output_file, ersem=False, ncopts={'zlib': True, 'complevel': 7}, **kwargs):
         """
@@ -1009,16 +1067,27 @@ class Model(Domain):
                                        attributes=atts,
                                        ncopts=ncopts)
 
-    def write_river_namelist(self, output_file):
+    def write_river_namelist(self, output_file, forcing_file, vertical_distribution='uniform'):
         """
 
         Parameters
         ----------
         output_file : str, pathlib.Path
             Output file to which to write the river configuration.
+        forcing_file : str, pathlib.Path
+            File from which FVCOM will read the river forcing data.
+        vertical_distribution : str, optional
+            Vertical distribution of river input. Defaults to 'uniform'.
 
         """
-        pass
+        with open(output_file, 'w') as f:
+            for ri in range(self.dims.river):
+                f.write(' &NML_RIVER\n')
+                f.write('  RIVER_NAME          = ''{}'',\n'.format(self.river.names[ri]))
+                f.write('  RIVER_FILE          = ''{}'',\n'.format(forcing_file))
+                f.write('  RIVER_GRID_LOCATION = {:d},\n'.format(self.river.node[ri]))
+                f.write('  RIVER_VERTICAL_DISTRIBUTION = {}\n'.format(vertical_distribution))
+                f.write('  /\n')
 
     def add_probes(self, positions, names, variables, interval, max_distance=np.inf):
         """
