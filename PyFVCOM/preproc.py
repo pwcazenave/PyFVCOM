@@ -1193,21 +1193,21 @@ class Model(Domain):
                 NEMO river discharge (m^3s^{-1}) [river, time]
             temperature : np.ndarray
                 NEMO river temperature (degrees Celsius) [river, time]
-            ammonia : np.ndarray
+            N4_n : np.ndarray
                 NEMO river ammonia (mmol/m^3) [river, time]
-            nitrate : np.ndarray
+            N3_n : np.ndarray
                 NEMO river nitrate (mmol/m^3) [river, time]
-            oxygen : np.ndarray
+            O2_o : np.ndarray
                 NEMO river oxygen (mmol/m^3) [river, time]
-            phosphate : np.ndarray
+            N1_p : np.ndarray
                 NEMO river phosphate (mmol/m^3) [river, time]
-            silicate : np.ndarray
+            N5_s : np.ndarray
                 NEMO river silicate (mmol/m^3) [river, time]
-            dic : np.ndarray
+            O3_c : np.ndarray
                 NEMO river dissolved inorganic carbon (mmol/m^3) [river, time]
-            total_alkalinity : np.ndarray
+            O3_TA : np.ndarray
                 NEMO river total alkalinity (mmol/m^3) [river, time]
-            bio_alkalinity : np.ndarray
+            O3_bioalk : np.ndarray
                 NEMO river bio-alkalinity (umol/m^3 - note different units) [river, time]
 
         Notes
@@ -1218,8 +1218,8 @@ class Model(Domain):
 
         nemo_variables = ['rodic', 'ronh4', 'rono3', 'roo', 'rop', 'rorunoff', 'rosio2',
                           'rotemper', 'rototalk', 'robioalk']
-        sensible_names = ['dic', 'ammonia', 'nitrate', 'oxygen', 'phosphate', 'flux', 'silicate',
-                          'temperature', 'total_alkalinity', 'bio_alkalinity']
+        sensible_names = ['O3_c', 'N4_n', 'N3_n', 'O2_o', 'N1_p', 'flux', 'N5_s',
+                          'temperature', 'O3_TA', 'O3_bioalk']
 
         nemo = {}
         with Dataset(nemo_file, 'r') as nc:
@@ -1242,14 +1242,14 @@ class Model(Domain):
         temporary_flux = nemo['flux']
         temporary_flux[temporary_flux == 0] = 1E-8
         # Convert units from grams to millimoles where appropriate.
-        nemo['ammonia'] = (nemo['ammonia'] / 14) * 1000 / temporary_flux  # g/s to mmol/m3
-        nemo['nitrate'] = (nemo['nitrate'] / 14) * 1000 / temporary_flux  # g/s to mmol/m3
-        nemo['oxygen'] = (nemo['oxygen'] / 16) * 1000 / temporary_flux  # Nemo oxygen concentrations are for O rather than O2
-        nemo['phosphate'] = (nemo['phosphate'] / 35.5) * 1000 / temporary_flux  # g/s to mmol/m3
-        nemo['silicate'] = (nemo['silicate'] / 28) * 1000./ temporary_flux  # g/2 to mmol/m3
-        nemo['bio_alkalinity'] = nemo['bio_alkalinity'] / temporary_flux / 1000  # bioalk is in umol/s need umol/kg
-        nemo['dic'] = nemo['dic'] / 12 / temporary_flux * 1000  # dic is in gC/s need mmol/m3
-        # total alkalinity is already in umol/Kg as expected by ERSEM.
+        nemo['N4_n'] = (nemo['N4_n'] / 14) * 1000 / temporary_flux  # g/s to mmol/m3
+        nemo['N3_n'] = (nemo['N3_n'] / 14) * 1000 / temporary_flux  # g/s to mmol/m3
+        nemo['O2_o'] = (nemo['O2_o'] / 16) * 1000 / temporary_flux  # Nemo oxygen concentrations are for O rather than O2
+        nemo['N1_p'] = (nemo['N1_p'] / 35.5) * 1000 / temporary_flux  # g/s to mmol/m3
+        nemo['N5_s'] = (nemo['N5_s'] / 28) * 1000./ temporary_flux  # g/2 to mmol/m3
+        nemo['O3_bioalk'] = nemo['O3_bioalk'] / temporary_flux / 1000  # bioalk is in umol/s need umol/kg
+        nemo['O3_c'] = nemo['O3_c'] / 12 / temporary_flux * 1000  # dic is in gC/s need mmol/m3
+        # Total alkalinity is already in umol/kg as expected by ERSEM.
 
         # Now we've got the data, use the flux data to find the indices of the rivers in the arrays and extract those
         # as time series per location. These data can then be passed to self.add_rivers fairly straightforwardly.
