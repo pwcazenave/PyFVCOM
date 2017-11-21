@@ -1036,13 +1036,13 @@ class Model(Domain):
                 nodes.append(node)
                 river_index.append(ri)
 
-        setattr(self.river, 'flux', flux[ri, :])
-        setattr(self.river, 'salinity', salinity[ri, :])
-        setattr(self.river, 'temperature', temperature[ri, :])
+        setattr(self.river, 'flux', flux[river_index, :])
+        setattr(self.river, 'salinity', salinity[river_index, :])
+        setattr(self.river, 'temperature', temperature[river_index, :])
 
         if ersem:
             for variable in ersem:
-                setattr(self.river, variable, ersem[variable][ri, :])
+                setattr(self.river, variable, ersem[variable][river_index, :])
 
             # Add small zooplankton values if we haven't been given any already. Taken to be 10^-6 of Western Channel
             # Observatory L4 initial conditions. Only add these if we haven't already been given these data.
