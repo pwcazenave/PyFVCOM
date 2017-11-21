@@ -1264,6 +1264,9 @@ class Model(Domain):
                 except IndexError:
                     nemo[key] = nemo[key][mask]
 
+        # Since the NEMO river don't have names, make some based on their position.
+        nemo['names'] = ['river_{}_{}'.format(*i) for i in zip(nemo['lon'], nemo['lat'])]
+
         return nemo
 
     def add_probes(self, positions, names, variables, interval, max_distance=np.inf):
