@@ -1074,6 +1074,18 @@ class Model(Domain):
         ncopts : dict, optional
             Dictionary of options to use when creating the netCDF variables. Defaults to compression on.
 
+        The self.river object should have, at a minimum, the following objects:
+            - names : list of river names
+            - nodes : list of grid nodes
+            - time : list of datetimes
+            - flux : river discharge data
+            - temperature : river temperature data
+            - salinity : river salinity data
+
+
+        Uses self.river.source for the 'title' global attribute in the netCDF and self.river.history for the 'info'
+        global attribute. Both of these default to empty strings.
+
         Remaining arguments are passed to WriteForcing.
 
         """
