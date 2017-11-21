@@ -693,21 +693,29 @@ class Model(Domain):
 
         """
 
-        if not np.any(self.gridobc_nodes):
+        if not np.any(self.grid.obc_nodes):
             raise ValueError('No open boundary nodes specified; sponge nodes cannot be defined.')
 
         if isinstance(radius, (float, int)):
-            radius = np.repeat(radius, np.shape(nodes))
+            radius = np.repeat(radius, np.shape(nodes)).tolist()
         if isinstance(coefficient, (float, int)):
-            coefficient = np.repeat(radius), np.shape(nodes)
-
-        self.grid.sponge_radius = radius
-        self.grid.sponge_coefficient = coefficient
+            coefficient = np.repeat(coefficient, np.shape(nodes)).tolist()
 
         if hasattr(self.grid, 'sponge_nodes'):
             self.grid.sponge_nodes.append(nodes)
         else:
-            self.grid.sponge_nodes = nodes
+            self.grid.sponge_nodes = [nodes]
+
+        if hasattr(self.grid, 'sponge_radius'):
+            self.grid.sponge_radius.append(radius)
+        else:
+            self.grid.sponge_radius = [radius]
+
+        if hasattr(self.grid, 'sponge_coefficient'):
+            self.grid.sponge_coefficient.append(coefficient)
+        else:
+            self.grid.sponge_coefficient = [coefficient]
+
     def write_sponge(self, sponge_file):
         """
         Write out the sponge data to an FVCOM-formatted ASCII file.
