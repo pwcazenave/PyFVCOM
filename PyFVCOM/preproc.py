@@ -708,6 +708,22 @@ class Model(Domain):
             self.grid.sponge_nodes.append(nodes)
         else:
             self.grid.sponge_nodes = nodes
+    def write_sponge(self, sponge_file):
+        """
+        Write out the sponge data to an FVCOM-formatted ASCII file.
+        Parameters
+        ----------
+        sponge_file : str, pathlib.Path
+            Path to the file to create.
+
+        """
+
+        number_of_nodes = len(self.__flatten_list(self.grid.obc_nodes))
+
+        with open(sponge_file, 'w') as f:
+            f.write('Sponge Node Number = {:d}\n'.format(number_of_nodes))
+            for node in zip(np.arange(number_of_nodes) + 1, self.__flatten_list(self.grid.sponge_radius), self.__flatten_list(self.grid.sponge_coefficient)):
+                f.write('{} {:.6f} {:.6f}\n'.format(*node))
 
     def add_grid_metrics(self, noisy=False):
         """ Calculate grid metrics. """
