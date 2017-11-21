@@ -60,6 +60,8 @@ class Model(Domain):
 
         self.river.history = ''
         self.river.info = ''
+        self.river.source = ''
+
     def write_grid(self, grid_file, depth_file=None):
         """
         Write out the unstructured grid data to file.
