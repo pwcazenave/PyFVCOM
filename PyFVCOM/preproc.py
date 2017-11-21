@@ -1279,7 +1279,7 @@ class Model(Domain):
                 else:
                     grid_id = self.closest_node(position, threshold=max_distance, vincenty=True)
                 if variable in depth_variables:
-                    sigma = [1, len(self.grid.siglay)]
+                    sigma = [1, self.dims.layers]
                 else:
                     sigma = None
                 current_grid.append(grid_id)
