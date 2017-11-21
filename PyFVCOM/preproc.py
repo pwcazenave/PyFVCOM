@@ -28,7 +28,7 @@ from warnings import warn
 from utide import reconstruct, ut_constants
 from utide.utilities import Bunch
 
-from PyFVCOM.grid import Domain, grid_metrics, read_fvcom_obc, nodes2elems
+from PyFVCOM.grid import Domain, grid_metrics, read_fvcom_obc, nodes2elems, write_fvcom_mesh
 from PyFVCOM.utilities import date_range
 
 
@@ -60,6 +60,28 @@ class Model(Domain):
 
         self.river.history = ''
         self.river.info = ''
+    def write_grid(self, grid_file, depth_file=None):
+        """
+        Write out the unstructured grid data to file.
+
+        grid_file : str, pathlib.Path
+            Name of the file to which to write the grid.
+        depth_file : str, pathlib.Path, optional
+            If given, also write out the bathymetry file.
+
+        """
+        grid_file = str(grid_file)
+        if depth_file:
+            depth_file = str(depth_file)
+
+        nodes = np.arange(self.dims.node) + 1
+        if self.grid.native_coordinates.lower() == 'spherical':
+            x, y = self.grid.lon, self.grid.lat
+        else:
+            x, y = self.grid.x, self.grid.y
+
+        write_fvcom_mesh(self.grid.triangles, nodes, x, y, self.grid.h, grid_file, extra_depth=depth_file)
+
 
     def interp_sst_assimilation(self, sst_dir, year, serial=False, pool_size=None, noisy=False):
         """
