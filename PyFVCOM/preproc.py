@@ -1089,6 +1089,103 @@ class Model(Domain):
                 f.write('  RIVER_VERTICAL_DISTRIBUTION = {}\n'.format(vertical_distribution))
                 f.write('  /\n')
 
+    def read_nemo_rivers(self, nemo_file):
+        """
+
+        Parameters
+        ----------
+        nemo_file : str, pathlib.Path
+            Path to the NEMO forcing file.
+
+        Returns
+        -------
+        nemo: dict
+            A dictionary with the following keys:
+
+            positions : np.ndarray
+                NEMO river locations.
+            times : np.ndarray
+                NEMO river time series. Since the NEMO data is a climatology, this uses the self.start and self.end
+                variables to create a matching time series for the river data.
+            names : np.ndarray
+                NEMO river names.
+            flux : np.ndarray
+                NEMO river discharge (m^3s^{-1}) [river, time]
+            temperature : np.ndarray
+                NEMO river temperature (degrees Celsius) [river, time]
+            ammonia : np.ndarray
+                NEMO river ammonia (mmol/m^3) [river, time]
+            nitrate : np.ndarray
+                NEMO river nitrate (mmol/m^3) [river, time]
+            oxygen : np.ndarray
+                NEMO river oxygen (mmol/m^3) [river, time]
+            phosphate : np.ndarray
+                NEMO river phosphate (mmol/m^3) [river, time]
+            silicate : np.ndarray
+                NEMO river silicate (mmol/m^3) [river, time]
+            dic : np.ndarray
+                NEMO river dissolved inorganic carbon (mmol/m^3) [river, time]
+            total_alkalinity : np.ndarray
+                NEMO river total alkalinity (mmol/m^3) [river, time]
+            bio_alkalinity : np.ndarray
+                NEMO river bio-alkalinity (umol/m^3 - note different units) [river, time]
+
+        Notes
+        -----
+        This is mostly copy-pasted from the MATLAB fvcom-toolbox function get_NEMO_rivers.m.
+
+        """
+
+        nemo_variables = ['rodic', 'ronh4', 'rono3', 'roo', 'rop', 'rorunoff', 'rosio2',
+                          'rotemper', 'rototalk', 'robioalk']
+        sensible_names = ['dic', 'ammonia', 'nitrate', 'oxygen', 'phosphate', 'flux', 'silicate',
+                          'temperature', 'total_alkalinity', 'bio_alkalinity']
+
+        nemo = {}
+        with Dataset(nemo_file, 'r') as nc:
+            number_of_times = nc.dimensions['time_counter'].size
+            nemo['times'] = np.linspace(0, number_of_times, endpoint=True)
+            nemo['times'] = [self.start + relativedelta(days=i) for i in nemo['times']]
+            nemo['lon'], nemo['lat'] = np.meshgrid(nc.variables['x'][:], nc.variables['y'][:])
+            for vi, var in enumerate(nemo_variables):
+                nemo[sensible_names[vi]] = nc.variables[var][:]
+
+            # Get the NEMO grid area for correcting units.
+            area = nc.variables['dA'][:]
+
+        # Flux in NEMO is specified in kg/m^{2}/s. FVCOM wants m^{3}/s. Divide by freshwater density to get m/s and
+        # then multiply by the area of each element to get flux.
+        nemo['flux'] /= 1000
+        # Now multiply by the relevant area to (finally!) get to m^{3}/s.
+        nemo['flux'] *= area
+        # Set zero values to a very small number instead to avoid divide by zero errors below.
+        temporary_flux = nemo['flux']
+        temporary_flux[temporary_flux == 0] = 1E-8
+        # Convert units from grams to millimoles where appropriate.
+        nemo['ammonia'] = (nemo['ammonia'] / 14) * 1000 / temporary_flux  # g/s to mmol/m3
+        nemo['nitrate'] = (nemo['nitrate'] / 14) * 1000 / temporary_flux  # g/s to mmol/m3
+        nemo['oxygen'] = (nemo['oxygen'] / 16) * 1000 / temporary_flux  # Nemo oxygen concentrations are for O rather than O2
+        nemo['phosphate'] = (nemo['phosphate'] / 35.5) * 1000 / temporary_flux  # g/s to mmol/m3
+        nemo['silicate'] = (nemo['silicate'] / 28) * 1000./ temporary_flux  # g/2 to mmol/m3
+        nemo['bio_alkalinity'] = nemo['bio_alkalinity'] / temporary_flux / 1000  # bioalk is in umol/s need umol/kg
+        nemo['dic'] = nemo['dic'] / 12 / temporary_flux * 1000  # dic is in gC/s need mmol/m3
+        # total alkalinity is already in umol/Kg as expected by ERSEM.
+
+        # Now we've got the data, use the flux data to find the indices of the rivers in the arrays and extract those
+        # as time series per location. These data can then be passed to self.add_rivers fairly straightforwardly.
+        mask = np.any(nemo['flux'], axis=0)
+        for key in nemo:
+            if key != 'times':
+                try:
+                    # Don't like having to tile since we should be able to do this with a np.newaxis, but, for some
+                    # reason, it doesn't seem to work here. Make the array time dimension appear last for
+                    # compatibility with add_rivers.
+                    nemo[key] = nemo[key][np.tile(mask, [number_of_times, 1, 1])].reshape(number_of_times, -1)
+                except IndexError:
+                    nemo[key] = nemo[key][mask]
+
+        return nemo
+
     def add_probes(self, positions, names, variables, interval, max_distance=np.inf):
         """
         Generate probe locations closest to the given locations.
