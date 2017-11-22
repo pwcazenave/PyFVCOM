@@ -1047,7 +1047,7 @@ class Model(Domain):
             dist = np.asarray([haversine_distance(pt_1, position) for pt_1 in grid_pts])
             breached_distance = dist < threshold
             if np.any(breached_distance):
-                nodes.append(self.grid.coastline(np.argmin(dist)))
+                nodes.append(self.grid.coastline[np.argmin(dist)])
                 river_index.append(ri)
 
         self.river.node = nodes
