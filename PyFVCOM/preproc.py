@@ -1134,9 +1134,11 @@ class Model(Domain):
         if max_discharge:
             # Find rivers in excess of the given discharge maximum.
             big_rivers = np.argwhere(self.river.flux > max_discharge)
+            # TODO: implement this!
 
         if min_depth:
             deep_rivers = np.argwhere(self.grid.h[self.river.node] > min_depth)
+            # TODO: implement this!
 
         if open_boundary_proximity:
             # Remove nodes close to the open boundary joint with the coastline. Identifying the coastline/open
