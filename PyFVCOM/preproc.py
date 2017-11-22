@@ -61,7 +61,14 @@ class Model(Domain):
     @staticmethod
     def __flatten_list(nest):
         """ Flatten a list of lists. """
-        return list(itertools.chain(*nest))
+        try:
+            flattened = list(itertools.chain(*nest))
+        except TypeError:
+            # Maybe it's already flat and we've just tried iterating over non-iterables. If so, just return what we
+            # got given.
+            flattened = nest
+
+        return flattened
 
     def __prep_rivers(self):
         self.river = type('river', (object,), {})()
