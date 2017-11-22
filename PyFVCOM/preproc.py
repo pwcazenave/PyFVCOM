@@ -1028,7 +1028,6 @@ class Model(Domain):
             self.river.info = info
 
         self.river.time = times
-        self.river.names = names
 
         nodes = []
         river_index = []
@@ -1045,27 +1044,40 @@ class Model(Domain):
         self.river.node = nodes
         self.dims.river = len(river_index)
 
-        setattr(self.river, 'flux', flux[river_index, :])
-        setattr(self.river, 'salinity', salinity[river_index, :])
-        setattr(self.river, 'temperature', temperature[river_index, :])
+        # If we have no rivers within the domain, just set everything to empty lists.
+        if self.dims.river == 0:
+            self.river.names = []
+            for var in ('flux', 'salinity', 'temperature'):
+                setattr(self.river, var, [])
+            if ersem:
+                for var in ersem:
+                    setattr(self.river, var, [])
+                # Do the extras too.
+                for var in ('Z4_c', 'Z5_c', 'Z5_n', 'Z5_p', 'Z6_c', 'Z6_n', 'Z6_p'):
+                    setattr(self.river, var, [])
+        else:
+            self.river.names = [names[i] for i in river_index]
+            setattr(self.river, 'flux', flux[:, river_index])
+            setattr(self.river, 'salinity', salinity[:, river_index])
+            setattr(self.river, 'temperature', temperature[:, river_index])
 
-        if ersem:
-            for variable in ersem:
-                setattr(self.river, variable, ersem[variable][river_index, :])
+            if ersem:
+                for variable in ersem:
+                    setattr(self.river, variable, ersem[variable][:, river_index])
 
-            # Add small zooplankton values if we haven't been given any already. Taken to be 10^-6 of Western Channel
-            # Observatory L4 initial conditions.
-            fac = 10**-6
-            extra_data = {'Z4_c': 1.2 * fac,
-                          'Z5_c': 7.2 * fac,
-                          'Z5_n': 0.12 * fac,
-                          'Z5_p': 0.0113 * fac,
-                          'Z6_c': 2.4 * fac,
-                          'Z6_n': 0.0505 * fac,
-                          'Z6_p': 0.0047 * fac}
-            for extra in extra_data:
-                if not hasattr(self.river, extra):
-                    setattr(self.river, extra, extra_data[extra])
+                # Add small zooplankton values if we haven't been given any already. Taken to be 10^-6 of Western Channel
+                # Observatory L4 initial conditions.
+                fac = 10**-6
+                extra_data = {'Z4_c': 1.2 * fac,
+                              'Z5_c': 7.2 * fac,
+                              'Z5_n': 0.12 * fac,
+                              'Z5_p': 0.0113 * fac,
+                              'Z6_c': 2.4 * fac,
+                              'Z6_n': 0.0505 * fac,
+                              'Z6_p': 0.0047 * fac}
+                for extra in extra_data:
+                    if not hasattr(self.river, extra):
+                        setattr(self.river, extra, extra_data[extra])
 
     def write_river_forcing(self, output_file, ersem=False, ncopts={'zlib': True, 'complevel': 7}, **kwargs):
         """
