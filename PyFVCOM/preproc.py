@@ -854,7 +854,7 @@ class Model(Domain):
         self.tide = type('tide', (object,), {})()
         forcing = []
 
-        dates = date_range(self.start + relativedelta(days=-1), self.end + relativedelta(days=1), inc=interval)
+        dates = date_range(self.start - relativedelta(days=1), self.end + relativedelta(days=1), inc=interval / 24)
         self.tide.time = dates
         # UTide needs MATLAB times.
         times = mtime(dates)
