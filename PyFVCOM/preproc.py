@@ -54,8 +54,8 @@ class Model(Domain):
         *_, bnd = connectivity(np.array((self.grid.lon, self.grid.lat)).T, self.grid.triangles)
         self.grid.coastline = np.argwhere(bnd)
         # Remove the open boundaries, if we have them.
-        if np.any(self.grid.obc_nodes):
-            land_only = np.isin(np.squeeze(np.argwhere(bnd)), self.__flatten_list(self.grid.obc_nodes), invert=True)
+        if np.any(self.grid.open_boundary_nodes):
+            land_only = np.isin(np.squeeze(np.argwhere(bnd)), self.__flatten_list(self.grid.open_boundary_nodes), invert=True)
             self.grid.coastline = np.squeeze(self.grid.coastline[land_only])
 
     @staticmethod
@@ -760,12 +760,12 @@ class Model(Domain):
             Set to True to overwrite any automatically or already loaded open boundary nodes. Defaults to False.
 
         """
-        if np.any(self.grid.obc_nodes) and np.any(self.grid.types) and reload:
+        if np.any(self.grid.open_boundary_nodes) and np.any(self.grid.types) and reload:
             # We've already got some, so warn and return.
             warn('Open boundary nodes already loaded and reload set to False.')
             return
         else:
-            self.grid.obc_nodes, self.grid.types, _ = read_fvcom_obc(str(obc_file))
+            self.grid.open_boundary_nodes, self.grid.types, _ = read_fvcom_obc(str(obc_file))
 
     def add_sponge_layer(self, nodes, radius, coefficient):
         """
@@ -782,7 +782,7 @@ class Model(Domain):
 
         """
 
-        if not np.any(self.grid.obc_nodes):
+        if not np.any(self.grid.open_boundary_nodes):
             raise ValueError('No open boundary nodes specified; sponge nodes cannot be defined.')
 
         if isinstance(radius, (float, int)):
@@ -815,7 +815,7 @@ class Model(Domain):
 
         """
 
-        number_of_nodes = len(self.__flatten_list(self.grid.obc_nodes))
+        number_of_nodes = len(self.__flatten_list(self.grid.open_boundary_nodes))
 
         with open(sponge_file, 'w') as f:
             f.write('Sponge Node Number = {:d}\n'.format(number_of_nodes))
@@ -860,7 +860,7 @@ class Model(Domain):
         times = mtime(dates)
 
         if predict == 'zeta':
-            obc_ids = self.grid.obc_nodes
+            obc_ids = self.grid.open_boundary_nodes
         else:
             obc_ids = self.grid.obc_elems
 
@@ -984,7 +984,7 @@ class Model(Domain):
         globals = {'type': 'FVCOM TIME SERIES ELEVATION FORCING FILE',
                    'title': 'TPXO tides',
                    'history': 'File created using PyFVCOM'}
-        dims = {'nobc': self.dims.obc, 'time': 0, 'DateStrLen': 26}
+        dims = {'nobc': self.dims.open_boundary_nodes, 'time': 0, 'DateStrLen': 26}
 
         with WriteForcing(str(output_file), dims, global_attributes=globals, clobber=True, format='NETCDF4', **kwargs) as elev:
             # Add the variables.
@@ -1155,7 +1155,7 @@ class Model(Domain):
             # Using that position, we can find any river nodes which fall within that distance and simply remove
             # their data from the relevant self.river arrays.
             boundary_river_indices = []
-            for obc in self.grid.obc_nodes:
+            for obc in self.grid.open_boundary_nodes:
                 obc_land_nodes = obc[0], obc[-1]
                 grid_pts = np.asarray([self.grid.lon[self.river.node], self.grid.lat[self.river.node]]).T
                 for land_node in obc_land_nodes:
