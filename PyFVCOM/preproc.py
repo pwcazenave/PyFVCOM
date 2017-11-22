@@ -915,7 +915,9 @@ class Model(Domain):
                 results = pool.map(self._predict_tide, args)
                 pool.close()
 
-            forcing.append(np.asarray(results))
+            # Make a long list (rather than a list per open boundary so it's easier to write to netCDF. This,
+            # however, may make it a little harder to use for nesting.
+            forcing += results
 
         # Dump the results into the object.
         setattr(self.tide, predict, np.asarray(forcing))
