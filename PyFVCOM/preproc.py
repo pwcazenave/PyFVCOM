@@ -881,7 +881,7 @@ class Model(Domain):
 
             latitudes = y[obc]
 
-            with Dataset(tpxo_harmonics, 'r') as tides:
+            with Dataset(str(tpxo_harmonics), 'r') as tides:
                 tpxo_const = [''.join(i).upper().strip() for i in tides.variables['con'][:].astype(str)]
                 # If we've been given variables that aren't in the TPXO data, just find the indices we do have.
                 cidx = [tpxo_const.index(i) for i in constituents if i in tpxo_const]
