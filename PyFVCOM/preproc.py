@@ -918,7 +918,7 @@ class Model(Domain):
             forcing.append(np.asarray(results))
 
         # Dump the results into the object.
-        setattr(self.tide, predict, forcing)
+        setattr(self.tide, predict, np.asarray(forcing))
 
     @staticmethod
     def _predict_tide(args):
