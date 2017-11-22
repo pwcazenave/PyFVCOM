@@ -65,7 +65,7 @@ class Domain:
         self.grid.zone = zone
         # Initialise everything to None so we don't get caught out expecting something to exist when it doesn't.
         self.domain_plot = None
-        self.grid.nodestrings = None
+        self.grid.obc_nodes = None
         self.grid.filename = grid
 
         if self.grid.native_coordinates.lower() == 'cartesian' and not self.grid.zone:

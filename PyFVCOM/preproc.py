@@ -757,7 +757,7 @@ class Model(Domain):
             warn('Open boundary nodes already loaded and reload set to False.')
             return
         else:
-            self.grid.nodestrings, self.grid.types, _ = read_fvcom_obc(str(obc_file))
+            self.grid.obc_nodes, self.grid.types, _ = read_fvcom_obc(str(obc_file))
 
     def add_sponge_layer(self, nodes, radius, coefficient):
         """
