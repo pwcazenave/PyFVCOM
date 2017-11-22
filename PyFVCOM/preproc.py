@@ -299,7 +299,7 @@ class Model(Domain):
                     'type': 'data'}
             sstgrd.add_variable('sst', self.sst.sst, ['time', 'node'], attributes=atts, ncopts=ncopts)
 
-    # There's a lot of repetition in this sigma coordinate stuff. It need splitting into multiple smaller functions
+    # There's a lot of repetition in this sigma coordinate stuff. It needs splitting into multiple smaller functions
     # which can be reused.
     def add_sigma_coordinates(self, sigma_file, noisy=False):
         """
