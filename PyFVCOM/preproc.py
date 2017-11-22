@@ -1091,7 +1091,7 @@ class Model(Domain):
     def check_rivers(self, max_discharge=None, min_depth=None, open_boundary_proximity=None, noisy=False):
         """
         Check the river nodes are suitable for an FVCOM run. By default, this only checks for rivers attached to
-        elements which are bound on two  sides by coastline.
+        elements which are bound on two sides by coastline.
 
         Parameters
         ----------
