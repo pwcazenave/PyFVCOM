@@ -28,7 +28,7 @@ from warnings import warn
 from utide import reconstruct, ut_constants
 from utide.utilities import Bunch
 
-from PyFVCOM.grid import Domain, grid_metrics, read_fvcom_obc, nodes2elems, write_fvcom_mesh
+from PyFVCOM.grid import Domain, grid_metrics, read_fvcom_obc, nodes2elems, write_fvcom_mesh, connectivity, haversine_distance
 from PyFVCOM.utilities import date_range
 
 
@@ -48,6 +48,14 @@ class Model(Domain):
 
         # Initialise the river structure.
         self.__prep_rivers()
+
+        # Add the coastline to the grid object for use later on.
+        *_, bnd = connectivity(np.array((self.grid.lon, self.grid.lat)).T, self.grid.triangles)
+        self.grid.coastline = np.argwhere(bnd)
+        # Remove the open boundaries, if we have them.
+        if np.any(self.grid.obc_nodes):
+            land_only = np.isin(np.squeeze(np.argwhere(bnd)), self.__flatten_list(self.grid.obc_nodes), invert=True)
+            self.grid.coastline = np.squeeze(self.grid.coastline[land_only])
 
     @staticmethod
     def __flatten_list(nest):
