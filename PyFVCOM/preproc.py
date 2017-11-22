@@ -859,18 +859,27 @@ class Model(Domain):
         # UTide needs MATLAB times.
         times = mtime(dates)
 
-        for obc in self.grid.obc_nodes:
-            latitudes = self.grid.lat[obc]
+        if predict == 'zeta':
+            obc_ids = self.grid.obc_nodes
+        else:
+            obc_ids = self.grid.obc_elems
+
+        for obc in obc_ids:
 
             if predict == 'zeta':
                 amplitude_var, phase_var = 'ha', 'hp'
+                x, y = self.grid.lon, self.grid.lat
                 xdim = len(obc)
             elif predict == 'u':
                 amplitude_var, phase_var = 'ua', 'up'
+                x, y = self.grid.lonc, self.grid.latc
                 xdim = len(obc)
             elif predict == 'v':
                 amplitude_var, phase_var = 'va', 'vp'
+                x, y = self.grid.lonc, self.grid.latc
                 xdim = len(obc)
+
+            latitudes = y[obc]
 
             with Dataset(tpxo_harmonics, 'r') as tides:
                 tpxo_const = [''.join(i).upper().strip() for i in tides.variables['con'][:].astype(str)]
@@ -878,7 +887,7 @@ class Model(Domain):
                 amplitudes = np.empty((xdim, len(constituents))) * np.nan
                 phases = np.empty((xdim, len(constituents))) * np.nan
 
-                for xi, xy in enumerate(zip(self.grid.lon[obc], self.grid.lat[obc])):
+                for xi, xy in enumerate(zip(x[obc], y[obc])):
                     idx = [np.argmin(np.abs(tides['lon_z'][:, 0] - xy[0])),
                            np.argmin(np.abs(tides['lat_z'][0, :] - xy[1]))]
                     amplitudes[xi, :] = tides.variables[amplitude_var][cidx, idx[0], idx[1]]
