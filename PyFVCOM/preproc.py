@@ -1326,13 +1326,11 @@ class Model(Domain):
         for key in nemo:
             if key != 'times':
                 try:
-                    # Don't like having to tile since we should be able to do this with a np.newaxis, but, for some
-                    # reason, it doesn't seem to work here. Make the array time dimension appear first for
-                    # compatibility with self.add_rivers.
-                    nemo[key] = nemo[key][np.tile(mask, [number_of_times, 1, 1])].reshape(number_of_times, -1)
+                    # Make the array time dimension appear first for compatibility with self.add_rivers. That pair of
+                    # transposes are probably less than ideal, but I want to go home now.
+                    nemo[key] = nemo[key][:, mask].T.reshape(-1, number_of_times).T
                 except IndexError:
                     nemo[key] = nemo[key][mask]
-
         # Since the NEMO river don't have names, make some based on their position.
         nemo['names'] = ['river_{}_{}'.format(*i) for i in zip(nemo['lon'], nemo['lat'])]
 
