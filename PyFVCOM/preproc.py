@@ -996,7 +996,7 @@ class Model(Domain):
             elev.write_fvcom_time(self.tides.time)
             atts = {'long_name': 'Open Boundary Elevation',
                     'units': 'meters'}
-            elev.add_variable('elevation', self.tides.zeta, ['time', 'nobc'], attributes=atts, ncopts=ncopts)
+            elev.add_variable('elevation', np.asarray(self.tide.zeta).T, ['time', 'nobc'], attributes=atts, ncopts=ncopts)
 
     def add_rivers(self, positions, names, times, flux, temperature, salinity, threshold=np.inf, history='', info='', ersem=None):
         """
