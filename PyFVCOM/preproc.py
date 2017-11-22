@@ -986,14 +986,14 @@ class Model(Domain):
         times : np.ndarray
             Array of datetime objects for the river data.
         flux : np.ndarray
-            River discharge data (m^3s{^-1}) [river, time]
+            River discharge data (m^3s{^-1}) [time, river]
         temperature : np.ndarray
-            River temperature data (degrees Celsius) [river, time]
+            River temperature data (degrees Celsius) [time, river]
         salinity : np.ndarray
-            River salinity data (PSU) [river, time]
+            River salinity data (PSU) [time, river]
         threshold : float, optional
-            Distance beyond which a model node is considered too far from the current river position. Such rivers are
-            omitted from the forcing.
+            Distance (in kilometres) beyond which a model node is considered too far from the current river position.
+            Such rivers are omitted from the forcing.
         history : str
             String added to the `history' global attribute.
         info : str
