@@ -1087,6 +1087,63 @@ class Model(Domain):
                     if not hasattr(self.river, extra):
                         setattr(self.river, extra, extra_data[extra])
 
+    def check_rivers(self, max_discharge=None, min_depth=None, open_boundary_proximity=None):
+        """
+        Check the river nodes are suitable for an FVCOM run. By default, this only checks for rivers attached to
+        elements which are bound on two  sides by coastline.
+
+        Parameters
+        ----------
+        max_discharge : float, optional
+            Set a maximum discharge (in m^3s^{-1}) to supply to a single river node. This is useful for reducing the
+            likelihood of crashes due to massive influxes of freshwater into a relatively small element.
+        min_depth : float, optional
+            Set a minimum depth (in metres) for river nodes. Shallower river nodes are set to this minimum depth.
+        open_boundary_proximity : float, optional
+            Remove rivers within some radius (in kilometres) of an open boundary node.
+
+        """
+
+        # Do nothing here if we have no rivers.
+        if self.dims.river == 0:
+            return
+
+        if max_discharge:
+            # Find rivers in excess of the given discharge maximum.
+            big_rivers = np.argwhere(self.river.flux > max_discharge)
+
+        if min_depth:
+            deep_rivers = np.argwhere(self.grid.h[self.river.node] > min_depth)
+
+        if open_boundary_proximity:
+            # Remove nodes close to the open boundary joint with the coastline. Identifying the coastline/open
+            # boundary joining nodes is simply a case of taking the first and last node ID for each open boundary.
+            # Using that position, we can find any river nodes which fall within that distance and simply remove
+            # their data from the relevant self.river arrays.
+            boundary_river_indices = []
+            for obc in self.grid.obc_nodes:
+                obc_land_nodes = obc[0], obc[-1]
+                grid_pts = np.asarray([self.grid.lon[self.river.node], self.grid.lat[self.river.node]]).T
+                for land_node in obc_land_nodes:
+                    current_end = (self.grid.lon[land_node], self.grid.lat[land_node])
+                    dist = np.asarray([haversine_distance(pt_1, current_end) for pt_1 in grid_pts])
+                    breached_distance = dist < open_boundary_proximity
+                    to_remove = np.sum(breached_distance)
+                    if np.any(breached_distance):
+                        extra = ''
+                        if to_remove > 1:
+                            extra = 's'
+                        print('Removing {} river{}'.format(to_remove, extra))
+                        boundary_river_indices += np.argwhere(breached_distance).tolist()
+
+            # Now drop all those indices from the relevant river data.
+            for field in self.obj_iter(self.river):
+                if field != 'time':
+                    setattr(self.river, field, np.delete(getattr(self.river, field), self.__flatten_list(boundary_river_indices), axis=-1))
+
+            # Update the dimension too.
+            self.dims.river -= len(boundary_river_indices)
+
     def write_river_forcing(self, output_file, ersem=False, ncopts={'zlib': True, 'complevel': 7}, **kwargs):
         """
         Write out an FVCOM river forcing netCDF file.
