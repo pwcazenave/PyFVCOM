@@ -883,9 +883,12 @@ class Model(Domain):
 
             with Dataset(tpxo_harmonics, 'r') as tides:
                 tpxo_const = [''.join(i).upper().strip() for i in tides.variables['con'][:].astype(str)]
-                cidx = [tpxo_const.index(i) for i in constituents]
-                amplitudes = np.empty((xdim, len(constituents))) * np.nan
-                phases = np.empty((xdim, len(constituents))) * np.nan
+                # If we've been given variables that aren't in the TPXO data, just find the indices we do have.
+                cidx = [tpxo_const.index(i) for i in constituents if i in tpxo_const]
+                # Save the names of the constituents we've actually used.
+                self.tide.constituents = [constituents[i] for i in cidx]
+                amplitudes = np.empty((xdim, len(cidx))) * np.nan
+                phases = np.empty((xdim, len(cidx))) * np.nan
 
                 for xi, xy in enumerate(zip(x[obc], y[obc])):
                     idx = [np.argmin(np.abs(tides['lon_z'][:, 0] - xy[0])),
@@ -893,11 +896,11 @@ class Model(Domain):
                     amplitudes[xi, :] = tides.variables[amplitude_var][cidx, idx[0], idx[1]]
                     phases[xi, :] = tides.variables[phase_var][cidx, idx[0], idx[1]]
 
-            # Prepare the UTide inputs.
-            const_idx = np.asarray([ut_constants['const']['name'].tolist().index(i) for i in constituents])
+            # Prepare the UTide inputs for the constituents in the TPXO data.
+            const_idx = np.asarray([ut_constants['const']['name'].tolist().index(i) for i in self.tide.constituents])
             frq = ut_constants['const']['freq'][const_idx]
 
-            coef = Bunch(name=constituents, mean=0, slope=0)
+            coef = Bunch(name=self.tide.constituents, mean=0, slope=0)
             coef['aux'] = Bunch(reftime=729572.47916666674, lind=const_idx, frq=frq)
             coef['aux']['opt'] = Bunch(twodim=False, nodsatlint=False, nodsatnone=False,
                                        gwchlint=False, gwchnone=False, notrend=False, prefilt=[])
