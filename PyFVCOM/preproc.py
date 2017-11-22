@@ -992,8 +992,8 @@ class Model(Domain):
             elev.add_variable('obc_nodes', self.grid.obc_nodes, ['nobc'], attributes=atts, ncopts=ncopts)
             atts = {'long_name': 'internal mode iteration number'}
             # Not sure this variable is actually necessary.
-            elev.add_variable('iint', np.arange(len(self.tides.time)), ['time'], attributes=atts, ncopts=ncopts, format=int)
-            elev.write_fvcom_time(self.tides.time)
+            elev.add_variable('iint', np.arange(len(self.tide.time)), ['time'], attributes=atts, ncopts=ncopts, format=int)
+            elev.write_fvcom_time(self.tide.time)
             atts = {'long_name': 'Open Boundary Elevation',
                     'units': 'meters'}
             elev.add_variable('elevation', np.asarray(self.tide.zeta).T, ['time', 'nobc'], attributes=atts, ncopts=ncopts)
