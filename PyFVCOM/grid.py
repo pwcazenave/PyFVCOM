@@ -65,7 +65,7 @@ class Domain:
         self.grid.zone = zone
         # Initialise everything to None so we don't get caught out expecting something to exist when it doesn't.
         self.domain_plot = None
-        self.grid.obc_nodes = None
+        self.grid.open_boundary_nodes = None
         self.grid.filename = grid
 
         if self.grid.native_coordinates.lower() == 'cartesian' and not self.grid.zone:
@@ -76,7 +76,6 @@ class Domain:
         # Make the relevant dimensions.
         self.dims.nele = len(self.grid.xc)
         self.dims.node = len(self.grid.x)
-        self.dims.obc = len(self.grid.obc_nodes)
 
     def _prep(self):
         # Create empty object for the grid and dimension data. This ought to be possible with nested classes,
@@ -150,7 +149,7 @@ class Domain:
         self.grid.h = z
         self.grid.nodes = nodes
         self.grid.types = types
-        self.grid.obc_nodes = nodestrings
+        self.grid.open_boundary_nodes = nodestrings
 
         # Make element centred versions of everything.
         self.grid.xc = nodes2elems(self.grid.x, self.grid.triangles)
