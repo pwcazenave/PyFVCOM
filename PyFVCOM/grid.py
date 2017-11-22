@@ -77,6 +77,17 @@ class Domain:
         self.dims.nele = len(self.grid.xc)
         self.dims.node = len(self.grid.x)
 
+        # Set two dimensions: number of open boundaries (obc) and number of open boundary nodes (open_boundary_nodes).
+        if self.grid.open_boundary_nodes:
+            # If we have more than one open boundary, we need to iterate through the list of lists to get the total
+            # number, otherwise we can just len the list.
+            try:
+                self.dims.open_boundary_nodes = sum([len(i) for i in self.grid.open_boundary_nodes])
+                self.dims.open_boundary = len(self.grid.open_boundary_nodes)
+            except TypeError:
+                self.dims.open_boundary_nodes = len(self.grid.open_boundary_nodes)
+                self.dims.open_boundary = 1
+
     def _prep(self):
         # Create empty object for the grid and dimension data. This ought to be possible with nested classes,
         # but I can't figure it out. That approach would also mean we can set __iter__ to make the object iterable
