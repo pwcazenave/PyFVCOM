@@ -1088,7 +1088,7 @@ class Model(Domain):
                     if not hasattr(self.river, extra):
                         setattr(self.river, extra, extra_data[extra])
 
-    def check_rivers(self, max_discharge=None, min_depth=None, open_boundary_proximity=None):
+    def check_rivers(self, max_discharge=None, min_depth=None, open_boundary_proximity=None, noisy=False):
         """
         Check the river nodes are suitable for an FVCOM run. By default, this only checks for rivers attached to
         elements which are bound on two  sides by coastline.
@@ -1146,10 +1146,11 @@ class Model(Domain):
                     breached_distance = dist < open_boundary_proximity
                     to_remove = np.sum(breached_distance)
                     if np.any(breached_distance):
-                        extra = ''
-                        if to_remove > 1:
-                            extra = 's'
-                        print('Removing {} river{}'.format(to_remove, extra))
+                        if noisy:
+                            extra = ''
+                            if to_remove > 1:
+                                extra = 's'
+                            print('Removing {} river{}'.format(to_remove, extra))
                         boundary_river_indices += np.argwhere(breached_distance).tolist()
 
             # Now drop all those indices from the relevant river data.
