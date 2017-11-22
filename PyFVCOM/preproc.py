@@ -568,7 +568,7 @@ class Model(Domain):
         fparams = lambda depth_guess: self.__hybrid_coordinate_hmin(depth_guess, self.dims.levels, upper_layer_depth,
                                                                     lower_layer_depth, total_upper_layers,
                                                                     total_lower_layers, upper_layer_thickness, lower_layer_thickness)
-        optimised_depth = scipy.optimize.fmin(func=fparams, x0=transition_depth, **optimisation_settings)
+        optimised_depth = scipy.optimize.fmin(func=fparams, x0=transition_depth, disp=False, **optimisation_settings)
         min_error = transition_depth - optimised_depth  # this isn't right
         self.sigma.transition_depth = optimised_depth
 
