@@ -2190,7 +2190,7 @@ def get_boundary_polygons(triangle, noisy=False):
     u, c = np.unique(triangle, return_counts=True)
     uc = np.asarray([u, c]).T
 
-    nodes_lt_4 = np.asarray(uc[uc[:,1] < 4, 0], dtype=int)
+    nodes_lt_4 = np.asarray(uc[uc[:, 1] < 4, 0], dtype=int)
     boundary_polygon_list = []
 
     while len(nodes_lt_4) > 0:
