@@ -29,6 +29,7 @@ from utide import reconstruct, ut_constants
 from utide.utilities import Bunch
 
 from PyFVCOM.grid import Domain, grid_metrics, read_fvcom_obc, nodes2elems, write_fvcom_mesh, connectivity, haversine_distance
+from PyFVCOM.grid import find_bad_node, get_attached_unique_nodes
 from PyFVCOM.utilities import date_range
 
 
@@ -1107,6 +1108,21 @@ class Model(Domain):
         # Do nothing here if we have no rivers.
         if self.dims.river == 0:
             return
+
+        for i, node in enumerate(self.river.node):
+            bad = find_bad_node(self.grid.triangles, node)
+            if bad:
+                if noisy:
+                    print('Moving river at {}/{}'.format(self.grid.lon[node], self.grid.lat[node]))
+                candidates = get_attached_unique_nodes(node, self.grid.triangles)
+                # Check both candidates are good and if so, pick the closest to the current node.
+                for candidate in candidates:
+                    still_bad = find_bad_node(self.grid.triangles, candidate)
+                    if still_bad:
+                        # Is this even possible?
+                        candidates = get_attached_unique_nodes(candidate, self.grid.triangles)
+                dist = [haversine_distance((self.grid.lon[i], self.grid.lat[i]), (self.grid.lon[node], self.grid.lat[node])) for i in candidates]
+                self.river.node[i] = np.argmin(candidates[np.argmin(dist)])
 
         if max_discharge:
             # Find rivers in excess of the given discharge maximum.
