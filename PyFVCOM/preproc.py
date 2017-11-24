@@ -161,7 +161,7 @@ class Model(Domain):
             atts = {'long_name': 'bottom roughness minimum', 'units': 'None', 'type': 'data'}
             z0.add_variable('cbcmin', None, ['nele'], attributes=atts, ncopts=ncopts)
 
-    def interp_sst_assimilation(self, sst_dir, year, serial=False, pool_size=None, noisy=False):
+    def interp_sst_assimilation(self, sst_dir, offset=0, serial=False, pool_size=None, noisy=False):
         """
         Interpolate SST data from remote sensing data onto the supplied model
         grid.
@@ -170,8 +170,8 @@ class Model(Domain):
         ----------
         sst_dir : str, pathlib.Path
             Path to directory containing the SST data. Assumes there are directories per year within this directory.
-        year : int
-            Tear for which to generate SST data
+        offset : int, optional
+            Number of days by which to offset the time period in the time series. Defaults to zero.
         serial : bool, optional
             Run in serial rather than parallel. Defaults to parallel.
         pool_size : int, optional
@@ -206,10 +206,13 @@ class Model(Domain):
         if isinstance(sst_dir, str):
             sst_dir = Path(sst_dir)
 
-        # SST files. Try to prepend the end of the previous year and the start of the next year.
-        sst_files = [os.path.join(sst_dir, str(year - 1), sorted(os.listdir(os.path.join(sst_dir, str(year - 1))))[-1])]
-        sst_files += [os.path.join(sst_dir, str(year), i) for i in os.listdir(os.path.join(sst_dir, str(year)))]
-        sst_files += [os.path.join(sst_dir, str(year + 1), sorted(os.listdir(os.path.join(sst_dir, str(year + 1))))[0])]
+        # Make daily data.
+        dates = date_range(self.start - relativedelta(days=offset), self.end + relativedelta(days=offset))
+
+        sst_files = []
+        for date in dates:
+            sst_base = sst_dir / Path(str(date.year))
+            sst_files += list(sst_base.glob('*{}*.nc'.format(date.strftime('%Y%m%d'))))
 
         if noisy:
             print('To do:\n{}'.format('|' * len(sst_files)), flush=True)
