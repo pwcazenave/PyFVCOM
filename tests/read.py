@@ -146,7 +146,7 @@ class FileReader_test(TestCase):
 
     def test_get_time_with_string(self):
         time_dims = ['2001-02-12 09:00:00.00000', '2001-02-14 12:00:00.00000']
-        returned_indices = [26, 78]
+        returned_indices = [26, 77]
 
         F = FileReader(self.stub.ncfile.name, dims={'time': time_dims})
         test.assert_equal(F._dims['time'], returned_indices)
@@ -154,7 +154,7 @@ class FileReader_test(TestCase):
     def test_get_time_with_datetime(self):
         time_dims = [datetime.strptime('2001-02-12 09:00:00.00000', '%Y-%m-%d %H:%M:%S.%f'),
                      datetime.strptime('2001-02-14 12:00:00.00000', '%Y-%m-%d %H:%M:%S.%f')]
-        returned_indices = [26, 78]
+        returned_indices = [26, 77]
 
         F = FileReader(self.stub.ncfile.name, dims={'time': time_dims})
         test.assert_equal(F._dims['time'][0], returned_indices[0])
