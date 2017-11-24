@@ -25,6 +25,7 @@ from dateutil.relativedelta import relativedelta
 from datetime import datetime
 from functools import partial
 from warnings import warn
+from pathlib import Path
 from utide import reconstruct, ut_constants
 from utide.utilities import Bunch
 
@@ -167,7 +168,7 @@ class Model(Domain):
 
         Parameters
         ----------
-        sst_dir : str
+        sst_dir : str, pathlib.Path
             Path to directory containing the SST data. Assumes there are directories per year within this directory.
         year : int
             Tear for which to generate SST data
@@ -201,6 +202,9 @@ class Model(Domain):
         - Based on https://github.com/pwcazenave/fvcom-toolbox/tree/master/fvcom_prepro/interp_sst_assimilation.m.
 
         """
+
+        if isinstance(sst_dir, str):
+            sst_dir = Path(sst_dir)
 
         # SST files. Try to prepend the end of the previous year and the start of the next year.
         sst_files = [os.path.join(sst_dir, str(year - 1), sorted(os.listdir(os.path.join(sst_dir, str(year - 1))))[-1])]
