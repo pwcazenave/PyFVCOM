@@ -158,6 +158,7 @@ class FileReader_test(TestCase):
 
         F = FileReader(self.stub.ncfile.name, dims={'time': time_dims})
         test.assert_equal(F._dims['time'][0], returned_indices[0])
+        test.assert_equal(F._dims['time'][-1], returned_indices[-1])
 
     def test_get_time_with_tolerance(self):
         time_dims = [datetime.strptime('2001-02-12 09:00:00.00000', '%Y-%m-%d %H:%M:%S.%f'),
