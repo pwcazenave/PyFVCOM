@@ -74,6 +74,11 @@ class FileReader_test(TestCase):
         F = FileReader(self.stub.ncfile.name, dims={'node': [10], 'time': np.arange(10, 40)}, variables=['zeta'])
         test.assert_almost_equal(np.squeeze(F.data.zeta), self.reference.data.zeta[10:40, 10], decimal=5)
 
+    def test_get_negative_time_series(self):
+        F1 = FileReader(self.stub.ncfile.name, dims={'node': [10]}, variables=['zeta'])
+        F2 = FileReader(self.stub.ncfile.name, dims={'node': [10], 'time': -np.arange(10, 40)}, variables=['zeta'])
+        test.assert_almost_equal(F2.data.zeta, F1.data.zeta[-np.arange(10, 40)], decimal=5)
+
     def test_get_single_time(self):
         F = FileReader(self.stub.ncfile.name, dims={'node': [10], 'time': [10]}, variables=['zeta'])
         test.assert_almost_equal(np.squeeze(F.data.zeta), self.reference.data.zeta[10, 10], decimal=5)
