@@ -45,12 +45,10 @@ class FileReader(object):
         dims : dict, optional
             Dictionary of dimension names along which to subsample e.g. dims={'time': [0, 100], 'nele': [0, 10, 100],
             'node': 100}.
-            Times (time) is specified as a range; vertical (siglay, siglev) and horizontal dimensions (node,
-            nele) can be list-like. Time can also be specified as either a time string (e.g. '2000-01-25
-            23:00:00.00000') or given as a datetime object.
+            All netCDF variable dimensions are specified as list of indices. Time can also be specified as either a
+            time string (e.g. '2000-01-25 23:00:00.00000') or given as a datetime object.
             Any combination of dimensions is possible; omitted dimensions are loaded in their entirety.
-            To extract a single time (e.g. the 9th in python indexing), specify the range as [9, 10].
-            Negative indices are supported. To load from the 10th to the last time can be written as 'time': [9, -1]).
+            Negative indices are supported. To load from the 10th and last time can be written as 'time': [9, -1]).
             A special dimension of 'wesn' can be used to specify a bounding box within which to extract the model
             grid and data.
         zone : str, list-like, optional
@@ -106,21 +104,22 @@ class FileReader(object):
         # Convert negative indexing to positive in dimensions to extract. We do this since we end up using range for
         # the extraction of each dimension since you can't (easily) pass slices as arguments.
         for dim in self._dims:
-            negatives = [i < 0 for i in self._dims[dim] if isinstance(i, int)]
-            if negatives and dim != 'wesn':
-                for i, value in enumerate(negatives):
-                    if value:
-                        self._dims[dim][i] = self._dims[dim][i] + self.ds.dimensions[dim].size + 1
-            # If we've been given a region to load (W/E/S/N), set a flag to extract only nodes and elements which
-            # fall within that region.
-            if dim == 'wesn':
-                self._bounding_box = True
+            # Check if we've got iterable dimensions and make them if not.
+            try:
+                _ = (e for e in self._dims[dim])
+            except TypeError:
+                self._dims[dim]= [self._dims[dim]]
+
+        # If we've been given a region to load (W/E/S/N), set a flag to extract only nodes and elements which
+        # fall within that region.
+        if 'wesn' in self._dims:
+            self._bounding_box = True
 
         self._load_time()
         self._load_grid()
 
-        if variables:
-            self._load_data(self._variables)
+        if self._variables:
+            self.load_data(self._variables)
 
     def __eq__(self, other):
         # For easy comparison of classes.
@@ -340,11 +339,14 @@ class FileReader(object):
             # Clip everything to the time indices if we've been given them. Update the time dimension too.
             if 'time' in self._dims:
                 if all([isinstance(i, (datetime, str)) for i in self._dims['time']]):
-                    # Convert datetime dimensions to indices in the currently loaded data.
-                    self._dims['time'][0] = self.time_to_index(self._dims['time'][0])
-                    self._dims['time'][1] = self.time_to_index(self._dims['time'][1]) + 1  # make the indexing inclusive
+                    # Convert datetime dimensions to indices in the currently loaded data. Assume we've got a list
+                    # and if that fails, we've probably got a single index, so convert it accordingly.
+                    try:
+                        self._dims['time'] = [self.time_to_index(i) for i in self._dims['time']]
+                    except TypeError:
+                        self._dims['time'] = [self.time_to_index(self._dims['time'])]  # make iterable
                 for time in self.obj_iter(self.time):
-                    setattr(self.time, time, getattr(self.time, time)[self._dims['time'][0]:self._dims['time'][1]])
+                    setattr(self.time, time, getattr(self.time, time)[self._dims['time']])
             self.dims.time = len(self.time.time)
 
     def _load_grid(self):
@@ -584,55 +586,6 @@ class FileReader(object):
             if self.grid.lonc_range == 0 and self.grid.latc_range == 0:
                 self.grid.xc, self.grid.yc, _ = utm_from_lonlat(self.grid.lonc, self.grid.latc)
 
-    def _load_data(self, variables=None):
-        """ Wrapper to load the relevant parts of the data in the netCDFs we have been given.
-
-        TODO: This could really do with a decent set of tests to make sure what I'm trying to do is actually what's
-        being done.
-
-        """
-
-        # Get a list of all the variables from the netCDF dataset.
-        if not variables:
-            variables = list(self.ds.variables.keys())
-
-        got_time = 'time' in self._dims
-        got_horizontal = 'node' in self._dims or 'nele' in self._dims
-        got_vertical = 'siglay' in self._dims or 'siglev' in self._dims
-
-        if self._debug:
-            print(self._dims.keys())
-            print('time: {} vertical: {} horizontal: {}'.format(got_time, got_vertical, got_horizontal))
-
-        if got_time:
-            start, end = self._dims['time']
-        else:
-            start, end = False, False  # load everything
-
-        nodes, elements, layers, levels = False, False, False, False
-        # Make sure we don't have single values for the dimensions otherwise everything gets squeezed and figuring out
-        # what dimension is where gets difficult.
-        if 'node' in self._dims:
-            nodes = self._dims['node']
-            if isinstance(nodes, int):
-                nodes = [nodes]
-        if 'nele' in self._dims:
-            elements = self._dims['nele']
-            if isinstance(elements, int):
-                elements = [elements]
-        if 'siglay' in self._dims:
-            layers = self._dims['siglay']
-            if isinstance(layers, int):
-                layers = [layers]
-        if 'siglev' in self._dims:
-            levels = self._dims['siglev']
-            if isinstance(levels, int):
-                levels = [levels]
-        self.load_data(variables, start=start, end=end, node=nodes, nele=elements, layer=layers, level=levels)
-
-        # Update the dimensions to match the data.
-        self._update_dimensions(variables)
-
     def _update_dimensions(self, variables):
         # Update the dimensions based on variables we've been given. Construct a list of the unique dimensions in all
         # the given variables and use that to update self.dims.
@@ -647,7 +600,7 @@ class FileReader(object):
                 print('{}: {} dimension, old/new: {}/{}'.format(self._fvcom, dim, getattr(self.dims, dim), unique_dims[dim]))
             setattr(self.dims, dim, unique_dims[dim])
 
-    def load_data(self, var, start=False, end=False, stride=False, node=False, nele=False, layer=False, level=False):
+    def load_data(self, var, dims=None):
         """ Add a given variable/variables at the given indices. If any indices are omitted or Falsey, return all
         data for the missing dimensions.
 
@@ -655,22 +608,13 @@ class FileReader(object):
         ----------
         var : list-like, str
             List of variables to load.
-        start, end, stride : int, optional
-            Start and end of the time range to load. If given, stride sets the increment in times (defaults to 1). If
-            omitted, start and end default to all times.
-        node : list-like, int, optional
-            Horizontal node indices to load (defaults to all positions).
-        nele : list-like, int, optional
-            Horizontal element indices to load (defaults to all positions).
-        layer : list-like, int, optional
-            Vertical layer indices to load (defaults to all positions).
-        layer : list-like, int, optional
-            Vertical level indices to load (defaults to all positions).
+        dims : dictionary, optional
+            Supply specific dimensions to load. If omitted, uses the global dimensions supplied to FileReader (if any).
 
         """
 
-        if self._debug:
-            print('start: {}, end: {}, stride: {}, node: {}, nele: {}, layer: {}, level: {}'.format(start, end, stride, node, nele, layer, level))
+        if not dims:
+            dims = self._dims
 
         # Check if we've got iterable variables and make one if not.
         try:
@@ -678,101 +622,42 @@ class FileReader(object):
         except TypeError:
             var = [var]
 
-        # For backwards compatibility
-        siglay = layer
-        siglev = level
-
-        # Save the inputs so we can loop through the variables without checking the last loop's values (which
-        # otherwise leads to difficult to fix behaviour).
-        original_node = copy.copy(node)
-        original_nele = copy.copy(nele)
-        original_layer = copy.copy(siglay)
-        original_level = copy.copy(siglev)
-
-        # Make the time here as it's independent of the variable in question (unlike the horizontal and vertical
-        # dimensions).
-        if not stride:
-            stride = 1
-        if not start:
-            start = 0
-
         for v in var:
             if self._debug:
                 print('Loading: {}'.format(v))
+
+            if v not in self.ds.variables:
+                raise KeyError("Variable '{}' not present in {}.".format(v, self._fvcom))
+
             # Get this variable's dimensions and shape
             var_dim = self.ds.variables[v].dimensions
             var_shape = self.ds.variables[v].shape
-            var_size_dict = dict(zip(var_dim, var_shape))
-            if 'time' not in var_dim:
-                # Should we error here or carry on having warned?
-                warn('variable {} does not contain a time dimension.'.format(v))
-                possible_indices = {}
-            else:
-                # make the end of the stride if not supplied
-                if not end:
-                    end = var_size_dict['time']
-                time = np.arange(start,end,stride)
-                possible_indices = {'time': time}
+            variable_shape = self.ds.variables[v].shape
+            variable_indices = [np.arange(i) for i in variable_shape]
+            for dimension in var_dim:
+                if dimension in dims:
+                    # Replace their size with anything we've been given in dims.
+                    variable_index = var_dim.index(dimension)
+                    variable_indices[variable_index] = dims[dimension]
+
             # Save any attributes associated with this variable before trying to load the data.
             attributes = type('attributes', (object,), {})()
             for attribute in self.ds.variables[v].ncattrs():
                 setattr(attributes, attribute, getattr(self.ds.variables[v], attribute))
             setattr(self.atts, v, attributes)
 
-            # We've not been told to subset in any dimension, so just return early with all the data.
-            if not (start or end or stride or original_layer or original_level or original_node or original_nele):
-                if self._debug:
-                    print('0: no dims')
-                setattr(self.data, v, self.ds.variables[v][:])
-            else:
-                # Populate indices for omitted values. Warn we don't have a sigma layer dimension, but carry on. We
-                # don't need to make dummy data because if this file doesn't have this dimension, it certainly
-                # won't have any data which include it.
-                if not isinstance(original_layer, (list, tuple, np.ndarray)):
-                    if not original_layer:
-                        try:
-                            siglay = np.arange(self.dims.siglay)
-                        except AttributeError:
-                            warn('{} does not contain a sigma layer dimension.'.format(v))
-                            pass
-                possible_indices['siglay'] = siglay
-                if not isinstance(original_level, (list, tuple, np.ndarray)):
-                    if not original_level:
-                        try:
-                            siglev = np.arange(self.dims.siglev)
-                        except AttributeError:
-                            warn('{} does not contain a sigma level dimension.'.format(v))
-                            pass
-                possible_indices['siglev'] = siglev
-                if not isinstance(original_node, (list, tuple, np.ndarray)):
-                    if not original_node:
-                        # I'm not sure if this is a really terrible idea (from a performance perspective).
-                        node = np.arange(self.dims.node)
-                possible_indices['node'] = node
-                if not isinstance(original_nele, (list, tuple, np.ndarray)):
-                    if not original_nele:
-                        # I'm not sure if this is a really terrible idea (from a performance perspective).
-                        nele = np.arange(self.dims.nele)
-                possible_indices['nele'] = nele
+            if 'time' not in var_dim:
+                # Should we error here or carry on having warned?
+                warn('{} does not contain a time dimension.'.format(v))
 
-                var_index_dict = {}
-                for this_key, this_size in var_size_dict.items():
-                    # Try and add the indices for the various dimensions present in var_dim. If there is a
-                    # dimension which isn't present (e.g. bedlay for sediment) then it creates a range covering the
-                    # whole slice.
-                    try:
-                        var_index_dict[this_key] = possible_indices[this_key]
-                    except KeyError:
-                        var_index_dict[this_key] = np.arange(var_size_dict[this_key])
+            try:
+                setattr(self.data, v, self.ds.variables[v][variable_indices])
+            except MemoryError:
+                raise MemoryError("Variable {} too large for RAM. Use `dims' to load subsets in space or time or "
+                                  "`variables' to request only certain variables.".format(v))
 
-                # Need to reorder to get back to the order the dimensions are in the netcdf (since the dictionary is
-                # unordered).
-                ordered_coords = [list(var_index_dict[this_key]) for this_key in var_dim]
-                try:
-                    setattr(self.data, v, self.ds.variables[v][ordered_coords])
-                except MemoryError:
-                    raise MemoryError("Variable {} too large for RAM. Use `dims' to load subsets in space or time or "
-                                      "`variables' to request only certain variables.".format(v))
+        # Update the dimensions to match the data.
+        self._update_dimensions(var)
 
     def closest_time(self, when):
         """ Find the index of the closest time to the supplied time (datetime object). """
