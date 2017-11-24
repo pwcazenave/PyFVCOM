@@ -67,12 +67,8 @@ class FileReader_test(TestCase):
         test.assert_equal(F.grid.lat.max(), extents[3])
 
     def test_get_water_column(self):
-        water_column = np.array([
-            9.99821472, 10.90714264, 11.81607151, 12.72500038, 13.6339283,
-            14.54285717, 15.45178604, 16.36071396, 17.26964378, 18.1785717
-        ])
-        F = FileReader(self.stub.ncfile.name, dims={'node': [5], 'time': [10, 11]}, variables=['temp'])
-        test.assert_almost_equal(np.squeeze(F.data.temp), water_column, decimal=5)
+        F = FileReader(self.stub.ncfile.name, dims={'node': [5], 'time': 10}, variables=['temp'])
+        test.assert_almost_equal(np.squeeze(F.data.temp), self.reference.data.temp[10, :, 5], decimal=5)
 
     def test_get_time_series(self):
         F = FileReader(self.stub.ncfile.name, dims={'node': [10], 'time': np.arange(10, 40)}, variables=['zeta'])
