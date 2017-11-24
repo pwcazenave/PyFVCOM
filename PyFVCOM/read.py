@@ -179,7 +179,7 @@ class FileReader(object):
                              "`fvcom1' has end {} and `fvcom2' has start {}".format(self.time.datetime[-1],
                                                                                     FVCOM.time.datetime[0]))
         if not data_compare:
-            raise ValueError('Loaded data sets for each FVCOM class must match.')
+            raise ValueError('Loaded data sets for each FileReader class must match.')
         if not (old_data == new_data) and (old_data or new_data):
             warn('Subsequent attempts to load data for this merged object will only load data from the first object. '
                  'Load data into each object before merging them.')
