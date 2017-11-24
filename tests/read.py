@@ -17,6 +17,7 @@ class FileReader_test(TestCase):
         self.starttime, self.endtime, self.interval, self.lon, self.lat, self.triangles = _prep()
         self.stub = StubFile(self.starttime, self.endtime, self.interval,
                              lon=self.lon, lat=self.lat, triangles=self.triangles, zone='30N')
+        self.reference = FileReader(self.stub.ncfile.name, variables=['ww', 'zeta', 'temp', 'h'])
 
     def tearDown(self):
         self.stub.ncfile.close()
@@ -24,44 +25,36 @@ class FileReader_test(TestCase):
         del(self.stub)
 
     def test_get_single_lon(self):
-        lon = -5.78687373
-        F = FileReader(self.stub.ncfile.name, dims={'node': [0]})
-        test.assert_almost_equal(F.grid.lon, lon, decimal=5)
+        result = FileReader(self.stub.ncfile.name, dims={'node': [0]})
+        test.assert_almost_equal(result.grid.lon, self.reference.grid.lon[0], decimal=5)
 
     def test_get_single_lat(self):
-        lat = 56.89470906
-        F = FileReader(self.stub.ncfile.name, dims={'node': [29]})
-        test.assert_almost_equal(F.grid.lat, lat, decimal=5)
+        result = FileReader(self.stub.ncfile.name, dims={'node': [29]})
+        test.assert_almost_equal(result.grid.lat, self.reference.grid.lat[29], decimal=5)
 
     def test_get_single_lonc(self):
-        lonc = -4.67915533
-        F = FileReader(self.stub.ncfile.name, dims={'nele': [0]})
-        test.assert_almost_equal(F.grid.lonc, lonc, decimal=5)
+        result = FileReader(self.stub.ncfile.name, dims={'nele': [0]})
+        test.assert_almost_equal(result.grid.lonc, self.reference.grid.lonc[0], decimal=5)
 
     def test_get_single_latc(self):
-        latc = 52.864905897403958
         F = FileReader(self.stub.ncfile.name, dims={'nele': [29]})
-        test.assert_almost_equal(F.grid.latc, latc, decimal=5)
+        test.assert_almost_equal(F.grid.latc, self.reference.grid.latc[29], decimal=5)
 
     def test_get_multipe_lon(self):
-        lon = np.array((-5.78687373, -3.26585943))
         F = FileReader(self.stub.ncfile.name, dims={'node': [0, 5]})
-        test.assert_almost_equal(F.grid.lon, lon, decimal=5)
+        test.assert_almost_equal(F.grid.lon, self.reference.grid.lon[[0, 5]], decimal=5)
 
     def test_get_multipe_lat(self):
-        lat = np.array((56.89470906, 58.49899088))
         F = FileReader(self.stub.ncfile.name, dims={'node': [29, 34]})
-        test.assert_almost_equal(F.grid.lat, lat, decimal=5)
+        test.assert_almost_equal(F.grid.lat, self.reference.grid.lat[[29, 34]], decimal=5)
 
     def test_get_multipe_lonc(self):
-        lonc = np.array((-4.67915533, 0.61115498))
         F = FileReader(self.stub.ncfile.name, dims={'nele': [0, 5]})
-        test.assert_almost_equal(F.grid.lonc, lonc, decimal=5)
+        test.assert_almost_equal(F.grid.lonc, self.reference.grid.lonc[[0, 5]], decimal=5)
 
     def test_get_multipe_latc(self):
-        latc = np.array((52.8649059, 52.90310308))
         F = FileReader(self.stub.ncfile.name, dims={'nele': [29, 34]})
-        test.assert_almost_equal(F.grid.latc, latc, decimal=5)
+        test.assert_almost_equal(F.grid.latc, self.reference.grid.latc[[29, 34]], decimal=5)
 
     def test_get_bounding_box(self):
         wesn = [-5, -3, 50, 55]
@@ -82,56 +75,28 @@ class FileReader_test(TestCase):
         test.assert_almost_equal(np.squeeze(F.data.temp), water_column, decimal=5)
 
     def test_get_time_series(self):
-        surface_elevation = np.array([
-            -1.41013891, -0.98554639, -0.3139296, 0.4363727, 1.07729949,
-            1.44820437, 1.45612114, 1.09906549, 0.46653234, -0.28293574,
-            -0.96148683, -1.3990441, -1.48593514, -1.20038097, -0.61395488,
-            0.12635717, 0.83499817, 1.33434937, 1.49924987, 1.28836787,
-            0.75456029, 0.03162443, -0.699238, -1.25483851, -1.49591749,
-            -1.3620492, -0.88678734, -0.18925488, 0.55571376, 1.1613944])
-        F = FileReader(self.stub.ncfile.name, dims={'node': [10], 'time': [10, 40]}, variables=['zeta'])
-        test.assert_almost_equal(np.squeeze(F.data.zeta), surface_elevation, decimal=5)
+        F = FileReader(self.stub.ncfile.name, dims={'node': [10], 'time': np.arange(10, 40)}, variables=['zeta'])
+        test.assert_almost_equal(np.squeeze(F.data.zeta), self.reference.data.zeta[10:40, 10], decimal=5)
 
     def test_get_single_time(self):
-        surface_elevation = np.array([-1.41013891])
-        F = FileReader(self.stub.ncfile.name, dims={'node': [10], 'time': [10, 11]}, variables=['zeta'])
-        test.assert_almost_equal(np.squeeze(F.data.zeta), surface_elevation, decimal=5)
+        F = FileReader(self.stub.ncfile.name, dims={'node': [10], 'time': [10]}, variables=['zeta'])
+        test.assert_almost_equal(np.squeeze(F.data.zeta), self.reference.data.zeta[10, 10], decimal=5)
 
     def test_get_single_time_negative_index(self):
-        surface_elevation = np.array([[0.22058453]])
-        F = FileReader(self.stub.ncfile.name, dims={'node': [10], 'time': [-10, -9]}, variables=['zeta'])
-        test.assert_almost_equal(np.squeeze(F.data.zeta), surface_elevation, decimal=5)
+        F = FileReader(self.stub.ncfile.name, dims={'node': [10], 'time': [-10]}, variables=['zeta'])
+        test.assert_almost_equal(np.squeeze(F.data.zeta), self.reference.data.zeta[-10, 10], decimal=5)
 
     def test_get_layer(self):
-        vertical_velocity = np.array([
-            0.01509815, 0.01509815, 0.01509815, 0.01509815, 0.01509815,
-            0.01509815, 0.01509815, 0.01509815, 0.01509815, 0.01509815,
-            0.01509815, 0.01509815, 0.01509815, 0.01509815, 0.01509815,
-            0.01509815, 0.01509815, 0.01509815, 0.01509815, 0.01509815,
-            0.01509815, 0.01509815, 0.01509815, 0.01509815, 0.01509815,
-            0.01509815, 0.01509815, 0.01509815, 0.01509815, 0.01509815,
-            0.01509815, 0.01509815, 0.01509815, 0.01509815, 0.01509815,
-            0.01509815, 0.01509815, 0.01509815, 0.01509815, 0.01509815,
-            0.01509815, 0.01509815, 0.01509815, 0.01509815, 0.01509815,
-            0.01509815, 0.01509815, 0.01509815, 0.01509815, 0.01509815,
-            0.01509815, 0.01509815, 0.01509815, 0.01509815, 0.01509815,
-            0.01509815, 0.01509815, 0.01509815, 0.01509815, 0.01509815,
-            0.01509815, 0.01509815, 0.01509815, 0.01509815, 0.01509815,
-            0.01509815, 0.01509815, 0.01509815, 0.01509815, 0.01509815,
-            0.01509815, 0.01509815, 0.01509815, 0.01509815, 0.01509815,
-            0.01509815, 0.01509815, 0.01509815, 0.01509815])
-        F = FileReader(self.stub.ncfile.name, dims={'siglay': [5], 'time': [100, 101]}, variables=['ww'])
-        test.assert_almost_equal(np.squeeze(F.data.ww), vertical_velocity, decimal=5)
+        F = FileReader(self.stub.ncfile.name, dims={'siglay': [5], 'time': [100]}, variables=['ww'])
+        test.assert_almost_equal(np.squeeze(F.data.ww), self.reference.data.ww[100, 5, :], decimal=5)
 
     def test_get_layer_no_variable(self):
-        siglay = -np.tile(np.arange(0.05, 1, 0.2), [len(self.lon), 1]).T
         F = FileReader(self.stub.ncfile.name, dims={'siglay': np.arange(0, 10, 2)})
-        test.assert_almost_equal(F.grid.siglay, siglay)
+        test.assert_almost_equal(F.grid.siglay, self.reference.grid.siglay[0:10:2])
 
     def test_get_level_no_variable(self):
-        siglev = -np.tile(np.arange(0, 1.2, 0.2), [len(self.lon), 1]).T
         F = FileReader(self.stub.ncfile.name, dims={'siglev': np.arange(0, 11, 2)})
-        test.assert_almost_equal(F.grid.siglev, siglev)
+        test.assert_almost_equal(F.grid.siglev, self.reference.grid.siglev[0:11:2])
 
     def test_non_temporal_variable(self):
         h = np.asarray([1.64808428, 12.75706577, 18.34670639, 24.29236031,
