@@ -69,13 +69,6 @@ class GridToolsTest(TestCase):
         lengths = element_side_lengths(self.tri, self.x, self.y)
         test.assert_equal(lengths, test_lengths)
 
-    def test_clip_triangulation(self):
-        model = {key: getattr(self, key) for key in ('xc', 'yc')}
-        test_clipped = [[2, 6, 7], [0, 1, 2], [7, 6, 4], [4, 1, 0], [6, 2, 4], [4, 2, 1]]
-        # test_clipped = [[0, 1, 2]]
-        clipped = clip_triangulation(model, 1)
-        test.assert_equal(clipped, test_clipped)
-
     def test_mesh2grid_1(self):
         test_x, test_y, test_z = [0, 1, 2], [0, 1, 2], [[0, 1, 2], [1, 0, 1], [2, 3, 3]]
         nx, ny = 3, 3
@@ -121,12 +114,6 @@ class GridToolsTest(TestCase):
         test.assert_equal(te, test_te)
         test.assert_equal(e2t, test_e2t)
         test.assert_equal(bnd, test_bnd)
-
-    def test_clip_domain(self):
-        extents = (0, 1.5, 0, 2)
-        test_mask = np.arange(6)  # omit the easternmost nodes
-        mask = clip_domain(self.x, self.y, extents)
-        test.assert_equal(mask, test_mask)
 
     def test_find_connected_nodes(self):
         node = 2
