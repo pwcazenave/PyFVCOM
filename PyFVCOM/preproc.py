@@ -11,7 +11,6 @@ Pierre Cazenave (Plymouth Marine Laboratory)
 
 """
 
-import os
 import scipy.optimize
 
 import numpy as np
