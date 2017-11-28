@@ -226,13 +226,13 @@ class Domain:
             _, _, _, index = find_nearest_point(x, y, *where, maxDistance=threshold)
             if np.any(np.isnan(index)):
                 index[np.isnan[index]] = None
-
         elif vincenty:
             grid_pts = np.asarray([self.grid.lon, self.grid.lat]).T
             dist = np.asarray([vincenty_distance(pt_1, where) for pt_1 in grid_pts]) * 1000
         elif haversine:
             grid_pts = np.asarray([self.grid.lon, self.grid.lat]).T
             dist = np.asarray([haversine_distance(pt_1, where) for pt_1 in grid_pts]) * 1000
+
         if vincenty or haversine:
             index = np.argmin(dist)
             if threshold:
