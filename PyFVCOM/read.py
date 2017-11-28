@@ -578,13 +578,22 @@ class FileReader(object):
         if self.dims.node > 1:
             if self.grid.lon_range == 0 and self.grid.lat_range == 0:
                 self.grid.lon, self.grid.lat = lonlat_from_utm(self.grid.x, self.grid.y, zone=self._zone)
-            if self.grid.lon_range == 0 and self.grid.lat_range == 0:
+                self.grid.lon_range = np.ptp(self.grid.lon)
+                self.grid.lat_range = np.ptp(self.grid.lat)
+            if self.grid.x_range == 0 and self.grid.y_range == 0:
                 self.grid.x, self.grid.y, _ = utm_from_lonlat(self.grid.lon, self.grid.lat)
+                self.grid.x_range = np.ptp(self.grid.x)
+                self.grid.y_range = np.ptp(self.grid.y)
         if self.dims.nele > 1:
             if self.grid.lonc_range == 0 and self.grid.latc_range == 0:
                 self.grid.lonc, self.grid.latc = lonlat_from_utm(self.grid.xc, self.grid.yc, zone=self._zone)
-            if self.grid.lonc_range == 0 and self.grid.latc_range == 0:
+                self.grid.lonc_range = np.ptp(self.grid.lonc)
+                self.grid.latc_range = np.ptp(self.grid.latc)
+            if self.grid.xc_range == 0 and self.grid.yc_range == 0:
                 self.grid.xc, self.grid.yc, _ = utm_from_lonlat(self.grid.lonc, self.grid.latc)
+                self.grid.xc_range = np.ptp(self.grid.xc)
+                self.grid.yc_range = np.ptp(self.grid.yc)
+
         # Make a bounding box variable too (spherical coordinates): W/E/S/N
         self.grid.bounding_box = (np.min(self.grid.lon), np.max(self.grid.lon),
                                   np.min(self.grid.lat), np.max(self.grid.lat))
