@@ -651,8 +651,7 @@ class Model(Domain):
         self.sigma.levels_z = self.grid.h [:, np.newaxis] * self.sigma.levels
         self.sigma.levels_center_z = self.grid.h_center[:, np.newaxis]  * self.sigma.levels_center
 
-    @staticmethod
-    def __hybrid_coordinate_hmin(H, levels, DU, DL, KU, KL, ZKU, ZKL):
+    def __hybrid_coordinate_hmin(self, H, levels, DU, DL, KU, KL, ZKU, ZKL):
         """
         Helper function to find the relevant minimum depth.
 
@@ -677,21 +676,26 @@ class Model(Domain):
             Minimum water depth.
 
         """
+        # This is essentially identical to self.sigma_tanh, so we should probably just use that instead. Using
+        # self.sigma_tanh doesn't produce the same result, but then I'm fairly certain that the commented out code
+        # below is wrong.
+        Z0 = self.sigma_tanh(levels, DU, DL)
+        Z2 = np.zeros(levels)
 
-        Z0 = np.zeros(levels)
-        Z2 = Z0.copy()
-
-        dl2 = 0.001
-        du2 = 0.001
-        levels = levels - 1
-        for nn in range(levels - 1):
-            x1 = dl2 + du2
-            x1 = x1 * (levels - nn) / levels
-            x1 = x1 - dl2
-            x1 = np.tanh(x1)
-            x2 = np.tanh(dl2)
-            x3 = x2 + np.tanh(du2)
-            Z0[nn + 1] = ((x1 + x2) / x3) - 1
+        # Z0 = np.zeros(levels)
+        # Z2 = Z0.copy()
+        #
+        # dl2 = 0.001
+        # du2 = 0.001
+        # levels = levels - 1
+        # for nn in range(levels - 1):
+        #     x1 = dl2 + du2
+        #     x1 = x1 * (levels - nn) / levels
+        #     x1 = x1 - dl2
+        #     x1 = np.tanh(x1)
+        #     x2 = np.tanh(dl2)
+        #     x3 = x2 + np.tanh(du2)
+        #     Z0[nn + 1] = ((x1 + x2) / x3) - 1
 
         # s-coordinates
         X1 = (H - DU - DL)
