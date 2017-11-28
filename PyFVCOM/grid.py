@@ -10,6 +10,7 @@ import sys
 import multiprocessing
 import numpy as np
 import math
+import scipy.spatial
 from matplotlib.tri.triangulation import Triangulation
 from matplotlib.tri import CubicTriInterpolator
 import matplotlib.path as mplPath
@@ -184,6 +185,65 @@ class Domain:
         self.grid.bounding_box = (np.min(self.grid.lon), np.max(self.grid.lon),
                                   np.min(self.grid.lat), np.max(self.grid.lat))
 
+    def _closest_point(self, x, y, where, threshold=None, vincenty=False, haversine=False):
+        """
+        Find the index of the closest node to the supplied position (x, y). Set `cartesian' to True for cartesian
+        coordinates (defaults to spherical).
+
+        Parameters
+        ----------
+        x, y : np.ndarray
+            Grid coordinates within which to search. These are ignored if we have either of `vincenty' or `haversine'
+            enabled.
+        where : list-like
+            Arbitrary x, y position for which to find the closest model grid position.
+        cartesian : bool, optional
+            Set to True to use cartesian coordinates. Defaults to False.
+        threshold : float, optional
+            Give a threshold distance beyond which the closest grid is considered too far away. Units are the same as
+            the coordinates in `where', unless using lat/lon and vincenty when it is in metres. Return None when
+            beyond threshold.
+        vincenty : bool, optional
+            Use vincenty distance calculation. Allows specification of point in lat/lon but threshold in metres.
+        haversine : bool, optional
+            Use the simpler but much faster Haversine distance calculation. Allows specification of point in lon/lat
+            but threshold in metres.
+
+        Returns
+        -------
+        index : int, None
+            Grid index which falls closest to the supplied position. If `threshold' is set and the distance from the
+            supplied position to the nearest model node exceeds that threshold, `index' is None.
+
+        """
+
+        if vincenty and haversine:
+            raise AttributeError("Please specify one of `haversine' or `vincenty', not both.")
+
+        # We have to split this into two parts: if our threshold is in the same units as the grid (i.e. haversine and
+        # vincenty are both False), then we can use the quick find_nearest_point function; if either of haversine or
+        # vincenty have been given, we need to use the distance conversion functions, which are slower.
+        if not vincenty or not haversine:
+            _, _, _, index = find_nearest_point(x, y, *where, maxDistance=threshold)
+            if np.any(np.isnan(index)):
+                index[np.isnan[index]] = None
+
+        elif vincenty:
+            grid_pts = np.asarray([self.grid.lon, self.grid.lat]).T
+            dist = np.asarray([vincenty_distance(pt_1, where) for pt_1 in grid_pts]) * 1000
+        elif haversine:
+            grid_pts = np.asarray([self.grid.lon, self.grid.lat]).T
+            dist = np.asarray([haversine_distance(pt_1, where) for pt_1 in grid_pts]) * 1000
+        if vincenty or haversine:
+            index = np.argmin(dist)
+            if threshold:
+                if dist.min() < threshold:
+                    index = np.argmin(dist)
+                else:
+                    index = None
+
+        return index
+
     def closest_node(self, where, cartesian=False, threshold=None, vincenty=False, haversine=False):
         """
         Find the index of the closest node to the supplied position (x, y). Set `cartesian' to True for cartesian
@@ -202,7 +262,8 @@ class Domain:
         vincenty : bool, optional
             Use vincenty distance calculation. Allows specification of point in lat/lon but threshold in metres.
         haversine : bool, optional
-            Use the simpler but much faster Haversine distance calculation. Allows specification of point in lat/lon but threshold in metres.
+            Use the simpler but much faster Haversine distance calculation. Allows specification of points in lon/lat
+            but threshold in metres.
 
         Returns
         -------
@@ -211,31 +272,14 @@ class Domain:
             supplied position to the nearest model node exceeds that threshold, `index' is None.
 
         """
+        if cartesian:
+            x, y = self.grid.x, self.grid.y
+        else:
+            x, y = self.grid.lon, self.grid.lat
 
-        if not vincenty or not haversine:
-            if cartesian:
-                x, y = self.grid.x, self.grid.y
-            else:
-                x, y = self.grid.lon, self.grid.lat
-            dist = np.sqrt((x - where[0])**2 + (y - where[1])**2)
-        elif vincenty:
-            grid_pts = np.asarray([self.grid.lon, self.grid.lat]).T
-            where_pt_rep = np.tile(np.asarray(where), (len(self.grid.lon),1))
-            dist = np.asarray([vincenty_distance(pt_1, pt_2) for pt_1, pt_2 in zip(grid_pts, where_pt_rep)])*1000
-        elif haversine:
-            grid_pts = np.asarray([self.grid.lon, self.grid.lat]).T
-            where_pt_rep = np.tile(np.asarray(where), (len(self.grid.lon),1))
-            dist = np.asarray([haversine_distance(pt_1, pt_2) for pt_1, pt_2 in zip(grid_pts, where_pt_rep)])*1000
-        index = np.argmin(dist)
-        if threshold:
-            if dist.min() < threshold:
-                index = np.argmin(dist)
-            else:
-                index = None
+        return self._closest_point(x, y, where, threshold=threshold, vincenty=vincenty, haversine=haversine)
 
-        return index
-
-    def closest_element(self, where, cartesian=False, threshold=None, vincenty=False):
+    def closest_element(self, where, cartesian=False, threshold=None, vincenty=False, haversine=False):
         """
         Find the index of the closest element to the supplied position (x, y). Set `cartesian' to True for cartesian
         coordinates (defaults to spherical).
@@ -252,6 +296,9 @@ class Domain:
             beyond threshold.
         vincenty : bool, optional
             Use vincenty distance calculation. Allows specification of point in lat/lon but threshold in metres
+        haversine : bool, optional
+            Use the simpler but much faster Haversine distance calculation. Allows specification of points in lon/lat
+            but threshold in metres.
 
         Returns
         -------
@@ -260,25 +307,12 @@ class Domain:
             supplied position to the nearest model node exceeds that threshold, `index' is None.
 
         """
-        if not vincenty:
-            if cartesian:
-                x, y = self.grid.xc, self.grid.yc
-            else:
-                x, y = self.grid.lonc, self.grid.latc
-            dist = np.sqrt((x - where[0])**2 + (y - where[1])**2)
+        if cartesian:
+            x, y = self.grid.xc, self.grid.yc
         else:
-            grid_pts = np.asarray([self.grid.lonc, self.grid.latc]).T
-            where_pt_rep = np.tile(np.asarray(where), (len(self.grid.lonc),1))
-            dist = np.asarray([vincenty_distance(pt_1, pt_2) for pt_1, pt_2 in zip(grid_pts, where_pt_rep)])*1000
+            x, y = self.grid.lonc, self.grid.latc
 
-        index = np.argmin(dist)
-        if threshold:
-            if dist.min() < threshold:
-                index = np.argmin(dist)
-            else:
-                index = None
-
-        return index
+        return self._closest_point(x, y, where, threshold=threshold, vincenty=vincenty, haversine=haversine)
 
 
 def read_sms_mesh(mesh, nodestrings=False):
