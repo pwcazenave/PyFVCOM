@@ -520,6 +520,37 @@ class Model(Domain):
 
         return dist
 
+    def _sigma_tanh(self, levels, dl, du):
+        """
+        Generate a hyperbolic tangent vertical sigma coordinate distribution.
+
+        Parameters
+        ----------
+        levels : int
+            Number of sigma levels (layers + 1)
+        dl : float
+            The lower depth boundary from the bottom down to which the coordinates are parallel with uniform thickness.
+        du : float
+            The upper depth boundary from the surface up to which the coordinates are parallel with uniform thickness.
+
+        Returns
+        -------
+        dist : np.ndarray
+            Hyperbolic tangent vertical sigma coordinate distribution.
+
+        """
+
+        dist = np.zeros(levels)
+
+        for k in range(levels - 1):
+            x1 = dl + du
+            x1 = x1 * (levels - k - 2) / (levels - 1)
+            x1 = x1 - dl
+            x1 = np.tanh(x1)
+            x2 = np.tanh(dl)
+            x3 = x2 + np.tanh(du)
+            dist[k + 1] = (x1 + x2) / x3 - 1
+
         return dist
 
     def hybrid_sigma_coordinate(self, levels, transition_depth, upper_layer_depth, lower_layer_depth,
