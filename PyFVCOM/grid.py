@@ -162,7 +162,7 @@ class Domain:
         self.grid.types = types
         self.grid.open_boundary_nodes = nodestrings
 
-        # Make element centred versions of everything.
+        # Make element-centred versions of everything.
         self.grid.xc = nodes2elems(self.grid.x, self.grid.triangles)
         self.grid.yc = nodes2elems(self.grid.y, self.grid.triangles)
         self.grid.lonc = nodes2elems(self.grid.lon, self.grid.triangles)
