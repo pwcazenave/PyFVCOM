@@ -996,97 +996,71 @@ def write_fvcom_mesh(triangles, nodes, x, y, z, mesh, extra_depth=None):
                 f.write('{:.6f} {:.6f} {:.6f}\n'.format(*node))
 
 
-def find_nearest_point(FX, FY, x, y, maxDistance=np.inf, noisy=False):
+def find_nearest_point(grid_x, grid_y, x, y, maxDistance=np.inf, noisy=False):
     """
-    Given some point(s) x and y, find the nearest grid node in FX and
-    FY.
+    Given some point(s) `x' and `y', find the nearest grid node in `grid_x' and `grid_y'.
 
-    Returns the nearest coordinate(s), distance(s) from the point(s) and
-    the index in the respective array(s).
+    Returns the nearest coordinate(s), distance(s) from the point(s) and the index in the respective array(s).
 
-    Optionally specify a maximum distance (in the same units as the
-    input) to only return grid positions which are within that distance.
-    This means if your point lies outside the grid, for example, you can
-    use maxDistance to filter it out. Positions and indices which cannot
-    be found within maxDistance are returned as NaN; distance is always
-    returned, even if the maxDistance threshold has been exceeded.
+    Optionally specify a maximum distance (in the same units as the input) to only return grid positions which are
+    within that distance. This means if your point lies outside the grid, for example, you can use maxDistance to
+    filter it out. Positions and indices which cannot be found within maxDistance are returned as NaN; distance is
+    always returned, even if the maxDistance threshold has been exceeded.
 
     Parameters
     ----------
-    FX, FY : ndarray
-        Coordinates within which to search for the nearest point given
-        in x and y.
-    x, y : ndarray
-        List of coordinates to find the closest value in FX and FY.
-        Upper threshold of distance is given by maxDistance (see below).
+    grid_x, grid_y : np.ndarray
+        Coordinates within which to search for the nearest point given in `x' and `y'.
+    x, y : np.ndarray
+        List of coordinates to find the closest value in FX and FY. Upper threshold of distance is given by
+        maxDistance (see below).
     maxDistance : float, optional
-        Unless given, there is no upper limit on the distance away from
-        the source for which a result is deemed valid. Any other value
-        specified here limits the upper threshold.
+        Unless given, there is no upper limit on the distance away from the source for which a result is deemed
+        valid. Any other value specified here limits the upper threshold.
     noisy : bool or int, optional
-        Set to True to enable verbose output. If int, outputs every nth
-        iteration.
+        Set to True to enable verbose output. If int, outputs every nth iteration.
 
     Returns
     -------
-    nearestX, nearestY : ndarray
-        Coordinates from FX and FY which are within maxDistance (if
-        given) and closest to the corresponding point in x and y.
+    nearest_x, nearest_y : np.ndarray
+        Coordinates from `grid_x' and `grid_y' which are within maxDistance (if given) and closest to the
+        corresponding point in `x' and `y'.
     distance : ndarray
-        Distance between each point in x and y and the closest value in
-        FX and FY. Even if maxDistance is given (and exceeded), the
-        distance is reported here.
-    index : ndarray
-        List of indices of FX and FY for the closest positions to those
-        given in x, y.
+        Distance between each point in `x' and `y' and the closest value in `grid_x' and `grid_y'. Even if
+        maxDistance is given (and exceeded), the distance is reported here.
+    index : np.ndarray
+        List of indices of `grid_x' and `grid_y' for the closest positions to those given in `x', `y'.
 
     """
 
     if np.ndim(x) != np.ndim(y):
         raise Exception('Number of points in X and Y do not match')
 
-    nearestX = np.empty(np.shape(x))
-    nearestY = np.empty(np.shape(x))
-    index = np.empty(np.shape(x))
-    distance = np.empty(np.shape(x))
-
-    # Make all values NaN
-    nearestX = nearestX.ravel() * np.NaN
-    nearestY = nearestY.ravel() * np.NaN
-    index = index.ravel() * np.NaN
-    distance = distance.ravel() * np.NaN
+    grid_xy = np.array((grid_x, grid_y)).T
 
     if np.ndim(x) == 0:
-        todo = np.column_stack([x, y])
-        n = 1
+        search_xy = np.column_stack([x, y])
     else:
-        todo = list(zip(x, y))
-        n = np.shape(x)[0]
+        search_xy = np.array((x, y)).T
 
-    for c, pointXY in enumerate(todo):
-        if type(noisy) == int:
-            if c == 0 or (c + 1) % noisy == 0:
-                print('Point {} of {}'.format(c + 1, n))
-        elif noisy:
-            print('Point {} of {}'.format(c + 1, n))
+    kdtree = scipy.spatial.cKDTree(grid_xy)
+    dist, indices = kdtree.query(search_xy)
+    # Replace positions outside the grid with NaNs. Should these simply be removed?
+    if np.any(indices == len(grid_xy)):
+        indices = indices.astype(float)
+        indices[indices == len(grid_xy)] = np.nan
+    # Replace positions beyond the given distance threshold with NaNs.
+    if np.any(dist > maxDistance):
+        indices = indices.astype(float)
+        indices[dist > maxDistance] = np.nan
 
-        findX, findY = FX - pointXY[0], FY - pointXY[1]
-        vectorDistances = np.sqrt(findX**2 + findY**2)
-        if vectorDistances.min() > maxDistance:
-            distance[c] = np.min(vectorDistances)
-            # Should be NaN already, but no harm in being thorough
-            index[c], nearestX[c], nearestY[c] = np.NaN, np.NaN, np.NaN
-        else:
-            distance[c] = vectorDistances.min()
-            index[c] = vectorDistances.argmin()
-            nearestX[c] = FX[int(index[c])]
-            nearestY[c] = FY[int(index[c])]
+    # To maintain backwards compatibility, we need to return a value for every input position. We return NaN for
+    # values outside the threshold distance (if given) or domain.
+    nearest_x, nearest_y = np.empty(len(indices)) * np.nan, np.empty(len(indices)) * np.nan
+    nearest_x[indices[~np.isnan(indices)]] = grid_x[indices[~np.isnan(indices)]]
+    nearest_y[indices[~np.isnan(indices)]] = grid_y[indices[~np.isnan(indices)]]
 
-    # Convert the indices to ints if we don't have any NaNs.
-    if not np.any(np.isnan(index)):
-        index = index.astype(int)
-
-    return nearestX, nearestY, distance, index
+    return nearest_x, nearest_y, dist, indices
 
 
 def element_side_lengths(triangles, x, y):
