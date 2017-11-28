@@ -623,7 +623,7 @@ class Model(Domain):
         # Calculate the sigma level distributions at each grid node.
         sigma_levels = np.empty((self.dims.node, self.dims.levels)) * np.nan
         for i in range(self.dims.node):
-            sigma_levels[i, :] = self._sigma_gen(lower_layer_depth, upper_layer_depth,
+            sigma_levels[i, :] = self._sigma_gen(levels, lower_layer_depth, upper_layer_depth,
                                                  total_lower_layers, total_upper_layers,
                                                  lower_layer_thickness, upper_layer_thickness,
                                                  self.grid.h[i], optimised_depth)
