@@ -8,7 +8,6 @@ import numpy as np
 from netCDF4 import Dataset, date2num
 from datetime import datetime
 from collections import namedtuple
-from math import atan2
 
 from PyFVCOM.coordinate import utm_from_lonlat
 from PyFVCOM.grid import nodes2elems
