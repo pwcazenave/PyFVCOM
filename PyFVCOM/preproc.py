@@ -422,12 +422,14 @@ class Model(Domain):
                 print('zku\t{:d}\n'.format(zku))
                 print('zkl\t{:d}\n'.format(zkl))
 
-    def _sigma_gen(self, dl, du, kl, ku, zkl, zku, h, hmin):
+    def _sigma_gen(self, levels, dl, du, kl, ku, zkl, zku, h, hmin):
         """
         Generate a generalised sigma coordinate distribution.
 
         Parameters
         ----------
+        levels : int
+            Number of sigma levels.
         dl : float
             The lower depth boundary from the bottom, down to which the layers are uniform thickness.
         du : float
@@ -452,10 +454,9 @@ class Model(Domain):
 
         """
 
-        dist = np.empty(self.dims.levels) * np.nan
+        dist = np.zeros(levels)
 
         if h < hmin:
-            dist[0] = 0
             dl2 = 0.001
             du2 = 0.001
             for k in range(self.dims.layers):
@@ -467,28 +468,29 @@ class Model(Domain):
                 x3 = x2 + np.tanh(du2)
                 dist[k + 1] = (x1 + x2) / x3 - 1
         else:
-            dr = (h - du - dl) / h / (self.dims.levels - ku - kl - 1)
-            dist[0] = 0
+            dr = (h - du - dl) / h / (levels - ku - kl - 1)
 
             for k in range(1, ku + 1):
                 dist[k] = dist[k - 1] - zku[k - 1] / h
 
-            for k in range(ku + 1, self.dims.levels - kl):
+            for k in range(ku + 1, levels - kl):
                 dist[k] = dist[k - 1] - dr
 
             kk = 0
-            for k in range(self.dims.levels - kl + 1, self.dims.levels):
-                kk += 1
+            for k in range(-kl, 0):
                 dist[k] = dist[k - 1] - zkl[kk] / h
+                kk += 1
 
         return dist
 
-    def _sigma_geo(self, p_sigma):
+    def _sigma_geo(self, levels, p_sigma):
         """
         Generate a geometric sigma coordinate distribution.
 
         Parameters
         ----------
+        levels : int
+            Number of sigma levels.
         p_sigma : float
             Power value. 1 for uniform sigma layers, 2 for parabolic function. See page 308-309 in the FVCOM manual
             for examples.
@@ -499,19 +501,24 @@ class Model(Domain):
             Geometric vertical sigma coordinate distribution.
 
         """
-        kb = self.dims.levels
-        dist = np.empty(kb)
+
+        dist = np.empty(levels) * np.nan
 
         if p_sigma == 1:
-            for k in range(self.dims.levels):
-                dist[k] = -((k - 1) / (kb - 1))**p_sigma
-
+            for k in range(levels):
+                dist[k] = -((k - 1) / (levels - 1))**p_sigma
         else:
-            for k in range((kb + 1) / 2):
-                dist[k] = -((k - 1) / ((kb + 1) / 2 - 1))**p_sigma / 2
+            split = int(np.floor((levels + 1) / 2))
+            for k in range(split):
+                dist[k] = -(k / ((levels + 1) / 2 - 1))**p_sigma / 2
+            # Mirror the first half to make the second half of the parabola. We need to offset by one if we've got an
+            # odd number of levels.
+            if levels % 2 == 0:
+                dist[split:] = -(1 - -dist[:split])[::-1]
+            else:
+                dist[split:] = -(1 - -dist[:split - 1])[::-1]
 
-            for k in range((kb + 1) / 2 + 1, kb):
-                dist[k] = ((kb - k) / ((kb + 1) / 2 - 1))**p_sigma / 2 - 1
+        return dist
 
         return dist
 
