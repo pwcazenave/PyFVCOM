@@ -585,6 +585,10 @@ class FileReader(object):
                 self.grid.lonc, self.grid.latc = lonlat_from_utm(self.grid.xc, self.grid.yc, zone=self._zone)
             if self.grid.lonc_range == 0 and self.grid.latc_range == 0:
                 self.grid.xc, self.grid.yc, _ = utm_from_lonlat(self.grid.lonc, self.grid.latc)
+        # Make a bounding box variable too (spherical coordinates): W/E/S/N
+        self.grid.bounding_box = (np.min(self.grid.lon), np.max(self.grid.lon),
+                                  np.min(self.grid.lat), np.max(self.grid.lat))
+
 
     def _update_dimensions(self, variables):
         # Update the dimensions based on variables we've been given. Construct a list of the unique dimensions in all

@@ -171,6 +171,19 @@ class Domain:
         self.grid.latc = nodes2elems(self.grid.lat, self.grid.triangles)
         self.grid.h_center = nodes2elems(self.grid.h, self.grid.triangles)
 
+        # Add the coordinate ranges too
+        self.grid.lon_range = np.ptp(self.grid.lon)
+        self.grid.lat_range = np.ptp(self.grid.lat)
+        self.grid.lonc_range = np.ptp(self.grid.lonc)
+        self.grid.latc_range = np.ptp(self.grid.latc)
+        self.grid.x_range = np.ptp(self.grid.x)
+        self.grid.y_range = np.ptp(self.grid.y)
+        self.grid.xc_range = np.ptp(self.grid.xc)
+        self.grid.yc_range = np.ptp(self.grid.yc)
+        # Make a bounding box variable too (spherical coordinates): W/E/S/N
+        self.grid.bounding_box = (np.min(self.grid.lon), np.max(self.grid.lon),
+                                  np.min(self.grid.lat), np.max(self.grid.lat))
+
     def closest_node(self, where, cartesian=False, threshold=None, vincenty=False, haversine=False):
         """
         Find the index of the closest node to the supplied position (x, y). Set `cartesian' to True for cartesian
