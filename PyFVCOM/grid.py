@@ -184,7 +184,7 @@ class Domain:
         self.grid.bounding_box = (np.min(self.grid.lon), np.max(self.grid.lon),
                                   np.min(self.grid.lat), np.max(self.grid.lat))
 
-    def _closest_point(self, x, y, where, threshold=None, vincenty=False, haversine=False):
+    def _closest_point(self, x, y, lon, lat, where, threshold=None, vincenty=False, haversine=False):
         """
         Find the index of the closest node to the supplied position (x, y). Set `cartesian' to True for cartesian
         coordinates (defaults to spherical).
@@ -194,6 +194,8 @@ class Domain:
         x, y : np.ndarray
             Grid coordinates within which to search. These are ignored if we have either of `vincenty' or `haversine'
             enabled.
+        lon, lat : np.ndarray
+            Spherical grid positions. These only used if we have either of `vincenty' or `haversine' enabled.
         where : list-like
             Arbitrary x, y position for which to find the closest model grid position.
         cartesian : bool, optional
@@ -226,11 +228,12 @@ class Domain:
             _, _, _, index = find_nearest_point(x, y, *where, maxDistance=threshold)
             if np.any(np.isnan(index)):
                 index[np.isnan[index]] = None
-        elif vincenty:
-            grid_pts = np.asarray([self.grid.lon, self.grid.lat]).T
+
+        if vincenty:
+            grid_pts = np.asarray([lon, lat]).T
             dist = np.asarray([vincenty_distance(pt_1, where) for pt_1 in grid_pts]) * 1000
         elif haversine:
-            grid_pts = np.asarray([self.grid.lon, self.grid.lat]).T
+            grid_pts = np.asarray([lon, lat]).T
             dist = np.asarray([haversine_distance(pt_1, where) for pt_1 in grid_pts]) * 1000
 
         if vincenty or haversine:
@@ -276,7 +279,7 @@ class Domain:
         else:
             x, y = self.grid.lon, self.grid.lat
 
-        return self._closest_point(x, y, where, threshold=threshold, vincenty=vincenty, haversine=haversine)
+        return self._closest_point(x, y, self.grid.lon, self.grid.lat, where, threshold=threshold, vincenty=vincenty, haversine=haversine)
 
     def closest_element(self, where, cartesian=False, threshold=None, vincenty=False, haversine=False):
         """
@@ -311,7 +314,7 @@ class Domain:
         else:
             x, y = self.grid.lonc, self.grid.latc
 
-        return self._closest_point(x, y, where, threshold=threshold, vincenty=vincenty, haversine=haversine)
+        return self._closest_point(x, y, self.grid.lonc, self.grid.latc, where, threshold=threshold, vincenty=vincenty, haversine=haversine)
 
 
 def read_sms_mesh(mesh, nodestrings=False):
