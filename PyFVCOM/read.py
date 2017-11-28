@@ -1485,6 +1485,57 @@ def write_probes(file, mjd, timeseries, datatype, site, depth, sigma=(-1, -1), l
             f.write(fmt.format(*line))
 
 
+def get_river_config(file_name, noisy=False, zeroindex=False):
+    """
+    Parse an FVCOM river namelist file to extract the parameters and their values. Returns a dict of the parameters
+    with the associated values for all the rivers defined in the namelist.
+
+    Parameters
+    ----------
+    file_name : str
+        Full path to an FVCOM Rivers name list.
+    noisy : bool, optional
+        Set to True to enable verbose output. Defaults to False.
+    zeroindex : bool, optional
+        Set to True to convert indices from 1-based to 0-based. Defaults to False.
+
+    Returns
+    -------
+    rivers : dict
+        Dict of the parameters for each river defined in the name list.
+        Dictionary keys are the name list parameter names (e.g. RIVER_NAME).
+
+    Notes
+    -----
+
+    The indices returned in RIVER_GRID_LOCATION are 1-based (i.e. read in raw
+    from the nml file). For use in Python, you can either subtract 1 yourself,
+    or pass zeroindex=True to this function.
+
+    """
+
+    rivers = {}
+    with open(file_name) as f:
+        lines = f.readlines()
+        for line in lines:
+            line = line.strip()
+
+            if line and not line.startswith('&') and not line.startswith('/'):
+                param, value = [i.strip(",' ") for i in line.split('=')]
+                if param in rivers:
+                    rivers[param].append(value)
+                else:
+                    rivers[param] = [value]
+
+        if noisy:
+            print('Found {} rivers.'.format(len(rivers['RIVER_NAME'])))
+
+    if zeroindex and 'RIVER_GRID_LOCATION' in rivers:
+        rivers['RIVER_GRID_LOCATION'] = [int(i) - 1 for i in rivers['RIVER_GRID_LOCATION']]
+
+    return rivers
+
+
 # For backwards compatibility.
 def readFVCOM(file, varList=None, clipDims=False, noisy=False, atts=False):
     warn('{} is deprecated. Use ncread instead.'.format(inspect.stack()[0][3]))

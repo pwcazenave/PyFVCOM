@@ -1101,60 +1101,6 @@ def element_side_lengths(triangles, x, y):
     return elemSides
 
 
-def get_river_config(fileName, noisy=False, zeroindex=False):
-    """
-    Parse the rivers namelist to extract the parameters and their values.
-    Returns a dict of the parameters with the associated values for all the
-    rivers defined in the namelist.
-
-    Parameters
-    ----------
-    fileName : str
-        Full path to an FVCOM Rivers name list.
-    noisy : bool, optional
-        Set to True to enable verbose output. Defaults to False.
-    zeroindex : bool, optional
-        Set to True to convert indices from 1-based to 0-based.
-
-    Returns
-    -------
-    rivers : dict
-        Dict of the parameters for each river defind in the name list.
-        Dictionary keys are the name list parameter names (e.g. RIVER_NAME).
-
-    Notes
-    -----
-
-    The indices returned in RIVER_GRID_LOCATION are 1-based (i.e. read in raw
-    from the nml file). For use in Python, you can either subtract 1 yourself,
-    or pass zeroindex=True to this function.
-
-    """
-
-    f = open(fileName)
-    lines = f.readlines()
-    rivers = {}
-    for line in lines:
-        line = line.strip()
-
-        if line and not line.startswith('&') and not line.startswith('/'):
-            param, value = [i.strip(",' ") for i in line.split('=')]
-            if param in rivers:
-                rivers[param].append(value)
-            else:
-                rivers[param] = [value]
-
-    if noisy:
-        print('Found {} rivers.'.format(len(rivers['RIVER_NAME'])))
-
-    f.close()
-
-    if zeroindex and 'RIVER_GRID_LOCATION' in rivers:
-        rivers['RIVER_GRID_LOCATION'] = [int(i) - 1 for i in rivers['RIVER_GRID_LOCATION']]
-
-    return rivers
-
-
 def mesh2grid(meshX, meshY, meshZ, nx, ny, thresh=None, noisy=False):
     """
     Resample the unstructured grid in meshX and meshY onto a regular grid whose
