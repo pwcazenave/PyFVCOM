@@ -13,7 +13,6 @@ import math
 import scipy.spatial
 from matplotlib.tri.triangulation import Triangulation
 from matplotlib.tri import CubicTriInterpolator
-import matplotlib.path as mplPath
 from functools import partial
 
 from PyFVCOM.coordinate import utm_from_lonlat, lonlat_from_utm
