@@ -14,10 +14,10 @@ from datetime import datetime, timedelta
 from netCDF4 import Dataset, MFDataset, num2date, date2num
 
 from PyFVCOM.coordinate import lonlat_from_utm, utm_from_lonlat
-from PyFVCOM.grid import unstructured_grid_volume, nodes2elems, vincenty_distance, haversine_distance
+from PyFVCOM.grid import unstructured_grid_volume, nodes2elems, Domain
 
 
-class FileReader(object):
+class FileReader(Domain):
     """ Load FVCOM model output.
 
     Class simplifies the preparation of FVCOM model output for analysis with PyFVCOM.
@@ -598,7 +598,6 @@ class FileReader(object):
         self.grid.bounding_box = (np.min(self.grid.lon), np.max(self.grid.lon),
                                   np.min(self.grid.lat), np.max(self.grid.lat))
 
-
     def _update_dimensions(self, variables):
         # Update the dimensions based on variables we've been given. Construct a list of the unique dimensions in all
         # the given variables and use that to update self.dims.
@@ -679,102 +678,6 @@ class FileReader(object):
         except AttributeError:
             self.load_time()
             return np.argmin(np.abs(self.time.datetime - when))
-
-    def closest_node(self, where, cartesian=False, threshold=None, vincenty=False, haversine=False):
-        """
-        Find the index of the closest node to the supplied position (x, y). Set `cartesian' to True for cartesian
-        coordinates (defaults to spherical).
-
-        Parameters
-        ----------
-        where : list-like
-            Arbitrary x, y position for which to find the closest model grid position.
-        cartesian : bool, optional
-            Set to True to use cartesian coordinates. Defaults to False.
-        threshold : float, optional
-            Give a threshold distance beyond which the closest grid is considered too far away. Units are the same as
-            the coordinates in `where', unless using lat/lon and vincenty when it is in metres. Return None when
-            beyond threshold.
-        vincenty : bool, optional
-            Use vincenty distance calculation. Allows specification of point in lat/lon but threshold in metres.
-        haversine : bool, optional
-            Use the simpler but much faster Haversine distance calculation. Allows specification of point in lat/lon but threshold in metres.
-
-        Returns
-        -------
-        index : int, None
-            Grid index which falls closest to the supplied position. If `threshold' is set and the distance from the
-            supplied position to the nearest model node exceeds that threshold, `index' is None.
-
-        """
-
-        if not vincenty or not haversine:
-            if cartesian:
-                x, y = self.grid.x, self.grid.y
-            else:
-                x, y = self.grid.lon, self.grid.lat
-            dist = np.sqrt((x - where[0])**2 + (y - where[1])**2)
-        elif vincenty:
-            grid_pts = np.asarray([self.grid.lon, self.grid.lat]).T
-            where_pt_rep = np.tile(np.asarray(where), (len(self.grid.lon),1))
-            dist = np.asarray([vincenty_distance(pt_1, pt_2) for pt_1, pt_2 in zip(grid_pts, where_pt_rep)])*1000
-        elif haversine:
-            grid_pts = np.asarray([self.grid.lon, self.grid.lat]).T
-            where_pt_rep = np.tile(np.asarray(where), (len(self.grid.lon),1))
-            dist = np.asarray([haversine_distance(pt_1, pt_2) for pt_1, pt_2 in zip(grid_pts, where_pt_rep)])*1000
-        index = np.argmin(dist)
-        if threshold:
-            if dist.min() < threshold:
-                index = np.argmin(dist)
-            else:
-                index = None
-
-        return index
-
-    def closest_element(self, where, cartesian=False, threshold=None, vincenty=False):
-        """
-        Find the index of the closest element to the supplied position (x, y). Set `cartesian' to True for cartesian
-        coordinates (defaults to spherical).
-
-        Parameters
-        ----------
-        where : list-like
-            Arbitrary x, y position for which to find the closest model grid position.
-        cartesian : bool, optional
-            Set to True to use cartesian coordinates. Defaults to False.
-        threshold : float, optional
-            Give a threshold distance beyond which the closest grid is considered too far away. Units are the same as
-            the coordinates in `where', unless using lat/lon and vincenty when it is in metres. Return None when
-            beyond threshold.
-        vincenty : bool, optional
-            Use vincenty distance calculation. Allows specification of point in lat/lon but threshold in metres
-
-        Returns
-        -------
-        index : int, None
-            Grid index which falls closest to the supplied position. If `threshold' is set and the distance from the
-            supplied position to the nearest model node exceeds that threshold, `index' is None.
-
-        """
-        if not vincenty:
-            if cartesian:
-                x, y = self.grid.xc, self.grid.yc
-            else:
-                x, y = self.grid.lonc, self.grid.latc
-            dist = np.sqrt((x - where[0])**2 + (y - where[1])**2)
-        else:
-            grid_pts = np.asarray([self.grid.lonc, self.grid.latc]).T
-            where_pt_rep = np.tile(np.asarray(where), (len(self.grid.lonc),1))
-            dist = np.asarray([vincenty_distance(pt_1, pt_2) for pt_1, pt_2 in zip(grid_pts, where_pt_rep)])*1000
-
-        index = np.argmin(dist)
-        if threshold:
-            if dist.min() < threshold:
-                index = np.argmin(dist)
-            else:
-                index = None
-
-        return index
 
     def grid_volume(self):
         """
