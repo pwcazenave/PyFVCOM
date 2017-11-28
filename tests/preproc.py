@@ -49,7 +49,7 @@ class PreProcessingTest(TestCase):
                                   0.0163670431851858, 0.0207768134964938, 0.0251865838078018, 0.0295963541191098,
                                   0.0187584977599613, 0.00792064140081278, -0.00291721495833575, -0.0137550713174843,
                                   -0.0245929276766328])
-        sigma_levels = self.model._sigma_gen(30, 10, 10, 5, 5, [0.2] * 5, [0.2] * 5, self.model.grid.h[50], 5)
+        sigma_levels = self.model.sigma_generalized(30, 10, 10, 5, 5, [0.2] * 5, [0.2] * 5, self.model.grid.h[50], 5)
         test.assert_almost_equal(sigma_levels, matlab_result, decimal=16)
 
     def test_sigma_geo(self):
@@ -61,7 +61,7 @@ class PreProcessingTest(TestCase):
                                   -0.807372175980975, -0.847800237812128, -0.883472057074911, -0.914387633769322,
                                   -0.940546967895363, -0.961950059453032, -0.978596908442331, -0.990487514863258,
                                   -0.997621878715815, -1])
-        sigma_levels = self.model._sigma_geo(30, 2)
+        sigma_levels = self.model.sigma_geometric(30, 2)
         test.assert_almost_equal(sigma_levels, matlab_result, decimal=15)
 
     def test_sigma_tanh(self):
@@ -73,7 +73,7 @@ class PreProcessingTest(TestCase):
                                   -0.957076259750433, -0.97801403966034, -0.988868507460448, -0.994406003323654,
                                   -0.997207866748449, -0.998619655817751, -0.99932952669739, -0.999686084086247,
                                   -0.999865082291643, -0.999954918623355, -1])
-        sigma_levels = self.model._sigma_tanh(30, 5, 5)
+        sigma_levels = self.model.sigma_tanh(30, 5, 5)
         test.assert_almost_equal(sigma_levels, matlab_result, decimal=15)
 
     def test_add_rivers(self):
