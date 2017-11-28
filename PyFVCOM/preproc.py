@@ -374,11 +374,11 @@ class Model(Domain):
         if sigtype.lower() == 'generalized':
             sigma_levels = np.empty((self.dims.node, nlev)) * np.nan
             for i in range(self.dims.node):
-                sigma_levels[i, :] = self._sigma_gen(dl, du, kl, ku, zkl, zku, self.grid.h[i], min_constant_depth)
+                sigma_levels[i, :] = self.sigma_generalized(dl, du, kl, ku, zkl, zku, self.grid.h[i], min_constant_depth)
         elif sigtype.lower() == 'uniform':
-            sigma_levels = np.repeat(self._sigma_geo(nlev, 1), self.dims.node).reshape(self.dims.node, -1)
+            sigma_levels = np.repeat(self.sigma_geometric(nlev, 1), self.dims.node).reshape(self.dims.node, -1)
         elif sigtype.lower() == 'geometric':
-            sigma_levels = np.repeat(self._sigma_geo(nlev, sigpow), self.dims.node).reshape(self.dims.node, -1)
+            sigma_levels = np.repeat(self.sigma_geometric(nlev, sigpow), self.dims.node).reshape(self.dims.node, -1)
         else:
             raise ValueError('Unrecognised sigtype {} (is it supported?)'.format(sigtype))
 
@@ -421,7 +421,7 @@ class Model(Domain):
                 print('zku\t{:d}\n'.format(zku))
                 print('zkl\t{:d}\n'.format(zkl))
 
-    def _sigma_gen(self, levels, dl, du, kl, ku, zkl, zku, h, hmin):
+    def sigma_generalized(self, levels, dl, du, kl, ku, zkl, zku, h, hmin):
         """
         Generate a generalised sigma coordinate distribution.
 
@@ -482,7 +482,7 @@ class Model(Domain):
 
         return dist
 
-    def _sigma_geo(self, levels, p_sigma):
+    def sigma_geometric(self, levels, p_sigma):
         """
         Generate a geometric sigma coordinate distribution.
 
@@ -519,7 +519,7 @@ class Model(Domain):
 
         return dist
 
-    def _sigma_tanh(self, levels, dl, du):
+    def sigma_tanh(self, levels, dl, du):
         """
         Generate a hyperbolic tangent vertical sigma coordinate distribution.
 
@@ -623,10 +623,10 @@ class Model(Domain):
         # Calculate the sigma level distributions at each grid node.
         sigma_levels = np.empty((self.dims.node, self.dims.levels)) * np.nan
         for i in range(self.dims.node):
-            sigma_levels[i, :] = self._sigma_gen(levels, lower_layer_depth, upper_layer_depth,
-                                                 total_lower_layers, total_upper_layers,
-                                                 lower_layer_thickness, upper_layer_thickness,
-                                                 self.grid.h[i], optimised_depth)
+            sigma_levels[i, :] = self.sigma_generalized(levels, lower_layer_depth, upper_layer_depth,
+                                                        total_lower_layers, total_upper_layers,
+                                                        lower_layer_thickness, upper_layer_thickness,
+                                                        self.grid.h[i], optimised_depth)
 
         # Create a sigma layer variable (i.e. midpoint in the sigma levels).
         sigma_layers = sigma_levels[:, 0:-1] + (np.diff(sigma_levels, axis=1) / 2)
