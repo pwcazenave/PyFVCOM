@@ -145,6 +145,8 @@ class Domain:
             if self._noisy:
                 print('Loading MIKE21 grid {}'.format(self.grid.filename))
             triangle, nodes, x, y, z = read_mike_mesh(self.grid.filename)
+        else:
+            raise ValueError('Unknown file format ({}) for file {}.'.format(extension, self.grid.filename))
 
         if self.grid.native_coordinates.lower() != 'spherical':
             # Convert from UTM.
