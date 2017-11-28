@@ -652,48 +652,6 @@ class Model(Domain):
         self.sigma.levels_z = self.grid.h [:, np.newaxis] * self.sigma.levels
         self.sigma.levels_center_z = self.grid.h_center[:, np.newaxis]  * self.sigma.levels_center
 
-        # Add the following into a test at some point.
-        # function debug_mode()
-        # # Test with made up data. This isn't actually used at all, but it's handy
-        # # to leave around for debugging things.
-        #
-        # conf.nlev = 25; # vertical levels (layers + 1)
-        # conf.H0 = 30; # threshold depth for the transition (metres)
-        # conf.DU = 3; # upper water boundary thickness
-        # conf.DL = 3; # lower water boundary thickness
-        # conf.KU = 3; # layer number in the water column of DU (maximum of 5 m thickness)
-        # conf.KL = 3; # layer number in the water column of DL (maximum of 5m thickness)
-        #
-        #
-        # Mobj = hybrid_coordinate(conf, Mobj)
-        #
-        # nlev = conf.nlev
-        # H0 = conf.H0
-        # DU = conf.DU
-        # DL = conf.DL
-        # KU = conf.KU
-        # KL = conf.KL
-        # ZKU = repmat(DU./KU, 1, KU)
-        # ZKL = repmat(DL./KL, 1, KL)
-        #
-        # Hmin=24
-        # Hmax=Hmin + 200
-        # y = 0:0.1:100
-        # B = 70
-        # H = Hmax .* exp(-((y./B-0.15).^2./0.5.^2))
-        # # H = [Hmin,H]; H=sort(H)
-        # nlev = conf.nlev
-        # Z2=[]
-        # # Loop through all nodes to create sigma coordinates.
-        # for xx=1:length(H)
-        #     Z2(xx, :) = sigma_gen(nlev, DL, DU, KL, KU, ZKL, ZKU, H(xx), Hmin)
-        # end
-        #
-        # clf
-        # plot(y,Z2 .* repmat(H', 1, nlev));hold on
-        # plot(y,ones(size(y)).*-Hmin)
-        # fprintf('Calculated minimum depth: %.2f\n', Hmin)
-
     @staticmethod
     def __hybrid_coordinate_hmin(H, levels, DU, DL, KU, KL, ZKU, ZKL):
         """
