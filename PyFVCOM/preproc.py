@@ -377,9 +377,9 @@ class Model(Domain):
             for i in range(self.dims.node):
                 sigma_levels[i, :] = self._sigma_gen(dl, du, kl, ku, zkl, zku, self.grid.h[i], min_constant_depth)
         elif sigtype.lower() == 'uniform':
-            sigma_levels = np.repeat(self._sigma_geo(1), [self.dims.node, 1])
+            sigma_levels = np.repeat(self._sigma_geo(nlev, 1), self.dims.node).reshape(self.dims.node, -1)
         elif sigtype.lower() == 'geometric':
-            sigma_levels = np.repeat(self._sigma_geo(sigpow), [self.dims.node, 1])
+            sigma_levels = np.repeat(self._sigma_geo(nlev, sigpow), self.dims.node).reshape(self.dims.node, -1)
         else:
             raise ValueError('Unrecognised sigtype {} (is it supported?)'.format(sigtype))
 
