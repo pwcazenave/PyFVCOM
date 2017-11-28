@@ -155,7 +155,7 @@ class Domain:
         else:
             # Convert to UTM.
             self.grid.lon, self.grid.lat = x, y
-            self.grid.x, self.grid.y = utm_from_lonlat(x, y, zone=self.grid.zone)
+            self.grid.x, self.grid.y, _ = utm_from_lonlat(x, y, zone=self.grid.zone)
 
         self.grid.triangles = triangle
         self.grid.nv = triangle.T + 1  # for compatibility with FileReader
