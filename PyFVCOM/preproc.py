@@ -695,10 +695,10 @@ class Model(Domain):
 
         dl2 = 0.001
         du2 = 0.001
-        kbm1 = levels - 1
+        levels = levels - 1
         for nn in range(levels - 1):
             x1 = dl2 + du2
-            x1 = x1 * (kbm1 - nn) / kbm1
+            x1 = x1 * (levels - nn) / levels
             x1 = x1 - dl2
             x1 = np.tanh(x1)
             x2 = np.tanh(dl2)
