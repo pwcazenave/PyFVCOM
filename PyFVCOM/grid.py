@@ -1056,8 +1056,8 @@ def find_nearest_point(grid_x, grid_y, x, y, maxDistance=np.inf, noisy=False):
     # To maintain backwards compatibility, we need to return a value for every input position. We return NaN for
     # values outside the threshold distance (if given) or domain.
     nearest_x, nearest_y = np.empty(len(indices)) * np.nan, np.empty(len(indices)) * np.nan
-    nearest_x[indices[~np.isnan(indices)]] = grid_x[indices[~np.isnan(indices)]]
-    nearest_y[indices[~np.isnan(indices)]] = grid_y[indices[~np.isnan(indices)]]
+    nearest_x[~np.isnan(indices)] = grid_x[indices[~np.isnan(indices)].astype(int)]
+    nearest_y[~np.isnan(indices)] = grid_y[indices[~np.isnan(indices)].astype(int)]
 
     return nearest_x, nearest_y, dist, indices
 
