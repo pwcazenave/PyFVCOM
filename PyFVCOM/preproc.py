@@ -1677,23 +1677,23 @@ class Model(Domain):
         setattr(self.nest, fvcom_name, interpolated_coarse_data)
 
     @staticmethod
-    def _nested_forcing_interpolator(points, lon, lat, depth, data):
+    def _nested_forcing_interpolator(data, lon, lat, depth, points):
         """
         Worker function to interpolate the regularly gridded [depth, lat, lon] data onto the supplied `points' [lon,
         lat, depth].
 
         Parameters
         ----------
-        points : np.ndarray
-            Points onto which the coarse data should be interpolated.
+        data : np.ndarray
+            Coarse data to interpolate [depth, lat, lon].
         lon : np.ndarray
             Coarse data longitude array.
         lat : np.ndarray
             Coarse data latitude array.
         depth : np.ndarray
             Coarse data depth array.
-        data : np.ndarray
-            Coarse data to interpolate [depth, lat, lon].
+        points : np.ndarray
+            Points onto which the coarse data should be interpolated.
 
         Returns
         -------
