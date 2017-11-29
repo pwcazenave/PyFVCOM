@@ -1618,7 +1618,7 @@ class Model(Domain):
             else:
                 self.regular += RegularReader(str(file), variables=variables)
 
-    def add_nested_forcing(self, fvcom_name, coarse_name, coarse):
+    def add_nested_forcing(self, fvcom_name, coarse_name, coarse, constrain_coordinates=False):
         """
         Interpolate the given data onto the open boundary nodes in `Model.grid.open_boundary_nodes' for the period defined
         in `time'.
@@ -1632,6 +1632,10 @@ class Model(Domain):
         coarse : RegularReader
             The regularly gridded data to interpolate onto the open boundary nodes. This must include time, lon,
             lat and depth data as well as the time series to interpolate (4D volume).
+        constrain_coordinates : bool
+            Set to True to constrain the open boundary coordinates (lon, lat, depth) to the supplied coarse data.
+            This essentially squashes the open boundary to fit inside the coarse data and is, therefore, a bit of a
+            fudge! Defaults to False.
 
         """
 
@@ -1652,6 +1656,15 @@ class Model(Domain):
             y = self.grid.lat
             # Keep positive down depths.
             z = np.diff(-self.sigma.levels, axis=1) * self.grid.h[:, np.newaxis]
+
+        if constrain_coordinates:
+            x[x < coarse.grid.lon.min()] = coarse.grid.lon.min()
+            x[x > coarse.grid.lon.max()] = coarse.grid.lon.max()
+            y[y < coarse.grid.lat.min()] = coarse.grid.lat.min()
+            y[y > coarse.grid.lat.max()] = coarse.grid.lat.max()
+            z[z < coarse.grid.depth.min()] = coarse.grid.depth.min()
+            z[z > coarse.grid.depth.max()] = coarse.grid.depth.max()
+
         for points in boundary_points:
             # Make arrays of lon, lat, depth and time. Need to make the coordinates match the depth size and then
             # flatten the lot. We should be able to do the interpolation in one shot this way, but we have to be
