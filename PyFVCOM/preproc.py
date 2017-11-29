@@ -16,7 +16,7 @@ import itertools
 import scipy.optimize
 
 import numpy as np
-import multiprocessing as mp
+import multiprocessing
 
 from netCDF4 import Dataset, date2num, num2date
 from matplotlib.dates import date2num as mtime
@@ -228,9 +228,9 @@ class Model(Domain):
                 results.append(self._inter_sst_worker(lonlat, sst_file, noisy))
         else:
             if not pool_size:
-                pool = mp.Pool()
+                pool = multiprocessing.Pool()
             else:
-                pool = mp.Pool(pool_size)
+                pool = multiprocessing.Pool(pool_size)
             part_func = partial(self._inter_sst_worker, lonlat, noisy=noisy)
             results = pool.map(part_func, sst_files)
             pool.close()
@@ -921,9 +921,9 @@ class Model(Domain):
                     results.append(self._predict_tide(arg))
             else:
                 if not pool_size:
-                    pool = mp.Pool()
+                    pool = multiprocessing.Pool()
                 else:
-                    pool = mp.Pool(pool_size)
+                    pool = multiprocessing.Pool(pool_size)
                 results = pool.map(self._predict_tide, args)
                 pool.close()
 
