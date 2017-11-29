@@ -1644,27 +1644,21 @@ class Model(Domain):
             boundary_points = self.grid.open_boundary_elements
             x = self.grid.lonc
             y = self.grid.latc
-            z = np.diff(self.sigma.levels_center, axis=1) * self.grid.h_center[:, np.newaxis]
+            # Keep positive down depths.
+            z = 0 - np.diff(-self.sigma.levels_center, axis=1) * self.grid.h_center[:, np.newaxis]
         else:
             boundary_points = self.grid.open_boundary_nodes
             x = self.grid.lon
             y = self.grid.lat
-            z = np.diff(self.sigma.levels, axis=1) * self.grid.h[:, np.newaxis]
-
-        for point in boundary_points:
-            # Can't get broadcasting to work here, so tiling it is.
-            fvcom_grid = (np.tile(x[point, ...], [self.dims.layers, 1]),
-                          np.tile(y[point, ...], [self.dims.layers, 1]),
-                          z[point, ...])
-
-            # Do each time in parallel.
-            pool = mp.Pool()
-            partial_args = partial(self._nested_forcing_interpolator,
-                                   points=fvcom_grid,
-                                   lon=coarse.grid.lon,
-                                   lat=coarse.grid.lat,
-                                   depth=coarse.grid.depth)
-            interpolated_coarse_data = pool.map(partial_args, getattr(coarse.data, coarse_name))
+            # Keep positive down depths.
+            z = np.diff(-self.sigma.levels, axis=1) * self.grid.h[:, np.newaxis]
+        for points in boundary_points:
+            # Make arrays of lon, lat, depth and time. Need to make the coordinates match the depth size and then
+            # flatten the lot. We should be able to do the interpolation in one shot this way, but we have to be
+            # careful our coarse data covers our model domain (space and time).
+            boundary_grid = np.array((np.tile(self.nest.time, [len(points), self.dims.layers, 1]).T.ravel(), np.tile(z[points, ...].T, [len(self.nest.time), 1, 1]).ravel(), np.tile(y[points], [self.dims.layers, len(self.nest.time), 1]).transpose(1, 0, 2).ravel(), np.tile(x[points], [self.dims.layers, len(self.nest.time), 1]).transpose(1, 0, 2).ravel())).T
+            ft = RegularGridInterpolator((coarse.time.time, coarse.grid.depth, coarse.grid.lat, coarse.grid.lon), getattr(coarse.data, coarse_name), method='nearest', fill_value=None)
+            interpolated_coarse_data = ft(boundary_grid)
 
         # Drop the interpolated data into the nest object.
         setattr(self.nest, fvcom_name, interpolated_coarse_data)
