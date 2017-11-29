@@ -11,6 +11,7 @@ Pierre Cazenave (Plymouth Marine Laboratory)
 
 """
 
+import copy
 import scipy.optimize
 
 import numpy as np
@@ -31,6 +32,8 @@ from utide.utilities import Bunch
 from PyFVCOM.grid import Domain, grid_metrics, read_fvcom_obc, nodes2elems, write_fvcom_mesh, connectivity, haversine_distance
 from PyFVCOM.grid import find_bad_node, get_attached_unique_nodes
 from PyFVCOM.utilities import date_range
+from PyFVCOM.read import FileReader
+from PyFVCOM.coordinate import utm_from_lonlat, lonlat_from_utm
 
 
 class Model(Domain):
@@ -1599,6 +1602,31 @@ class Model(Domain):
                     f.write(' PROBE_VAR_NAME = "{}"\n'.format(long_name))
                     f.write('/\n')
 
+    def read_regular(self, regular, variables):
+        """
+        Read regularly gridded model data and provides a RegularReader object which mimics a FileReader object.
+
+        Parameters
+        ----------
+        regular : str, pathlib.Path
+            Files to read.
+        variables : list
+            Variables to extract. Variables missing in the files raise an error.
+
+        Provides
+        --------
+        A RegularReader object with the requested variables loaded.
+
+        """
+
+        for ii, file in enumerate(regular):
+            if self.noisy:
+                print('Loading file {}'.format(file))
+            if ii == 0:
+                self.regular = RegularReader(str(file), variables=variables)
+            else:
+                self.regular += RegularReader(str(file), variables=variables)
+
 
 class WriteForcing:
     """ Create an FVCOM netCDF input file. """
@@ -1702,3 +1730,296 @@ class WriteForcing:
     def __exit__(self, exc_type, exc_val, exc_tb):
         """ Tidy up the netCDF file handle. """
         self.nc.close()
+
+
+class RegularReader(FileReader):
+    """
+    Class to read in regularly gridded model output. This provides a similar interface to a PyFVCOM.read.FileReader
+    object but with an extra spatial dimension. This is currently based on CMEMS model outputs (i.e. NEMO).
+
+    Author(s)
+    ---------
+    Pierre Cazenave (Plymouth Marine Laboratory)
+
+    Credits
+    -------
+    This code leverages ideas (and in some cases, code) from PySeidon (https://github.com/GrumpyNounours/PySeidon)
+    and PyLag-tools (https://gitlab.em.pml.ac.uk/PyLag/PyLag-tools).
+
+    """
+
+    def __add__(self, other, debug=False):
+        """
+        This special method means we can stack two NemoReader objects in time through a simple addition (e.g. nemo1
+        += nemo2)
+
+        """
+
+        # Check we've already got all the same data objects before we start.
+        lon_compare = self.dims.lon == other.dims.lon
+        lat_compare = self.dims.lat == other.dims.lat
+        depth_compare = self.dims.depth == other.dims.depth
+        time_compare = self.time.datetime[-1] <= other.time.datetime[0]
+        data_compare = self.obj_iter(self.data) == self.obj_iter(other.data)
+        old_data = self.obj_iter(self.data)
+        new_data = self.obj_iter(other.data)
+        if not lon_compare:
+            raise ValueError('Horizontal longitude data are incompatible.')
+        if not lat_compare:
+            raise ValueError('Horizontal latitude data are incompatible.')
+        if not depth_compare:
+            raise ValueError('Vertical depth layers are incompatible.')
+        if not time_compare:
+            raise ValueError("Time periods are incompatible (`fvcom2' must be greater than or equal to `fvcom1')."
+                             "`fvcom1' has end {} and `fvcom2' has start {}".format(self.time.datetime[-1],
+                                                                                    other.time.datetime[0]))
+        if not data_compare:
+            raise ValueError('Loaded data sets for each NemoReader class must match.')
+        if not (old_data == new_data) and (old_data or new_data):
+            warn('Subsequent attempts to load data for this merged object will only load data from the first object. '
+                 'Load data into each object before merging them.')
+
+        # Copy ourselves to a new version for concatenation. self is the old so we get appended to by the new.
+        idem = copy.copy(self)
+
+        for var in self.obj_iter(idem.data):
+            if 'time' in idem.ds.variables[var].dimensions:
+                setattr(idem.data, var, np.concatenate((getattr(idem.data, var), getattr(other.data, var))))
+        for time in self.obj_iter(idem.time):
+            setattr(idem.time, time, np.concatenate((getattr(idem.time, time), getattr(other.time, time))))
+
+        # Remove duplicate times.
+        time_indices = np.arange(len(idem.time.time))
+        _, dupes = np.unique(idem.time.time, return_index=True)
+        dupe_indices = np.setdiff1d(time_indices, dupes)
+        for var in self.obj_iter(idem.data):
+            # Only delete things with a time dimension.
+            if 'time' in idem.ds.variables[var].dimensions:
+                time_axis = idem.ds.variables[var].dimensions.index('time')
+                setattr(idem.data, var, np.delete(getattr(idem.data, var), dupe_indices, axis=time_axis))
+        for time in self.obj_iter(idem.time):
+            try:
+                time_axis = idem.ds.variables[time].dimensions.index('time')
+                setattr(idem.time, time, np.delete(getattr(idem.time, time), dupe_indices, axis=time_axis))
+            except KeyError:
+                # This is hopefully one of the additional time variable which doesn't exist in the netCDF dataset.
+                # Just delete the relevant indices by assuming that time is the first axis.
+                setattr(idem.time, time, np.delete(getattr(idem.time, time), dupe_indices, axis=0))
+
+        # Update dimensions accordingly.
+        idem.dims.time = len(idem.time.time)
+
+        return idem
+
+    def _load_time(self):
+        """
+        Populate a time object with additional useful time representations from the netCDF time data.
+        """
+
+        time = self.ds.variables['time'][:]
+
+        # Make other time representations.
+        self.time.datetime = num2date(time, units=getattr(self.ds.variables['time'], 'units'))
+        if isinstance(self.time.datetime, (list, tuple, np.ndarray)):
+            setattr(self.time, 'Times', np.array([datetime.strftime(d, '%Y-%m-%dT%H:%M:%S.%f') for d in self.time.datetime]))
+        else:
+            setattr(self.time, 'Times', datetime.strftime(self.time.datetime, '%Y-%m-%dT%H:%M:%S.%f'))
+        self.time.time = date2num(self.time.datetime, units='days since 1858-11-17 00:00:00')
+        self.time.Itime = np.floor(self.time.time)
+        self.time.Itime2 = (self.time.time - np.floor(self.time.time)) * 1000 * 60 * 60  # microseconds since midnight
+        self.time.datetime = self.time.datetime
+        self.time.matlabtime = self.time.time + 678942.0  # convert to MATLAB-indexed times from Modified Julian Date.
+
+    def _load_grid(self):
+        """
+        Load the grid data.
+
+        Convert from UTM to spherical if we haven't got those data in the existing output file.
+
+        """
+
+        grid_variables = ['lon', 'lat', 'x', 'y', 'depth']
+
+        # Get the grid data.
+        for grid in grid_variables:
+
+            try:
+                setattr(self.grid, grid, self.ds.variables[grid][:])
+                # Save the attributes.
+                attributes = type('attributes', (object,), {})()
+                for attribute in self.ds.variables[grid].ncattrs():
+                    setattr(attributes, attribute, getattr(self.ds.variables[grid], attribute))
+                setattr(self.atts, grid, attributes)
+            except KeyError:
+                # Make zeros for this missing variable so we can convert from the non-missing data below.
+                setattr(self.grid, grid, np.zeros((self.dims.lon, self.dims.lat)))
+            except ValueError as value_error_message:
+                warn('Variable {} has a problem with the data. Setting value as all zeros.'.format(grid))
+                print(value_error_message)
+                setattr(self.grid, grid, np.zeros(self.ds.variables[grid].shape))
+
+        # Make the grid data the right shape for us to assume it's an FVCOM-style data set.
+        # self.grid.lon, self.grid.lat = np.meshgrid(self.grid.lon, self.grid.lat)
+        # self.grid.lon, self.grid.lat = self.grid.lon.ravel(), self.grid.lat.ravel()
+
+        # Update dimensions to match those we've been given, if any. Omit time here as we shouldn't be touching that
+        # dimension for any variable in use in here.
+        for dim in self._dims:
+            if dim != 'time':
+                setattr(self.dims, dim, len(self._dims[dim]))
+
+        # Convert the given W/E/S/N coordinates into node and element IDs to subset.
+        if self._bounding_box:
+            # We need to use the original Dataset lon and lat values here as they have the right shape for the
+            # subsetting.
+            self._dims['lon'] = np.argwhere((self.ds.variables['lon'][:] > self._dims['wesn'][0]) &
+                                            (self.ds.variables['lon'][:] < self._dims['wesn'][1]))
+            self._dims['lat'] = np.argwhere((self.ds.variables['lat'][:] > self._dims['wesn'][2]) &
+                                            (self.ds.variables['lat'][:] < self._dims['wesn'][3]))
+
+        related_variables = {'lon': ('x', 'lon'), 'lat': ('y', 'lat')}
+        for spatial_dimension in 'lon', 'lat':
+            if spatial_dimension in self._dims:
+                setattr(self.dims, spatial_dimension, len(self._dims[spatial_dimension]))
+                for var in related_variables[spatial_dimension]:
+                    try:
+                        spatial_index = self.ds.variables[var].dimensions.index(spatial_dimension)
+                        var_shape = [i for i in np.shape(self.ds.variables[var])]
+                        var_shape[spatial_index] = getattr(self.dims, spatial_dimension)
+                        if 'depth' in (self._dims, self.ds.variables[var].dimensions):
+                            var_shape[self.ds.variables[var].dimensions.index('depth')] = self.dims.siglay
+                        _temp = np.empty(var_shape) * np.nan
+                        if 'depth' in self.ds.variables[var].dimensions:
+                            for ni, node in enumerate(self._dims[spatial_dimension]):
+                                if 'depth' in self._dims:
+                                    _temp[..., ni] = self.ds.variables[var][self._dims['depth'], node]
+                                else:
+                                    _temp[..., ni] = self.ds.variables[var][:, node]
+                        else:
+                            for ni, node in enumerate(self._dims[spatial_dimension]):
+                                _temp[..., ni] = self.ds.variables[var][node]
+                    except KeyError:
+                        if 'depth' in var:
+                            _temp = np.empty((self.dims.depth, getattr(self.dims, spatial_dimension)))
+                        else:
+                            _temp = np.empty(getattr(self.dims, spatial_dimension))
+                setattr(self.grid, var, _temp)
+
+        # Check if we've been given vertical dimensions to subset in too, and if so, do that. Check we haven't
+        # already done this if the 'node' and 'nele' sections above first.
+        for var in ['depth']:
+            short_dim = copy.copy(var)
+            # Assume we need to subset this one unless 'node' or 'nele' are missing from self._dims. If they're in
+            # self._dims, we've already subsetted in the 'node' and 'nele' sections above, so doing it again here
+            # would fail.
+            subset_variable = True
+            if 'lon' in self._dims or 'lat' in self._dims:
+                subset_variable = False
+            # Strip off the _center to match the dimension name.
+            if short_dim.endswith('_center'):
+                short_dim = short_dim.split('_')[0]
+            if short_dim in self._dims:
+                if short_dim in self.ds.variables[var].dimensions and subset_variable:
+                    _temp = getattr(self.grid, var)[self._dims[short_dim], ...]
+                    setattr(self.grid, var, _temp)
+
+        # Check ranges and if zero assume we're missing that particular type, so convert from the other accordingly.
+        self.grid.lon_range = np.ptp(self.grid.lon)
+        self.grid.lat_range = np.ptp(self.grid.lat)
+        self.grid.x_range = np.ptp(self.grid.x)
+        self.grid.y_range = np.ptp(self.grid.y)
+
+        # Only do the conversions when we have more than a single point since the relevant ranges will be zero with
+        # only one position.
+        if self.dims.lon > 1 and self.dims.lat > 1:
+            if self.grid.lon_range == 0 and self.grid.lat_range == 0:
+                self.grid.lon, self.grid.lat = lonlat_from_utm(self.grid.x, self.grid.y, zone=self._zone)
+                self.grid.lon_range = np.ptp(self.grid.lon)
+                self.grid.lat_range = np.ptp(self.grid.lat)
+            if self.grid.lon_range == 0 and self.grid.lat_range == 0:
+                self.grid.x, self.grid.y = utm_from_lonlat(self.grid.lon, self.grid.lat)
+                self.grid.x_range = np.ptp(self.grid.x)
+                self.grid.y_range = np.ptp(self.grid.y)
+
+        # Make a bounding box variable too (spherical coordinates): W/E/S/N
+        self.grid.bounding_box = (np.min(self.grid.lon), np.max(self.grid.lon),
+                                  np.min(self.grid.lat), np.max(self.grid.lat))
+
+
+    def load_data(self, var):
+        """ Add a given variable/variables at the given indices. If any indices are omitted or Falsey, return all
+        data for the missing dimensions.
+
+        Parameters
+        ----------
+        var : list-like, str
+            List of variables to load.
+
+        """
+
+        # Check if we've got iterable variables and make one if not.
+        try:
+            _ = (e for e in var)
+        except TypeError:
+            var = [var]
+
+        for v in var:
+            if v not in self.ds.variables:
+                raise KeyError("Variable '{}' not present in {}.".format(v, self._fvcom))
+
+            # Get this variable's dimensions
+            var_dim = self.ds.variables[v].dimensions
+            variable_shape = self.ds.variables[v].shape
+            variable_indices = [np.arange(i) for i in variable_shape]
+            for dimension in var_dim:
+                if dimension in self._dims:
+                    # Replace their size with anything we've been given in dims.
+                    variable_index = var_dim.index(dimension)
+                    variable_indices[variable_index] = self._dims[dimension]
+
+            # Check the data we're loading is the same shape as our existing dimensions.
+            lon_compare = self.ds.dimensions['lon'].size == self.dims.lon
+            lat_compare = self.ds.dimensions['lat'].size == self.dims.lat
+            depth_compare = self.ds.dimensions['depth'].size == self.dims.depth
+            time_compare = self.ds.dimensions['time'].size == self.dims.time
+            # Check again if we've been asked to subset in any dimension.
+            if 'lon' in self._dims:
+                lon_compare = len(self.ds.variables['lon'][self._dims['lon']]) == self.dims.lon
+            if 'lat' in self._dims:
+                lat_compare = len(self.ds.variables['lat'][self._dims['lat']]) == self.dims.lat
+            if 'depth' in self._dims:
+                depth_compare = len(self.ds.variables['depth'][self._dims['depth']]) == self.dims.depth
+            if 'time' in self._dims:
+                time_compare = len(self.ds.variables['time'][self._dims['time']]) == self.dims.time
+
+            if not lon_compare:
+                raise ValueError('Longitude data are incompatible. You may be trying to load data after having already '
+                                 'concatenated a NemoReader object, which is unsupported.')
+            if not lat_compare:
+                raise ValueError('Latitude data are incompatible. You may be trying to load data after having already '
+                                 'concatenated a NemoReader object, which is unsupported.')
+            if not depth_compare:
+                raise ValueError('Vertical depth layers are incompatible. You may be trying to load data after having '
+                                 'already concatenated a NemoReader object, which is unsupported.')
+            if not time_compare:
+                raise ValueError('Time period is incompatible. You may be trying to load data after having already '
+                                 'concatenated a NemoReader object, which is unsupported.')
+
+            if 'time' not in var_dim:
+                # Should we error here or carry on having warned?
+                warn('{} does not contain a time dimension.'.format(v))
+
+            attributes = type('attributes', (object,), {})()
+            for attribute in self.ds.variables[v].ncattrs():
+                setattr(attributes, attribute, getattr(self.ds.variables[v], attribute))
+            setattr(self.atts, v, attributes)
+
+            data = self.ds.variables[v][variable_indices].data  # we'll mask later
+            # Set FillValues to NaN.
+            # data = np.ma.masked_where(data == self.ds.variables[v]._FillValue, data)
+            data[data == self.ds.variables[v]._FillValue] = np.nan
+            setattr(self.data, v, data)
+
+    def closest_element(self, *args, **kwargs):
+        """ Compatibility function. """
+        return self.closest_node(*args, **kwargs)
