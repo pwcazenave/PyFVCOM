@@ -1627,6 +1627,89 @@ class Model(Domain):
             else:
                 self.regular += RegularReader(str(file), variables=variables)
 
+    def add_nested_forcing(self, fvcom_name, coarse_name, coarse):
+        """
+        Interpolate the given data onto the open boundary nodes in `Model.grid.open_boundary_nodes' for the period defined
+        in `time'.
+
+        Parameters
+        ----------
+        fvcom_name : str
+            The data field name to add to the nest object which will be written to netCDF for FVCOM.
+        coarse_name : str
+            The data field name to use from the coarse object.
+        coarse : RegularReader
+            The regularly gridded data to interpolate onto the open boundary nodes. This must include time, lon,
+            lat and depth data as well as the time series to interpolate (4D volume).
+
+        """
+
+        self.nest = type('nest', (object,), {})()
+        self.nest.datetime = date_range(self.start - relativedelta(days=2), self.end + relativedelta(days=2), inc=1)
+        self.nest.time = date2num(self.nest.datetime, units='days since 1858-11-17 00:00:00')
+
+        open_boundary_forcing = []
+        if coarse_name in ('u', 'v', 'ua', 'va', 'ww'):
+            boundary_points = self.grid.open_boundary_elements
+            x = self.grid.lonc
+            y = self.grid.latc
+            z = np.diff(self.sigma.levels_center, axis=1) * self.grid.h_center[:, np.newaxis]
+        else:
+            boundary_points = self.grid.open_boundary_nodes
+            x = self.grid.lon
+            y = self.grid.lat
+            z = np.diff(self.sigma.levels, axis=1) * self.grid.h[:, np.newaxis]
+
+        for point in boundary_points:
+            # Can't get broadcasting to work here, so tiling it is.
+            fvcom_grid = (np.tile(x[point, ...], [self.dims.layers, 1]),
+                          np.tile(y[point, ...], [self.dims.layers, 1]),
+                          z[point, ...])
+
+            # Do each time in parallel.
+            pool = mp.Pool()
+            partial_args = partial(self._nested_forcing_interpolator,
+                                   points=fvcom_grid,
+                                   lon=coarse.grid.lon,
+                                   lat=coarse.grid.lat,
+                                   depth=coarse.grid.depth)
+            interpolated_coarse_data = pool.map(partial_args, getattr(coarse.data, coarse_name))
+
+        # Drop the interpolated data into the nest object.
+        setattr(self.nest, fvcom_name, interpolated_coarse_data)
+
+    @staticmethod
+    def _nested_forcing_interpolator(points, lon, lat, depth, data):
+        """
+        Worker function to interpolate the regularly gridded [depth, lat, lon] data onto the supplied `points' [lon,
+        lat, depth].
+
+        Parameters
+        ----------
+        points : np.ndarray
+            Points onto which the coarse data should be interpolated.
+        lon : np.ndarray
+            Coarse data longitude array.
+        lat : np.ndarray
+            Coarse data latitude array.
+        depth : np.ndarray
+            Coarse data depth array.
+        data : np.ndarray
+            Coarse data to interpolate [depth, lat, lon].
+
+        Returns
+        -------
+        interpolated_data : np.ndarray
+            Coarse data interpolated onto the supplied points.
+
+        """
+
+        # Make a RegularGridInterpolator from the supplied 4D data.
+        ft = RegularGridInterpolator((depth, lat, lon), data, method='nearest', fill_value=None)
+        interpolated_data = ft(points)
+
+        return interpolated_data
+
 
 class WriteForcing:
     """ Create an FVCOM netCDF input file. """
