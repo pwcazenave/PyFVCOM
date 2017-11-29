@@ -459,16 +459,7 @@ class Model(Domain):
         dist = np.zeros(levels)
 
         if h < hmin:
-            dl2 = 0.001
-            du2 = 0.001
-            for k in range(self.dims.layers):
-                x1 = dl2 + du2
-                x1 = x1 * self.dims.layers - k / self.dims.layers
-                x1 = x1 - dl2
-                x1 = np.tanh(x1)
-                x2 = np.tanh(dl2)
-                x3 = x2 + np.tanh(du2)
-                dist[k + 1] = (x1 + x2) / x3 - 1
+            dist = self.sigma_tanh(levels, du, dl)
         else:
             dr = (h - du - dl) / h / (levels - ku - kl - 1)
 
