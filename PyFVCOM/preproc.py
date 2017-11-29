@@ -12,11 +12,11 @@ Pierre Cazenave (Plymouth Marine Laboratory)
 """
 
 import copy
+import itertools
 import scipy.optimize
 
 import numpy as np
 import multiprocessing as mp
-import itertools
 
 from netCDF4 import Dataset, date2num, num2date
 from matplotlib.dates import date2num as mtime
