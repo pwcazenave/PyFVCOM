@@ -749,21 +749,6 @@ class Model(Domain):
         Z0 = self.sigma_tanh(levels, DU, DL)
         Z2 = np.zeros(levels)
 
-        # Z0 = np.zeros(levels)
-        # Z2 = Z0.copy()
-        #
-        # dl2 = 0.001
-        # du2 = 0.001
-        # levels = levels - 1
-        # for nn in range(levels - 1):
-        #     x1 = dl2 + du2
-        #     x1 = x1 * (levels - nn) / levels
-        #     x1 = x1 - dl2
-        #     x1 = np.tanh(x1)
-        #     x2 = np.tanh(dl2)
-        #     x3 = x2 + np.tanh(du2)
-        #     Z0[nn + 1] = ((x1 + x2) / x3) - 1
-
         # s-coordinates
         X1 = (H - DU - DL)
         X2 = X1 / H
