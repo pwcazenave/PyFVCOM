@@ -44,11 +44,20 @@ class Model(Domain):
         # Inherit everything from PyFVCOM.grid.Domain, but extend it for our purposes. This doesn't work with Python 2.
         super().__init__(*args, **kwargs)
 
+        self.noisy = False
+        if 'noisy' in kwargs:
+            self.noisy = kwargs['noisy']
+
+        # Initialise things so we can add attributes to them later.
+        self.time = type('time', (), {})()
+        self.sigma = type('sigma', (), {})()
+        self.tide = type('tide', (), {})()
+        self.sst = type('sst', (), {})()
+
+        # Make some potentially useful time representations.
         self.start = start
         self.end = end
-        self.sigma = None
-        self.tide = None
-        self.sst = None
+        self.__add_time()
 
         # Initialise the river structure.
         self.__prep_rivers()
@@ -80,6 +89,18 @@ class Model(Domain):
         self.river.history = ''
         self.river.info = ''
         self.river.source = ''
+
+    def __add_time(self):
+        """
+        Add time variables we might need for the various bits of processing.
+
+        """
+
+        self.time.datetime = date_range(self.start, self.end)
+        self.time.time = date2num(getattr(self.time, 'datetime'), units='days since 1858-11-17 00:00:00')
+        self.time.Itime = np.floor(getattr(self.time, 'time'))  # integer Modified Julian Days
+        self.time.Itime2 = (getattr(self.time, 'time') - getattr(self.time, 'Itime')) * 24 * 60 * 60 * 1000  # milliseconds since midnight
+        self.time.Times = [t.strftime('%Y-%m-%dT%H:%M:%S.%f') for t in getattr(self.time, 'datetime')]
 
     def write_grid(self, grid_file, depth_file=None):
         """
@@ -248,7 +269,6 @@ class Model(Domain):
         sst = sst[idx, :]
 
         # Store everything in an object.
-        self.sst = type('sst', (object,), {})()
         self.sst.sst = sst
         self.sst.time = dates
 
