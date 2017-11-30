@@ -73,7 +73,6 @@ class Domain:
         self.grid.native_coordinates = native_coordinates
         self.grid.zone = zone
         # Initialise everything to None so we don't get caught out expecting something to exist when it doesn't.
-        self.domain_plot = None
         self.grid.open_boundary_nodes = None
         self.grid.filename = grid
 
