@@ -93,6 +93,7 @@ class Model(Domain):
         return flattened
 
     def __prep_rivers(self):
+        """ Create a few object and attributes which are useful for the river data. """
         self.river = type('river', (object,), {})()
         self.dims.river = 0  # assume no rivers.
 
@@ -866,18 +867,17 @@ class Model(Domain):
                 f.write('{} {:.6f} {:.6f}\n'.format(*node))
 
     def add_grid_metrics(self, noisy=False):
-        """ Calculate grid metrics. """
-
-        grid_metrics(self.grid.tri, noisy=noisy)
-
         """
+        Calculate grid metrics.
 
         Parameters
         ----------
         noisy : bool, optional
+            Set to True to enable verbose output. Defaults to False.
 
         """
 
+        grid_metrics(self.grid.tri, noisy=noisy)
 
     def write_tides(self, output_file, ncopts={'zlib': True, 'complevel': 7}, **kwargs):
         """
