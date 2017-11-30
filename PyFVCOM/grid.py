@@ -7,16 +7,18 @@ from __future__ import print_function, division
 
 import os
 import sys
-import multiprocessing
-import numpy as np
 import math
 import scipy.spatial
-from matplotlib.tri.triangulation import Triangulation
-from matplotlib.tri import CubicTriInterpolator
+import multiprocessing
+
+import numpy as np
+
 from dateutil.relativedelta import relativedelta
 from scipy.interpolate import RegularGridInterpolator
 from functools import partial
 from matplotlib.dates import date2num as mtime
+from matplotlib.tri import CubicTriInterpolator
+from matplotlib.tri.triangulation import Triangulation
 from utide.utilities import Bunch
 from utide import reconstruct, ut_constants
 from netCDF4 import Dataset, date2num
