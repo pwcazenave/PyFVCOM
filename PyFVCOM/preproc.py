@@ -29,7 +29,8 @@ from pathlib import Path
 from utide import reconstruct, ut_constants
 from utide.utilities import Bunch
 
-from PyFVCOM.grid import Domain, grid_metrics, read_fvcom_obc, nodes2elems, write_fvcom_mesh, connectivity, haversine_distance
+from PyFVCOM.grid import Domain, grid_metrics, read_fvcom_obc, nodes2elems
+from PyFVCOM.grid import write_fvcom_mesh, connectivity, haversine_distance
 from PyFVCOM.grid import find_bad_node, get_attached_unique_nodes
 from PyFVCOM.utilities import date_range
 from PyFVCOM.read import FileReader
