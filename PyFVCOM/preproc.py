@@ -38,7 +38,15 @@ from PyFVCOM.coordinate import utm_from_lonlat, lonlat_from_utm
 
 
 class Model(Domain):
-    """ Everything related to making a new model run. """
+    """
+    Everything related to making a new model run.
+
+    There should be more use of objects here. For example, each open boundary should be a Boundary object which has
+    methods for interpolating data onto it (tides, temperature, salinity, ERSEM variables etc.). The coastline could
+    be an object which has methods related to rivers and checking depths. Likewise, the model grid object could
+    contain methods for interpolating SST, creating restart files etc.
+
+    """
 
     def __init__(self, start, end, *args, **kwargs):
 
