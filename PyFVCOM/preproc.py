@@ -81,14 +81,14 @@ class Model(Domain):
             self.grid.coastline = np.squeeze(self.grid.coastline[land_only])
 
     @staticmethod
-    def __flatten_list(nest):
+    def __flatten_list(nested):
         """ Flatten a list of lists. """
         try:
-            flattened = list(itertools.chain(*nest))
+            flattened = list(itertools.chain(*nested))
         except TypeError:
             # Maybe it's already flat and we've just tried iterating over non-iterables. If so, just return what we
             # got given.
-            flattened = nest
+            flattened = nested
 
         return flattened
 
