@@ -490,6 +490,9 @@ class Model(Domain):
                 print('zku\t{:d}\n'.format(zku))
                 print('zkl\t{:d}\n'.format(zkl))
 
+        # Update the open boundaries.
+        self.__update_open_boundaries()
+
     def sigma_generalized(self, levels, dl, du, kl, ku, zkl, zku, h, hmin):
         """
         Generate a generalised sigma coordinate distribution.
