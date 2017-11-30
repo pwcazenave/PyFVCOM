@@ -20,7 +20,6 @@ from PyFVCOM import ctd
 from PyFVCOM import current
 from PyFVCOM import grid
 from PyFVCOM import coordinate
-from PyFVCOM import utilities  # depends on grid and coordinate
 from PyFVCOM import ocean
 from PyFVCOM import stats
 from PyFVCOM import tidal_ellipse

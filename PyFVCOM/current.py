@@ -11,7 +11,7 @@ import copy
 
 from datetime import datetime
 
-from PyFVCOM.utilities import common_time
+from PyFVCOM.utilities.time import common_time
 from PyFVCOM.grid import grid_metrics, shape_coefficients
 
 class Residuals:
