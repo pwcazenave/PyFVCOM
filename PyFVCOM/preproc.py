@@ -1880,16 +1880,16 @@ class RegularReader(FileReader):
 
             if not lon_compare:
                 raise ValueError('Longitude data are incompatible. You may be trying to load data after having already '
-                                 'concatenated a NemoReader object, which is unsupported.')
+                                 'concatenated a RegularReader object, which is unsupported.')
             if not lat_compare:
                 raise ValueError('Latitude data are incompatible. You may be trying to load data after having already '
-                                 'concatenated a NemoReader object, which is unsupported.')
+                                 'concatenated a RegularReader object, which is unsupported.')
             if not depth_compare:
                 raise ValueError('Vertical depth layers are incompatible. You may be trying to load data after having '
-                                 'already concatenated a NemoReader object, which is unsupported.')
+                                 'already concatenated a RegularReader object, which is unsupported.')
             if not time_compare:
                 raise ValueError('Time period is incompatible. You may be trying to load data after having already '
-                                 'concatenated a NemoReader object, which is unsupported.')
+                                 'concatenated a RegularReader object, which is unsupported.')
 
             if 'time' not in var_dim:
                 # Should we error here or carry on having warned?
