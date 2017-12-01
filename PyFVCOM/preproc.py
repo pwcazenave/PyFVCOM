@@ -1668,7 +1668,7 @@ class RegularReader(FileReader):
 
         for var in self.obj_iter(idem.data):
             if 'time' in idem.ds.variables[var].dimensions:
-                setattr(idem.data, var, np.concatenate((getattr(idem.data, var), getattr(other.data, var))))
+                setattr(idem.data, var, np.ma.concatenate((getattr(idem.data, var), getattr(other.data, var))))
         for time in self.obj_iter(idem.time):
             setattr(idem.time, time, np.concatenate((getattr(idem.time, time), getattr(other.time, time))))
 
