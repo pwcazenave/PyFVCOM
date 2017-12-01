@@ -1900,10 +1900,7 @@ class RegularReader(FileReader):
                 setattr(attributes, attribute, getattr(self.ds.variables[v], attribute))
             setattr(self.atts, v, attributes)
 
-            data = self.ds.variables[v][variable_indices].data  # we'll mask later
-            # Set FillValues to NaN.
-            # data = np.ma.masked_where(data == self.ds.variables[v]._FillValue, data)
-            data[data == self.ds.variables[v]._FillValue] = np.nan
+            data = self.ds.variables[v][variable_indices]  # data are automatically masked
             setattr(self.data, v, data)
 
     def closest_element(self, *args, **kwargs):
