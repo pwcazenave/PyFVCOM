@@ -1676,17 +1676,20 @@ class RegularReader(FileReader):
         time_indices = np.arange(len(idem.time.time))
         _, dupes = np.unique(idem.time.time, return_index=True)
         dupe_indices = np.setdiff1d(time_indices, dupes)
+        time_mask = np.ones(time_indices.shape, dtype=bool)
+        time_mask[dupe_indices] = False
         for var in self.obj_iter(idem.data):
             # Only delete things with a time dimension.
             if 'time' in idem.ds.variables[var].dimensions:
-                time_axis = idem.ds.variables[var].dimensions.index('time')
-                setattr(idem.data, var, np.delete(getattr(idem.data, var), dupe_indices, axis=time_axis))
+                # time_axis = idem.ds.variables[var].dimensions.index('time')
+                setattr(idem.data, var, getattr(idem.data, var)[time_mask, ...])  # assume time is first
+                # setattr(idem.data, var, np.delete(getattr(idem.data, var), dupe_indices, axis=time_axis))
         for time in self.obj_iter(idem.time):
             try:
                 time_axis = idem.ds.variables[time].dimensions.index('time')
                 setattr(idem.time, time, np.delete(getattr(idem.time, time), dupe_indices, axis=time_axis))
             except KeyError:
-                # This is hopefully one of the additional time variable which doesn't exist in the netCDF dataset.
+                # This is hopefully one of the additional time variables which doesn't exist in the netCDF dataset.
                 # Just delete the relevant indices by assuming that time is the first axis.
                 setattr(idem.time, time, np.delete(getattr(idem.time, time), dupe_indices, axis=0))
 
