@@ -531,8 +531,8 @@ class OpenBoundary:
 
     def add_nested_forcing(self, fvcom_name, coarse_name, coarse, interval=1, constrain_coordinates=False):
         """
-        Interpolate the given data onto the open boundary nodes in `Model.grid.open_boundary_nodes' for the period
-        defined in `time'.
+        Interpolate the given data onto the open boundary nodes for the period from `self.time.start' to
+        `self.time.end'.
 
         Parameters
         ----------
@@ -542,13 +542,13 @@ class OpenBoundary:
             The data field name to use from the coarse object.
         coarse : RegularReader
             The regularly gridded data to interpolate onto the open boundary nodes. This must include time, lon,
-            lat and depth data as well as the time series to interpolate (4D volume).
+            lat and depth data as well as the time series to interpolate (4D volume [time, depth, lat, lon]).
+        interval : str, optional
+            Time sampling interval in days. Defaults to 1 day.
         constrain_coordinates : bool
             Set to True to constrain the open boundary coordinates (lon, lat, depth) to the supplied coarse data.
             This essentially squashes the open boundary to fit inside the coarse data and is, therefore, a bit of a
             fudge! Defaults to False.
-        interval : str, optional
-            Time sampling interval in days. Defaults to 1 day.
 
         """
 
