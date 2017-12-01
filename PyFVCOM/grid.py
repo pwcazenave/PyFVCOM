@@ -590,6 +590,7 @@ class OpenBoundary:
             x[x > coarse.grid.lon.max()] = coarse.grid.lon.max()
             y[y < coarse.grid.lat.min()] = coarse.grid.lat.min()
             y[y > coarse.grid.lat.max()] = coarse.grid.lat.max()
+
             # The depth data work differently as we need to squeeze each FVCOM water column into the available coarse
             # data. The only way to do this is to adjust each FVCOM water column in turn by comparing with the
             # closest coarse depth.
@@ -608,6 +609,21 @@ class OpenBoundary:
             # Fix all depths which are shallower than the shallowest coarse depth. This is more straightforward as
             # it's a single minimum across all the open boundary positions.
             z[z < coarse.grid.depth.min()] = coarse.grid.depth.min()
+
+        # Make arrays of lon, lat, depth and time. Need to make the coordinates match the coarse data shape and then
+        # flatten the lot. We should be able to do the interpolation in one shot this way, but we have to be
+        # careful our coarse data covers our model domain (space and time).
+        nt = len(self.nest.time.time)
+        nx = len(boundary_points)
+        nz = z.shape[-1]
+        boundary_grid = np.array((np.tile(self.nest.time.time, [nx, nz, 1]).T.ravel(),
+                                  np.tile(z.T, [nt, 1, 1]).ravel(),
+                                  np.tile(y, [nz, nt, 1]).transpose(1, 0, 2).ravel(),
+                                  np.tile(x, [nz, nt, 1]).transpose(1, 0, 2).ravel())).T
+        ft = RegularGridInterpolator((coarse.time.time, coarse.grid.depth, coarse.grid.lat, coarse.grid.lon),
+                                     getattr(coarse.data, coarse_name), method='linear', fill_value=np.nan)
+        # Reshape the results to match the un-ravelled boundary_grid array.
+        interpolated_coarse_data = ft(boundary_grid).reshape([nt, nz, -1])
 
         # Drop the interpolated data into the nest object.
         setattr(self.nest, fvcom_name, interpolated_coarse_data)
