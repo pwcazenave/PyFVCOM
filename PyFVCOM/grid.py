@@ -566,7 +566,7 @@ class OpenBoundary:
         # Populate the time data.
         self.nest.time = type('time', (), {})()
         self.nest.time.interval = interval
-        self.nest.time.datetime = date_range(self.start, self.end, inc=interval)
+        self.nest.time.datetime = date_range(self.time.start, self.time.end, inc=interval)
         self.nest.time.time = date2num(getattr(self.nest.time, 'datetime'), units='days since 1858-11-17 00:00:00')
         self.nest.time.Itime = np.floor(getattr(self.nest.time, 'time'))  # integer Modified Julian Days
         self.nest.time.Itime2 = (getattr(self.nest.time, 'time') - getattr(self.nest.time, 'Itime')) * 24 * 60 * 60 * 1000  # milliseconds since midnight
