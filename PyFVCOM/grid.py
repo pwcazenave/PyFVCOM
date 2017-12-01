@@ -422,76 +422,66 @@ class OpenBoundary:
 
         forcing = []
 
-        dates = date_range(self.start - relativedelta(days=1), self.end + relativedelta(days=1), inc=interval / 24)
-        self.time = dates
+        dates = date_range(self.time.start - relativedelta(days=1), self.time.end + relativedelta(days=1), inc=interval / 24)
+        self.tide.time = dates
         # UTide needs MATLAB times.
         times = mtime(dates)
 
         if predict == 'zeta':
-            obc_ids = self.grid.open_boundary_nodes
+            amplitude_var, phase_var = 'ha', 'hp'
+            x, y = self.grid.lon, self.grid.lat
+            obc = self.nodes
+        elif predict == 'u':
+            amplitude_var, phase_var = 'ua', 'up'
+            x, y = self.grid.lonc, self.grid.latc
+            obc = self.elements
+        elif predict == 'v':
+            amplitude_var, phase_var = 'va', 'vp'
+            x, y = self.grid.lonc, self.grid.latc
+            obc = self.elements
+
+        xdim = len(obc)
+        latitudes = y[obc]
+
+        with Dataset(str(tpxo_harmonics), 'r') as tides:
+            tpxo_const = [''.join(i).upper().strip() for i in tides.variables['con'][:].astype(str)]
+            # If we've been given variables that aren't in the TPXO data, just find the indices we do have.
+            cidx = [tpxo_const.index(i) for i in constituents if i in tpxo_const]
+            # Save the names of the constituents we've actually used.
+            self.tide.constituents = [constituents[i] for i in cidx]
+            amplitudes = np.empty((xdim, len(cidx))) * np.nan
+            phases = np.empty((xdim, len(cidx))) * np.nan
+
+            for xi, xy in enumerate(zip(x[obc], y[obc])):
+                idx = [np.argmin(np.abs(tides['lon_z'][:, 0] - xy[0])),
+                       np.argmin(np.abs(tides['lat_z'][0, :] - xy[1]))]
+                amplitudes[xi, :] = tides.variables[amplitude_var][cidx, idx[0], idx[1]]
+                phases[xi, :] = tides.variables[phase_var][cidx, idx[0], idx[1]]
+
+        # Prepare the UTide inputs for the constituents in the TPXO data.
+        const_idx = np.asarray([ut_constants['const']['name'].tolist().index(i) for i in self.tide.constituents])
+        frq = ut_constants['const']['freq'][const_idx]
+
+        coef = Bunch(name=self.tide.constituents, mean=0, slope=0)
+        coef['aux'] = Bunch(reftime=729572.47916666674, lind=const_idx, frq=frq)
+        coef['aux']['opt'] = Bunch(twodim=False, nodsatlint=False, nodsatnone=False,
+                                   gwchlint=False, gwchnone=False, notrend=False, prefilt=[])
+
+        args = [(latitudes[i], times, coef, amplitudes[i], phases[i], noisy) for i in range(xdim)]
+        if serial:
+            results = []
+            for arg in args:
+                results.append(self._predict_tide(arg))
         else:
-            obc_ids = self.grid.obc_elems
-
-        for obc in obc_ids:
-
-            if predict == 'zeta':
-                amplitude_var, phase_var = 'ha', 'hp'
-                x, y = self.grid.lon, self.grid.lat
-                xdim = len(obc)
-            elif predict == 'u':
-                amplitude_var, phase_var = 'ua', 'up'
-                x, y = self.grid.lonc, self.grid.latc
-                xdim = len(obc)
-            elif predict == 'v':
-                amplitude_var, phase_var = 'va', 'vp'
-                x, y = self.grid.lonc, self.grid.latc
-                xdim = len(obc)
-
-            latitudes = y[obc]
-
-            with Dataset(str(tpxo_harmonics), 'r') as tides:
-                tpxo_const = [''.join(i).upper().strip() for i in tides.variables['con'][:].astype(str)]
-                # If we've been given variables that aren't in the TPXO data, just find the indices we do have.
-                cidx = [tpxo_const.index(i) for i in constituents if i in tpxo_const]
-                # Save the names of the constituents we've actually used.
-                self.tide.constituents = [constituents[i] for i in cidx]
-                amplitudes = np.empty((xdim, len(cidx))) * np.nan
-                phases = np.empty((xdim, len(cidx))) * np.nan
-
-                for xi, xy in enumerate(zip(x[obc], y[obc])):
-                    idx = [np.argmin(np.abs(tides['lon_z'][:, 0] - xy[0])),
-                           np.argmin(np.abs(tides['lat_z'][0, :] - xy[1]))]
-                    amplitudes[xi, :] = tides.variables[amplitude_var][cidx, idx[0], idx[1]]
-                    phases[xi, :] = tides.variables[phase_var][cidx, idx[0], idx[1]]
-
-            # Prepare the UTide inputs for the constituents in the TPXO data.
-            const_idx = np.asarray([ut_constants['const']['name'].tolist().index(i) for i in self.tide.constituents])
-            frq = ut_constants['const']['freq'][const_idx]
-
-            coef = Bunch(name=self.tide.constituents, mean=0, slope=0)
-            coef['aux'] = Bunch(reftime=729572.47916666674, lind=const_idx, frq=frq)
-            coef['aux']['opt'] = Bunch(twodim=False, nodsatlint=False, nodsatnone=False,
-                                       gwchlint=False, gwchnone=False, notrend=False, prefilt=[])
-
-            args = [(latitudes[i], times, coef, amplitudes[i], phases[i], noisy) for i in range(xdim)]
-            if serial:
-                results = []
-                for arg in args:
-                    results.append(self._predict_tide(arg))
+            if not pool_size:
+                pool = multiprocessing.Pool()
             else:
-                if not pool_size:
-                    pool = multiprocessing.Pool()
-                else:
-                    pool = multiprocessing.Pool(pool_size)
-                results = pool.map(self._predict_tide, args)
-                pool.close()
-
-            # Make a long list (rather than a list per open boundary so it's easier to write to netCDF. This,
-            # however, may make it a little harder to use for nesting.
-            forcing += results
+                pool = multiprocessing.Pool(pool_size)
+            results = pool.map(self._predict_tide, args)
+            pool.close()
 
         # Dump the results into the object.
-        setattr(self, predict, np.asarray(forcing))
+        setattr(self.tide, predict, np.asarray(results))
 
     @staticmethod
     def _predict_tide(args):
