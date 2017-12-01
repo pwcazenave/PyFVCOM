@@ -405,7 +405,7 @@ class OpenBoundary:
         predict : str, optional
             Type of data to predict. Select 'zeta' (default), 'u' or 'v'.
         interval : str, optional
-            Time sampling interval in days. Defaults to 1 day.
+            Time sampling interval in days. Defaults to 1 hour.
         constituents : list, optional
             List of constituent names to use in UTide.reconstruct. Defaults to ['M2'].
         serial : bool, optional
