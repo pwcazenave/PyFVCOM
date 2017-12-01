@@ -576,16 +576,14 @@ class OpenBoundary:
             boundary_points = self.elements
             x = self.grid.lonc
             y = self.grid.latc
-            layers = self.sigma.layers_center
             # Keep positive down depths.
-            z = 0 - np.diff(-self.sigma.levels_center, axis=1) * self.grid.h_center[:, np.newaxis]
+            z = -self.sigma.layers_center_z
         else:
             boundary_points = self.nodes
             x = self.grid.lon
             y = self.grid.lat
-            layers = self.sigma.layers
             # Keep positive down depths.
-            z = np.diff(-self.sigma.levels, axis=1) * self.grid.h[:, np.newaxis]
+            z = -self.sigma.layers_z
 
         if constrain_coordinates:
             x[x < coarse.grid.lon.min()] = coarse.grid.lon.min()
