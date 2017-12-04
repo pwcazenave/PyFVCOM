@@ -8,6 +8,7 @@ from __future__ import print_function, division
 import os
 import sys
 import math
+import networkx
 import scipy.spatial
 import multiprocessing
 
@@ -15,6 +16,7 @@ import numpy as np
 
 from dateutil.relativedelta import relativedelta
 from scipy.interpolate import RegularGridInterpolator
+from scipy.spatial import Delaunay
 from functools import partial
 from matplotlib.dates import date2num as mtime
 from matplotlib.tri import CubicTriInterpolator
@@ -328,6 +330,28 @@ class Domain:
             x, y = self.grid.lonc, self.grid.latc
 
         return self._closest_point(x, y, self.grid.lonc, self.grid.latc, where, threshold=threshold, vincenty=vincenty, haversine=haversine)
+
+    def horizontal_transect_elements(self, positions):
+        """
+        Extract element IDs along a line defined by `positions' [[x1, y1], [x2, y2], ..., [xn, yn]].
+
+        Parameters
+        ----------
+        positions : np.ndarray
+            Array of positions along which to sample the grid. Units are spherical decimal degrees.
+
+        Returns
+        -------
+        indices : np.ndarray
+            Indices of the grid element positions comprising the transect.
+        distance : np.ndarray
+            Distance (in metres) along the transect.
+
+        """
+
+        indices, distance = element_sample(self.grid.lonc, self.grid.latc, self.grid.triangles, positions)
+
+        return indices, distance
 
 
 class OpenBoundary:
@@ -1898,6 +1922,82 @@ def line_sample(x, y, positions, num=0, return_distance=False, noisy=False):
         return idx, line, dist
     else:
         return idx, line
+
+
+def element_sample(xc, yc, triangles, positions):
+    """
+    Find the shortest path between the sets of positions using the unstructured grid triangulation.
+
+    Returns element indices and a distance along the line (in metres).
+
+    Parameters
+    ----------
+    xc, yc : np.ndarray
+        Position arrays for the unstructured grid element centres (decimal degrees).
+    triangles : np.ndarray
+        Triangulation matrix to find the connected elements. Shape is [nele, 3].
+    positions : np.ndarray
+        Coordinate pairs of the sample line coordinates np.array([[x1, y1], ..., [xn, yn]] in decimal degrees.
+
+    Returns
+    -------
+    indices : np.ndarray
+        List of indices for the elements used in the transect.
+    distance : np.ndarray, optional
+        The distance along the line in metres described by the elements in indices.
+
+    Notes
+    -----
+    This is lifted and adjusted for use with PyFVCOM from PySeidon.utilities.shortest_element_path.
+
+    """
+
+    grid = np.array((xc, yc)).T
+
+    triangulation = Delaunay(list(map(tuple, grid)))
+    # Replace the triangulation with the FVCOM one.
+    # triangulation.vertices = triangles.astype(int)
+
+    # Create a set for edges that are indices of the points.
+    edges = []
+    for vertex in triangulation.vertices:
+        # For each edge of the triangle, sort the vertices (sorting avoids duplicated edges being added to the set)
+        # and add to the edges set.
+        edge = sorted([vertex[0], vertex[1]])
+        a = grid[edge[0]]
+        b = grid[edge[1]]
+        weight = (np.hypot(a[0] - b[0], a[1] - b[1]))
+        edges.append((edge[0], edge[1], {'weight': weight}))
+
+        edge = sorted([vertex[0], vertex[2]])
+        a = grid[edge[0]]
+        b = grid[edge[1]]
+        weight = (np.hypot(a[0] - b[0], a[1] - b[1]))
+        edges.append((edge[0], edge[1], {'weight': weight}))
+
+        edge = sorted([vertex[1], vertex[2]])
+        a = grid[edge[0]]
+        b = grid[edge[1]]
+        weight = (np.hypot(a[0] - b[0], a[1] - b[1]))
+        edges.append((edge[0], edge[1], {'weight': weight}))
+
+    # Make a graph based on the Delaunay triangulation edges.
+    graph = networkx.Graph(edges)
+
+    # List of elements forming the shortest path.
+    elements = []
+    for position in zip(positions[:-1], positions[1:]):
+        # We need grid indices for networkx.shortest_path rather than positions, so for the current pair of positions,
+        # find the closest element IDs.
+        source = np.argmin(np.hypot(xc - position[0][0], yc - position[0][1]))
+        target = np.argmin(np.hypot(xc - position[1][0], yc - position[1][1]))
+        elements += networkx.shortest_path(graph, source=source, target=target, weight='weight')
+
+    # Calculate the distance along the transect in metres (use the fast-but-less-accurate Haversine function rather
+    # than the slow-but-more-accurate Vincenty distance function).
+    distance = np.cumsum([0] + [haversine_distance((xc[i], yc[i]), (xc[i + 1], yc[i + 1])) for i in elements[:-1]])
+
+    return np.asarray(elements), distance
 
 
 def connectivity(p, t):
