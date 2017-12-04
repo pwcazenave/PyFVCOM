@@ -27,6 +27,123 @@ except ImportError:
 rcParams['mathtext.default'] = 'regular'  # use non-LaTeX fonts
 
 
+class Depth:
+    """ Create depth-resolved plots based on output from FVCOM.
+
+    Provides
+    --------
+    plot_slice
+
+    Author(s)
+    ---------
+    Pierre Cazenave (Plymouth Marine Laboratory)
+
+    """
+
+    def __init__(self, dataset, figure=None, figsize=(20, 8), axes=None, cmap='viridis', title=None, legend=False,
+                 fs=10, date_format=None, cb_label=None, hold=False):
+        """
+        Parameters
+        ----------
+        dataset : Dataset, PyFVCOM.read.FileReader
+            netCDF4 Dataset or PyFVCOM.read.FileReader object.
+        figure : Figure, optional
+            Matplotlib Figure object. A figure object is created if not
+            provided.
+        figsize : tuple(float), optional
+            Figure size in cm. This is only used if a new Figure object is
+            created.
+        axes : Axes, optional
+            Matplotlib axes object. An Axes object is created if not
+            provided.
+        cmap : None, Colormap
+            Provide a colourmap to use when plotting vectors or 2D plots (anything with a magnitude). Defaults to
+            'viridis'.
+        title : str, optional
+            Title to use when creating the plot.
+        fs : int, optional
+            Font size to use when rendering plot text.
+        legend : bool, optional
+            Set to True to add a legend. Defaults to False.
+        date_format : str
+            Date format to use.
+        cb_label : str
+            Label to apply to the colour bar. Defaults to no label.
+        hold : bool, optional
+            Set to True to keep existing plots when adding to an existing figure. Defaults to False.
+
+        """
+        self.ds = dataset
+        self.figure = figure
+        self.axes = axes
+        self.fs = fs
+        self.title = title
+        self.figsize = figsize
+        self.hold = hold
+        self.add_legend = legend
+        self.cmap = cmap
+        self.date_format = date_format
+        self.cb_label = cb_label
+
+        # Plot instances (initialise to None for truthiness test later)
+        self.slice_plot = None
+
+        # Are we working with a FileReader object or a bog-standard netCDF4 Dataset?
+        self._FileReader = False
+        if isinstance(dataset, (FileReader, Domain)):
+            self._FileReader = True
+
+        # Initialise the figure
+        self.__init_figure()
+
+    def __init_figure(self):
+        # Initialise the figure
+        if self.figure is None:
+            figsize = (cm2inch(self.figsize[0]), cm2inch(self.figsize[1]))
+            self.figure = plt.figure(figsize=figsize)
+
+        # Create plot axes
+        if not self.axes:
+            self.axes = self.figure.add_subplot(1, 1, 1)
+
+        if self.title:
+            self.axes.set_title(self.title)
+
+    def plot_slice(self, horizontal, depth, variable, fill_seabed=False):
+        """
+
+        Parameters
+        ----------
+        horizontal : np.ndarray
+            The horizontal array (x-axis). This can be distance along the slice or a coordinate.
+        depth : np.ndarray
+            The vertical depth array (positive-down).
+        variable : np.ndarray
+            The variable to plot in the vertical. Its shape must be compatible with `horizontal' and `depth'.
+        fill_seabed : bool, optional
+            Set to True to fill the seabed from the maximum water depth to the edge of the plot with gray.
+
+        """
+
+        # I'm not much of a fan of all this flipping and transposing. It feels like it's going to be a pain to debug
+        # when it inevitably does something you don't expect.
+        try:
+            self.slice_plot = self.axes.pcolormesh(horizontal, -depth, np.flipud(variable), cmap=self.cmap)
+        except TypeError:
+            # Try flipping the data array, that might make it work.
+            self.slice_plot = self.axes.pcolormesh(horizontal, -depth, np.flipud(variable.T), cmap=self.cmap)
+
+        if fill_seabed:
+            self.axes.fill_between(horizontal, self.axes.get_ylim()[0], -np.max(depth, axis=0), color='0.6')
+
+        divider = make_axes_locatable(self.axes)
+        cax = divider.append_axes("right", size="3%", pad=0.1)
+        self.colorbar = self.figure.colorbar(self.slice_plot, cax=cax)
+        self.colorbar.ax.tick_params(labelsize=self.fs)
+        if self.cb_label:
+            self.colorbar.set_label(self.cb_label)
+
+
 class Time:
     """ Create time series plots based on output from FVCOM.
 
