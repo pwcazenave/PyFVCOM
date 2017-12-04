@@ -1616,8 +1616,8 @@ def mesh2grid(meshX, meshY, meshZ, nx, ny, thresh=None, noisy=False):
 def line_sample(x, y, positions, num=0, return_distance=False, noisy=False):
     """
     Function to take an unstructured grid of positions x and y and find the
-    points which fall closest to a line defined by the coordinate pairs start
-    and end.
+    points which fall closest to a line defined by the coordinate pairs
+    `positions'.
 
     If num=0 (default), then the line will be sampled at each nearest node; if
     num is greater than 1, then the line will be subdivided into num segments
@@ -1631,9 +1631,9 @@ def line_sample(x, y, positions, num=0, return_distance=False, noisy=False):
 
     Parameters
     ----------
-    x, y : ndarray
+    x, y : np.ndarray
         Position arrays for the unstructured grid.
-    positions : ndarray
+    positions : np.ndarray
         Coordinate pairs of the sample line coordinates [[xpos, ypos], ...,
         [xpos, ypos]].  Units must match those in (x, y).
     num : int, optional
@@ -1650,11 +1650,11 @@ def line_sample(x, y, positions, num=0, return_distance=False, noisy=False):
     -------
     idx : list
         List of indices for the nodes used in the line sample.
-    line : ndarray
-        List of positions which fall along the line described by (start, end).
+    line : np.ndarray
+        List of positions which fall along the line described by `positions'.
         These are the projected positions of the nodes which fall closest to
         the line (not the positions of the nodes themselves).
-    distance : ndarray, optional
+    distance : np.ndarray, optional
         If `return_distance' is True, return the distance along the line
         described by the nodes in idx.
 
@@ -1672,11 +1672,11 @@ def line_sample(x, y, positions, num=0, return_distance=False, noisy=False):
 
         Parameters
         ----------
-        xs, ys : ndarray
+        xs, ys : np.ndarray
             Node position arrays.
-        start, end : ndarray
+        start, end : np.ndarray
             Coordinate pairs for the start and end of the sample line.
-        pdist : ndarray
+        pdist : np.ndarray
             Distance of the nodes in xs and ys from the line defined by
             `start' and `end'.
 
@@ -1684,7 +1684,7 @@ def line_sample(x, y, positions, num=0, return_distance=False, noisy=False):
         -------
         idx : list
             List of indices for the nodes used in the line sample.
-        line : ndarray
+        line : np.ndarray
             List of positions which fall along the line described by (start,
             end). These are the projected positions of the nodes which fall
             closest to the line (not the positions of the nodes themselves).
@@ -3107,18 +3107,14 @@ def getcrossectiontriangles(cross_section_pnts, trinodes, X, Y, dist_res):
     the triangulation trinodes, X, Y. Returns the location of the sub sampled points (sub_samp), which
     triangle they are in (sample_cells) and their nearest nodes (sample_nodes).
 
-
     Parameters
     ----------
     cross_section_pnts : 2x2 list_like
         The two ends of the cross section line.
-
     trinodes : list-like
         Unstructured grid triangulation table
-
     X,Y : list-like
         Node positions
-
     dist_res : float
         Approximate distance at which to sample the line
 
@@ -3126,13 +3122,10 @@ def getcrossectiontriangles(cross_section_pnts, trinodes, X, Y, dist_res):
     -------
     sub_samp : 2xN list
         Positions of sample points
-
     sample_cells : N list
         The cells within which the subsample points fall. -1 indicates that the point is outside the grid.
-
     sample_nodes : N list
         The nodes nearest the subsample points. -1 indicates that the point is outside the grid.
-
 
     Example
     -------
