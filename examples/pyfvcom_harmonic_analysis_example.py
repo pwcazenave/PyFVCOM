@@ -1,5 +1,12 @@
 
-%matplotlib inline
+# coding: utf-8
+
+# In[1]:
+
+get_ipython().magic('matplotlib inline')
+
+
+# In[2]:
 
 from __future__ import print_function
 
@@ -15,9 +22,12 @@ from matplotlib import rcParams
 from matplotlib import cm
 from netCDF4 import num2date
 
-from PyFVCOM.read_FVCOM_results import ncread
+from PyFVCOM.read import ncread
 from PyFVCOM.tidal_ellipse import ap2ep
 from tappy import TAPPY
+
+
+# In[5]:
 
 # Load model output.
 fvcom = 'sample.nc'
@@ -35,6 +45,9 @@ scaling = 2000
 # Find the model nodes which fall within the subset defined above.
 FVCOM = ncread(fvcom, vars=varlist, dims=dims, noisy=False)
 
+
+# In[6]:
+
 # Create a time array for the TAPPy call.
 FVCOM['datetimes'] = num2date(FVCOM['time'], 'days since 1858-11-17 00:00:00')
 years = [i.year for i in FVCOM['datetimes']]
@@ -45,11 +58,17 @@ minutes = [i.minute for i in FVCOM['datetimes']]
 seconds = [i.second for i in FVCOM['datetimes']]
 Times = np.column_stack((years, months, days, hours, minutes, seconds))
 
+
+# In[7]:
+
 # Find the indices of the locations which fall within the subset.
 elems = np.where((FVCOM['lonc'] > subset[0].min()) *
                  (FVCOM['lonc'] < subset[0].max()) *
                  (FVCOM['latc'] > subset[1].min()) *
                  (FVCOM['latc'] < subset[1].max()))[0]
+
+
+# In[10]:
 
 # Create dicts for the results.
 uharmonics, vharmonics = {}, {}
@@ -84,6 +103,9 @@ for i, idx in enumerate(elems):
     uharmonics[key] = uharm
     vharmonics[key] = vharm
 
+
+# In[7]:
+
 # Create the mapping object ready for the plot.
 m = Basemap(llcrnrlon=subset[0].min(),
             llcrnrlat=subset[1].min(),
@@ -103,6 +125,9 @@ meridians = np.arange(np.floor(subset[0].min()),
                       np.ceil(subset[0].max()), 0.05)
 
 x, y = m(FVCOM['lonc'], FVCOM['latc'])
+
+
+# In[8]:
 
 # Extract all the ellipses for the current subset so we can plot them 
 # more easily.
@@ -172,5 +197,9 @@ cb = fig.colorbar(ellipses, cax=cax)
 cb.set_label("Semi-major axis ($ms^{-1}$)")
 
 ax.set_title('$M_2$ tidal ellipses')
+
+
+# In[8]:
+
 
 
