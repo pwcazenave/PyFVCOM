@@ -331,6 +331,32 @@ class Domain:
 
         return self._closest_point(x, y, self.grid.lonc, self.grid.latc, where, threshold=threshold, vincenty=vincenty, haversine=haversine)
 
+    def horizontal_transect_nodes(self, positions):
+        """
+        Extract node IDs along a line defined by `positions' [[x1, y1], [x2, y2], ..., [xn, yn]].
+
+        Parameters
+        ----------
+        positions : np.ndarray
+            Array of positions along which to sample the grid. Units are spherical decimal degrees.
+
+        Returns
+        -------
+        indices : np.ndarray
+            Indices of the grid node positions comprising the transect.
+        distance : np.ndarray
+            Distance (in metres) along the transect.
+
+        """
+
+        # Since we're letting the transect positions be specified in spherical coordinates and we want to return the
+        # distance in metres, we need to do this in two steps: first, find the indices of the transect from the
+        # spherical grid, and secondly, find the distance in metres from the cartesian grid.
+        indices, _ = line_sample(self.grid.lon, self.grid.lat, positions)
+        distance = np.cumsum([0] + [np.hypot(self.grid.x[i + 1] - self.grid.x[i], self.grid.y[i + 1] - self.grid.y[i]) for i in indices[:-1]])
+
+        return indices, distance
+
     def horizontal_transect_elements(self, positions):
         """
         Extract element IDs along a line defined by `positions' [[x1, y1], [x2, y2], ..., [xn, yn]].
