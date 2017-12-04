@@ -375,7 +375,7 @@ class Domain:
 
         """
 
-        indices, distance = element_sample(self.grid.lonc, self.grid.latc, self.grid.triangles, positions)
+        indices, distance = element_sample(self.grid.lonc, self.grid.latc, positions)
 
         return indices, distance
 
@@ -1950,7 +1950,7 @@ def line_sample(x, y, positions, num=0, return_distance=False, noisy=False):
         return idx, line
 
 
-def element_sample(xc, yc, triangles, positions):
+def element_sample(xc, yc, positions):
     """
     Find the shortest path between the sets of positions using the unstructured grid triangulation.
 
@@ -1960,8 +1960,6 @@ def element_sample(xc, yc, triangles, positions):
     ----------
     xc, yc : np.ndarray
         Position arrays for the unstructured grid element centres (decimal degrees).
-    triangles : np.ndarray
-        Triangulation matrix to find the connected elements. Shape is [nele, 3].
     positions : np.ndarray
         Coordinate pairs of the sample line coordinates np.array([[x1, y1], ..., [xn, yn]] in decimal degrees.
 
@@ -1980,9 +1978,7 @@ def element_sample(xc, yc, triangles, positions):
 
     grid = np.array((xc, yc)).T
 
-    triangulation = Delaunay(list(map(tuple, grid)))
-    # Replace the triangulation with the FVCOM one.
-    # triangulation.vertices = triangles.astype(int)
+    triangulation = Delaunay(grid)
 
     # Create a set for edges that are indices of the points.
     edges = []
