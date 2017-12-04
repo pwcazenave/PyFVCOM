@@ -2838,10 +2838,9 @@ def elems2nodes(elems, tri, nvert=None):
 
 def nodes2elems(nodes, tri):
     """
-    Calculate a element centre value based on the average value for the
-    nodes from which it is formed. This necessarily involves an average,
-    so the conversion from nodes2elems and elems2nodes is not
-    necessarily reversible.
+    Calculate an element-centre value based on the average value for the
+    nodes from which it is formed. This involves an average, so the
+    conversion from nodes to elements cannot be reversed without smoothing.
 
     Parameters
     ----------
@@ -2861,10 +2860,8 @@ def nodes2elems(nodes, tri):
 
     if np.ndim(nodes) == 1:
         elems = nodes[tri].mean(axis=-1)
-    elif np.ndim(nodes) == 2:
-        elems = nodes[..., tri].mean(axis=-1)
     else:
-        raise Exception('Too many dimensions (maximum of two)')
+        elems = nodes[..., tri].mean(axis=-1)
 
     return elems
 
