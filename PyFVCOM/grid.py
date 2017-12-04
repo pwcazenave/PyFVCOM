@@ -199,7 +199,7 @@ class Domain:
         self.grid.bounding_box = (np.min(self.grid.lon), np.max(self.grid.lon),
                                   np.min(self.grid.lat), np.max(self.grid.lat))
 
-    def _closest_point(self, x, y, lon, lat, where, threshold=None, vincenty=False, haversine=False):
+    def _closest_point(self, x, y, lon, lat, where, threshold=np.inf, vincenty=False, haversine=False):
         """
         Find the index of the closest node to the supplied position (x, y). Set `cartesian' to True for cartesian
         coordinates (defaults to spherical).
@@ -261,7 +261,7 @@ class Domain:
 
         return index
 
-    def closest_node(self, where, cartesian=False, threshold=None, vincenty=False, haversine=False):
+    def closest_node(self, where, cartesian=False, threshold=np.inf, vincenty=False, haversine=False):
         """
         Find the index of the closest node to the supplied position (x, y). Set `cartesian' to True for cartesian
         coordinates (defaults to spherical).
@@ -296,7 +296,7 @@ class Domain:
 
         return self._closest_point(x, y, self.grid.lon, self.grid.lat, where, threshold=threshold, vincenty=vincenty, haversine=haversine)
 
-    def closest_element(self, where, cartesian=False, threshold=None, vincenty=False, haversine=False):
+    def closest_element(self, where, cartesian=False, threshold=np.inf, vincenty=False, haversine=False):
         """
         Find the index of the closest element to the supplied position (x, y). Set `cartesian' to True for cartesian
         coordinates (defaults to spherical).
