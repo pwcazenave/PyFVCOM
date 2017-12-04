@@ -15,6 +15,7 @@ from netCDF4 import Dataset, MFDataset, num2date, date2num
 
 from PyFVCOM.coordinate import lonlat_from_utm, utm_from_lonlat
 from PyFVCOM.grid import unstructured_grid_volume, nodes2elems, Domain
+from PyFVCOM.utilities.general import fix_range
 
 
 class FileReader(Domain):
@@ -456,6 +457,17 @@ class FileReader(Domain):
                     except IndexError:
                         # Maybe the array's the wrong way around. Flip it and try again.
                         setattr(self.grid, var, nodes2elems(getattr(self.grid, var.split('_')[0]).T, self.grid.triangles))
+
+        # Make depth-resolved sigma data. This is useful for plotting things.
+        for var in self.obj_iter(self.grid):
+            if var.startswith('sig'):
+                if var.endswith('_center'):
+                    z = self.grid.h_center
+                else:
+                    z = self.grid.h
+                # Set the sigma data to the 0-1 range for siglay so that the maximum depth value is equal to the
+                # actual depth. This may be a problem.
+                setattr(self.grid, '{}_z'.format(var), fix_range(getattr(self.grid, var), 0, 1) * z)
 
         # Convert the given W/E/S/N coordinates into node and element IDs to subset.
         if self._bounding_box:
