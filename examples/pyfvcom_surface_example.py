@@ -1,5 +1,12 @@
 
-%matplotlib inline
+# coding: utf-8
+
+# In[1]:
+
+get_ipython().magic('matplotlib inline')
+
+
+# In[2]:
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -8,7 +15,10 @@ from cmocean import cm
 from mpl_toolkits.basemap import Basemap
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
-from PyFVCOM.read_FVCOM_results import ncread
+from PyFVCOM.read import ncread
+
+
+# In[3]:
 
 # Load the model output.
 fvcom = 'sample.nc'
@@ -20,6 +30,9 @@ dims = {'time': ':20'}
 varlist = ('lon', 'lat', 'nv', 'zeta', 'Times')
 
 FVCOM = ncread(fvcom, vars=varlist, dims=dims, noisy=True)
+
+
+# In[4]:
 
 # Lay the groundwork for a plot of the model surface.
 
@@ -46,12 +59,15 @@ meridians = np.arange(np.floor(extents[0]), np.ceil(extents[1]), 2)
 
 x, y = m(FVCOM['lon'], FVCOM['lat'])
 
+
+# In[5]:
+
 # Plot the surface elevation at the 6th time step.
 
 fig = plt.figure(figsize=(10, 10))  # units are inches for the size
 ax = fig.add_subplot(111)
 
-tp = ax.tripcolor(x, y, triangles, FVCOM['zeta'][5, :], cmap=cm.freesurface)
+tp = ax.tripcolor(x, y, triangles, FVCOM['zeta'][5, :], cmap=cm.balance)
 tp.set_clim(-5, 5)  # clip the colours to +/- 5m.
 
 # Add the coastline.
@@ -67,6 +83,10 @@ m.drawmeridians(meridians, labels=[0, 0, 0, 1], linewidth=0)
 # cb = fig.colorbar(tp, cax=cax)
 # cb.set_label("Surface elevation (m)")
 
-ax.set_title(''.join(FVCOM['Times'][-1, :-7]))
+ax.set_title(''.join(FVCOM['Times'][-1, :-7].astype(str)))
+
+
+# In[ ]:
+
 
 
