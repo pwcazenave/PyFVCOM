@@ -405,10 +405,13 @@ class FileReader(Domain):
             self.grid.nv = self.ds.variables['nv'][:].astype(int)  # force integers even though they should already be so
             self.grid.triangles = copy.copy(self.grid.nv.T - 1)  # zero-indexed for python
         except KeyError:
-            # If we don't have a triangulation, make one.
+            # If we don't have a triangulation, make one. Warn that if we've made one, it might not match the
+            # original triangulation used in the model run.
             triangulation = tri.Triangulation(self.grid.lon, self.grid.lat)
             self.grid.triangles = triangulation.triangles
             self.grid.nv = self.grid.triangles.T + 1
+            self.dims.nele = self.grid.triangles.shape[0]
+            warn('Triangulation created from node positions. This may be inconsistent with the original triangulation.')
 
         # Fix broken triangulations if necessary.
         if self.grid.nv.min() != 1:
