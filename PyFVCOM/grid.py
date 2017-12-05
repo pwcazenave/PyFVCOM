@@ -3209,9 +3209,28 @@ def getcrossectiontriangles(cross_section_pnts, trinodes, X, Y, dist_res):
 
 
 def isintriangle(tri_x, tri_y, point_x, point_y):
-    # Returns a boolean as to whether the point (point_x, point_y) is within the triangle (tri_x, tri_y)
-    # method from http://totologic.blogspot.co.uk/2014/01/accurate-point-in-triangle-test.html without edge test
-    # used in getcrossectiontriangles
+    """
+    Returns a boolean as to whether the point (point_x, point_y) is within the triangle (tri_x, tri_y)
+
+    Parameters
+    ----------
+    tri_x, tri_y : np.ndarray
+        Coordinates of the triangle vertices.
+    point_x, point_y : float
+        Position to test.
+
+    Returns
+    -------
+    isin : bool
+        True if the position (point_x, point_y) is in the triangle defined by (tri_x, tri_y).
+
+    Notes
+    -----
+    Method from http://totologic.blogspot.co.uk/2014/01/accurate-point-in-triangle-test.html without edge test used
+    in getcrossectiontriangles.
+
+    """
+
     x1 = tri_x[0]
     x2 = tri_x[1]
     x3 = tri_x[2]
@@ -3220,11 +3239,10 @@ def isintriangle(tri_x, tri_y, point_x, point_y):
     y2 = tri_y[1]
     y3 = tri_y[2]
 
-    a = ((y2 - y3)*(point_x - x3) + (x3 - x2)*(point_y - y3)) / ((y2 - y3)*(x1 - x3) + (x3 - x2)*(y1 - y3))
-    b = ((y3 - y1)*(point_x - x3) + (x1 - x3)*(point_y - y3)) / ((y2 - y3)*(x1 - x3) + (x3 - x2)*(y1 - y3))
+    a = ((y2 - y3) * (point_x - x3) + (x3 - x2) * (point_y - y3)) / ((y2 - y3) * (x1 - x3) + (x3 - x2) * (y1 - y3))
+    b = ((y3 - y1) * (point_x - x3) + (x1 - x3) * (point_y - y3)) / ((y2 - y3) * (x1 - x3) + (x3 - x2) * (y1 - y3))
     c = 1 - a - b
 
-    is_in =  0 <= a <= 1 and 0 <= b <= 1 and 0 <= c <= 1
+    is_in = 0 <= a <= 1 and 0 <= b <= 1 and 0 <= c <= 1
 
     return is_in
-
