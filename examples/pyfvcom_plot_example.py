@@ -29,7 +29,7 @@ import matplotlib.pyplot as plt
 
 # In[3]:
 
-# Create an object which holds the model outputs. We're only loading 
+# Create an object which holds the model outputs. We're only loading
 # surface elevation and temperature for the first 200 time steps.
 fvcom = FileReader('sample.nc', dims={'time': range(200)}, variables=['zeta', 'temp'])
 
@@ -37,10 +37,10 @@ fvcom = FileReader('sample.nc', dims={'time': range(200)}, variables=['zeta', 't
 # In[4]:
 
 # Make a plot of the surface elevation.
-plot = Plotter(fvcom, 
+plot = Plotter(fvcom,
                figsize=(20, 20),
                res='i',
-               tick_inc=(4, 2), 
+               tick_inc=(4, 2),
                cb_label='{} ({})'.format(fvcom.atts.zeta.long_name,
                                          fvcom.atts.zeta.units),
                cmap=cm.balance)
@@ -59,11 +59,13 @@ plot = Depth(fvcom, figsize=(20, 9),
 # fill_seabed makes the part of the plot below the seabed grey.
 plot.plot_slice(distance / 1000,  # to kilometres from metres
                 fvcom.grid.siglay_z[:, indices],
-                fvcom.data.temp[4, :, indices], 
+                fvcom.data.temp[4, :, indices],
                 fill_seabed=True)
 plot.axes.set_xlim(right=(distance / 1000).max())  # set the x-axis to the data range
 plot.axes.set_xlabel('Distance (km)')
 plot.axes.set_ylabel('Depth (m)')
+# Save the figure.
+plot.figure.savefig('temperature_profile.png')
 
 
 # In[6]:
@@ -85,7 +87,7 @@ fvcom = FileReader('sample.nc', variables=['temp', 'zeta'], dims={'time': range(
 time = Time(fvcom, figsize=(20, 9), cb_label='{} ({})'.format(fvcom.atts.temp.long_name,
                                                               fvcom.atts.temp.units))
 z = make_water_column(fvcom.data.zeta, fvcom.grid.h, fvcom.grid.siglay)
-# fill_seabed makes the part of the plot below the seabed grey. 
+# fill_seabed makes the part of the plot below the seabed grey.
 # We need to squeeze the data array since we've only extracted a single
 # position.
 time.plot_surface(z, np.squeeze(fvcom.data.temp), fill_seabed=True)
