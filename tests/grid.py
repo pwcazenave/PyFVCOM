@@ -266,3 +266,12 @@ class GridToolsTest(TestCase):
         test.assert_equal(known_good, result)
         test.assert_equal(known_good_miles, result_miles)
 
+    def test_isintriangle(self):
+        test_point_x_in = 0.1
+        test_point_y_in = 0.2
+        test_point_x_out = self.x.max() + 0.1
+        test_point_y_out = self.y.max() + 0.2
+        in_triangle = isintriangle(self.x[self.tri[0, :]], self.y[self.tri[0, :]], test_point_x_in, test_point_y_in)
+        out_triangle = isintriangle(self.x[self.tri[0, :]], self.y[self.tri[0, :]], test_point_x_out, test_point_y_out)
+        test.assert_equal(in_triangle, True)
+        test.assert_equal(out_triangle, False)
