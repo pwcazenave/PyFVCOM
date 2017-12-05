@@ -647,18 +647,19 @@ class OpenBoundary:
             coarse_depths = np.tile(coarse.grid.depth, [coarse.dims.lat, coarse.dims.lon, 1]).transpose(2, 0, 1)
             coarse_depths = np.ma.masked_array(coarse_depths, mask=getattr(coarse.data, coarse_name)[0, ...].mask)
             coarse_depths = np.max(coarse_depths, axis=0)
-            # Go through each open boundary position and if its depth is deeper than the closest  coarse data,
-            # set the boundary to the shallowest coarse depth.
+            # Fix all depths which are shallower than the shallowest coarse depth. This is more straightforward as
+            # it's a single minimum across all the open boundary positions.
+            z[z < coarse.grid.depth.min()] = coarse.grid.depth.min()
+            # Go through each open boundary position and if its depth is deeper than the closest coarse data,
+            # squash the open boundary water column into the coarse water column.
             for idx, node in enumerate(zip(x, y, z)):
                 lon_index = np.argmin(np.abs(self.grid.lon - node[0]))
                 lat_index = np.argmin(np.abs(self.grid.lat - node[1]))
                 if coarse_depths[lat_index, lon_index] < node[2].max():
                     # Squash the FVCOM water column into the coarse water column.
                     # z[idx, :] = fix_range(node[2], coarse.grid.depth.min(), coarse_depths[lat_index, lon_index])
+                    # TODO: Is the sign of the offset right here?
                     z[idx, :] = (node[2] / node[2].max()) * coarse_depths[lat_index, lon_index] - 1  # offset by a bit
-            # Fix all depths which are shallower than the shallowest coarse depth. This is more straightforward as
-            # it's a single minimum across all the open boundary positions.
-            z[z < coarse.grid.depth.min()] = coarse.grid.depth.min()
 
         # Make arrays of lon, lat, depth and time. Need to make the coordinates match the coarse data shape and then
         # flatten the lot. We should be able to do the interpolation in one shot this way, but we have to be
