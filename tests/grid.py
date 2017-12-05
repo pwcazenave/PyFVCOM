@@ -18,7 +18,10 @@ class GridToolsTest(TestCase):
         self.tri = np.array([[0, 2, 1], [1, 2, 3], [2, 5, 3], [2, 4, 5], [1, 3, 7], [1, 7, 6], [3, 5, 7], [7, 5, 8]])
         self.xc = nodes2elems(self.x, self.tri)
         self.yc = nodes2elems(self.y, self.tri)
+        self.lonc, self.latc = self.xc / 11, self.yc / 21  # make some fake spherical data
         self.z = np.array([0, 1, 1, 0, 2, 1, 2, 3, 3])
+        # Save some grid metrics for tests which require them.
+        self.ntve, self.nbve, self.nbe, self.isbce, self.isonb = grid_metrics(self.tri)
 
     def test_get_node_control_area(self):
         test_node_area = 2 / 3
@@ -104,6 +107,20 @@ class GridToolsTest(TestCase):
         test.assert_equal(test_idx, idx)
         test.assert_almost_equal(test_line, line)
         test.assert_almost_equal(test_dist, dist)
+
+    def test_element_sample(self):
+        known_indices = [1, 4]
+        known_distance = [0, 3.52999767]
+        indices, distance = element_sample(self.lonc, self.latc, np.array(((0.05, 0.025), (0.1, 0.014))))
+        test.assert_equal(indices, known_indices)
+        test.assert_almost_equal(distance, known_distance)
+
+    def test_element_sample_multiple_stops(self):
+        known_indices = [1, 4, 4, 6]
+        known_distance = [0, 3.52999767, 7.33381686,  11.13763606]
+        indices, distance = element_sample(self.lonc, self.latc, np.array(((0.05, 0.025), (0.1, 0.014), (0.11, 0.07))))
+        test.assert_equal(indices, known_indices)
+        test.assert_almost_equal(distance, known_distance)
 
     def test_connectivity(self):
         test_e = [[0, 1], [0, 2], [1, 2], [1, 3],
@@ -235,6 +252,27 @@ class GridToolsTest(TestCase):
         test.assert_equal(nbe, test_nbe)
         test.assert_equal(isbce, test_isbce)
         test.assert_equal(isonb, test_isonb)
+
+    def test_shape_coefficients(self):
+        known_a1u = np.array([[np.nan, -0.5, -0.5, np.nan, 0.5, np.nan, 0.5, np.nan],
+                              [np.nan, -0.25, 1.25, np.nan, 0.25, np.nan, 0.5, np.nan],
+                              [np.nan, 1.25, -0.25, np.nan, 0.5, np.nan, 0.25, np.nan],
+                              [np.nan, -0.5, -0.5, np.nan, -1.25, np.nan, -1.25, np.nan]])
+        known_a2u = np.array([[np.nan, -0.5, 0.5, np.nan, -0.5, np.nan, 0.5, np.nan],
+                              [np.nan, 1.25, 0.25, np.nan, 1.25, np.nan, 0.5, np.nan],
+                              [np.nan, -0.25, -1.25, np.nan, -0.5, np.nan, -1.25, np.nan],
+                              [np.nan, -0.5, 0.5, np.nan, -0.25, np.nan, 0.25, np.nan]])
+
+        a1u, a2u = shape_coefficients(self.xc, self.yc, self.nbe, self.isbce)
+        test.assert_almost_equal(a1u, known_a1u)
+        test.assert_almost_equal(a2u, known_a2u)
+
+    def test_reduce_triangulation(self):
+        known_reduced = np.array([[0, 2, 1], [1, 2, 3]])
+
+        reduced = reduce_triangulation(self.tri, np.arange(5))
+
+        test.assert_equal(reduced, known_reduced)
 
     def test_vincenty_distance(self):
         """
