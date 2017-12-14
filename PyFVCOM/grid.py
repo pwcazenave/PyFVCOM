@@ -547,7 +547,7 @@ class OpenBoundary:
             Array of matplotlib datenums (see `matplotlib.dates.num2date').
         coef : utide.utilities.Bunch
             Configuration options for utide.
-        amplituds : ndarray
+        amplitudes : ndarray
             Amplitude of the relevant constituents shaped [nconst].
         phases : ndarray
             Array of the phase of the relevant constituents shaped [nconst].
@@ -2965,7 +2965,7 @@ def haversine_distance(point1, point2, miles=False):
         Decimal degree longitude and latitude for the start.
     point2 : list, tuple, np.ndarray
         Decimal degree longitude and latitude for the end.
-    miles : bool
+    miles : bool, optional
         Set to True to return the distance in miles. Defaults to False (kilometres).
 
     Returns
