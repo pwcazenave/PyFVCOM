@@ -19,7 +19,7 @@ from pyproj import Proj
 from warnings import warn
 
 # Convert a string, tuple, float or int to a list.
-to_list = lambda x: [x] if isinstance(x, str) or isinstance(x, float) or isinstance(x, int) else x
+to_list = lambda x: [x] if isinstance(x, str) or isinstance(x, (float, int, np.float32)) else x
 
 
 def __test(inLat, inLong, inZone=False):
