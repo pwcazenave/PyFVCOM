@@ -11,42 +11,63 @@ Pierre Cazenave (Plymouth Marine Laboratory)
 
 """
 
-import os
+import copy
+import itertools
 import scipy.optimize
 
 import numpy as np
-import multiprocessing as mp
-import itertools
+import multiprocessing
 
 from netCDF4 import Dataset, date2num, num2date
-from matplotlib.dates import date2num as mtime
 from scipy.interpolate import RegularGridInterpolator
 from dateutil.relativedelta import relativedelta
 from datetime import datetime
 from functools import partial
 from warnings import warn
 from pathlib import Path
-from utide import reconstruct, ut_constants
-from utide.utilities import Bunch
 
-from PyFVCOM.grid import Domain, grid_metrics, read_fvcom_obc, nodes2elems, write_fvcom_mesh, connectivity, haversine_distance
+from PyFVCOM.grid import Domain, grid_metrics, read_fvcom_obc, nodes2elems
+from PyFVCOM.grid import write_fvcom_mesh, connectivity, haversine_distance
 from PyFVCOM.grid import find_bad_node, get_attached_unique_nodes
-from PyFVCOM.utilities import date_range
+from PyFVCOM.grid import OpenBoundary
+from PyFVCOM.utilities.time import date_range
+from PyFVCOM.read import FileReader
+from PyFVCOM.coordinate import utm_from_lonlat, lonlat_from_utm
 
 
 class Model(Domain):
-    """ Everything related to making a new model run. """
+    """
+    Everything related to making a new model run.
+
+    There should be more use of objects here. For example, each open boundary should be a Boundary object which has
+    methods for interpolating data onto it (tides, temperature, salinity, ERSEM variables etc.). The coastline could
+    be an object which has methods related to rivers and checking depths. Likewise, the model grid object could
+    contain methods for interpolating SST, creating restart files etc.
+
+    """
 
     def __init__(self, start, end, *args, **kwargs):
 
         # Inherit everything from PyFVCOM.grid.Domain, but extend it for our purposes. This doesn't work with Python 2.
         super().__init__(*args, **kwargs)
 
+        self.noisy = False
+        if 'noisy' in kwargs:
+            self.noisy = kwargs['noisy']
+
+        # Initialise things so we can add attributes to them later.
+        self.time = type('time', (), {})()
+        self.sigma = type('sigma', (), {})()
+        self.tide = type('tide', (), {})()
+        self.sst = type('sst', (), {})()
+
+        # Make some potentially useful time representations.
         self.start = start
         self.end = end
-        self.sigma = None
-        self.tide = None
-        self.sst = None
+        self.__add_time()
+
+        # Initialise the open boundary objects from the nodes we've read in from the grid (if any).
+        self.__initialise_open_boundaries_on_nodes()
 
         # Initialise the river structure.
         self.__prep_rivers()
@@ -60,24 +81,75 @@ class Model(Domain):
             self.grid.coastline = np.squeeze(self.grid.coastline[land_only])
 
     @staticmethod
-    def __flatten_list(nest):
+    def __flatten_list(nested):
         """ Flatten a list of lists. """
         try:
-            flattened = list(itertools.chain(*nest))
+            flattened = list(itertools.chain(*nested))
         except TypeError:
             # Maybe it's already flat and we've just tried iterating over non-iterables. If so, just return what we
             # got given.
-            flattened = nest
+            flattened = nested
 
         return flattened
 
     def __prep_rivers(self):
+        """ Create a few object and attributes which are useful for the river data. """
         self.river = type('river', (object,), {})()
         self.dims.river = 0  # assume no rivers.
 
         self.river.history = ''
         self.river.info = ''
         self.river.source = ''
+
+    def __add_time(self):
+        """
+        Add time variables we might need for the various bits of processing.
+
+        """
+
+        self.time.datetime = date_range(self.start, self.end)
+        self.time.time = date2num(getattr(self.time, 'datetime'), units='days since 1858-11-17 00:00:00')
+        self.time.Itime = np.floor(getattr(self.time, 'time'))  # integer Modified Julian Days
+        self.time.Itime2 = (getattr(self.time, 'time') - getattr(self.time, 'Itime')) * 24 * 60 * 60 * 1000  # milliseconds since midnight
+        self.time.Times = [t.strftime('%Y-%m-%dT%H:%M:%S.%f') for t in getattr(self.time, 'datetime')]
+
+    def __initialise_open_boundaries_on_nodes(self):
+        """ Add the relevant node-based grid information for any open boundaries we've got. """
+
+        if np.any(self.grid.open_boundary_nodes):
+            self.open_boundaries = []
+            for nodes in self.grid.open_boundary_nodes:
+                self.open_boundaries.append(OpenBoundary(nodes))
+                # Add the positions of the relevant bits of information.
+                for attribute in ('lon', 'lat', 'x', 'y', 'h'):
+                    try:
+                        setattr(self.open_boundaries[-1].grid, attribute, getattr(self.grid, attribute)[nodes, ...])
+                    except AttributeError:
+                        pass
+                # Add all the time data.
+                setattr(self.open_boundaries[-1].time, 'start', self.start)
+                setattr(self.open_boundaries[-1].time, 'end', self.end)
+
+    def __update_open_boundaries(self):
+        """
+        Call this when we've done something which affects the open boundary objects and we need to update their
+        properties.
+
+        For example, this updates sigma information if we've added the sigma distribution to the Model object.
+
+        """
+
+        # Add the sigma data to any open boundaries we've got loaded.
+        for boundary in self.open_boundaries:
+            for attribute in self.obj_iter(self.sigma):
+                try:
+                    # Ignore element-based data for now.
+                    if 'center' not in attribute:
+                        setattr(boundary.sigma, attribute, getattr(self.sigma, attribute)[boundary.nodes, ...])
+                except (IndexError, TypeError):
+                    setattr(boundary.sigma, attribute, getattr(self.sigma, attribute))
+                except AttributeError:
+                    pass
 
     def write_grid(self, grid_file, depth_file=None):
         """
@@ -226,9 +298,9 @@ class Model(Domain):
                 results.append(self._inter_sst_worker(lonlat, sst_file, noisy))
         else:
             if not pool_size:
-                pool = mp.Pool()
+                pool = multiprocessing.Pool()
             else:
-                pool = mp.Pool(pool_size)
+                pool = multiprocessing.Pool(pool_size)
             part_func = partial(self._inter_sst_worker, lonlat, noisy=noisy)
             results = pool.map(part_func, sst_files)
             pool.close()
@@ -246,7 +318,6 @@ class Model(Domain):
         sst = sst[idx, :]
 
         # Store everything in an object.
-        self.sst = type('sst', (object,), {})()
         self.sst.sst = sst
         self.sst.time = dates
 
@@ -306,8 +377,6 @@ class Model(Domain):
                     'type': 'data'}
             sstgrd.add_variable('sst', self.sst.sst, ['time', 'node'], attributes=atts, ncopts=ncopts)
 
-    # There's a lot of repetition in this sigma coordinate stuff. It needs splitting into multiple smaller functions
-    # which can be reused.
     def add_sigma_coordinates(self, sigma_file, noisy=False):
         """
         Read in a sigma coordinates file and apply to the grid object.
@@ -375,11 +444,11 @@ class Model(Domain):
         if sigtype.lower() == 'generalized':
             sigma_levels = np.empty((self.dims.node, nlev)) * np.nan
             for i in range(self.dims.node):
-                sigma_levels[i, :] = self._sigma_gen(dl, du, kl, ku, zkl, zku, self.grid.h[i], min_constant_depth)
+                sigma_levels[i, :] = self.sigma_generalized(dl, du, kl, ku, zkl, zku, self.grid.h[i], min_constant_depth)
         elif sigtype.lower() == 'uniform':
-            sigma_levels = np.repeat(self._sigma_geo(1), [self.dims.node, 1])
+            sigma_levels = np.repeat(self.sigma_geometric(nlev, 1), self.dims.node).reshape(self.dims.node, -1)
         elif sigtype.lower() == 'geometric':
-            sigma_levels = np.repeat(self._sigma_geo(sigpow), [self.dims.node, 1])
+            sigma_levels = np.repeat(self.sigma_geometric(nlev, sigpow), self.dims.node).reshape(self.dims.node, -1)
         else:
             raise ValueError('Unrecognised sigtype {} (is it supported?)'.format(sigtype))
 
@@ -422,12 +491,17 @@ class Model(Domain):
                 print('zku\t{:d}\n'.format(zku))
                 print('zkl\t{:d}\n'.format(zkl))
 
-    def _sigma_gen(self, dl, du, kl, ku, zkl, zku, h, hmin):
+        # Update the open boundaries.
+        self.__update_open_boundaries()
+
+    def sigma_generalized(self, levels, dl, du, kl, ku, zkl, zku, h, hmin):
         """
         Generate a generalised sigma coordinate distribution.
 
         Parameters
         ----------
+        levels : int
+            Number of sigma levels.
         dl : float
             The lower depth boundary from the bottom, down to which the layers are uniform thickness.
         du : float
@@ -452,43 +526,34 @@ class Model(Domain):
 
         """
 
-        dist = np.empty(self.dims.levels) * np.nan
+        dist = np.zeros(levels)
 
         if h < hmin:
-            dist[0] = 0
-            dl2 = 0.001
-            du2 = 0.001
-            for k in range(self.dims.layers):
-                x1 = dl2 + du2
-                x1 = x1 * self.dims.layers - k / self.dims.layers
-                x1 = x1 - dl2
-                x1 = np.tanh(x1)
-                x2 = np.tanh(dl2)
-                x3 = x2 + np.tanh(du2)
-                dist[k + 1] = (x1 + x2) / x3 - 1
+            dist = self.sigma_tanh(levels, du, dl)
         else:
-            dr = (h - du - dl) / h / (self.dims.levels - ku - kl - 1)
-            dist[0] = 0
+            dr = (h - du - dl) / h / (levels - ku - kl - 1)
 
             for k in range(1, ku + 1):
                 dist[k] = dist[k - 1] - zku[k - 1] / h
 
-            for k in range(ku + 1, self.dims.levels - kl):
+            for k in range(ku + 1, levels - kl):
                 dist[k] = dist[k - 1] - dr
 
             kk = 0
-            for k in range(self.dims.levels - kl + 1, self.dims.levels):
-                kk += 1
+            for k in range(-kl, 0):
                 dist[k] = dist[k - 1] - zkl[kk] / h
+                kk += 1
 
         return dist
 
-    def _sigma_geo(self, p_sigma):
+    def sigma_geometric(self, levels, p_sigma):
         """
         Generate a geometric sigma coordinate distribution.
 
         Parameters
         ----------
+        levels : int
+            Number of sigma levels.
         p_sigma : float
             Power value. 1 for uniform sigma layers, 2 for parabolic function. See page 308-309 in the FVCOM manual
             for examples.
@@ -499,19 +564,55 @@ class Model(Domain):
             Geometric vertical sigma coordinate distribution.
 
         """
-        kb = self.dims.levels
-        dist = np.empty(kb)
+
+        dist = np.empty(levels) * np.nan
 
         if p_sigma == 1:
-            for k in range(self.dims.levels):
-                dist[k] = -((k - 1) / (kb - 1))**p_sigma
-
+            for k in range(levels):
+                dist[k] = -((k - 1) / (levels - 1))**p_sigma
         else:
-            for k in range((kb + 1) / 2):
-                dist[k] = -((k - 1) / ((kb + 1) / 2 - 1))**p_sigma / 2
+            split = int(np.floor((levels + 1) / 2))
+            for k in range(split):
+                dist[k] = -(k / ((levels + 1) / 2 - 1))**p_sigma / 2
+            # Mirror the first half to make the second half of the parabola. We need to offset by one if we've got an
+            # odd number of levels.
+            if levels % 2 == 0:
+                dist[split:] = -(1 - -dist[:split])[::-1]
+            else:
+                dist[split:] = -(1 - -dist[:split - 1])[::-1]
 
-            for k in range((kb + 1) / 2 + 1, kb):
-                dist[k] = ((kb - k) / ((kb + 1) / 2 - 1))**p_sigma / 2 - 1
+        return dist
+
+    def sigma_tanh(self, levels, dl, du):
+        """
+        Generate a hyperbolic tangent vertical sigma coordinate distribution.
+
+        Parameters
+        ----------
+        levels : int
+            Number of sigma levels (layers + 1)
+        dl : float
+            The lower depth boundary from the bottom down to which the coordinates are parallel with uniform thickness.
+        du : float
+            The upper depth boundary from the surface up to which the coordinates are parallel with uniform thickness.
+
+        Returns
+        -------
+        dist : np.ndarray
+            Hyperbolic tangent vertical sigma coordinate distribution.
+
+        """
+
+        dist = np.zeros(levels)
+
+        for k in range(levels - 1):
+            x1 = dl + du
+            x1 = x1 * (levels - k - 2) / (levels - 1)
+            x1 = x1 - dl
+            x1 = np.tanh(x1)
+            x2 = np.tanh(dl)
+            x3 = x2 + np.tanh(du)
+            dist[k + 1] = (x1 + x2) / x3 - 1
 
         return dist
 
@@ -586,10 +687,10 @@ class Model(Domain):
         # Calculate the sigma level distributions at each grid node.
         sigma_levels = np.empty((self.dims.node, self.dims.levels)) * np.nan
         for i in range(self.dims.node):
-            sigma_levels[i, :] = self._sigma_gen(lower_layer_depth, upper_layer_depth,
-                                                 total_lower_layers, total_upper_layers,
-                                                 lower_layer_thickness, upper_layer_thickness,
-                                                 self.grid.h[i], optimised_depth)
+            sigma_levels[i, :] = self.sigma_generalized(levels, lower_layer_depth, upper_layer_depth,
+                                                        total_lower_layers, total_upper_layers,
+                                                        lower_layer_thickness, upper_layer_thickness,
+                                                        self.grid.h[i], optimised_depth)
 
         # Create a sigma layer variable (i.e. midpoint in the sigma levels).
         sigma_layers = sigma_levels[:, 0:-1] + (np.diff(sigma_levels, axis=1) / 2)
@@ -614,50 +715,10 @@ class Model(Domain):
         self.sigma.levels_z = self.grid.h [:, np.newaxis] * self.sigma.levels
         self.sigma.levels_center_z = self.grid.h_center[:, np.newaxis]  * self.sigma.levels_center
 
-        # Add the following into a test at some point.
-        # function debug_mode()
-        # # Test with made up data. This isn't actually used at all, but it's handy
-        # # to leave around for debugging things.
-        #
-        # conf.nlev = 25; # vertical levels (layers + 1)
-        # conf.H0 = 30; # threshold depth for the transition (metres)
-        # conf.DU = 3; # upper water boundary thickness
-        # conf.DL = 3; # lower water boundary thickness
-        # conf.KU = 3; # layer number in the water column of DU (maximum of 5 m thickness)
-        # conf.KL = 3; # layer number in the water column of DL (maximum of 5m thickness)
-        #
-        #
-        # Mobj = hybrid_coordinate(conf, Mobj)
-        #
-        # nlev = conf.nlev
-        # H0 = conf.H0
-        # DU = conf.DU
-        # DL = conf.DL
-        # KU = conf.KU
-        # KL = conf.KL
-        # ZKU = repmat(DU./KU, 1, KU)
-        # ZKL = repmat(DL./KL, 1, KL)
-        #
-        # Hmin=24
-        # Hmax=Hmin + 200
-        # y = 0:0.1:100
-        # B = 70
-        # H = Hmax .* exp(-((y./B-0.15).^2./0.5.^2))
-        # # H = [Hmin,H]; H=sort(H)
-        # nlev = conf.nlev
-        # Z2=[]
-        # # Loop through all nodes to create sigma coordinates.
-        # for xx=1:length(H)
-        #     Z2(xx, :) = sigma_gen(nlev, DL, DU, KL, KU, ZKL, ZKU, H(xx), Hmin)
-        # end
-        #
-        # clf
-        # plot(y,Z2 .* repmat(H', 1, nlev));hold on
-        # plot(y,ones(size(y)).*-Hmin)
-        # fprintf('Calculated minimum depth: %.2f\n', Hmin)
+        # Update the open boundaries.
+        self.__update_open_boundaries()
 
-    @staticmethod
-    def __hybrid_coordinate_hmin(H, levels, DU, DL, KU, KL, ZKU, ZKL):
+    def __hybrid_coordinate_hmin(self, H, levels, DU, DL, KU, KL, ZKU, ZKL):
         """
         Helper function to find the relevant minimum depth.
 
@@ -682,21 +743,11 @@ class Model(Domain):
             Minimum water depth.
 
         """
-
-        Z0 = np.zeros(levels)
-        Z2 = Z0.copy()
-
-        dl2 = 0.001
-        du2 = 0.001
-        kbm1 = levels - 1
-        for nn in range(levels - 1):
-            x1 = dl2 + du2
-            x1 = x1 * (kbm1 - nn) / kbm1
-            x1 = x1 - dl2
-            x1 = np.tanh(x1)
-            x2 = np.tanh(dl2)
-            x3 = x2 + np.tanh(du2)
-            Z0[nn + 1] = ((x1 + x2) / x3) - 1
+        # This is essentially identical to self.sigma_tanh, so we should probably just use that instead. Using
+        # self.sigma_tanh doesn't produce the same result, but then I'm fairly certain that the commented out code
+        # below is wrong.
+        Z0 = self.sigma_tanh(levels, DU, DL)
+        Z2 = np.zeros(levels)
 
         # s-coordinates
         X1 = (H - DU - DL)
@@ -774,47 +825,10 @@ class Model(Domain):
         else:
             self.grid.open_boundary_nodes, self.grid.types, _ = read_fvcom_obc(str(obc_file))
 
-    def add_sponge_layer(self, nodes, radius, coefficient):
-        """
-        Add a sponge layer. If radius or coefficient are floats, apply the same value to all nodes.
-
-        Parameters
-        ----------
-        nodes : list, np.ndarray
-            Grid nodes at which to add the sponge layer.
-        radius : float, list, np.ndarray
-            The sponge layer radius at the given nodes.
-        coefficient : float, list, np.ndarray
-            The sponge layer coefficient at the given nodes.
-
-        """
-
-        if not np.any(self.grid.open_boundary_nodes):
-            raise ValueError('No open boundary nodes specified; sponge nodes cannot be defined.')
-
-        if isinstance(radius, (float, int)):
-            radius = np.repeat(radius, np.shape(nodes)).tolist()
-        if isinstance(coefficient, (float, int)):
-            coefficient = np.repeat(coefficient, np.shape(nodes)).tolist()
-
-        if hasattr(self.grid, 'sponge_nodes'):
-            self.grid.sponge_nodes.append(nodes)
-        else:
-            self.grid.sponge_nodes = [nodes]
-
-        if hasattr(self.grid, 'sponge_radius'):
-            self.grid.sponge_radius.append(radius)
-        else:
-            self.grid.sponge_radius = [radius]
-
-        if hasattr(self.grid, 'sponge_coefficient'):
-            self.grid.sponge_coefficient.append(coefficient)
-        else:
-            self.grid.sponge_coefficient = [coefficient]
-
     def write_sponge(self, sponge_file):
         """
         Write out the sponge data to an FVCOM-formatted ASCII file.
+
         Parameters
         ----------
         sponge_file : str, pathlib.Path
@@ -822,161 +836,33 @@ class Model(Domain):
 
         """
 
-        number_of_nodes = len(self.__flatten_list(self.grid.open_boundary_nodes))
+        # Work through all the open boundary objects collecting all the information we need and then dump that to file.
+        radius = []
+        coefficient = []
+        for boundary in self.open_boundaries:
+            radius += boundary.sponge_radius.tolist()
+            coefficient += boundary.sponge_coefficient.tolist()
 
-        with open(sponge_file, 'w') as f:
+        # I feel like this should be in self.dims.
+        number_of_nodes = len(radius)
+
+        with open(str(sponge_file), 'w') as f:
             f.write('Sponge Node Number = {:d}\n'.format(number_of_nodes))
-            for node in zip(np.arange(number_of_nodes) + 1, self.__flatten_list(self.grid.sponge_radius), self.__flatten_list(self.grid.sponge_coefficient)):
+            for node in zip(np.arange(number_of_nodes) + 1, radius, coefficient):
                 f.write('{} {:.6f} {:.6f}\n'.format(*node))
 
     def add_grid_metrics(self, noisy=False):
-        """ Calculate grid metrics. """
+        """
+        Calculate grid metrics.
+
+        Parameters
+        ----------
+        noisy : bool, optional
+            Set to True to enable verbose output. Defaults to False.
+
+        """
 
         grid_metrics(self.grid.tri, noisy=noisy)
-
-    def add_tpxo_tides(self, tpxo_harmonics, predict='zeta', interval=1, constituents=['M2'], serial=False, pool_size=None, noisy=False):
-        """
-        Add TPXO tides at the open boundary nodes.
-
-        Parameters
-        ----------
-        tpxo_harmonics : str, pathlib.Path
-            Path to the TPXO harmonics netCDF file to use.
-        predict : str, optional
-            Type of data to predict. Select 'zeta' (default), 'u' or 'v'.
-        interval : float, optional
-            Interval in hours at which to generate predicted tides.
-        constituents : list, optional
-            List of constituent names to use in UTide.reconstruct. Defaults to ['M2'].
-        serial : bool, optional
-            Run in serial rather than parallel. Defaults to parallel.
-        pool_size : int, optional
-            Specify number of processes for parallel run. By default it uses all available.
-        noisy : bool, optional
-            Set to True to enable some sort of progress output. Defaults to False.
-
-        """
-
-        # Store everything in an object.
-        self.tide = type('tide', (object,), {})()
-        forcing = []
-
-        dates = date_range(self.start - relativedelta(days=1), self.end + relativedelta(days=1), inc=interval / 24)
-        self.tide.time = dates
-        # UTide needs MATLAB times.
-        times = mtime(dates)
-
-        if predict == 'zeta':
-            obc_ids = self.grid.open_boundary_nodes
-        else:
-            obc_ids = self.grid.obc_elems
-
-        for obc in obc_ids:
-
-            if predict == 'zeta':
-                amplitude_var, phase_var = 'ha', 'hp'
-                x, y = self.grid.lon, self.grid.lat
-                xdim = len(obc)
-            elif predict == 'u':
-                amplitude_var, phase_var = 'ua', 'up'
-                x, y = self.grid.lonc, self.grid.latc
-                xdim = len(obc)
-            elif predict == 'v':
-                amplitude_var, phase_var = 'va', 'vp'
-                x, y = self.grid.lonc, self.grid.latc
-                xdim = len(obc)
-
-            latitudes = y[obc]
-
-            with Dataset(str(tpxo_harmonics), 'r') as tides:
-                tpxo_const = [''.join(i).upper().strip() for i in tides.variables['con'][:].astype(str)]
-                # If we've been given variables that aren't in the TPXO data, just find the indices we do have.
-                cidx = [tpxo_const.index(i) for i in constituents if i in tpxo_const]
-                # Save the names of the constituents we've actually used.
-                self.tide.constituents = [constituents[i] for i in cidx]
-                amplitudes = np.empty((xdim, len(cidx))) * np.nan
-                phases = np.empty((xdim, len(cidx))) * np.nan
-
-                for xi, xy in enumerate(zip(x[obc], y[obc])):
-                    idx = [np.argmin(np.abs(tides['lon_z'][:, 0] - xy[0])),
-                           np.argmin(np.abs(tides['lat_z'][0, :] - xy[1]))]
-                    amplitudes[xi, :] = tides.variables[amplitude_var][cidx, idx[0], idx[1]]
-                    phases[xi, :] = tides.variables[phase_var][cidx, idx[0], idx[1]]
-
-            # Prepare the UTide inputs for the constituents in the TPXO data.
-            const_idx = np.asarray([ut_constants['const']['name'].tolist().index(i) for i in self.tide.constituents])
-            frq = ut_constants['const']['freq'][const_idx]
-
-            coef = Bunch(name=self.tide.constituents, mean=0, slope=0)
-            coef['aux'] = Bunch(reftime=729572.47916666674, lind=const_idx, frq=frq)
-            coef['aux']['opt'] = Bunch(twodim=False, nodsatlint=False, nodsatnone=False,
-                                       gwchlint=False, gwchnone=False, notrend=False, prefilt=[])
-
-            args = [(latitudes[i], times, coef, amplitudes[i], phases[i], noisy) for i in range(xdim)]
-            if serial:
-                results = []
-                for arg in args:
-                    results.append(self._predict_tide(arg))
-            else:
-                if not pool_size:
-                    pool = mp.Pool()
-                else:
-                    pool = mp.Pool(pool_size)
-                results = pool.map(self._predict_tide, args)
-                pool.close()
-
-            # Make a long list (rather than a list per open boundary so it's easier to write to netCDF. This,
-            # however, may make it a little harder to use for nesting.
-            forcing += results
-
-        # Dump the results into the object.
-        setattr(self.tide, predict, np.asarray(forcing))
-
-    @staticmethod
-    def _predict_tide(args):
-        """
-        For the given time and coefficients (in coef) reconstruct the tidal elevation or current component time
-        series at the given latitude.
-
-        Parameters
-        ----------
-        A single tuple with the following variables:
-
-        lats : np.ndarray
-            Latitudes of the positions to predict.
-        times : ndarray
-            Array of matplotlib datenums (see `matplotlib.dates.num2date').
-        coef : utide.utilities.Bunch
-            Configuration options for utide.
-        amplituds : ndarray
-            Amplitude of the relevant constituents shaped [nconst].
-        phases : ndarray
-            Array of the phase of the relevant constituents shaped [nconst].
-        noisy : bool
-            Set to true to enable verbose output. Defaults to False (no output).
-
-        Returns
-        -------
-        zeta : ndarray
-            Time series of surface elevations.
-
-        Notes
-        -----
-        Uses utide.reconstruct() for the predicted tide.
-
-        """
-        lats, times, coef, amplitude, phase, noisy = args
-        if np.isnan(lats):
-            return None
-        coef['aux']['lat'] = lats  # float
-        coef['A'] = amplitude
-        coef['g'] = phase
-        coef['A_ci'] = np.zeros(amplitude.shape)
-        coef['g_ci'] = np.zeros(phase.shape)
-        pred = reconstruct(times, coef, verbose=False)
-        zeta = pred['h']
-
-        return zeta
 
     def write_tides(self, output_file, ncopts={'zlib': True, 'complevel': 7}, **kwargs):
         """
@@ -1600,6 +1486,31 @@ class Model(Domain):
                     f.write(' PROBE_VAR_NAME = "{}"\n'.format(long_name))
                     f.write('/\n')
 
+    def read_regular(self, regular, variables):
+        """
+        Read regularly gridded model data and provides a RegularReader object which mimics a FileReader object.
+
+        Parameters
+        ----------
+        regular : str, pathlib.Path
+            Files to read.
+        variables : list
+            Variables to extract. Variables missing in the files raise an error.
+
+        Provides
+        --------
+        A RegularReader object with the requested variables loaded.
+
+        """
+
+        for ii, file in enumerate(regular):
+            if self.noisy:
+                print('Loading file {}'.format(file))
+            if ii == 0:
+                self.regular = RegularReader(str(file), variables=variables)
+            else:
+                self.regular += RegularReader(str(file), variables=variables)
+
 
 class WriteForcing:
     """ Create an FVCOM netCDF input file. """
@@ -1703,3 +1614,295 @@ class WriteForcing:
     def __exit__(self, exc_type, exc_val, exc_tb):
         """ Tidy up the netCDF file handle. """
         self.nc.close()
+
+
+class RegularReader(FileReader):
+    """
+    Class to read in regularly gridded model output. This provides a similar interface to a PyFVCOM.read.FileReader
+    object but with an extra spatial dimension. This is currently based on CMEMS model outputs (i.e. NEMO).
+
+    Author(s)
+    ---------
+    Pierre Cazenave (Plymouth Marine Laboratory)
+
+    Credits
+    -------
+    This code leverages ideas (and in some cases, code) from PySeidon (https://github.com/GrumpyNounours/PySeidon)
+    and PyLag-tools (https://gitlab.em.pml.ac.uk/PyLag/PyLag-tools).
+
+    """
+
+    def __add__(self, other, debug=False):
+        """
+        This special method means we can stack two NemoReader objects in time through a simple addition (e.g. nemo1
+        += nemo2)
+
+        """
+
+        # Check we've already got all the same data objects before we start.
+        lon_compare = self.dims.lon == other.dims.lon
+        lat_compare = self.dims.lat == other.dims.lat
+        depth_compare = self.dims.depth == other.dims.depth
+        time_compare = self.time.datetime[-1] <= other.time.datetime[0]
+        data_compare = self.obj_iter(self.data) == self.obj_iter(other.data)
+        old_data = self.obj_iter(self.data)
+        new_data = self.obj_iter(other.data)
+        if not lon_compare:
+            raise ValueError('Horizontal longitude data are incompatible.')
+        if not lat_compare:
+            raise ValueError('Horizontal latitude data are incompatible.')
+        if not depth_compare:
+            raise ValueError('Vertical depth layers are incompatible.')
+        if not time_compare:
+            raise ValueError("Time periods are incompatible (`fvcom2' must be greater than or equal to `fvcom1')."
+                             "`fvcom1' has end {} and `fvcom2' has start {}".format(self.time.datetime[-1],
+                                                                                    other.time.datetime[0]))
+        if not data_compare:
+            raise ValueError('Loaded data sets for each NemoReader class must match.')
+        if not (old_data == new_data) and (old_data or new_data):
+            warn('Subsequent attempts to load data for this merged object will only load data from the first object. '
+                 'Load data into each object before merging them.')
+
+        # Copy ourselves to a new version for concatenation. self is the old so we get appended to by the new.
+        idem = copy.copy(self)
+
+        for var in self.obj_iter(idem.data):
+            if 'time' in idem.ds.variables[var].dimensions:
+                setattr(idem.data, var, np.ma.concatenate((getattr(idem.data, var), getattr(other.data, var))))
+        for time in self.obj_iter(idem.time):
+            setattr(idem.time, time, np.concatenate((getattr(idem.time, time), getattr(other.time, time))))
+
+        # Remove duplicate times.
+        time_indices = np.arange(len(idem.time.time))
+        _, dupes = np.unique(idem.time.time, return_index=True)
+        dupe_indices = np.setdiff1d(time_indices, dupes)
+        time_mask = np.ones(time_indices.shape, dtype=bool)
+        time_mask[dupe_indices] = False
+        for var in self.obj_iter(idem.data):
+            # Only delete things with a time dimension.
+            if 'time' in idem.ds.variables[var].dimensions:
+                # time_axis = idem.ds.variables[var].dimensions.index('time')
+                setattr(idem.data, var, getattr(idem.data, var)[time_mask, ...])  # assume time is first
+                # setattr(idem.data, var, np.delete(getattr(idem.data, var), dupe_indices, axis=time_axis))
+        for time in self.obj_iter(idem.time):
+            try:
+                time_axis = idem.ds.variables[time].dimensions.index('time')
+                setattr(idem.time, time, np.delete(getattr(idem.time, time), dupe_indices, axis=time_axis))
+            except KeyError:
+                # This is hopefully one of the additional time variables which doesn't exist in the netCDF dataset.
+                # Just delete the relevant indices by assuming that time is the first axis.
+                setattr(idem.time, time, np.delete(getattr(idem.time, time), dupe_indices, axis=0))
+
+        # Update dimensions accordingly.
+        idem.dims.time = len(idem.time.time)
+
+        return idem
+
+    def _load_time(self):
+        """
+        Populate a time object with additional useful time representations from the netCDF time data.
+        """
+
+        time = self.ds.variables['time'][:]
+
+        # Make other time representations.
+        self.time.datetime = num2date(time, units=getattr(self.ds.variables['time'], 'units'))
+        if isinstance(self.time.datetime, (list, tuple, np.ndarray)):
+            setattr(self.time, 'Times', np.array([datetime.strftime(d, '%Y-%m-%dT%H:%M:%S.%f') for d in self.time.datetime]))
+        else:
+            setattr(self.time, 'Times', datetime.strftime(self.time.datetime, '%Y-%m-%dT%H:%M:%S.%f'))
+        self.time.time = date2num(self.time.datetime, units='days since 1858-11-17 00:00:00')
+        self.time.Itime = np.floor(self.time.time)
+        self.time.Itime2 = (self.time.time - np.floor(self.time.time)) * 1000 * 60 * 60  # microseconds since midnight
+        self.time.datetime = self.time.datetime
+        self.time.matlabtime = self.time.time + 678942.0  # convert to MATLAB-indexed times from Modified Julian Date.
+
+    def _load_grid(self):
+        """
+        Load the grid data.
+
+        Convert from UTM to spherical if we haven't got those data in the existing output file.
+
+        """
+
+        grid_variables = ['lon', 'lat', 'x', 'y', 'depth']
+
+        # Get the grid data.
+        for grid in grid_variables:
+
+            try:
+                setattr(self.grid, grid, self.ds.variables[grid][:])
+                # Save the attributes.
+                attributes = type('attributes', (object,), {})()
+                for attribute in self.ds.variables[grid].ncattrs():
+                    setattr(attributes, attribute, getattr(self.ds.variables[grid], attribute))
+                setattr(self.atts, grid, attributes)
+            except KeyError:
+                # Make zeros for this missing variable so we can convert from the non-missing data below.
+                setattr(self.grid, grid, np.zeros((self.dims.lon, self.dims.lat)))
+            except ValueError as value_error_message:
+                warn('Variable {} has a problem with the data. Setting value as all zeros.'.format(grid))
+                print(value_error_message)
+                setattr(self.grid, grid, np.zeros(self.ds.variables[grid].shape))
+
+        # Make the grid data the right shape for us to assume it's an FVCOM-style data set.
+        # self.grid.lon, self.grid.lat = np.meshgrid(self.grid.lon, self.grid.lat)
+        # self.grid.lon, self.grid.lat = self.grid.lon.ravel(), self.grid.lat.ravel()
+
+        # Update dimensions to match those we've been given, if any. Omit time here as we shouldn't be touching that
+        # dimension for any variable in use in here.
+        for dim in self._dims:
+            if dim != 'time':
+                setattr(self.dims, dim, len(self._dims[dim]))
+
+        # Convert the given W/E/S/N coordinates into node and element IDs to subset.
+        if self._bounding_box:
+            # We need to use the original Dataset lon and lat values here as they have the right shape for the
+            # subsetting.
+            self._dims['lon'] = np.argwhere((self.ds.variables['lon'][:] > self._dims['wesn'][0]) &
+                                            (self.ds.variables['lon'][:] < self._dims['wesn'][1]))
+            self._dims['lat'] = np.argwhere((self.ds.variables['lat'][:] > self._dims['wesn'][2]) &
+                                            (self.ds.variables['lat'][:] < self._dims['wesn'][3]))
+
+        related_variables = {'lon': ('x', 'lon'), 'lat': ('y', 'lat')}
+        for spatial_dimension in 'lon', 'lat':
+            if spatial_dimension in self._dims:
+                setattr(self.dims, spatial_dimension, len(self._dims[spatial_dimension]))
+                for var in related_variables[spatial_dimension]:
+                    try:
+                        spatial_index = self.ds.variables[var].dimensions.index(spatial_dimension)
+                        var_shape = [i for i in np.shape(self.ds.variables[var])]
+                        var_shape[spatial_index] = getattr(self.dims, spatial_dimension)
+                        if 'depth' in (self._dims, self.ds.variables[var].dimensions):
+                            var_shape[self.ds.variables[var].dimensions.index('depth')] = self.dims.siglay
+                        _temp = np.empty(var_shape) * np.nan
+                        if 'depth' in self.ds.variables[var].dimensions:
+                            for ni, node in enumerate(self._dims[spatial_dimension]):
+                                if 'depth' in self._dims:
+                                    _temp[..., ni] = self.ds.variables[var][self._dims['depth'], node]
+                                else:
+                                    _temp[..., ni] = self.ds.variables[var][:, node]
+                        else:
+                            for ni, node in enumerate(self._dims[spatial_dimension]):
+                                _temp[..., ni] = self.ds.variables[var][node]
+                    except KeyError:
+                        if 'depth' in var:
+                            _temp = np.empty((self.dims.depth, getattr(self.dims, spatial_dimension)))
+                        else:
+                            _temp = np.empty(getattr(self.dims, spatial_dimension))
+                setattr(self.grid, var, _temp)
+
+        # Check if we've been given vertical dimensions to subset in too, and if so, do that. Check we haven't
+        # already done this if the 'node' and 'nele' sections above first.
+        for var in ['depth']:
+            short_dim = copy.copy(var)
+            # Assume we need to subset this one unless 'node' or 'nele' are missing from self._dims. If they're in
+            # self._dims, we've already subsetted in the 'node' and 'nele' sections above, so doing it again here
+            # would fail.
+            subset_variable = True
+            if 'lon' in self._dims or 'lat' in self._dims:
+                subset_variable = False
+            # Strip off the _center to match the dimension name.
+            if short_dim.endswith('_center'):
+                short_dim = short_dim.split('_')[0]
+            if short_dim in self._dims:
+                if short_dim in self.ds.variables[var].dimensions and subset_variable:
+                    _temp = getattr(self.grid, var)[self._dims[short_dim], ...]
+                    setattr(self.grid, var, _temp)
+
+        # Check ranges and if zero assume we're missing that particular type, so convert from the other accordingly.
+        self.grid.lon_range = np.ptp(self.grid.lon)
+        self.grid.lat_range = np.ptp(self.grid.lat)
+        self.grid.x_range = np.ptp(self.grid.x)
+        self.grid.y_range = np.ptp(self.grid.y)
+
+        # Only do the conversions when we have more than a single point since the relevant ranges will be zero with
+        # only one position.
+        if self.dims.lon > 1 and self.dims.lat > 1:
+            if self.grid.lon_range == 0 and self.grid.lat_range == 0:
+                self.grid.lon, self.grid.lat = lonlat_from_utm(self.grid.x, self.grid.y, zone=self._zone)
+                self.grid.lon_range = np.ptp(self.grid.lon)
+                self.grid.lat_range = np.ptp(self.grid.lat)
+            if self.grid.lon_range == 0 and self.grid.lat_range == 0:
+                self.grid.x, self.grid.y = utm_from_lonlat(self.grid.lon, self.grid.lat)
+                self.grid.x_range = np.ptp(self.grid.x)
+                self.grid.y_range = np.ptp(self.grid.y)
+
+        # Make a bounding box variable too (spherical coordinates): W/E/S/N
+        self.grid.bounding_box = (np.min(self.grid.lon), np.max(self.grid.lon),
+                                  np.min(self.grid.lat), np.max(self.grid.lat))
+
+    def load_data(self, var):
+        """ Add a given variable/variables at the given indices. If any indices are omitted or Falsey, return all
+        data for the missing dimensions.
+
+        Parameters
+        ----------
+        var : list-like, str
+            List of variables to load.
+
+        """
+
+        # Check if we've got iterable variables and make one if not.
+        try:
+            _ = (e for e in var)
+        except TypeError:
+            var = [var]
+
+        for v in var:
+            if v not in self.ds.variables:
+                raise KeyError("Variable '{}' not present in {}.".format(v, self._fvcom))
+
+            # Get this variable's dimensions
+            var_dim = self.ds.variables[v].dimensions
+            variable_shape = self.ds.variables[v].shape
+            variable_indices = [np.arange(i) for i in variable_shape]
+            for dimension in var_dim:
+                if dimension in self._dims:
+                    # Replace their size with anything we've been given in dims.
+                    variable_index = var_dim.index(dimension)
+                    variable_indices[variable_index] = self._dims[dimension]
+
+            # Check the data we're loading is the same shape as our existing dimensions.
+            lon_compare = self.ds.dimensions['lon'].size == self.dims.lon
+            lat_compare = self.ds.dimensions['lat'].size == self.dims.lat
+            depth_compare = self.ds.dimensions['depth'].size == self.dims.depth
+            time_compare = self.ds.dimensions['time'].size == self.dims.time
+            # Check again if we've been asked to subset in any dimension.
+            if 'lon' in self._dims:
+                lon_compare = len(self.ds.variables['lon'][self._dims['lon']]) == self.dims.lon
+            if 'lat' in self._dims:
+                lat_compare = len(self.ds.variables['lat'][self._dims['lat']]) == self.dims.lat
+            if 'depth' in self._dims:
+                depth_compare = len(self.ds.variables['depth'][self._dims['depth']]) == self.dims.depth
+            if 'time' in self._dims:
+                time_compare = len(self.ds.variables['time'][self._dims['time']]) == self.dims.time
+
+            if not lon_compare:
+                raise ValueError('Longitude data are incompatible. You may be trying to load data after having already '
+                                 'concatenated a RegularReader object, which is unsupported.')
+            if not lat_compare:
+                raise ValueError('Latitude data are incompatible. You may be trying to load data after having already '
+                                 'concatenated a RegularReader object, which is unsupported.')
+            if not depth_compare:
+                raise ValueError('Vertical depth layers are incompatible. You may be trying to load data after having '
+                                 'already concatenated a RegularReader object, which is unsupported.')
+            if not time_compare:
+                raise ValueError('Time period is incompatible. You may be trying to load data after having already '
+                                 'concatenated a RegularReader object, which is unsupported.')
+
+            if 'time' not in var_dim:
+                # Should we error here or carry on having warned?
+                warn('{} does not contain a time dimension.'.format(v))
+
+            attributes = type('attributes', (object,), {})()
+            for attribute in self.ds.variables[v].ncattrs():
+                setattr(attributes, attribute, getattr(self.ds.variables[v], attribute))
+            setattr(self.atts, v, attributes)
+
+            data = self.ds.variables[v][variable_indices]  # data are automatically masked
+            setattr(self.data, v, data)
+
+    def closest_element(self, *args, **kwargs):
+        """ Compatibility function. """
+        return self.closest_node(*args, **kwargs)

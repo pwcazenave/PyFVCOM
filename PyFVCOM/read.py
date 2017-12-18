@@ -14,10 +14,11 @@ from datetime import datetime, timedelta
 from netCDF4 import Dataset, MFDataset, num2date, date2num
 
 from PyFVCOM.coordinate import lonlat_from_utm, utm_from_lonlat
-from PyFVCOM.grid import unstructured_grid_volume, nodes2elems, vincenty_distance, haversine_distance
+from PyFVCOM.grid import unstructured_grid_volume, nodes2elems, Domain
+from PyFVCOM.utilities.general import fix_range
 
 
-class FileReader(object):
+class FileReader(Domain):
     """ Load FVCOM model output.
 
     Class simplifies the preparation of FVCOM model output for analysis with PyFVCOM.
@@ -404,10 +405,13 @@ class FileReader(object):
             self.grid.nv = self.ds.variables['nv'][:].astype(int)  # force integers even though they should already be so
             self.grid.triangles = copy.copy(self.grid.nv.T - 1)  # zero-indexed for python
         except KeyError:
-            # If we don't have a triangulation, make one.
+            # If we don't have a triangulation, make one. Warn that if we've made one, it might not match the
+            # original triangulation used in the model run.
             triangulation = tri.Triangulation(self.grid.lon, self.grid.lat)
             self.grid.triangles = triangulation.triangles
             self.grid.nv = self.grid.triangles.T + 1
+            self.dims.nele = self.grid.triangles.shape[0]
+            warn('Triangulation created from node positions. This may be inconsistent with the original triangulation.')
 
         # Fix broken triangulations if necessary.
         if self.grid.nv.min() != 1:
@@ -456,6 +460,17 @@ class FileReader(object):
                     except IndexError:
                         # Maybe the array's the wrong way around. Flip it and try again.
                         setattr(self.grid, var, nodes2elems(getattr(self.grid, var.split('_')[0]).T, self.grid.triangles))
+
+        # Make depth-resolved sigma data. This is useful for plotting things.
+        for var in self.obj_iter(self.grid):
+            if var.startswith('sig'):
+                if var.endswith('_center'):
+                    z = self.grid.h_center
+                else:
+                    z = self.grid.h
+                # Set the sigma data to the 0-1 range for siglay so that the maximum depth value is equal to the
+                # actual depth. This may be a problem.
+                setattr(self.grid, '{}_z'.format(var), fix_range(getattr(self.grid, var), 0, 1) * z)
 
         # Convert the given W/E/S/N coordinates into node and element IDs to subset.
         if self._bounding_box:
@@ -578,13 +593,25 @@ class FileReader(object):
         if self.dims.node > 1:
             if self.grid.lon_range == 0 and self.grid.lat_range == 0:
                 self.grid.lon, self.grid.lat = lonlat_from_utm(self.grid.x, self.grid.y, zone=self._zone)
-            if self.grid.lon_range == 0 and self.grid.lat_range == 0:
+                self.grid.lon_range = np.ptp(self.grid.lon)
+                self.grid.lat_range = np.ptp(self.grid.lat)
+            if self.grid.x_range == 0 and self.grid.y_range == 0:
                 self.grid.x, self.grid.y, _ = utm_from_lonlat(self.grid.lon, self.grid.lat)
+                self.grid.x_range = np.ptp(self.grid.x)
+                self.grid.y_range = np.ptp(self.grid.y)
         if self.dims.nele > 1:
             if self.grid.lonc_range == 0 and self.grid.latc_range == 0:
                 self.grid.lonc, self.grid.latc = lonlat_from_utm(self.grid.xc, self.grid.yc, zone=self._zone)
-            if self.grid.lonc_range == 0 and self.grid.latc_range == 0:
+                self.grid.lonc_range = np.ptp(self.grid.lonc)
+                self.grid.latc_range = np.ptp(self.grid.latc)
+            if self.grid.xc_range == 0 and self.grid.yc_range == 0:
                 self.grid.xc, self.grid.yc, _ = utm_from_lonlat(self.grid.lonc, self.grid.latc)
+                self.grid.xc_range = np.ptp(self.grid.xc)
+                self.grid.yc_range = np.ptp(self.grid.yc)
+
+        # Make a bounding box variable too (spherical coordinates): W/E/S/N
+        self.grid.bounding_box = (np.min(self.grid.lon), np.max(self.grid.lon),
+                                  np.min(self.grid.lat), np.max(self.grid.lat))
 
     def _update_dimensions(self, variables):
         # Update the dimensions based on variables we've been given. Construct a list of the unique dimensions in all
@@ -666,102 +693,6 @@ class FileReader(object):
         except AttributeError:
             self.load_time()
             return np.argmin(np.abs(self.time.datetime - when))
-
-    def closest_node(self, where, cartesian=False, threshold=None, vincenty=False, haversine=False):
-        """
-        Find the index of the closest node to the supplied position (x, y). Set `cartesian' to True for cartesian
-        coordinates (defaults to spherical).
-
-        Parameters
-        ----------
-        where : list-like
-            Arbitrary x, y position for which to find the closest model grid position.
-        cartesian : bool, optional
-            Set to True to use cartesian coordinates. Defaults to False.
-        threshold : float, optional
-            Give a threshold distance beyond which the closest grid is considered too far away. Units are the same as
-            the coordinates in `where', unless using lat/lon and vincenty when it is in metres. Return None when
-            beyond threshold.
-        vincenty : bool, optional
-            Use vincenty distance calculation. Allows specification of point in lat/lon but threshold in metres.
-        haversine : bool, optional
-            Use the simpler but much faster Haversine distance calculation. Allows specification of point in lat/lon but threshold in metres.
-
-        Returns
-        -------
-        index : int, None
-            Grid index which falls closest to the supplied position. If `threshold' is set and the distance from the
-            supplied position to the nearest model node exceeds that threshold, `index' is None.
-
-        """
-
-        if not vincenty or not haversine:
-            if cartesian:
-                x, y = self.grid.x, self.grid.y
-            else:
-                x, y = self.grid.lon, self.grid.lat
-            dist = np.sqrt((x - where[0])**2 + (y - where[1])**2)
-        elif vincenty:
-            grid_pts = np.asarray([self.grid.lon, self.grid.lat]).T
-            where_pt_rep = np.tile(np.asarray(where), (len(self.grid.lon),1))
-            dist = np.asarray([vincenty_distance(pt_1, pt_2) for pt_1, pt_2 in zip(grid_pts, where_pt_rep)])*1000
-        elif haversine:
-            grid_pts = np.asarray([self.grid.lon, self.grid.lat]).T
-            where_pt_rep = np.tile(np.asarray(where), (len(self.grid.lon),1))
-            dist = np.asarray([haversine_distance(pt_1, pt_2) for pt_1, pt_2 in zip(grid_pts, where_pt_rep)])*1000
-        index = np.argmin(dist)
-        if threshold:
-            if dist.min() < threshold:
-                index = np.argmin(dist)
-            else:
-                index = None
-
-        return index
-
-    def closest_element(self, where, cartesian=False, threshold=None, vincenty=False):
-        """
-        Find the index of the closest element to the supplied position (x, y). Set `cartesian' to True for cartesian
-        coordinates (defaults to spherical).
-
-        Parameters
-        ----------
-        where : list-like
-            Arbitrary x, y position for which to find the closest model grid position.
-        cartesian : bool, optional
-            Set to True to use cartesian coordinates. Defaults to False.
-        threshold : float, optional
-            Give a threshold distance beyond which the closest grid is considered too far away. Units are the same as
-            the coordinates in `where', unless using lat/lon and vincenty when it is in metres. Return None when
-            beyond threshold.
-        vincenty : bool, optional
-            Use vincenty distance calculation. Allows specification of point in lat/lon but threshold in metres
-
-        Returns
-        -------
-        index : int, None
-            Grid index which falls closest to the supplied position. If `threshold' is set and the distance from the
-            supplied position to the nearest model node exceeds that threshold, `index' is None.
-
-        """
-        if not vincenty:
-            if cartesian:
-                x, y = self.grid.xc, self.grid.yc
-            else:
-                x, y = self.grid.lonc, self.grid.latc
-            dist = np.sqrt((x - where[0])**2 + (y - where[1])**2)
-        else:
-            grid_pts = np.asarray([self.grid.lonc, self.grid.latc]).T
-            where_pt_rep = np.tile(np.asarray(where), (len(self.grid.lonc),1))
-            dist = np.asarray([vincenty_distance(pt_1, pt_2) for pt_1, pt_2 in zip(grid_pts, where_pt_rep)])*1000
-
-        index = np.argmin(dist)
-        if threshold:
-            if dist.min() < threshold:
-                index = np.argmin(dist)
-            else:
-                index = None
-
-        return index
 
     def grid_volume(self):
         """
@@ -1470,6 +1401,57 @@ def write_probes(file, mjd, timeseries, datatype, site, depth, sigma=(-1, -1), l
         # Dump the data (this may be slow).
         for line in np.column_stack((mjd, timeseries)):
             f.write(fmt.format(*line))
+
+
+def get_river_config(file_name, noisy=False, zeroindex=False):
+    """
+    Parse an FVCOM river namelist file to extract the parameters and their values. Returns a dict of the parameters
+    with the associated values for all the rivers defined in the namelist.
+
+    Parameters
+    ----------
+    file_name : str
+        Full path to an FVCOM Rivers name list.
+    noisy : bool, optional
+        Set to True to enable verbose output. Defaults to False.
+    zeroindex : bool, optional
+        Set to True to convert indices from 1-based to 0-based. Defaults to False.
+
+    Returns
+    -------
+    rivers : dict
+        Dict of the parameters for each river defined in the name list.
+        Dictionary keys are the name list parameter names (e.g. RIVER_NAME).
+
+    Notes
+    -----
+
+    The indices returned in RIVER_GRID_LOCATION are 1-based (i.e. read in raw
+    from the nml file). For use in Python, you can either subtract 1 yourself,
+    or pass zeroindex=True to this function.
+
+    """
+
+    rivers = {}
+    with open(file_name) as f:
+        lines = f.readlines()
+        for line in lines:
+            line = line.strip()
+
+            if line and not line.startswith('&') and not line.startswith('/'):
+                param, value = [i.strip(",' ") for i in line.split('=')]
+                if param in rivers:
+                    rivers[param].append(value)
+                else:
+                    rivers[param] = [value]
+
+        if noisy:
+            print('Found {} rivers.'.format(len(rivers['RIVER_NAME'])))
+
+    if zeroindex and 'RIVER_GRID_LOCATION' in rivers:
+        rivers['RIVER_GRID_LOCATION'] = [int(i) - 1 for i in rivers['RIVER_GRID_LOCATION']]
+
+    return rivers
 
 
 # For backwards compatibility.

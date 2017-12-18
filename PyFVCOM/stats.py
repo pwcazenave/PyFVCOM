@@ -13,7 +13,7 @@ import numpy as np
 from warnings import warn
 from scipy import stats, polyfit, polyval
 
-from PyFVCOM.utilities import fix_range
+from PyFVCOM.utilities.general import fix_range
 
 
 def calculate_regression(x, y, type):

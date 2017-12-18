@@ -18,7 +18,10 @@ class GridToolsTest(TestCase):
         self.tri = np.array([[0, 2, 1], [1, 2, 3], [2, 5, 3], [2, 4, 5], [1, 3, 7], [1, 7, 6], [3, 5, 7], [7, 5, 8]])
         self.xc = nodes2elems(self.x, self.tri)
         self.yc = nodes2elems(self.y, self.tri)
+        self.lonc, self.latc = self.xc / 11, self.yc / 21  # make some fake spherical data
         self.z = np.array([0, 1, 1, 0, 2, 1, 2, 3, 3])
+        # Save some grid metrics for tests which require them.
+        self.ntve, self.nbve, self.nbe, self.isbce, self.isonb = grid_metrics(self.tri)
 
     def test_get_node_control_area(self):
         test_node_area = 2 / 3
@@ -53,19 +56,30 @@ class GridToolsTest(TestCase):
         test.assert_equal(y, test_y)
         test.assert_equal(dist, test_dist)
 
+    def test_find_nearest_point_multiple(self):
+        target_x, target_y = [0.5, 0.2], [0.75, 0.2]
+        test_x, test_y, test_dist, test_index = [0, 0], [1, 0], [np.min(np.hypot(self.x - i[0], self.y - i[1])) for i in zip(target_x, target_y)], [2, 0]
+        x, y, dist, index = find_nearest_point(self.x, self.y, target_x, target_y)
+        test.assert_equal(index, test_index)
+        test.assert_equal(x, test_x)
+        test.assert_equal(y, test_y)
+        test.assert_equal(dist, test_dist)
+
+    def test_find_nearest_point_multiple_with_threshold(self):
+        target_x, target_y = [0.5, 0.2], [0.75, 0.2]
+        test_x, test_y, test_dist, test_index = [np.nan, 0], [np.nan, 0], [np.min(np.hypot(self.x - i[0], self.y - i[1])) for i in zip(target_x, target_y)], [np.nan, 0]
+        x, y, dist, index = find_nearest_point(self.x, self.y, target_x, target_y, maxDistance=0.3)
+        test.assert_equal(index, test_index)
+        test.assert_equal(x, test_x)
+        test.assert_equal(y, test_y)
+        test.assert_equal(dist, test_dist)
+
     def test_elem_side_lengths(self):
         diagonal = np.hypot(1, 1)
         test_lengths = [[1, diagonal, 1], [diagonal, 1, 1], [diagonal, 1, 1], [1, 1, diagonal],
                         [1, 1, diagonal], [diagonal, 1, 1], [1, diagonal, 1], [diagonal, 1, 1]]
         lengths = element_side_lengths(self.tri, self.x, self.y)
         test.assert_equal(lengths, test_lengths)
-
-    def test_clip_triangulation(self):
-        model = {key: getattr(self, key) for key in ('xc', 'yc')}
-        test_clipped = [[2, 6, 7], [0, 1, 2], [7, 6, 4], [4, 1, 0], [6, 2, 4], [4, 2, 1]]
-        # test_clipped = [[0, 1, 2]]
-        clipped = clip_triangulation(model, 1)
-        test.assert_equal(clipped, test_clipped)
 
     def test_mesh2grid_1(self):
         test_x, test_y, test_z = [0, 1, 2], [0, 1, 2], [[0, 1, 2], [1, 0, 1], [2, 3, 3]]
@@ -94,6 +108,20 @@ class GridToolsTest(TestCase):
         test.assert_almost_equal(test_line, line)
         test.assert_almost_equal(test_dist, dist)
 
+    def test_element_sample(self):
+        known_indices = [1, 4]
+        known_distance = [0, 3.52999767]
+        indices, distance = element_sample(self.lonc, self.latc, np.array(((0.05, 0.025), (0.1, 0.014))))
+        test.assert_equal(indices, known_indices)
+        test.assert_almost_equal(distance, known_distance)
+
+    def test_element_sample_multiple_stops(self):
+        known_indices = [1, 4, 4, 6]
+        known_distance = [0, 3.52999767, 7.33381686,  11.13763606]
+        indices, distance = element_sample(self.lonc, self.latc, np.array(((0.05, 0.025), (0.1, 0.014), (0.11, 0.07))))
+        test.assert_equal(indices, known_indices)
+        test.assert_almost_equal(distance, known_distance)
+
     def test_connectivity(self):
         test_e = [[0, 1], [0, 2], [1, 2], [1, 3],
                   [1, 6], [1, 7], [2, 3], [2, 4],
@@ -112,12 +140,6 @@ class GridToolsTest(TestCase):
         test.assert_equal(te, test_te)
         test.assert_equal(e2t, test_e2t)
         test.assert_equal(bnd, test_bnd)
-
-    def test_clip_domain(self):
-        extents = (0, 1.5, 0, 2)
-        test_mask = np.arange(6)  # omit the easternmost nodes
-        mask = clip_domain(self.x, self.y, extents)
-        test.assert_equal(mask, test_mask)
 
     def test_find_connected_nodes(self):
         node = 2
@@ -231,6 +253,27 @@ class GridToolsTest(TestCase):
         test.assert_equal(isbce, test_isbce)
         test.assert_equal(isonb, test_isonb)
 
+    def test_shape_coefficients(self):
+        known_a1u = np.array([[np.nan, -0.5, -0.5, np.nan, 0.5, np.nan, 0.5, np.nan],
+                              [np.nan, -0.25, 1.25, np.nan, 0.25, np.nan, 0.5, np.nan],
+                              [np.nan, 1.25, -0.25, np.nan, 0.5, np.nan, 0.25, np.nan],
+                              [np.nan, -0.5, -0.5, np.nan, -1.25, np.nan, -1.25, np.nan]])
+        known_a2u = np.array([[np.nan, -0.5, 0.5, np.nan, -0.5, np.nan, 0.5, np.nan],
+                              [np.nan, 1.25, 0.25, np.nan, 1.25, np.nan, 0.5, np.nan],
+                              [np.nan, -0.25, -1.25, np.nan, -0.5, np.nan, -1.25, np.nan],
+                              [np.nan, -0.5, 0.5, np.nan, -0.25, np.nan, 0.25, np.nan]])
+
+        a1u, a2u = shape_coefficients(self.xc, self.yc, self.nbe, self.isbce)
+        test.assert_almost_equal(a1u, known_a1u)
+        test.assert_almost_equal(a2u, known_a2u)
+
+    def test_reduce_triangulation(self):
+        known_reduced = np.array([[0, 2, 1], [1, 2, 3]])
+
+        reduced = reduce_triangulation(self.tri, np.arange(5))
+
+        test.assert_equal(reduced, known_reduced)
+
     def test_vincenty_distance(self):
         """
         Standard tests as defined in https://github.com/maurycyp/vincenty
@@ -261,3 +304,12 @@ class GridToolsTest(TestCase):
         test.assert_equal(known_good, result)
         test.assert_equal(known_good_miles, result_miles)
 
+    def test_isintriangle(self):
+        test_point_x_in = 0.1
+        test_point_y_in = 0.2
+        test_point_x_out = self.x.max() + 0.1
+        test_point_y_out = self.y.max() + 0.2
+        in_triangle = isintriangle(self.x[self.tri[0, :]], self.y[self.tri[0, :]], test_point_x_in, test_point_y_in)
+        out_triangle = isintriangle(self.x[self.tri[0, :]], self.y[self.tri[0, :]], test_point_x_out, test_point_y_out)
+        test.assert_equal(in_triangle, True)
+        test.assert_equal(out_triangle, False)

@@ -7,15 +7,26 @@ from __future__ import print_function, division
 
 import os
 import sys
-import multiprocessing
-import numpy as np
 import math
-from matplotlib.tri.triangulation import Triangulation
-from matplotlib.tri import CubicTriInterpolator
-import matplotlib.path as mplPath
+import networkx
+import scipy.spatial
+import multiprocessing
+
+import numpy as np
+
+from dateutil.relativedelta import relativedelta
+from scipy.interpolate import RegularGridInterpolator
+from scipy.spatial import Delaunay
 from functools import partial
+from matplotlib.dates import date2num as mtime
+from matplotlib.tri import CubicTriInterpolator
+from matplotlib.tri.triangulation import Triangulation
+from utide.utilities import Bunch
+from utide import reconstruct, ut_constants
+from netCDF4 import Dataset, date2num
 
 from PyFVCOM.coordinate import utm_from_lonlat, lonlat_from_utm
+from PyFVCOM.utilities.time import date_range
 
 
 class Domain:
@@ -64,7 +75,6 @@ class Domain:
         self.grid.native_coordinates = native_coordinates
         self.grid.zone = zone
         # Initialise everything to None so we don't get caught out expecting something to exist when it doesn't.
-        self.domain_plot = None
         self.grid.open_boundary_nodes = None
         self.grid.filename = grid
 
@@ -145,6 +155,13 @@ class Domain:
             if self._noisy:
                 print('Loading MIKE21 grid {}'.format(self.grid.filename))
             triangle, nodes, x, y, z = read_mike_mesh(self.grid.filename)
+        else:
+            raise ValueError('Unknown file format ({}) for file {}.'.format(extension, self.grid.filename))
+
+        # Make open boundary objects from the nodestrings.
+        self.grid.open_boundary = []
+        for nodestring in nodestrings:
+            self.grid.open_boundary.append(OpenBoundary(nodestring))
 
         if self.grid.native_coordinates.lower() != 'spherical':
             # Convert from UTM.
@@ -153,7 +170,7 @@ class Domain:
         else:
             # Convert to UTM.
             self.grid.lon, self.grid.lat = x, y
-            self.grid.x, self.grid.y = utm_from_lonlat(x, y, zone=self.grid.zone)
+            self.grid.x, self.grid.y, _ = utm_from_lonlat(x, y, zone=self.grid.zone)
 
         self.grid.triangles = triangle
         self.grid.nv = triangle.T + 1  # for compatibility with FileReader
@@ -162,14 +179,89 @@ class Domain:
         self.grid.types = types
         self.grid.open_boundary_nodes = nodestrings
 
-        # Make element centred versions of everything.
+        # Make element-centred versions of everything.
         self.grid.xc = nodes2elems(self.grid.x, self.grid.triangles)
         self.grid.yc = nodes2elems(self.grid.y, self.grid.triangles)
         self.grid.lonc = nodes2elems(self.grid.lon, self.grid.triangles)
         self.grid.latc = nodes2elems(self.grid.lat, self.grid.triangles)
         self.grid.h_center = nodes2elems(self.grid.h, self.grid.triangles)
 
-    def closest_node(self, where, cartesian=False, threshold=None, vincenty=False, haversine=False):
+        # Add the coordinate ranges too
+        self.grid.lon_range = np.ptp(self.grid.lon)
+        self.grid.lat_range = np.ptp(self.grid.lat)
+        self.grid.lonc_range = np.ptp(self.grid.lonc)
+        self.grid.latc_range = np.ptp(self.grid.latc)
+        self.grid.x_range = np.ptp(self.grid.x)
+        self.grid.y_range = np.ptp(self.grid.y)
+        self.grid.xc_range = np.ptp(self.grid.xc)
+        self.grid.yc_range = np.ptp(self.grid.yc)
+        # Make a bounding box variable too (spherical coordinates): W/E/S/N
+        self.grid.bounding_box = (np.min(self.grid.lon), np.max(self.grid.lon),
+                                  np.min(self.grid.lat), np.max(self.grid.lat))
+
+    def _closest_point(self, x, y, lon, lat, where, threshold=np.inf, vincenty=False, haversine=False):
+        """
+        Find the index of the closest node to the supplied position (x, y). Set `cartesian' to True for cartesian
+        coordinates (defaults to spherical).
+
+        Parameters
+        ----------
+        x, y : np.ndarray
+            Grid coordinates within which to search. These are ignored if we have either of `vincenty' or `haversine'
+            enabled.
+        lon, lat : np.ndarray
+            Spherical grid positions. These only used if we have either of `vincenty' or `haversine' enabled.
+        where : list-like
+            Arbitrary x, y position for which to find the closest model grid position.
+        cartesian : bool, optional
+            Set to True to use cartesian coordinates. Defaults to False.
+        threshold : float, optional
+            Give a threshold distance beyond which the closest grid is considered too far away. Units are the same as
+            the coordinates in `where', unless using lat/lon and vincenty when it is in metres. Return None when
+            beyond threshold.
+        vincenty : bool, optional
+            Use vincenty distance calculation. Allows specification of point in lat/lon but threshold in metres.
+        haversine : bool, optional
+            Use the simpler but much faster Haversine distance calculation. Allows specification of point in lon/lat
+            but threshold in metres.
+
+        Returns
+        -------
+        index : int, None
+            Grid index which falls closest to the supplied position. If `threshold' is set and the distance from the
+            supplied position to the nearest model node exceeds that threshold, `index' is None.
+
+        """
+
+        if vincenty and haversine:
+            raise AttributeError("Please specify one of `haversine' or `vincenty', not both.")
+
+        # We have to split this into two parts: if our threshold is in the same units as the grid (i.e. haversine and
+        # vincenty are both False), then we can use the quick find_nearest_point function; if either of haversine or
+        # vincenty have been given, we need to use the distance conversion functions, which are slower.
+        if not vincenty or not haversine:
+            _, _, _, index = find_nearest_point(x, y, *where, maxDistance=threshold)
+            if np.any(np.isnan(index)):
+                index[np.isnan[index]] = None
+
+        if vincenty:
+            grid_pts = np.asarray([lon, lat]).T
+            dist = np.asarray([vincenty_distance(pt_1, where) for pt_1 in grid_pts]) * 1000
+        elif haversine:
+            grid_pts = np.asarray([lon, lat]).T
+            dist = np.asarray([haversine_distance(pt_1, where) for pt_1 in grid_pts]) * 1000
+
+        if vincenty or haversine:
+            index = np.argmin(dist)
+            if threshold:
+                if dist.min() < threshold:
+                    index = np.argmin(dist)
+                else:
+                    index = None
+
+        return index
+
+    def closest_node(self, where, cartesian=False, threshold=np.inf, vincenty=False, haversine=False):
         """
         Find the index of the closest node to the supplied position (x, y). Set `cartesian' to True for cartesian
         coordinates (defaults to spherical).
@@ -187,7 +279,8 @@ class Domain:
         vincenty : bool, optional
             Use vincenty distance calculation. Allows specification of point in lat/lon but threshold in metres.
         haversine : bool, optional
-            Use the simpler but much faster Haversine distance calculation. Allows specification of point in lat/lon but threshold in metres.
+            Use the simpler but much faster Haversine distance calculation. Allows specification of points in lon/lat
+            but threshold in metres.
 
         Returns
         -------
@@ -196,31 +289,14 @@ class Domain:
             supplied position to the nearest model node exceeds that threshold, `index' is None.
 
         """
+        if cartesian:
+            x, y = self.grid.x, self.grid.y
+        else:
+            x, y = self.grid.lon, self.grid.lat
 
-        if not vincenty or not haversine:
-            if cartesian:
-                x, y = self.grid.x, self.grid.y
-            else:
-                x, y = self.grid.lon, self.grid.lat
-            dist = np.sqrt((x - where[0])**2 + (y - where[1])**2)
-        elif vincenty:
-            grid_pts = np.asarray([self.grid.lon, self.grid.lat]).T
-            where_pt_rep = np.tile(np.asarray(where), (len(self.grid.lon),1))
-            dist = np.asarray([vincenty_distance(pt_1, pt_2) for pt_1, pt_2 in zip(grid_pts, where_pt_rep)])*1000
-        elif haversine:
-            grid_pts = np.asarray([self.grid.lon, self.grid.lat]).T
-            where_pt_rep = np.tile(np.asarray(where), (len(self.grid.lon),1))
-            dist = np.asarray([haversine_distance(pt_1, pt_2) for pt_1, pt_2 in zip(grid_pts, where_pt_rep)])*1000
-        index = np.argmin(dist)
-        if threshold:
-            if dist.min() < threshold:
-                index = np.argmin(dist)
-            else:
-                index = None
+        return self._closest_point(x, y, self.grid.lon, self.grid.lat, where, threshold=threshold, vincenty=vincenty, haversine=haversine)
 
-        return index
-
-    def closest_element(self, where, cartesian=False, threshold=None, vincenty=False):
+    def closest_element(self, where, cartesian=False, threshold=np.inf, vincenty=False, haversine=False):
         """
         Find the index of the closest element to the supplied position (x, y). Set `cartesian' to True for cartesian
         coordinates (defaults to spherical).
@@ -237,6 +313,9 @@ class Domain:
             beyond threshold.
         vincenty : bool, optional
             Use vincenty distance calculation. Allows specification of point in lat/lon but threshold in metres
+        haversine : bool, optional
+            Use the simpler but much faster Haversine distance calculation. Allows specification of points in lon/lat
+            but threshold in metres.
 
         Returns
         -------
@@ -245,25 +324,390 @@ class Domain:
             supplied position to the nearest model node exceeds that threshold, `index' is None.
 
         """
-        if not vincenty:
-            if cartesian:
-                x, y = self.grid.xc, self.grid.yc
-            else:
-                x, y = self.grid.lonc, self.grid.latc
-            dist = np.sqrt((x - where[0])**2 + (y - where[1])**2)
+        if cartesian:
+            x, y = self.grid.xc, self.grid.yc
         else:
-            grid_pts = np.asarray([self.grid.lonc, self.grid.latc]).T
-            where_pt_rep = np.tile(np.asarray(where), (len(self.grid.lonc),1))
-            dist = np.asarray([vincenty_distance(pt_1, pt_2) for pt_1, pt_2 in zip(grid_pts, where_pt_rep)])*1000
+            x, y = self.grid.lonc, self.grid.latc
 
-        index = np.argmin(dist)
-        if threshold:
-            if dist.min() < threshold:
-                index = np.argmin(dist)
+        return self._closest_point(x, y, self.grid.lonc, self.grid.latc, where, threshold=threshold, vincenty=vincenty, haversine=haversine)
+
+    def horizontal_transect_nodes(self, positions):
+        """
+        Extract node IDs along a line defined by `positions' [[x1, y1], [x2, y2], ..., [xn, yn]].
+
+        Parameters
+        ----------
+        positions : np.ndarray
+            Array of positions along which to sample the grid. Units are spherical decimal degrees.
+
+        Returns
+        -------
+        indices : np.ndarray
+            Indices of the grid node positions comprising the transect.
+        distance : np.ndarray
+            Distance (in metres) along the transect.
+
+        """
+
+        # Since we're letting the transect positions be specified in spherical coordinates and we want to return the
+        # distance in metres, we need to do this in two steps: first, find the indices of the transect from the
+        # spherical grid, and secondly, find the distance in metres from the cartesian grid.
+        indices, _ = line_sample(self.grid.lon, self.grid.lat, positions)
+        distance = np.cumsum([0] + [np.hypot(self.grid.x[i + 1] - self.grid.x[i], self.grid.y[i + 1] - self.grid.y[i]) for i in indices[:-1]])
+
+        return indices, distance
+
+    def horizontal_transect_elements(self, positions):
+        """
+        Extract element IDs along a line defined by `positions' [[x1, y1], [x2, y2], ..., [xn, yn]].
+
+        Parameters
+        ----------
+        positions : np.ndarray
+            Array of positions along which to sample the grid. Units are spherical decimal degrees.
+
+        Returns
+        -------
+        indices : np.ndarray
+            Indices of the grid element positions comprising the transect.
+        distance : np.ndarray
+            Distance (in metres) along the transect.
+
+        """
+
+        indices, distance = element_sample(self.grid.lonc, self.grid.latc, positions)
+
+        return indices, distance
+
+
+class OpenBoundary:
+    """ FVCOM grid open boundary object. Handles reading, writing and interpolating. """
+
+    def __init__(self, ids, mode='nodes'):
+        """
+        Given a set of open boundary nodes, create some methods based on their positions.
+
+        Parameters
+        ----------
+        ids : np.ndarray
+            Array of unstructured grid IDs representing a model open boundary.
+        mode : str, optional
+            Set the boundary to work on nodes ('nodes') or element-centres ('elements'). Defaults to 'nodes'.
+
+        Provides
+        --------
+        add_sponge_layer : add a sponge layer to the open boundary.
+        add_tpxo_tides : predict tidal elevations/currents along the open boundary.
+        add_nested_forcing : interpolate some regularly gridded data onto the open boundary.
+
+        """
+        self.mode = mode
+        if self.mode == 'nodes':
+            self.nodes = ids
+        else:
+            self.elements = ids
+        self.sponge_coefficient = None
+        self.sponge_radius = None
+        # These get added to by PyFVCOM.preproc.Model and are used in the tide and nest functions below.
+        self.tide = type('tide', (), {})()
+        self.grid = type('grid', (), {})()
+        self.sigma = type('sigma', (), {})()
+        self.time = type('time', (), {})()
+        self.nest = type('nest', (), {})()
+
+    def add_sponge_layer(self, radius, coefficient):
+        """
+        Add a sponge layer. If radius or coefficient are floats, apply the same value to all nodes.
+
+        Parameters
+        ----------
+        radius : float, list, np.ndarray
+            The sponge layer radius at the given nodes.
+        coefficient : float, list, np.ndarray
+            The sponge layer coefficient at the given nodes.
+
+        Provides
+        --------
+        sponge_radius : np.ndarray
+            Sponge radii for the nodes in the boundary.
+        sponge_coefficient
+            Sponge coefficients for the nodes in the boundary.
+
+        """
+
+        if isinstance(radius, (float, int)):
+            radius = np.repeat(radius, np.shape(self.nodes))
+        if isinstance(coefficient, (float, int)):
+            coefficient = np.repeat(coefficient, np.shape(self.nodes))
+
+        self.sponge_radius = radius
+
+        self.sponge_coefficient = coefficient
+
+    def add_tpxo_tides(self, tpxo_harmonics, predict='zeta', interval=1, constituents=['M2'], serial=False, pool_size=None, noisy=False):
+        """
+        Add TPXO tides at the open boundary nodes.
+
+        Parameters
+        ----------
+        tpxo_harmonics : str, pathlib.Path
+            Path to the TPXO harmonics netCDF file to use.
+        predict : str, optional
+            Type of data to predict. Select 'zeta' (default), 'u' or 'v'.
+        interval : str, optional
+            Time sampling interval in days. Defaults to 1 hour.
+        constituents : list, optional
+            List of constituent names to use in UTide.reconstruct. Defaults to ['M2'].
+        serial : bool, optional
+            Run in serial rather than parallel. Defaults to parallel.
+        pool_size : int, optional
+            Specify number of processes for parallel run. By default it uses all available.
+        noisy : bool, optional
+            Set to True to enable some sort of progress output. Defaults to False.
+
+        """
+
+        if self.time is None:
+            raise ValueError('No time data have been added to this OpenBoundary object, so we cannot predict tides.')
+
+        dates = date_range(self.time.start - relativedelta(days=1), self.time.end + relativedelta(days=1), inc=interval / 24)
+        self.tide.time = dates
+        # UTide needs MATLAB times.
+        times = mtime(dates)
+
+        if predict == 'zeta':
+            amplitude_var, phase_var = 'ha', 'hp'
+            x, y = self.grid.lon, self.grid.lat
+            obc = self.nodes
+        elif predict == 'u':
+            amplitude_var, phase_var = 'ua', 'up'
+            x, y = self.grid.lonc, self.grid.latc
+            obc = self.elements
+        elif predict == 'v':
+            amplitude_var, phase_var = 'va', 'vp'
+            x, y = self.grid.lonc, self.grid.latc
+            obc = self.elements
+
+        xdim = len(obc)
+        latitudes = y[obc]
+
+        with Dataset(str(tpxo_harmonics), 'r') as tides:
+            tpxo_const = [''.join(i).upper().strip() for i in tides.variables['con'][:].astype(str)]
+            # If we've been given variables that aren't in the TPXO data, just find the indices we do have.
+            cidx = [tpxo_const.index(i) for i in constituents if i in tpxo_const]
+            # Save the names of the constituents we've actually used.
+            self.tide.constituents = [constituents[i] for i in cidx]
+            amplitudes = np.empty((xdim, len(cidx))) * np.nan
+            phases = np.empty((xdim, len(cidx))) * np.nan
+
+            for xi, xy in enumerate(zip(x[obc], y[obc])):
+                idx = [np.argmin(np.abs(tides['lon_z'][:, 0] - xy[0])),
+                       np.argmin(np.abs(tides['lat_z'][0, :] - xy[1]))]
+                amplitudes[xi, :] = tides.variables[amplitude_var][cidx, idx[0], idx[1]]
+                phases[xi, :] = tides.variables[phase_var][cidx, idx[0], idx[1]]
+
+        # Prepare the UTide inputs for the constituents in the TPXO data.
+        const_idx = np.asarray([ut_constants['const']['name'].tolist().index(i) for i in self.tide.constituents])
+        frq = ut_constants['const']['freq'][const_idx]
+
+        coef = Bunch(name=self.tide.constituents, mean=0, slope=0)
+        coef['aux'] = Bunch(reftime=729572.47916666674, lind=const_idx, frq=frq)
+        coef['aux']['opt'] = Bunch(twodim=False, nodsatlint=False, nodsatnone=False,
+                                   gwchlint=False, gwchnone=False, notrend=False, prefilt=[])
+
+        args = [(latitudes[i], times, coef, amplitudes[i], phases[i], noisy) for i in range(xdim)]
+        if serial:
+            results = []
+            for arg in args:
+                results.append(self._predict_tide(arg))
+        else:
+            if not pool_size:
+                pool = multiprocessing.Pool()
             else:
-                index = None
+                pool = multiprocessing.Pool(pool_size)
+            results = pool.map(self._predict_tide, args)
+            pool.close()
 
-        return index
+        # Dump the results into the object.
+        setattr(self.tide, predict, np.asarray(results))
+
+    @staticmethod
+    def _predict_tide(args):
+        """
+        For the given time and coefficients (in coef) reconstruct the tidal elevation or current component time
+        series at the given latitude.
+
+        Parameters
+        ----------
+        A single tuple with the following variables:
+
+        lats : np.ndarray
+            Latitudes of the positions to predict.
+        times : ndarray
+            Array of matplotlib datenums (see `matplotlib.dates.num2date').
+        coef : utide.utilities.Bunch
+            Configuration options for utide.
+        amplitudes : ndarray
+            Amplitude of the relevant constituents shaped [nconst].
+        phases : ndarray
+            Array of the phase of the relevant constituents shaped [nconst].
+        noisy : bool
+            Set to true to enable verbose output. Defaults to False (no output).
+
+        Returns
+        -------
+        zeta : ndarray
+            Time series of surface elevations.
+
+        Notes
+        -----
+        Uses utide.reconstruct() for the predicted tide.
+
+        """
+        lats, times, coef, amplitude, phase, noisy = args
+        if np.isnan(lats):
+            return None
+        coef['aux']['lat'] = lats  # float
+        coef['A'] = amplitude
+        coef['g'] = phase
+        coef['A_ci'] = np.zeros(amplitude.shape)
+        coef['g_ci'] = np.zeros(phase.shape)
+        pred = reconstruct(times, coef, verbose=False)
+        zeta = pred['h']
+
+        return zeta
+
+    def add_nested_forcing(self, fvcom_name, coarse_name, coarse, interval=1, constrain_coordinates=False):
+        """
+        Interpolate the given data onto the open boundary nodes for the period from `self.time.start' to
+        `self.time.end'.
+
+        Parameters
+        ----------
+        fvcom_name : str
+            The data field name to add to the nest object which will be written to netCDF for FVCOM.
+        coarse_name : str
+            The data field name to use from the coarse object.
+        coarse : RegularReader
+            The regularly gridded data to interpolate onto the open boundary nodes. This must include time, lon,
+            lat and depth data as well as the time series to interpolate (4D volume [time, depth, lat, lon]).
+        interval : str, optional
+            Time sampling interval in days. Defaults to 1 day.
+        constrain_coordinates : bool
+            Set to True to constrain the open boundary coordinates (lon, lat, depth) to the supplied coarse data.
+            This essentially squashes the open boundary to fit inside the coarse data and is, therefore, a bit of a
+            fudge! Defaults to False.
+
+        """
+
+        # Check we have what we need.
+        raise_error = False
+        if self.mode == 'nodes':
+            if not hasattr(self.sigma, 'layers'):
+                raise_error = True
+        elif self.mode == 'elements':
+            if not hasattr(self.sigma, 'layers_center'):
+                raise_error = True
+        if raise_error:
+            raise AttributeError('Add vertical sigma coordinates in order to interpolate forcing along this boundary.')
+
+        # Populate the time data.
+        self.nest.time = type('time', (), {})()
+        self.nest.time.interval = interval
+        self.nest.time.datetime = date_range(self.time.start, self.time.end, inc=interval)
+        self.nest.time.time = date2num(getattr(self.nest.time, 'datetime'), units='days since 1858-11-17 00:00:00')
+        self.nest.time.Itime = np.floor(getattr(self.nest.time, 'time'))  # integer Modified Julian Days
+        self.nest.time.Itime2 = (getattr(self.nest.time, 'time') - getattr(self.nest.time, 'Itime')) * 24 * 60 * 60 * 1000  # milliseconds since midnight
+        self.nest.time.Times = [t.strftime('%Y-%m-%dT%H:%M:%S.%f') for t in getattr(self.nest.time, 'datetime')]
+
+        if self.mode == 'elements':
+            boundary_points = self.elements
+            x = self.grid.lonc
+            y = self.grid.latc
+            # Keep positive down depths.
+            z = -self.sigma.layers_center_z
+        else:
+            boundary_points = self.nodes
+            x = self.grid.lon
+            y = self.grid.lat
+            # Keep positive down depths.
+            z = -self.sigma.layers_z
+
+        if constrain_coordinates:
+            x[x < coarse.grid.lon.min()] = coarse.grid.lon.min()
+            x[x > coarse.grid.lon.max()] = coarse.grid.lon.max()
+            y[y < coarse.grid.lat.min()] = coarse.grid.lat.min()
+            y[y > coarse.grid.lat.max()] = coarse.grid.lat.max()
+
+            # The depth data work differently as we need to squeeze each FVCOM water column into the available coarse
+            # data. The only way to do this is to adjust each FVCOM water column in turn by comparing with the
+            # closest coarse depth.
+            coarse_depths = np.tile(coarse.grid.depth, [coarse.dims.lat, coarse.dims.lon, 1]).transpose(2, 0, 1)
+            coarse_depths = np.ma.masked_array(coarse_depths, mask=getattr(coarse.data, coarse_name)[0, ...].mask)
+            coarse_depths = np.max(coarse_depths, axis=0)
+            # Fix all depths which are shallower than the shallowest coarse depth. This is more straightforward as
+            # it's a single minimum across all the open boundary positions.
+            z[z < coarse.grid.depth.min()] = coarse.grid.depth.min()
+            # Go through each open boundary position and if its depth is deeper than the closest coarse data,
+            # squash the open boundary water column into the coarse water column.
+            for idx, node in enumerate(zip(x, y, z)):
+                lon_index = np.argmin(np.abs(self.grid.lon - node[0]))
+                lat_index = np.argmin(np.abs(self.grid.lat - node[1]))
+                if coarse_depths[lat_index, lon_index] < node[2].max():
+                    # Squash the FVCOM water column into the coarse water column.
+                    # z[idx, :] = fix_range(node[2], coarse.grid.depth.min(), coarse_depths[lat_index, lon_index])
+                    # TODO: Is the sign of the offset right here?
+                    z[idx, :] = (node[2] / node[2].max()) * coarse_depths[lat_index, lon_index] - 1  # offset by a bit
+
+        # Make arrays of lon, lat, depth and time. Need to make the coordinates match the coarse data shape and then
+        # flatten the lot. We should be able to do the interpolation in one shot this way, but we have to be
+        # careful our coarse data covers our model domain (space and time).
+        nt = len(self.nest.time.time)
+        nx = len(boundary_points)
+        nz = z.shape[-1]
+        boundary_grid = np.array((np.tile(self.nest.time.time, [nx, nz, 1]).T.ravel(),
+                                  np.tile(z.T, [nt, 1, 1]).ravel(),
+                                  np.tile(y, [nz, nt, 1]).transpose(1, 0, 2).ravel(),
+                                  np.tile(x, [nz, nt, 1]).transpose(1, 0, 2).ravel())).T
+        ft = RegularGridInterpolator((coarse.time.time, coarse.grid.depth, coarse.grid.lat, coarse.grid.lon),
+                                     getattr(coarse.data, coarse_name), method='linear', fill_value=np.nan)
+        # Reshape the results to match the un-ravelled boundary_grid array.
+        interpolated_coarse_data = ft(boundary_grid).reshape([nt, nz, -1])
+
+        # Drop the interpolated data into the nest object.
+        setattr(self.nest, fvcom_name, interpolated_coarse_data)
+
+    @staticmethod
+    def _nested_forcing_interpolator(data, lon, lat, depth, points):
+        """
+        Worker function to interpolate the regularly gridded [depth, lat, lon] data onto the supplied `points' [lon,
+        lat, depth].
+
+        Parameters
+        ----------
+        data : np.ndarray
+            Coarse data to interpolate [depth, lat, lon].
+        lon : np.ndarray
+            Coarse data longitude array.
+        lat : np.ndarray
+            Coarse data latitude array.
+        depth : np.ndarray
+            Coarse data depth array.
+        points : np.ndarray
+            Points onto which the coarse data should be interpolated.
+
+        Returns
+        -------
+        interpolated_data : np.ndarray
+            Coarse data interpolated onto the supplied points.
+
+        """
+
+        # Make a RegularGridInterpolator from the supplied 4D data.
+        ft = RegularGridInterpolator((depth, lat, lon), data, method='nearest', fill_value=None)
+        interpolated_data = ft(points)
+
+        return interpolated_data
 
 
 def read_sms_mesh(mesh, nodestrings=False):
@@ -947,97 +1391,71 @@ def write_fvcom_mesh(triangles, nodes, x, y, z, mesh, extra_depth=None):
                 f.write('{:.6f} {:.6f} {:.6f}\n'.format(*node))
 
 
-def find_nearest_point(FX, FY, x, y, maxDistance=np.inf, noisy=False):
+def find_nearest_point(grid_x, grid_y, x, y, maxDistance=np.inf, noisy=False):
     """
-    Given some point(s) x and y, find the nearest grid node in FX and
-    FY.
+    Given some point(s) `x' and `y', find the nearest grid node in `grid_x' and `grid_y'.
 
-    Returns the nearest coordinate(s), distance(s) from the point(s) and
-    the index in the respective array(s).
+    Returns the nearest coordinate(s), distance(s) from the point(s) and the index in the respective array(s).
 
-    Optionally specify a maximum distance (in the same units as the
-    input) to only return grid positions which are within that distance.
-    This means if your point lies outside the grid, for example, you can
-    use maxDistance to filter it out. Positions and indices which cannot
-    be found within maxDistance are returned as NaN; distance is always
-    returned, even if the maxDistance threshold has been exceeded.
+    Optionally specify a maximum distance (in the same units as the input) to only return grid positions which are
+    within that distance. This means if your point lies outside the grid, for example, you can use maxDistance to
+    filter it out. Positions and indices which cannot be found within maxDistance are returned as NaN; distance is
+    always returned, even if the maxDistance threshold has been exceeded.
 
     Parameters
     ----------
-    FX, FY : ndarray
-        Coordinates within which to search for the nearest point given
-        in x and y.
-    x, y : ndarray
-        List of coordinates to find the closest value in FX and FY.
-        Upper threshold of distance is given by maxDistance (see below).
+    grid_x, grid_y : np.ndarray
+        Coordinates within which to search for the nearest point given in `x' and `y'.
+    x, y : np.ndarray
+        List of coordinates to find the closest value in FX and FY. Upper threshold of distance is given by
+        maxDistance (see below).
     maxDistance : float, optional
-        Unless given, there is no upper limit on the distance away from
-        the source for which a result is deemed valid. Any other value
-        specified here limits the upper threshold.
+        Unless given, there is no upper limit on the distance away from the source for which a result is deemed
+        valid. Any other value specified here limits the upper threshold.
     noisy : bool or int, optional
-        Set to True to enable verbose output. If int, outputs every nth
-        iteration.
+        Set to True to enable verbose output. If int, outputs every nth iteration.
 
     Returns
     -------
-    nearestX, nearestY : ndarray
-        Coordinates from FX and FY which are within maxDistance (if
-        given) and closest to the corresponding point in x and y.
+    nearest_x, nearest_y : np.ndarray
+        Coordinates from `grid_x' and `grid_y' which are within maxDistance (if given) and closest to the
+        corresponding point in `x' and `y'.
     distance : ndarray
-        Distance between each point in x and y and the closest value in
-        FX and FY. Even if maxDistance is given (and exceeded), the
-        distance is reported here.
-    index : ndarray
-        List of indices of FX and FY for the closest positions to those
-        given in x, y.
+        Distance between each point in `x' and `y' and the closest value in `grid_x' and `grid_y'. Even if
+        maxDistance is given (and exceeded), the distance is reported here.
+    index : np.ndarray
+        List of indices of `grid_x' and `grid_y' for the closest positions to those given in `x', `y'.
 
     """
 
     if np.ndim(x) != np.ndim(y):
         raise Exception('Number of points in X and Y do not match')
 
-    nearestX = np.empty(np.shape(x))
-    nearestY = np.empty(np.shape(x))
-    index = np.empty(np.shape(x))
-    distance = np.empty(np.shape(x))
-
-    # Make all values NaN
-    nearestX = nearestX.ravel() * np.NaN
-    nearestY = nearestY.ravel() * np.NaN
-    index = index.ravel() * np.NaN
-    distance = distance.ravel() * np.NaN
+    grid_xy = np.array((grid_x, grid_y)).T
 
     if np.ndim(x) == 0:
-        todo = np.column_stack([x, y])
-        n = 1
+        search_xy = np.column_stack([x, y])
     else:
-        todo = list(zip(x, y))
-        n = np.shape(x)[0]
+        search_xy = np.array((x, y)).T
 
-    for c, pointXY in enumerate(todo):
-        if type(noisy) == int:
-            if c == 0 or (c + 1) % noisy == 0:
-                print('Point {} of {}'.format(c + 1, n))
-        elif noisy:
-            print('Point {} of {}'.format(c + 1, n))
+    kdtree = scipy.spatial.cKDTree(grid_xy)
+    dist, indices = kdtree.query(search_xy)
+    # Replace positions outside the grid with NaNs. Should these simply be removed?
+    if np.any(indices == len(grid_xy)):
+        indices = indices.astype(float)
+        indices[indices == len(grid_xy)] = np.nan
+    # Replace positions beyond the given distance threshold with NaNs.
+    if np.any(dist > maxDistance):
+        indices = indices.astype(float)
+        indices[dist > maxDistance] = np.nan
 
-        findX, findY = FX - pointXY[0], FY - pointXY[1]
-        vectorDistances = np.sqrt(findX**2 + findY**2)
-        if vectorDistances.min() > maxDistance:
-            distance[c] = np.min(vectorDistances)
-            # Should be NaN already, but no harm in being thorough
-            index[c], nearestX[c], nearestY[c] = np.NaN, np.NaN, np.NaN
-        else:
-            distance[c] = vectorDistances.min()
-            index[c] = vectorDistances.argmin()
-            nearestX[c] = FX[int(index[c])]
-            nearestY[c] = FY[int(index[c])]
+    # To maintain backwards compatibility, we need to return a value for every input position. We return NaN for
+    # values outside the threshold distance (if given) or domain.
+    nearest_x, nearest_y = np.empty(len(indices)) * np.nan, np.empty(len(indices)) * np.nan
+    nearest_x[~np.isnan(indices)] = grid_x[indices[~np.isnan(indices)].astype(int)]
+    nearest_y[~np.isnan(indices)] = grid_y[indices[~np.isnan(indices)].astype(int)]
 
-    # Convert the indices to ints if we don't have any NaNs.
-    if not np.any(np.isnan(index)):
-        index = index.astype(int)
-
-    return nearestX, nearestY, distance, index
+    return nearest_x, nearest_y, dist, indices
 
 
 def element_side_lengths(triangles, x, y):
@@ -1076,240 +1494,6 @@ def element_side_lengths(triangles, x, y):
         elemSides[it, 2] = np.sqrt((pos3x - pos1x)**2 + (pos3y - pos1y)**2)
 
     return elemSides
-
-
-def fix_coordinates(FVCOM, UTMZone, inVars=['x', 'y']):
-    """
-    Use the lonlat_from_utm function to convert the grid from UTM to Lat/Long.
-    Returns longitude and latitude in the range -180 to 180.
-
-    By default, the variables which will be converted from UTM to Lat/Long are
-    'x' and 'y'. To specify a different pair, give inVars=['xc', 'yc'], for
-    example, to convert the 'xc' and 'yc' variables instead. Their order should
-    be x-direction followed by y-direction.
-
-    Parameters
-    ----------
-    FVCOM : dict
-        Dict of the FVCOM model results (see PyFVCOM.read.ncread).
-    UTMZone : str
-        UTM Zone (e.g. '30N').
-    inVars : list, optional
-        List of strings specifying the keys for FVCOM to be used as input.
-        Defaults to ['x', 'y'] but if you wanted to convert element centres,
-        change to ['xc', 'yc'] instead.
-
-    Returns
-    -------
-    X, Y : ndarray
-        Converted coordinates in longitude and latitude.
-
-    """
-
-    try:
-        X, Y = lonlat_from_utm(FVCOM[inVars[0]], FVCOM[inVars[1]], zone=UTMZone)
-    except IOError:
-        print("Couldn't find the {} or {} variables in the FVCOM dict.".format(inVars[0], inVars[1], end=''))
-        print('Check you loaded them and try again.')
-
-    # Make the range -180 to 180 rather than 0 to 360.
-    if np.min(X) >= 0:
-        X[X > 180] = X[X > 180] - 360
-
-    return X, Y
-
-
-def clip_triangulation(MODEL, sideLength, keys=['xc', 'yc']):
-    """
-    Make a new triangulation of the element centres and clip according
-    to a maximum length.
-
-    Parameters
-    ----------
-    MODEL : dict
-        Contains the MODEL model results. Keys are assumed to be ['xc', 'yc']
-        unless the optional argument `keys' is specified (see below).
-    sideLength : float
-        Maximum length of an element before it is clipped.
-    keys : list, optional
-        List of two keys to use as the x and y coordinates for the
-        triangulation. Defaults to ['xc', 'yc'].
-
-    Returns
-    -------
-    triClip : ndarray
-        Triangulation (indices of the coordinates which make up an
-        element) of the new clipped elements. This can be used with the
-        input coordinates in MODEL to plot the new unstructured grid.
-
-    """
-
-    tri = Triangulation(MODEL[keys[0]], MODEL[keys[1]]).triangles
-
-    # Get the length of all element edges
-    xx, yy = MODEL[keys[0]][tri], MODEL[keys[1]][tri]
-    dx = np.empty(np.shape(xx))
-    dy = np.empty(np.shape(yy))
-    sxy = np.empty(np.shape(xx))
-    dx[:, 0] = xx[:, 0] - xx[:, 1]
-    dx[:, 1] = xx[:, 1] - xx[:, 2]
-    dx[:, 2] = xx[:, 2] - xx[:, 0]
-    dy[:, 0] = yy[:, 0] - yy[:, 1]
-    dy[:, 1] = yy[:, 1] - yy[:, 2]
-    dy[:, 2] = yy[:, 2] - yy[:, 0]
-    sxy[:, 0] = np.sqrt(dx[:, 0]**2 + dy[:, 1]**2)
-    sxy[:, 1] = np.sqrt(dx[:, 1]**2 + dy[:, 2]**2)
-    sxy[:, 2] = np.sqrt(dx[:, 2]**2 + dy[:, 0]**2)
-
-    triClip = []
-    for i, t in enumerate(sxy):
-        if max(t) <= sideLength:
-            # Keep this element
-            triClip.append(tri[i])
-
-    triClip = np.asarray(triClip)
-
-    return triClip
-
-
-def get_river_config(fileName, noisy=False, zeroindex=False):
-    """
-    Parse the rivers namelist to extract the parameters and their values.
-    Returns a dict of the parameters with the associated values for all the
-    rivers defined in the namelist.
-
-    Parameters
-    ----------
-    fileName : str
-        Full path to an FVCOM Rivers name list.
-    noisy : bool, optional
-        Set to True to enable verbose output. Defaults to False.
-    zeroindex : bool, optional
-        Set to True to convert indices from 1-based to 0-based.
-
-    Returns
-    -------
-    rivers : dict
-        Dict of the parameters for each river defind in the name list.
-        Dictionary keys are the name list parameter names (e.g. RIVER_NAME).
-
-    Notes
-    -----
-
-    The indices returned in RIVER_GRID_LOCATION are 1-based (i.e. read in raw
-    from the nml file). For use in Python, you can either subtract 1 yourself,
-    or pass zeroindex=True to this function.
-
-    """
-
-    f = open(fileName)
-    lines = f.readlines()
-    rivers = {}
-    for line in lines:
-        line = line.strip()
-
-        if line and not line.startswith('&') and not line.startswith('/'):
-            param, value = [i.strip(",' ") for i in line.split('=')]
-            if param in rivers:
-                rivers[param].append(value)
-            else:
-                rivers[param] = [value]
-
-    if noisy:
-        print('Found {} rivers.'.format(len(rivers['RIVER_NAME'])))
-
-    f.close()
-
-    if zeroindex and 'RIVER_GRID_LOCATION' in rivers:
-        rivers['RIVER_GRID_LOCATION'] = [int(i) - 1 for i in rivers['RIVER_GRID_LOCATION']]
-
-    return rivers
-
-
-def get_rivers(discharge, positions, noisy=False):
-    """
-    Extract the modified POLCOMS positions and the discharge data.
-
-    Parameters
-    ----------
-    discharge : list
-        Full path to the POLCOMS flw discharge ASCII file(s) for a given year.
-        Number of rows is time, number of columns is number of rivers. The
-        order of the locations in the positions file must match the order of
-        the
-    positions : str
-        Full path to an ASCII file of the (modified) positions of the POLCOMS
-        rivers as lon, lat, name.
-    noisy : bool
-        Set to True to enable verbose output (defaults to False)
-
-    Returns
-    -------
-    rivers : dict
-        Dictionary of the time series for each location in the positions file.
-        For multiple discharge files, the data are appended in time. Dictionary
-        keys are the river names in the positions file. N.B. The concatenation
-        assumes the files are given in chronological order.
-    locations : dict
-        Dictionary of longitudes and latitudes for each of the rivers in the
-        positions file. Keys are the river names.
-
-    """
-
-    f = open(positions, 'r')
-    lines = f.readlines()
-    locations = {}
-    order = 0
-    for c, line in enumerate(lines):
-        if c > 0:
-            line = line.strip()
-            lon, lat, name = line.split(',')
-            if name.strip() in locations:
-                # Key already exists... just append a 1 to the key name.
-                if noisy:
-                    print('Duplicate key {}. Renaming to {}_1'.format(
-                        name.strip(), name.strip()))
-
-                locations[name.strip() + '_1'] = [float(lon),
-                    float(lat),
-                    order]
-            else:
-                locations[name.strip()] = [float(lon), float(lat), order]
-
-            # Keep a track of the order we're putting the data into the dict
-            # for the extraction to the flux array.
-            order += 1
-
-    f.close()
-
-    rivers = {}
-
-    for c, dfile in enumerate(discharge):
-        if noisy:
-            print('Reading in river discharge from file {}... '.format(dfile),
-                  end=' ')
-
-        # Just dump the file with np.genfromtxt.
-        if c == 0:
-            flux = np.genfromtxt(dfile)
-        else:
-            flux = np.vstack((flux, np.genfromtxt(dfile)))
-
-        if noisy:
-            print('done.')
-
-    if flux.shape[-1] != len(list(locations.keys())):
-        raise Exception('Inconsistent number of rivers and discharge profiles')
-
-    # Now we need to iterate through the names and create the dict with the
-    # relevant data.
-    for station in locations:
-        # Get the order index from the locations dict.
-        n = locations[station][-1]
-        # Extract the data from the flux array.
-        rivers[station] = flux[:, n]
-
-    return rivers, locations
 
 
 def mesh2grid(meshX, meshY, meshZ, nx, ny, thresh=None, noisy=False):
@@ -1431,8 +1615,8 @@ def mesh2grid(meshX, meshY, meshZ, nx, ny, thresh=None, noisy=False):
 def line_sample(x, y, positions, num=0, return_distance=False, noisy=False):
     """
     Function to take an unstructured grid of positions x and y and find the
-    points which fall closest to a line defined by the coordinate pairs start
-    and end.
+    points which fall closest to a line defined by the coordinate pairs
+    `positions'.
 
     If num=0 (default), then the line will be sampled at each nearest node; if
     num is greater than 1, then the line will be subdivided into num segments
@@ -1446,9 +1630,9 @@ def line_sample(x, y, positions, num=0, return_distance=False, noisy=False):
 
     Parameters
     ----------
-    x, y : ndarray
+    x, y : np.ndarray
         Position arrays for the unstructured grid.
-    positions : ndarray
+    positions : np.ndarray
         Coordinate pairs of the sample line coordinates [[xpos, ypos], ...,
         [xpos, ypos]].  Units must match those in (x, y).
     num : int, optional
@@ -1465,11 +1649,11 @@ def line_sample(x, y, positions, num=0, return_distance=False, noisy=False):
     -------
     idx : list
         List of indices for the nodes used in the line sample.
-    line : ndarray
-        List of positions which fall along the line described by (start, end).
+    line : np.ndarray
+        List of positions which fall along the line described by `positions'.
         These are the projected positions of the nodes which fall closest to
         the line (not the positions of the nodes themselves).
-    distance : ndarray, optional
+    distance : np.ndarray, optional
         If `return_distance' is True, return the distance along the line
         described by the nodes in idx.
 
@@ -1487,11 +1671,11 @@ def line_sample(x, y, positions, num=0, return_distance=False, noisy=False):
 
         Parameters
         ----------
-        xs, ys : ndarray
+        xs, ys : np.ndarray
             Node position arrays.
-        start, end : ndarray
+        start, end : np.ndarray
             Coordinate pairs for the start and end of the sample line.
-        pdist : ndarray
+        pdist : np.ndarray
             Distance of the nodes in xs and ys from the line defined by
             `start' and `end'.
 
@@ -1499,7 +1683,7 @@ def line_sample(x, y, positions, num=0, return_distance=False, noisy=False):
         -------
         idx : list
             List of indices for the nodes used in the line sample.
-        line : ndarray
+        line : np.ndarray
             List of positions which fall along the line described by (start,
             end). These are the projected positions of the nodes which fall
             closest to the line (not the positions of the nodes themselves).
@@ -1765,6 +1949,78 @@ def line_sample(x, y, positions, num=0, return_distance=False, noisy=False):
         return idx, line
 
 
+def element_sample(xc, yc, positions):
+    """
+    Find the shortest path between the sets of positions using the unstructured grid triangulation.
+
+    Returns element indices and a distance along the line (in metres).
+
+    Parameters
+    ----------
+    xc, yc : np.ndarray
+        Position arrays for the unstructured grid element centres (decimal degrees).
+    positions : np.ndarray
+        Coordinate pairs of the sample line coordinates np.array([[x1, y1], ..., [xn, yn]] in decimal degrees.
+
+    Returns
+    -------
+    indices : np.ndarray
+        List of indices for the elements used in the transect.
+    distance : np.ndarray, optional
+        The distance along the line in metres described by the elements in indices.
+
+    Notes
+    -----
+    This is lifted and adjusted for use with PyFVCOM from PySeidon.utilities.shortest_element_path.
+
+    """
+
+    grid = np.array((xc, yc)).T
+
+    triangulation = Delaunay(grid)
+
+    # Create a set for edges that are indices of the points.
+    edges = []
+    for vertex in triangulation.vertices:
+        # For each edge of the triangle, sort the vertices (sorting avoids duplicated edges being added to the set)
+        # and add to the edges set.
+        edge = sorted([vertex[0], vertex[1]])
+        a = grid[edge[0]]
+        b = grid[edge[1]]
+        weight = (np.hypot(a[0] - b[0], a[1] - b[1]))
+        edges.append((edge[0], edge[1], {'weight': weight}))
+
+        edge = sorted([vertex[0], vertex[2]])
+        a = grid[edge[0]]
+        b = grid[edge[1]]
+        weight = (np.hypot(a[0] - b[0], a[1] - b[1]))
+        edges.append((edge[0], edge[1], {'weight': weight}))
+
+        edge = sorted([vertex[1], vertex[2]])
+        a = grid[edge[0]]
+        b = grid[edge[1]]
+        weight = (np.hypot(a[0] - b[0], a[1] - b[1]))
+        edges.append((edge[0], edge[1], {'weight': weight}))
+
+    # Make a graph based on the Delaunay triangulation edges.
+    graph = networkx.Graph(edges)
+
+    # List of elements forming the shortest path.
+    elements = []
+    for position in zip(positions[:-1], positions[1:]):
+        # We need grid indices for networkx.shortest_path rather than positions, so for the current pair of positions,
+        # find the closest element IDs.
+        source = np.argmin(np.hypot(xc - position[0][0], yc - position[0][1]))
+        target = np.argmin(np.hypot(xc - position[1][0], yc - position[1][1]))
+        elements += networkx.shortest_path(graph, source=source, target=target, weight='weight')
+
+    # Calculate the distance along the transect in metres (use the fast-but-less-accurate Haversine function rather
+    # than the slow-but-more-accurate Vincenty distance function).
+    distance = np.cumsum([0] + [haversine_distance((xc[i], yc[i]), (xc[i + 1], yc[i + 1])) for i in elements[:-1]])
+
+    return np.asarray(elements), distance
+
+
 def connectivity(p, t):
     """
     Assemble connectivity data for a triangular mesh.
@@ -1866,45 +2122,6 @@ def connectivity(p, t):
     bnd[e[e2t[:, 1] == -1, :]] = True
 
     return e, te, e2t, bnd
-
-
-def clip_domain(x, y, extents, noisy=False):
-    """
-    Function to find the indices for the positions in `x' and `y' which fall within the
-    bounding box or polygon defined in extents. For a bounding box supply an array or list
-    of size (4,) with (xmin, xmax, ymin, ymax). For a polygon provide a list of x,y points
-    or an Nx2 array of x,y points.
-
-    Parameters
-    ----------
-    x, y : ndarray
-        x and y coordinate arrays.
-    extents : ndarray or list
-        minimum and maximum of the extents of the x and y coordinates for the
-        bounding box (xmin, xmax, ymin, ymax) or for a polygon a list or array
-        of x,y coordinates
-
-    Returns
-    -------
-    mask : ndarrary
-        Mask (True = within the bounding box, False = not) array of the indices
-        of the positions in pos which fall within the bounding box.
-
-    """
-    if np.asarray(extents).shape != (4,):
-        poly_path = mplPath.Path(extents)
-        mask = np.where(np.asarray(poly_path.contains_points(np.asarray([x,y]).T)))[0]
-    else:
-        mask = np.where((x >= extents[0]) *
-            (x <= extents[1]) *
-            (y >= extents[2]) *
-            (y <= extents[3]))[0]
-
-    if noisy:
-        print('Subset contains {} points of {} total.'.format(len(mask),
-                                                              len(x)))
-
-    return mask
 
 
 def find_connected_nodes(n, triangles):
@@ -2620,10 +2837,9 @@ def elems2nodes(elems, tri, nvert=None):
 
 def nodes2elems(nodes, tri):
     """
-    Calculate a element centre value based on the average value for the
-    nodes from which it is formed. This necessarily involves an average,
-    so the conversion from nodes2elems and elems2nodes is not
-    necessarily reversible.
+    Calculate an element-centre value based on the average value for the
+    nodes from which it is formed. This involves an average, so the
+    conversion from nodes to elements cannot be reversed without smoothing.
 
     Parameters
     ----------
@@ -2643,10 +2859,8 @@ def nodes2elems(nodes, tri):
 
     if np.ndim(nodes) == 1:
         elems = nodes[tri].mean(axis=-1)
-    elif np.ndim(nodes) == 2:
-        elems = nodes[..., tri].mean(axis=-1)
     else:
-        raise Exception('Too many dimensions (maximum of two)')
+        elems = nodes[..., tri].mean(axis=-1)
 
     return elems
 
@@ -2751,7 +2965,7 @@ def haversine_distance(point1, point2, miles=False):
         Decimal degree longitude and latitude for the start.
     point2 : list, tuple, np.ndarray
         Decimal degree longitude and latitude for the end.
-    miles : bool
+    miles : bool, optional
         Set to True to return the distance in miles. Defaults to False (kilometres).
 
     Returns
@@ -2885,18 +3099,14 @@ def getcrossectiontriangles(cross_section_pnts, trinodes, X, Y, dist_res):
     the triangulation trinodes, X, Y. Returns the location of the sub sampled points (sub_samp), which
     triangle they are in (sample_cells) and their nearest nodes (sample_nodes).
 
-
     Parameters
     ----------
     cross_section_pnts : 2x2 list_like
         The two ends of the cross section line.
-
     trinodes : list-like
         Unstructured grid triangulation table
-
     X,Y : list-like
         Node positions
-
     dist_res : float
         Approximate distance at which to sample the line
 
@@ -2904,13 +3114,10 @@ def getcrossectiontriangles(cross_section_pnts, trinodes, X, Y, dist_res):
     -------
     sub_samp : 2xN list
         Positions of sample points
-
     sample_cells : N list
         The cells within which the subsample points fall. -1 indicates that the point is outside the grid.
-
     sample_nodes : N list
         The nodes nearest the subsample points. -1 indicates that the point is outside the grid.
-
 
     Example
     -------
@@ -3000,9 +3207,28 @@ def getcrossectiontriangles(cross_section_pnts, trinodes, X, Y, dist_res):
 
 
 def isintriangle(tri_x, tri_y, point_x, point_y):
-    # Returns a boolean as to whether the point (point_x, point_y) is within the triangle (tri_x, tri_y)
-    # method from http://totologic.blogspot.co.uk/2014/01/accurate-point-in-triangle-test.html without edge test
-    # used in getcrossectiontriangles
+    """
+    Returns a boolean as to whether the point (point_x, point_y) is within the triangle (tri_x, tri_y)
+
+    Parameters
+    ----------
+    tri_x, tri_y : np.ndarray
+        Coordinates of the triangle vertices.
+    point_x, point_y : float
+        Position to test.
+
+    Returns
+    -------
+    isin : bool
+        True if the position (point_x, point_y) is in the triangle defined by (tri_x, tri_y).
+
+    Notes
+    -----
+    Method from http://totologic.blogspot.co.uk/2014/01/accurate-point-in-triangle-test.html without edge test used
+    in getcrossectiontriangles.
+
+    """
+
     x1 = tri_x[0]
     x2 = tri_x[1]
     x3 = tri_x[2]
@@ -3011,11 +3237,10 @@ def isintriangle(tri_x, tri_y, point_x, point_y):
     y2 = tri_y[1]
     y3 = tri_y[2]
 
-    a = ((y2 - y3)*(point_x - x3) + (x3 - x2)*(point_y - y3)) / ((y2 - y3)*(x1 - x3) + (x3 - x2)*(y1 - y3))
-    b = ((y3 - y1)*(point_x - x3) + (x1 - x3)*(point_y - y3)) / ((y2 - y3)*(x1 - x3) + (x3 - x2)*(y1 - y3))
+    a = ((y2 - y3) * (point_x - x3) + (x3 - x2) * (point_y - y3)) / ((y2 - y3) * (x1 - x3) + (x3 - x2) * (y1 - y3))
+    b = ((y3 - y1) * (point_x - x3) + (x1 - x3) * (point_y - y3)) / ((y2 - y3) * (x1 - x3) + (x3 - x2) * (y1 - y3))
     c = 1 - a - b
 
-    is_in =  0 <= a <= 1 and 0 <= b <= 1 and 0 <= c <= 1
+    is_in = 0 <= a <= 1 and 0 <= b <= 1 and 0 <= c <= 1
 
     return is_in
-

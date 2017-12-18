@@ -17,7 +17,8 @@ from lxml import etree
 from warnings import warn
 
 from PyFVCOM.grid import find_nearest_point
-from PyFVCOM.utilities import fix_range, julian_day
+from PyFVCOM.utilities.general import fix_range
+from PyFVCOM.utilities.time import julian_day
 
 try:
     import sqlite3
@@ -769,9 +770,10 @@ class Lanczos:
         Parameters
         ----------
         dt : float, optional
-            Sampling interval. Defaults to 1. (dT in the MATLAB version).
+            Sampling interval in minutes. Defaults to 1. (dT in the MATLAB version).
         cutoff : float, optional
-            Cutoff frequency in minutes at which to pass data. Defaults to the half the Nyquist frequency. (Cf in the MATLAB version).
+            Cutoff frequency in minutes at which to pass data. Defaults to the half the Nyquist frequency. (Cf in the
+            MATLAB version).
         samples : int, optional
             Number of samples in the window. Defaults to 100. (M in the MATLAB version)
         passtype : str
@@ -880,7 +882,8 @@ def lanczos(x, dt=1, cutoff=None, samples=100, passtype='low'):
     dt : float, optional
         Sampling interval. Defaults to 1. (dT in the MATLAB version).
     cutoff : float, optional
-        Cutoff frequency in minutes at which to pass data. Defaults to the half the Nyquist frequency. (Cf in the MATLAB version).
+        Cutoff frequency in minutes at which to pass data. Defaults to the half the Nyquist frequency. (Cf in the
+        MATLAB version).
     samples : int, optional
         Number of samples in the window. Defaults to 100. (M in the MATLAB version)
     passtype : str
