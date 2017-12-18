@@ -815,8 +815,8 @@ Do the comparison
 """
 
 class comp_data():
-    def __init__(self, buoy_list, file_list_or_probe_dir, wco_database, max_time_threshold=dt.timedelta(hours=1), max_depth_threshold = 100, probe_depths=None):
-        self.file_list_or_probe_dir
+    def __init__(self, buoy_list, model_ident, wco_database, max_time_threshold=dt.timedelta(hours=1), max_depth_threshold = 100, probe_depths=None):
+        self.model_ident = model_ident
         self.database_obj = wco_database
         self.buoy_list = buoy_list
 
@@ -918,7 +918,7 @@ class comp_data_probe(comp_data):
         for this_buoy in self.buoy_list:
             t_filelist = []
             s_filelist = []
-            for this_dir in self.file_or_probe_dir_list:
+            for this_dir in self.model_ident:
                 t_filelist.append(this_dir + this_buoy + '_t1.dat')
                 s_filelist.append(this_dir + this_buoy + '_s1.dat')
             mod_times, mod_t_vals, mod_pos = pf.read.read_probes(t_filelist, locations=True, datetimes=True)
