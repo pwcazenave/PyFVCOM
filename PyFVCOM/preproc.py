@@ -1634,7 +1634,7 @@ class RegularReader(FileReader):
 
     def __add__(self, other, debug=False):
         """
-        This special method means we can stack two NemoReader objects in time through a simple addition (e.g. nemo1
+        This special method means we can stack two RegularReader objects in time through a simple addition (e.g. nemo1
         += nemo2)
 
         """
@@ -1658,7 +1658,7 @@ class RegularReader(FileReader):
                              "`fvcom1' has end {} and `fvcom2' has start {}".format(self.time.datetime[-1],
                                                                                     other.time.datetime[0]))
         if not data_compare:
-            raise ValueError('Loaded data sets for each NemoReader class must match.')
+            raise ValueError('Loaded data sets for each RegularReader class must match.')
         if not (old_data == new_data) and (old_data or new_data):
             warn('Subsequent attempts to load data for this merged object will only load data from the first object. '
                  'Load data into each object before merging them.')
