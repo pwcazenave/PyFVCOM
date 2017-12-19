@@ -10,7 +10,7 @@ from dateutil.relativedelta import relativedelta
 
 from PyFVCOM.preproc import Model
 from PyFVCOM.grid import write_sms_mesh
-from PyFVCOM.utilities import date_range
+from PyFVCOM.utilities.time import date_range
 
 
 class PreProcessingTest(TestCase):

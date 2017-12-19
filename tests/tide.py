@@ -5,7 +5,7 @@ from unittest import TestCase
 from datetime import datetime
 
 from PyFVCOM.tide import *
-from PyFVCOM.utilities import date_range, make_signal
+from PyFVCOM.utilities.time import date_range, make_signal
 
 from matplotlib.pyplot import *
 

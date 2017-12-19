@@ -8,7 +8,7 @@ from datetime import datetime
 from dateutil.relativedelta import relativedelta
 
 from PyFVCOM.read import FileReader
-from PyFVCOM.utilities import StubFile
+from PyFVCOM.utilities.grid import StubFile
 
 
 class FileReader_test(TestCase):

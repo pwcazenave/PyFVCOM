@@ -3,6 +3,7 @@ from netCDF4 import Dataset, date2num
 
 from PyFVCOM.coordinate import utm_from_lonlat
 from PyFVCOM.grid import nodes2elems
+from PyFVCOM.utilities.time import date_range
 
 
 class StubFile:
