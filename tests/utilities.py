@@ -23,7 +23,7 @@ class UtilitiesTest(TestCase):
 
     def test_fix_range(self):
         target_min, target_max = -100, 100
-        scaled_signal = fix_range(self.signal1, target_min, target_max)
+        scaled_signal = general.fix_range(self.signal1, target_min, target_max)
         test.assert_equal(scaled_signal.min(), target_min)
         test.assert_equal(scaled_signal.max(), target_max)
 
@@ -31,14 +31,14 @@ class UtilitiesTest(TestCase):
         ind = 25
         shape = (10, 20)
         test_row, test_col = 1, 5
-        rows, cols = ind2sub(shape, ind)
+        rows, cols = general.ind2sub(shape, ind)
         test.assert_equal(rows, test_row)
         test.assert_equal(cols, test_col)
 
     def test_date_range(self):
         start = datetime.strptime('2010-02-01 00:00:00', '%Y-%m-%d %H:%M:%S')
         end = datetime.strptime('2010-02-03 00:00:00', '%Y-%m-%d %H:%M:%S')
-        time_range = date_range(start, end, inc=0.5)  # half-day interval
+        time_range = time.date_range(start, end, inc=0.5)  # half-day interval
         test.assert_equal(start, time_range[0])
         test.assert_equal(end, time_range[-1])
         test.assert_equal(5, len(time_range))
@@ -48,7 +48,7 @@ class UtilitiesTest(TestCase):
         amplitude = 2
         period = 4
         phase = 0
-        signal = make_signal(self.num_time, amplitude, phase, period)
+        signal = time.make_signal(self.num_time, amplitude, phase, period)
         test.assert_equal(np.max(signal), amplitude)
         test.assert_equal(np.min(signal), -amplitude)
 

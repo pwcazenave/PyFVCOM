@@ -1,3 +1,6 @@
+import numpy as np
+
+
 def fix_range(a, nmin, nmax):
     """
     Given an array of values `a', scale the values within in to the range
