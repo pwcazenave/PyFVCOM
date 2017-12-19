@@ -116,8 +116,8 @@ class Model(Domain):
     def __initialise_open_boundaries_on_nodes(self):
         """ Add the relevant node-based grid information for any open boundaries we've got. """
 
+        self.open_boundaries = []
         if np.any(self.grid.open_boundary_nodes):
-            self.open_boundaries = []
             for nodes in self.grid.open_boundary_nodes:
                 self.open_boundaries.append(OpenBoundary(nodes))
                 # Add the positions of the relevant bits of information.
