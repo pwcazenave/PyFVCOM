@@ -1,4 +1,6 @@
 import tempfile
+import numpy as np
+from datetime import datetime
 from netCDF4 import Dataset, date2num
 
 from PyFVCOM.coordinate import utm_from_lonlat
