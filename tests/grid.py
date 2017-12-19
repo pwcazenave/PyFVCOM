@@ -271,7 +271,6 @@ class GridToolsTest(TestCase):
         known_reduced = np.array([[0, 2, 1], [1, 2, 3]])
 
         reduced = reduce_triangulation(self.tri, np.arange(5))
-
         test.assert_equal(reduced, known_reduced)
 
     def test_vincenty_distance(self):
