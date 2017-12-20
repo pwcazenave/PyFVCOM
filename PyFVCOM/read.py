@@ -243,7 +243,7 @@ class FileReader(Domain):
     def _load_time(self):
         """ Populate a time object with additional useful time representations from the netCDF time data. """
 
-        time_variables = ('time', 'Times', 'Itime', 'Itime2')
+        time_variables = ('time', 'Itime', 'Itime2', 'Times')
         got_time, missing_time = [], []
         for time in time_variables:
             # Since not all of the time_variables specified above are required, only try to load the data if they
@@ -262,8 +262,25 @@ class FileReader(Domain):
             warn('No time variables found in the netCDF.')
         else:
             if 'Times' in got_time:
+                # Check whether we've got missing values and try and make them from one of the others. This sometimes
+                # happens if you stop a model part way through a run.
+                bad_times = np.argwhere(np.any(self.ds.variables['Times'][:].data == ([b''] * self.ds.dimensions['DateStrLen'].size), axis=1)).ravel()
+                if np.any(bad_times):
+                    if 'time' in got_time:
+                        for bad_time in bad_times:
+                            if self.time.time[bad_time]:
+                                self.time.Times[bad_time] = list(datetime.strftime(num2date(self.time.time[bad_time], units='days since 1858-11-17 00:00:00'), '%Y-%m-%dT%H:%M:%S.%f'))
+                    elif 'Itime' in got_time and 'Itime2' in got_time:
+                        for bad_time in bad_times:
+                            if self.time.Itime[bad_time] and self.time.Itime2[bad_time]:
+                                self.time.Times[bad_time] = list(datetime.strftime(num2date(self.time.Itime[bad_time] + self.time.Itime2[bad_time] / 1000.0 / 60 / 60, units=getattr(self.ds.variables['Itime'], 'units')), '%Y-%m-%dT%H:%M:%S.%f'))
+
                 # Overwrite the existing Times array with a more sensibly shaped one.
-                self.time.Times = np.asarray([''.join(t.astype(str)).strip() for t in self.time.Times])
+                try:
+                    self.time.Times = np.asarray([''.join(t.astype(str)).strip() for t in self.time.Times])
+                except TypeError:
+                    # We might have a masked array, so just use the raw data.
+                    self.time.Times = np.asarray([''.join(t.astype(str)).strip() for t in self.time.Times.data])
 
             # Make whatever we got into datetime objects and use those to make everything else. Note: the `time' variable
             # is often the one with the lowest precision, so use the others preferentially over that.
