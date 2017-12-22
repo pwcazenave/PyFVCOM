@@ -263,17 +263,18 @@ class FileReader(Domain):
         else:
             if 'Times' in got_time:
                 # Check whether we've got missing values and try and make them from one of the others. This sometimes
-                # happens if you stop a model part way through a run.
-                bad_times = np.argwhere(np.any(self.ds.variables['Times'][:].data == ([b''] * self.ds.dimensions['DateStrLen'].size), axis=1)).ravel()
-                if np.any(bad_times):
-                    if 'time' in got_time:
-                        for bad_time in bad_times:
-                            if self.time.time[bad_time]:
-                                self.time.Times[bad_time] = list(datetime.strftime(num2date(self.time.time[bad_time], units='days since 1858-11-17 00:00:00'), '%Y-%m-%dT%H:%M:%S.%f'))
-                    elif 'Itime' in got_time and 'Itime2' in got_time:
-                        for bad_time in bad_times:
-                            if self.time.Itime[bad_time] and self.time.Itime2[bad_time]:
-                                self.time.Times[bad_time] = list(datetime.strftime(num2date(self.time.Itime[bad_time] + self.time.Itime2[bad_time] / 1000.0 / 60 / 60, units=getattr(self.ds.variables['Itime'], 'units')), '%Y-%m-%dT%H:%M:%S.%f'))
+                # happens if you stop a model part way through a run. We check for masked arrays at this point because the netCDF library only returns masked arrays when we have NaNs in the results.
+                if isinstance(self.ds.variables['Times'][:], np.ma.core.MaskedArray):
+                    bad_times = np.any(np.argwhere(np.any(self.ds.variables['Times'][:].data == ([b''] * self.ds.dimensions['DateStrLen'].size), axis=1)).ravel())
+                    if np.any(bad_times):
+                        if 'time' in got_time:
+                            for bad_time in bad_times:
+                                if self.time.time[bad_time]:
+                                    self.time.Times[bad_time] = list(datetime.strftime(num2date(self.time.time[bad_time], units='days since 1858-11-17 00:00:00'), '%Y-%m-%dT%H:%M:%S.%f'))
+                        elif 'Itime' in got_time and 'Itime2' in got_time:
+                            for bad_time in bad_times:
+                                if self.time.Itime[bad_time] and self.time.Itime2[bad_time]:
+                                    self.time.Times[bad_time] = list(datetime.strftime(num2date(self.time.Itime[bad_time] + self.time.Itime2[bad_time] / 1000.0 / 60 / 60, units=getattr(self.ds.variables['Itime'], 'units')), '%Y-%m-%dT%H:%M:%S.%f'))
 
                 # Overwrite the existing Times array with a more sensibly shaped one.
                 try:
