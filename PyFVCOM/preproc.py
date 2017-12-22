@@ -933,8 +933,9 @@ class Model(Domain):
         from PML's Western Channel Observatory L4 buoy data. These are: 'Z4_c', 'Z5c', 'Z5n', 'Z5p', 'Z6c', 'Z6n' and
         'Z6p'.
 
-        If `sediment' is True, then the variables in the sediment are added. Cohesive sediments are expected to have names like
-        'mud_*' and non-cohesive sediments names like 'sand_*'.
+        If `sediment' is supplied, then the variables in the sediment are added. Cohesive sediments are expected to have
+        names like 'mud_*' and non-cohesive sediments names like 'sand_*'.
+
         TO DO: Add Regs formula for calculating spm from flux
 
         """
@@ -1107,7 +1108,7 @@ class Model(Domain):
             - O3_c : dissolved inorganic carbon [time, river]
             - O3_bioalk : bio-alkalinity [time, river]
             - Z4_c : mesozooplankton carbon [time, river]
-        If using sediments then any objects of the self.river whos name matches 'mud_*' or 'sand_*' will be added
+        If using sediments then any objects of the self.river whose name matches 'mud_*' or 'sand_*' will be added
         to the output.
 
         Uses self.river.source for the 'title' global attribute in the netCDF and self.river.history for the 'info'
