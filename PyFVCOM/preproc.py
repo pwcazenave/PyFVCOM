@@ -18,7 +18,7 @@ import scipy.optimize
 import numpy as np
 import multiprocessing
 
-from netCDF4 import Dataset, date2num, num2date
+from netCDF4 import Dataset, date2num, num2date, stringtochar
 from scipy.interpolate import RegularGridInterpolator
 from dateutil.relativedelta import relativedelta
 from datetime import datetime
@@ -1126,7 +1126,7 @@ class Model(Domain):
         dims = {'namelen': 80, 'rivers': self.dims.river, 'time': 0, 'DateStrLen': 26}
         with WriteForcing(str(output_file), dims, global_attributes=globals, clobber=True, format='NETCDF4', **kwargs) as river:
             # We need to force the river names to be right-padded to 80 characters and transposed for the netCDF array.
-            river_names = map(list, zip(*[list('{:80s}'.format(i)) for i in self.river.names]))
+            river_names = stringtochar(np.asarray(self.river.names, dtype='S80')) 
             river.add_variable('river_names', river_names, ['rivers', 'namelen'], format='c', ncopts=ncopts)
 
             river.write_fvcom_time(self.river.time, ncopts=ncopts)
