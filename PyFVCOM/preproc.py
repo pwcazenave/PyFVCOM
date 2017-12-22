@@ -1195,12 +1195,14 @@ class Model(Domain):
                 if muddy_sediment_names:
                     for this_sediment in muddy_sediment_names:
                         atts = {'long_name': '{} - muddy stuff'.format(this_sediment), 'units': 'kgm^-3'} 
-                        river.add_variable(this_sediment, getattr(self.river, this_sediment), ['time', 'rivers'], attributes=atts, ncopts=ncopts)
+                        river.add_variable(this_sediment, getattr(self.river, this_sediment), ['time', 'rivers'],
+                                           attributes=atts, ncopts=ncopts)
     
                 if sandy_sediment_names:
                     for this_sediment in sandy_sediment_names:
                         atts = {'long_name': '{} - sandy stuff'.format(this_sediment), 'units': 'kgm^-3'}    
-                        river.add_variable(this_sediment, getattr(self.river, this_sediment), ['time', 'rivers'], attributes=atts, ncopts=ncopts)
+                        river.add_variable(this_sediment, getattr(self.river, this_sediment), ['time', 'rivers'],
+                                           attributes=atts, ncopts=ncopts)
 
 
     def write_river_namelist(self, output_file, forcing_file, vertical_distribution='uniform'):
