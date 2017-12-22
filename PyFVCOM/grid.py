@@ -119,7 +119,7 @@ class Domain:
 
         # Default to no node strings. Only the SMS read function can parse them as they're stored within that file.
         # We'll try and grab them from the FVCOM file assuming the standard FVCOM naming conventions.
-        nodestrings = None
+        nodestrings = []
         types = None
         try:
             basedir = str(self.grid.filename.parent)

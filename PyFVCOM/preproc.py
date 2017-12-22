@@ -31,6 +31,7 @@ from PyFVCOM.grid import write_fvcom_mesh, connectivity, haversine_distance
 from PyFVCOM.grid import find_bad_node, get_attached_unique_nodes
 from PyFVCOM.grid import OpenBoundary
 from PyFVCOM.utilities.time import date_range
+from PyFVCOM.utilities.general import flatten_list
 from PyFVCOM.read import FileReader
 from PyFVCOM.coordinate import utm_from_lonlat, lonlat_from_utm
 
@@ -77,20 +78,8 @@ class Model(Domain):
         self.grid.coastline = np.argwhere(bnd)
         # Remove the open boundaries, if we have them.
         if np.any(self.grid.open_boundary_nodes):
-            land_only = np.isin(np.squeeze(np.argwhere(bnd)), self.__flatten_list(self.grid.open_boundary_nodes), invert=True)
+            land_only = np.isin(np.squeeze(np.argwhere(bnd)), flatten_list(self.grid.open_boundary_nodes), invert=True)
             self.grid.coastline = np.squeeze(self.grid.coastline[land_only])
-
-    @staticmethod
-    def __flatten_list(nested):
-        """ Flatten a list of lists. """
-        try:
-            flattened = list(itertools.chain(*nested))
-        except TypeError:
-            # Maybe it's already flat and we've just tried iterating over non-iterables. If so, just return what we
-            # got given.
-            flattened = nested
-
-        return flattened
 
     def __prep_rivers(self):
         """ Create a few object and attributes which are useful for the river data. """
@@ -887,7 +876,7 @@ class Model(Domain):
         with WriteForcing(str(output_file), dims, global_attributes=globals, clobber=True, format='NETCDF4', **kwargs) as elev:
             # Add the variables.
             atts = {'long_name': 'Open Boundary Node Number', 'grid': 'obc_grid'}
-            elev.add_variable('obc_nodes', self.__flatten_list(self.grid.open_boundary_nodes), ['nobc'], attributes=atts, ncopts=ncopts)
+            elev.add_variable('obc_nodes', flatten_list(self.grid.open_boundary_nodes), ['nobc'], attributes=atts, ncopts=ncopts)
             atts = {'long_name': 'internal mode iteration number'}
             # Not sure this variable is actually necessary.
             elev.add_variable('iint', np.arange(len(self.tide.time)), ['time'], attributes=atts, ncopts=ncopts, format=int)

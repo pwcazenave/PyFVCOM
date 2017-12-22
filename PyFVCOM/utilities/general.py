@@ -1,6 +1,5 @@
 import numpy as np
 
-
 def fix_range(a, nmin, nmax):
     """
     Given an array of values `a', scale the values within in to the range
@@ -62,4 +61,14 @@ def ind2sub(array_shape, index):
     return np.unravel_index(index, array_shape)
 
 
+def flatten_list(nested):
+    """ Flatten a list of lists. """
+    try:
+        flattened = list(itertools.chain(*nested))
+    except TypeError:
+        # Maybe it's already flat and we've just tried iterating over non-iterables. If so, just return what we
+        # got given.
+        flattened = nested
+
+    return flattened
 
