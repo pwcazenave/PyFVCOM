@@ -885,7 +885,7 @@ class Model(Domain):
                     'units': 'meters'}
             elev.add_variable('elevation', np.asarray(self.tide.zeta).T, ['time', 'nobc'], attributes=atts, ncopts=ncopts)
 
-    def add_rivers(self, positions, names, times, flux, temperature, salinity, threshold=np.inf, history='', info='', ersem=None):
+    def add_rivers(self, positions, names, times, flux, temperature, salinity, threshold=np.inf, history='', info='', ersem=None, sediments=None):
         """
         Add river nodes closest to the given locations.
 
@@ -913,6 +913,9 @@ class Model(Domain):
         ersem : dict
             If supplied, a dictionary whose keys are variable names to add to the river object and whose values are
             the corresponding river data. These should match the shape of the flux, temperature and salinity data.
+        sediment : dict
+            If supplied, either dictionary whose keys are variable names to add to the river object and whose values are
+            the corresponding river data. These should match the shape of the flux, temperature and salinity data.
 
         Provides
         --------
@@ -929,6 +932,10 @@ class Model(Domain):
         Note: a number of variables are automatically created if not given within the `ersem' dict, based on values
         from PML's Western Channel Observatory L4 buoy data. These are: 'Z4_c', 'Z5c', 'Z5n', 'Z5p', 'Z6c', 'Z6n' and
         'Z6p'.
+
+        If `sediment' is True, then the variables in the sediment are added. Cohesive sediments are expected to have names like
+        'mud_*' and non-cohesive sediments names like 'sand_*'.
+        TO DO: Add Regs formula for calculating spm from flux
 
         """
 
@@ -990,7 +997,11 @@ class Model(Domain):
                 for extra in extra_data:
                     if not hasattr(self.river, extra):
                         setattr(self.river, extra, extra_data[extra])
-
+                
+            if sediments:
+                for variable in sediments:
+                    setattr(self.river, variable, sediments[variable][:, river_index])
+                
     def check_rivers(self, max_discharge=None, min_depth=None, open_boundary_proximity=None, noisy=False):
         """
         Check the river nodes are suitable for an FVCOM run. By default, this only checks for rivers attached to
@@ -1066,7 +1077,7 @@ class Model(Domain):
             # Update the dimension too.
             self.dims.river -= len(boundary_river_indices)
 
-    def write_river_forcing(self, output_file, ersem=False, ncopts={'zlib': True, 'complevel': 7}, **kwargs):
+    def write_river_forcing(self, output_file, ersem=False, ncopts={'zlib': True, 'complevel': 7}, sediments=False, **kwargs):
         """
         Write out an FVCOM river forcing netCDF file.
 
@@ -1096,6 +1107,8 @@ class Model(Domain):
             - O3_c : dissolved inorganic carbon [time, river]
             - O3_bioalk : bio-alkalinity [time, river]
             - Z4_c : mesozooplankton carbon [time, river]
+        If using sediments then any objects of the self.river whos name matches 'mud_*' or 'sand_*' will be added
+        to the output.
 
         Uses self.river.source for the 'title' global attribute in the netCDF and self.river.history for the 'info'
         global attribute. Both of these default to empty strings.
@@ -1173,6 +1186,21 @@ class Model(Domain):
                                                ['time', 'rivers'],
                                                attributes=atts,
                                                ncopts=ncopts)
+        
+            if sediments:
+                muddy_sediment_names = list(filter(lambda x:'mud_' in x, list(self.river.__dict__.keys())))
+                sandy_sediment_names = list(filter(lambda x:'sand_' in x, list(self.river.__dict__.keys())))
+
+                if muddy_sediment_names:
+                    for this_sediment in muddy_sediment_names:
+                        atts = {'long_name': '{} - muddy stuff'.format(this_sediment), 'units': 'kgm^-3'} 
+                        river.add_variable(this_sediment, getattr(self.river, this_sediment), ['time', 'rivers'], attributes=atts, ncopts=ncopts)
+    
+                if sandy_sediment_names:
+                    for this_sediment in sandy_sediment_names:
+                        atts = {'long_name': '{} - sandy stuff'.format(this_sediment), 'units': 'kgm^-3'}    
+                        river.add_variable(this_sediment, getattr(self.river, this_sediment), ['time', 'rivers'], attributes=atts, ncopts=ncopts)
+
 
     def write_river_namelist(self, output_file, forcing_file, vertical_distribution='uniform'):
         """
