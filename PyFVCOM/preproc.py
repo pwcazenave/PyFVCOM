@@ -1073,7 +1073,7 @@ class Model(Domain):
             # Now drop all those indices from the relevant river data.
             for field in self.obj_iter(self.river):
                 if field != 'time':
-                    setattr(self.river, field, np.delete(getattr(self.river, field), self.__flatten_list(boundary_river_indices), axis=-1))
+                    setattr(self.river, field, np.delete(getattr(self.river, field), flatten_list(boundary_river_indices), axis=-1))
 
             # Update the dimension too.
             self.dims.river -= len(boundary_river_indices)
