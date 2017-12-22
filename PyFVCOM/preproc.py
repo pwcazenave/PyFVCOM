@@ -1504,31 +1504,39 @@ class Model(Domain):
                     f.write(' PROBE_VAR_NAME = "{}"\n'.format(long_name))
                     f.write('/\n')
 
-    def read_regular(self, regular, variables):
-        """
-        Read regularly gridded model data and provides a RegularReader object which mimics a FileReader object.
+    def read_regular(self, *args, **kwargs):
+        read_regular.__doc__
+        self.regular = read_regular(*args, noisy=self.noisy, **kwargs)
 
-        Parameters
-        ----------
-        regular : str, pathlib.Path
-            Files to read.
-        variables : list
-            Variables to extract. Variables missing in the files raise an error.
 
-        Provides
-        --------
-        A RegularReader object with the requested variables loaded.
+def read_regular(regular, variables, noisy=False):
+    """
+    Read regularly gridded model data and provides a RegularReader object which mimics a FileReader object.
 
-        """
+    Parameters
+    ----------
+    regular : str, pathlib.Path
+        Files to read.
+    variables : list
+        Variables to extract. Variables missing in the files raise an error.
+    noisy : bool, optional
+        Set to True to enable verbose output. Defaults to False.
 
-        for ii, file in enumerate(regular):
-            if self.noisy:
-                print('Loading file {}'.format(file))
-            if ii == 0:
-                self.regular = RegularReader(str(file), variables=variables)
-            else:
-                self.regular += RegularReader(str(file), variables=variables)
+    Provides
+    --------
+    A RegularReader object with the requested variables loaded.
 
+    """
+
+    for ii, file in enumerate(regular):
+        if noisy:
+            print('Loading file {}'.format(file))
+        if ii == 0:
+            regular = RegularReader(str(file), variables=variables)
+        else:
+            regular += RegularReader(str(file), variables=variables)
+
+    return regular
 
 class WriteForcing:
     """ Create an FVCOM netCDF input file. """
