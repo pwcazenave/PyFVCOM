@@ -1,5 +1,7 @@
 import itertools
 import numpy as np
+import itertools
+import numpy as np
 import warnings
 from html.parser import HTMLParser
 from re import sub
