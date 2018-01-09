@@ -1,3 +1,4 @@
+import itertools
 import numpy as np
 
 def fix_range(a, nmin, nmax):
