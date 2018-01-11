@@ -48,11 +48,11 @@ class HarmonicOutput:
             Model data object.
         consts : list
             List of constituents used in the harmonic analysis.
-        files : list
+        files : list, optional
             File names used to create the harmonic analysis for the metadata.
-        predict : bool
+        predict : bool, optional
             Set to True to enable predicted variable creation (defaults to False).
-        dump_raw : bool
+        dump_raw : bool, optional
             Set to True to enable output of the raw data used to perform the harmonic analysis (defaults to False).
 
         """
