@@ -10,13 +10,12 @@ from __future__ import print_function
 
 import os
 import sys
-import scipy
-import inspect
-import numpy as np
+from warnings import warn
 
+import numpy as np
+import scipy
 from lxml import etree
 from netCDF4 import Dataset
-from warnings import warn
 
 from PyFVCOM.grid import find_nearest_point
 from PyFVCOM.utilities.general import fix_range
