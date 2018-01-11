@@ -141,7 +141,8 @@ class HarmonicOutput:
         self._nc.setncattr('title', 'FVCOM model results harmonic analysis')
         self._nc.setncattr('author', 'Pierre Cazenave (Plymouth Marine Laboratory)')
         self._nc.setncattr('history', 'File created using {}'.format(os.path.basename(sys.argv[0])))
-        self._nc.setncattr('sources', 'Created from file(s): {}'.format(self._files))
+        if self._files:
+            self._nc.setncattr('sources', 'Created from file(s): {}'.format(self._files))
 
         self.lon = self._nc.createVariable('lon', 'f4', ['node'], **self._ncopts)
         self.lon.setncattr('units', 'degrees_east')
