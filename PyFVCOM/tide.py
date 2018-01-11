@@ -91,6 +91,9 @@ class HarmonicOutput:
         self._init_structure()
         self._populate_grid()
 
+        # Sync what we've got to disk now.
+        self.sync()
+
     def _init_structure(self):
         if self._nz == 0:
             # Space last
