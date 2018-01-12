@@ -1609,7 +1609,7 @@ class WriteForcing:
         Parameters
         ----------
         time : np.ndarray, list, tuple
-            Times as date time objects.
+            Times as datetime objects.
 
         """
 
