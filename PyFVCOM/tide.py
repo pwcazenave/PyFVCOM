@@ -15,7 +15,7 @@ from warnings import warn
 import numpy as np
 import scipy
 from lxml import etree
-from netCDF4 import Dataset
+from netCDF4 import Dataset, date2num
 
 from PyFVCOM.grid import find_nearest_point
 from PyFVCOM.utilities.general import fix_range
@@ -68,6 +68,7 @@ class HarmonicOutput:
         self._consts = consts
 
         # The data arrays
+        self._time = fvcom.time.datetime
         self._lon = fvcom.grid.lon
         self._lat = fvcom.grid.lat
         self._lonc = fvcom.grid.lonc
@@ -404,7 +405,47 @@ class HarmonicOutput:
         self.siglay[:] = self._siglay
         self.siglev[:] = self._siglev
         if self._predict or self._dump_raw:
-            self.Times[:] = [list(t) for t in self._Times]  # back to netCDF-compatible 2D array of strings.
+            self._write_fvcom_time(self._time)
+
+    def _write_fvcom_time(self, time, **kwargs):
+        """
+        Write the four standard FVCOM time variables (time, Times, Itime, Itime2) for the given time series.
+
+        Parameters
+        ----------
+        time : np.ndarray, list, tuple
+            Times as datetime objects.
+
+        """
+
+        mjd = date2num(time, units='days since 1858-11-17 00:00:00')
+        Itime = np.floor(mjd)  # integer Modified Julian Days
+        Itime2 = (mjd - Itime) * 24 * 60 * 60 * 1000  # milliseconds since midnight
+        Times = [t.strftime('%Y-%m-%dT%H:%M:%S.%f') for t in time]
+
+        # time
+        self.time = self._nc.createVariable('time', 'f4', ['time'], **self._ncopts)
+        self.time.setncattr('units', 'days since 1858-11-17 00:00:00')
+        self.time.setncattr('format', 'modified julian day (MJD)')
+        self.time.setncattr('long_name', 'time')
+        self.time.setncattr('time_zone', 'UTC')
+        # Itime
+        self.Itime = self._nc.createVariable('Itime', 'i', ['time'], **self._ncopts)
+        self.Itime.setncattr('units', 'days since 1858-11-17 00:00:00')
+        self.Itime.setncattr('format', 'modified julian day (MJD)')
+        self.Itime.setncattr('time_zone', 'UTC')
+        self.Itime[:] = Itime
+        # Itime2
+        self.Itime2 = self._nc.createVariable('Itime2', 'i', ['time'], **self._ncopts)
+        self.Itime2.setncattr('units', 'msec since 00:00:00')
+        self.Itime2.setncattr('time_zone', 'UTC')
+        self.Itime2[:] = Itime2
+        # Times
+        self.Times = self._nc.createVariable('Itime2', 'c', ['time', 'DateStrLen'], **self._ncopts)
+        self.Times.setncattr('long_name', 'Calendar Date')
+        self.Times.setncattr('format', 'String: Calendar Time')
+        self.Times.setncattr('time_zone', 'UTC')
+        self.Times[:] = Times
 
     def close(self):
         """ Close the netCDF file handle. """
