@@ -1223,7 +1223,7 @@ class Model(Domain):
                 f.write(' &NML_RIVER\n')
                 f.write('  RIVER_NAME          = ''{}'',\n'.format(self.river.names[ri]))
                 f.write('  RIVER_FILE          = ''{}'',\n'.format(forcing_file))
-                f.write('  RIVER_GRID_LOCATION = {:d},\n'.format(self.river.node[ri]))
+                f.write('  RIVER_GRID_LOCATION = {:d},\n'.format(self.river.node[ri] + 1))
                 f.write('  RIVER_VERTICAL_DISTRIBUTION = {}\n'.format(vertical_distribution))
                 f.write('  /\n')
 
