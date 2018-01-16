@@ -1207,6 +1207,7 @@ class Model(Domain):
 
     def write_river_namelist(self, output_file, forcing_file, vertical_distribution='uniform'):
         """
+        Write an FVCOM river namelist file.
 
         Parameters
         ----------
@@ -1229,6 +1230,7 @@ class Model(Domain):
 
     def read_nemo_rivers(self, nemo_file, remove_baltic=True):
         """
+        Read a NEMO river netCDF file.
 
         Parameters
         ----------
