@@ -1097,7 +1097,7 @@ class ICES_comp():
                     node_ind = self.zeta_filereader.closest_node([sample['Longdeg'], sample['Latdeg']], haversine=True)
 
                     if self.daily_avg: # For daily averages match by day, otherwise use nearest time
-                        sample_dt = dt.datetime(y,m,d)
+                        sample_dt = dt.datetime(int(sample['Year']),int(sample['Mnth']),int(sample['Dy']))
 
                     model_time_ind = self.zeta_filereader.closest_time(sample_dt)
                     model_dt = self.zeta_filereader.time.datetime[model_time_ind]
