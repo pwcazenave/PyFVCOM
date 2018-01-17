@@ -1023,6 +1023,44 @@ class Model(Domain):
         if self.dims.river == 0:
             return
 
+        if max_discharge:
+            # Find rivers in excess of the given discharge maximum.
+            big_rivers = np.unique(np.argwhere(self.river.flux > max_discharge)[:,1])
+            if big_rivers:
+                for this_river in big_rivers:
+                    no_of_splits = np.ceil(np.max(self.river.flux[:,this_river])/max_discharge)
+                    original_river_name = self.river.names[this_river]
+                    each_flux = self.river.flux[:,this_river]/no_of_splits # everything else is concentrations so can just be copied
+
+                    for this_i in np.arange(2,no_of_splits +1):
+                        self.river.names.append(original_river_name + str(this_i))        
+                    
+                    self.river.flux[:, this_river] = self.river.flux[:,this_river]/no_of_splits # everything else is concentrations so can just be copied
+                    
+                    # Collect all variables to add columns for
+                    all_vars = ['flux', 'temperature', 'salinity']
+    
+                    # Ersem variables if they're in there
+                    N_names = list(filter(lambda x:'mud_' in x, list(self.river.__dict__.keys())))
+                    Z_names = list(filter(lambda x:'mud_' in x, list(self.river.__dict__.keys()))) 
+                    O_names = list(filter(lambda x:'mud_' in x, list(self.river.__dict__.keys())))
+
+                    # And sediment ones
+                    muddy_sediment_names = list(filter(lambda x:'mud_' in x, list(self.river.__dict__.keys())))
+                    sandy_sediment_names = list(filter(lambda x:'sand_' in x, list(self.river.__dict__.keys())))
+
+                    all_vars = flatten_list([all_vars, N_names, Z_names, O_names, muddy_sediment_names, sandy_sediment_names]) 
+
+                    for this_var in all_vars:
+                        self.__add_river_col(self, this_var, this_river, no_of_splits -1)
+
+
+            # update no of rivers
+
+
+
+               
+
         for i, node in enumerate(self.river.node):
             bad = find_bad_node(self.grid.triangles, node)
             if bad:
@@ -1035,13 +1073,11 @@ class Model(Domain):
                     if still_bad:
                         # Is this even possible?
                         candidates = get_attached_unique_nodes(candidate, self.grid.triangles)
+
+                # TO DO - Add check for two rivers on one node
+
                 dist = [haversine_distance((self.grid.lon[i], self.grid.lat[i]), (self.grid.lon[node], self.grid.lat[node])) for i in candidates]
                 self.river.node[i] = np.argmin(candidates[np.argmin(dist)])
-
-        if max_discharge:
-            # Find rivers in excess of the given discharge maximum.
-            big_rivers = np.argwhere(self.river.flux > max_discharge)
-            # TODO: implement this!
 
         if min_depth:
             deep_rivers = np.argwhere(self.grid.h[self.river.node] > min_depth)
@@ -1077,6 +1113,26 @@ class Model(Domain):
             # Update the dimension too.
             self.dims.river -= len(boundary_river_indices)
 
+    def __add_river_col(self, var_name, col_to_copy, no_cols_to_add):
+        """
+        Helper function to copy the existing data for river variable to a new splinter river (when they are split for excessive discharge at
+        one node
+
+        Parameters
+        ----------
+        var_name : str
+            Name of river attribute to alter
+        col_to_copy : int
+            The column (i.e. river) to copy from)
+        no_cols_to_add : int
+            The number of columns (i.e. extra rivers) to add to the end of the array
+        """
+        old_data = getattr(self.river, var_name)
+        col_to_add = old_data[:, col_to_copy][:,np.newaxis]
+        col_to_add = np.tile(col_to_add, [1, no_cols_to_add])
+        setattr(self.river, var_name, np.hstack([old_data, col_to_add]))
+
+
     def write_river_forcing(self, output_file, ersem=False, ncopts={'zlib': True, 'complevel': 7}, sediments=False, **kwargs):
         """
         Write out an FVCOM river forcing netCDF file.
@@ -1097,7 +1153,7 @@ class Model(Domain):
             - flux : river discharge data [time, river]
             - temperature : river temperature data [time, river]
             - salinity : river salinity data [time, river]
-        The `ersem' dictionary should contain at least:
+        If using ersem them it should also contain:
             - N1_p : phosphate [time, river]
             - N3_n : nitrate [time, river]
             - N4_n : ammonium [time, river]
