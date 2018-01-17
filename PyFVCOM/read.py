@@ -774,13 +774,15 @@ class FileReader(Domain):
         return time_idx
 
 
-def MFileReader(fvcom, *args, **kwargs):
+def MFileReader(fvcom, noisy=False, *args, **kwargs):
     """ Wrapper around FileReader for loading multiple files at once.
 
     Parameters
     ----------
     fvcom : list-like, str
         List of files to load.
+    noisy : bool, optional
+        Set to True to write out the name of each file being loaded.
 
     Additional arguments are passed to `PyFVCOM.read.FileReader'.
 
@@ -792,9 +794,13 @@ def MFileReader(fvcom, *args, **kwargs):
     """
 
     if isinstance(fvcom, str):
+        if noisy:
+            print('Loading {}'.format(fvcom))
         FVCOM = FileReader(fvcom, *args, **kwargs)
     else:
         for file in fvcom:
+            if noisy:
+                print('Loading {}'.format(file))
             if file == fvcom[0]:
                 FVCOM = FileReader(file, *args, **kwargs)
             else:

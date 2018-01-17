@@ -8,13 +8,14 @@ European continental shelf.
 
 from __future__ import print_function
 
+import os
 import sys
-import scipy
-import inspect
-import numpy as np
-
-from lxml import etree
 from warnings import warn
+
+import numpy as np
+import scipy
+from lxml import etree
+from netCDF4 import Dataset, date2num
 
 from PyFVCOM.grid import find_nearest_point
 from PyFVCOM.utilities.general import fix_range
@@ -27,6 +28,432 @@ except ImportError:
     warn('No sqlite standard library found in this python'
          ' installation. Some functions will be disabled.')
     use_sqlite = False
+
+
+class HarmonicOutput:
+    """
+    Class to create a harmonic output file which creates variables for surface elevation and currents (both
+    depth-averaged and depth-resolved). Will optionally save raw data and predicted time series too.
+
+    """
+    def __init__(self, ncfile, fvcom, consts, files=None, predict=False, dump_raw=False):
+        """
+        Create a new netCDF file for harmonic analysis output.
+
+        Parameters
+        ----------
+        ncfile : str
+            Path to the netCDF to create.
+        fvcom : PyFVCOM.read.FileReader
+            Model data object.
+        consts : list
+            List of constituents used in the harmonic analysis.
+        files : list, optional
+            File names used to create the harmonic analysis for the metadata.
+        predict : bool, optional
+            Set to True to enable predicted variable creation (defaults to False).
+        dump_raw : bool, optional
+            Set to True to enable output of the raw data used to perform the harmonic analysis (defaults to False).
+
+        """
+
+        # Things to do.
+        self._predict = predict
+        self._dump_raw = dump_raw
+
+        # The output file
+        self._ncfile = ncfile
+        self._files = files
+        self._ncopts = {'zlib': True, 'complevel': 7}
+        self._consts = consts
+
+        # The data arrays
+        self._time = fvcom.time.datetime
+        self._lon = fvcom.grid.lon
+        self._lat = fvcom.grid.lat
+        self._lonc = fvcom.grid.lonc
+        self._latc = fvcom.grid.latc
+        self._Times = fvcom.time.Times
+        self._nv = fvcom.grid.nv
+        self._h = fvcom.grid.h
+        self._h_center = fvcom.grid.h_center
+        self._siglay = fvcom.grid.siglay
+        self._siglev = fvcom.grid.siglev
+
+        # The dimensions
+        self._nx = len(self._lon)
+        self._ne = len(self._lonc)
+        self._nz = self._siglay.shape[0]
+        self._nzlev = self._siglev.shape[0]
+        self._nt = self._Times.shape[0]
+        self._nconsts = len(self._consts)
+
+        # Make the netCDF and populate the initial values (grid and time).
+        self._init_structure()
+        self._populate_grid()
+
+        # Sync what we've got to disk now.
+        self.sync()
+
+    def _init_structure(self):
+        if self._nz == 0:
+            # Space last
+            self._node_siglay_dims = ['siglay', 'node']
+            self._node_siglev_dims = ['siglev', 'node']
+            self._three_nele_dims = ['three', 'nele']
+            self._nele_time_dims = ['time', 'nele']
+            self._nele_siglay_time_dims = ['time', 'siglay', 'nele']
+            self._node_time_dims = ['time', 'node']
+            self._nele_nconsts_dims = ['nconsts', 'nele']
+            self._nele_siglay_nconsts_dims = self._nele_consts_dims  # single-layer only
+            self._node_nconsts_dims = ['nconsts', 'node']
+            self._nele_coordinates = 'time latc lonc'
+            self._nconsts_coordinates = 'nconsts lonc latc'
+
+        else:
+            # Space last
+            self._node_siglay_dims = ['siglay', 'node']
+            self._node_siglev_dims = ['siglev', 'node']
+            self._three_nele_dims = ['three', 'nele']
+            self._nele_time_dims = ['time', 'nele']
+            self._nele_siglay_time_dims = ['time', 'siglay', 'nele']
+            self._node_time_dims = ['time', 'node']
+            self._nele_nconsts_dims = ['nconsts', 'nele']
+            self._nele_siglay_nconsts_dims = ['nconsts', 'siglay', 'nele']  # multi-layer
+            self._node_nconsts_dims = ['nconsts', 'node']
+            self._nele_coordinates = 'time latc lonc'
+            self._nconsts_coordinates = 'nconsts lonc latc'
+        self._nc = Dataset(self._ncfile, 'w', format='NETCDF4', clobber=True)
+
+        self._nc.createDimension('node', self._nx)
+        self._nc.createDimension('nele', self._ne)
+        if self._nz != 0:
+            self._nc.createDimension('siglay', self._nz)
+            self._nc.createDimension('siglev', self._nzlev)
+        # Only create a Times variable if we're actually outputting any time dependent data.
+        if self._dump_raw or self._predict:
+            self._nc.createDimension('time', 0)
+        self._nc.createDimension('nconsts', self._nconsts)
+        self._nc.createDimension('three', 3)
+        self._nc.createDimension('NameStrLen', 4)
+        self._nc.createDimension('DateStrLen', 26)
+
+        self._nc.setncattr('type', 'Harmonic analysis of elevation, u and v data')
+        self._nc.setncattr('title', 'FVCOM model results harmonic analysis')
+        self._nc.setncattr('author', 'Pierre Cazenave (Plymouth Marine Laboratory)')
+        self._nc.setncattr('history', 'File created using {}'.format(os.path.basename(sys.argv[0])))
+        if self._files:
+            self._nc.setncattr('sources', 'Created from file(s): {}'.format(self._files))
+
+        self.lon = self._nc.createVariable('lon', 'f4', ['node'], **self._ncopts)
+        self.lon.setncattr('units', 'degrees_east')
+        self.lon.setncattr('long_name', 'nodal longitude')
+        self.lon.setncattr('standard_name', 'longitude')
+
+        self.lat = self._nc.createVariable('lat', 'f4', ['node'], **self._ncopts)
+        self.lat.setncattr('units', 'degrees_north')
+        self.lat.setncattr('long_name', 'nodal longitude')
+        self.lat.setncattr('standard_name', 'longitude')
+
+        self.lonc = self._nc.createVariable('lonc', 'f4', ['nele'], **self._ncopts)
+        self.lonc.setncattr('units', 'degrees_east')
+        self.lonc.setncattr('long_name', 'zonal longitude')
+        self.lonc.setncattr('standard_name', 'longitude')
+
+        self.latc = self._nc.createVariable('latc', 'f4', ['nele'], **self._ncopts)
+        self.latc.setncattr('units', 'degrees_north')
+        self.latc.setncattr('long_name', 'zonal longitude')
+        self.latc.setncattr('standard_name', 'longitude')
+
+        self.h = self._nc.createVariable('h', 'f4', ['node'], **self._ncopts)
+        self.h.setncattr('long_name', 'Bathymetry')
+        self.h.setncattr('standard_name', 'sea_floor_depth_below_geoid')
+        self.h.setncattr('units', 'm')
+        self.h.setncattr('positive', 'down')
+        self.h.setncattr('grid', 'Bathymetry_Mesh')
+        self.h.setncattr('coordinates', 'x y')
+        self.h.setncattr('type', 'data')
+
+        self.h_center = self._nc.createVariable('h_center', 'f4', ['nele'], **self._ncopts)
+        self.h_center.setncattr('long_name', 'Bathymetry')
+        self.h_center.setncattr('standard_name', 'sea_floor_depth_below_geoid')
+        self.h_center.setncattr('units', 'm')
+        self.h_center.setncattr('positive', 'down')
+        self.h_center.setncattr('grid', 'grid1 ')
+        self.h_center.setncattr('coordinates', 'latc lonc')
+        self.h_center.setncattr('grid_location', 'center')
+
+        self.siglay = self._nc.createVariable('siglay', 'f4', self._node_siglay_dims, **self._ncopts)
+        self.siglay.setncattr('long_name', 'Sigma Layers')
+        self.siglay.setncattr('standard_name', 'ocean_sigma/general_coordinate')
+        self.siglay.setncattr('positive', 'up')
+        self.siglay.setncattr('valid_min', -1.0)
+        self.siglay.setncattr('valid_max', 0.0)
+        self.siglay.setncattr('formula_terms', 'sigma: siglay eta: zeta depth: h')
+
+        self.siglev = self._nc.createVariable('siglev', 'f4', self._node_siglev_dims, **self._ncopts)
+        self.siglev.setncattr('long_name', 'Sigma Levels')
+        self.siglev.setncattr('standard_name', 'ocean_sigma/general_coordinate')
+        self.siglev.setncattr('positive', 'up')
+        self.siglev.setncattr('valid_min', -1.0)
+        self.siglev.setncattr('valid_max', 0.0)
+        self.siglev.setncattr('formula_terms', 'sigma: siglay eta: zeta depth: h')
+
+        self.nv = self._nc.createVariable('nv', 'f4', self._three_nele_dims, **self._ncopts)
+        self.nv.setncattr('long_name', 'nodes surrounding element')
+
+        if self._dump_raw or self._predict:
+            self.Times = self._nc.createVariable('Times', 'c', ['time', 'DateStrLen'], **self._ncopts)
+            self.Times.setncattr('time_zone', 'UTC')
+
+        if self._dump_raw:
+            self.ua_raw = self._nc.createVariable('ua_raw', 'f4', self._nele_time_dims, **self._ncopts)
+            self.ua_raw.setncattr('long_name', 'Modelled Eastward Water Depth-averaged Velocity')
+            self.ua_raw.setncattr('standard_name', 'fvcom_eastward_sea_water_velocity')
+            self.ua_raw.setncattr('units', 'meters s-1')
+            self.ua_raw.setncattr('grid', 'fvcom_grid')
+            self.ua_raw.setncattr('type', 'data')
+            self.ua_raw.setncattr('coordinates', self._nele_coordinates)
+            self.ua_raw.setncattr('location', 'face')
+
+            self.va_raw = self._nc.createVariable('va_raw', 'f4', self._nele_time_dims, **self._ncopts)
+            self.va_raw.setncattr('long_name', 'Modelled Northward Water Depth-averaged Velocity')
+            self.va_raw.setncattr('standard_name', 'fvcom_northward_sea_water_velocity')
+            self.va_raw.setncattr('units', 'meters s-1')
+            self.va_raw.setncattr('grid', 'fvcom_grid')
+            self.va_raw.setncattr('type', 'data')
+            self.va_raw.setncattr('coordinates', self._nele_coordinates)
+            self.va_raw.setncattr('location', 'face')
+
+            self.u_raw = self._nc.createVariable('u_raw', 'f4', self._nele_siglay_time_dims, **self._ncopts)
+            self.u_raw.setncattr('long_name', 'Modelled Eastward Water Velocity')
+            self.u_raw.setncattr('standard_name', 'fvcom_eastward_sea_water_velocity')
+            self.u_raw.setncattr('units', 'meters s-1')
+            self.u_raw.setncattr('grid', 'fvcom_grid')
+            self.u_raw.setncattr('type', 'data')
+            self.u_raw.setncattr('coordinates', self._nele_coordinates)
+            self.u_raw.setncattr('location', 'face')
+
+            self.v_raw = self._nc.createVariable('v_raw', 'f4', self._nele_siglay_time_dims, **self._ncopts)
+            self.v_raw.setncattr('long_name', 'Modelled Northward Water Velocity')
+            self.v_raw.setncattr('standard_name', 'fvcom_northward_sea_water_velocity')
+            self.v_raw.setncattr('units', 'meters s-1')
+            self.v_raw.setncattr('grid', 'fvcom_grid')
+            self.v_raw.setncattr('type', 'data')
+            self.v_raw.setncattr('coordinates', self._nele_coordinates)
+            self.v_raw.setncattr('location', 'face')
+
+            self.z_raw = self._nc.createVariable('z_raw', 'f4', self._node_time_dims, **self._ncopts)
+            self.z_raw.setncattr('long_name', 'Modelled Surface Elevation')
+            self.z_raw.setncattr('standard_name', 'fvcom_surface_elevation')
+            self.z_raw.setncattr('units', 'meters')
+            self.z_raw.setncattr('grid', 'fvcom_grid')
+            self.z_raw.setncattr('type', 'data')
+            self.z_raw.setncattr('coordinates', 'time lat lon')
+            self.z_raw.setncattr('location', 'node')
+
+        if self._predict:
+            self.ua_pred = self._nc.createVariable('ua_pred', 'f4', self._nele_time_dims, **self._ncopts)
+            self.ua_pred.setncattr('long_name', 'Predicted Eastward Water Depth-averaged Velocity')
+            self.ua_pred.setncattr('standard_name', 'eastward_sea_water_velocity')
+            self.ua_pred.setncattr('units', 'meters s-1')
+            self.ua_pred.setncattr('grid', 'fvcom_grid')
+            self.ua_pred.setncattr('type', 'data')
+            self.ua_pred.setncattr('coordinates', self._nele_coordinates)
+            self.ua_pred.setncattr('location', 'face')
+
+            self.va_pred = self._nc.createVariable('va_pred', 'f4', self._nele_time_dims, **self._ncopts)
+            self.va_pred.setncattr('long_name', 'Predicted Northward Water Depth-averaged Velocity')
+            self.va_pred.setncattr('standard_name', 'northward_sea_water_velocity')
+            self.va_pred.setncattr('units', 'meters s-1')
+            self.va_pred.setncattr('grid', 'fvcom_grid')
+            self.va_pred.setncattr('type', 'data')
+            self.va_pred.setncattr('coordinates', self._nele_coordinates)
+            self.va_pred.setncattr('location', 'face')
+
+            self.u_pred = self._nc.createVariable('u_pred', 'f4', self._nele_siglay_time_dims, **self._ncopts)
+            self.u_pred.setncattr('long_name', 'Predicted Eastward Water Velocity')
+            self.u_pred.setncattr('standard_name', 'eastward_sea_water_velocity')
+            self.u_pred.setncattr('units', 'meters s-1')
+            self.u_pred.setncattr('grid', 'fvcom_grid')
+            self.u_pred.setncattr('type', 'data')
+            self.u_pred.setncattr('coordinates', self._nele_coordinates)
+            self.u_pred.setncattr('location', 'face')
+
+            self.v_pred = self._nc.createVariable('v_pred', 'f4', self._nele_siglay_time_dims, **self._ncopts)
+            self.v_pred.setncattr('long_name', 'Predicted Northward Water Velocity')
+            self.v_pred.setncattr('standard_name', 'northward_sea_water_velocity')
+            self.v_pred.setncattr('units', 'meters s-1')
+            self.v_pred.setncattr('grid', 'fvcom_grid')
+            self.v_pred.setncattr('type', 'data')
+            self.v_pred.setncattr('coordinates', self._nele_coordinates)
+            self.v_pred.setncattr('location', 'face')
+
+            self.z_pred = self._nc.createVariable('z_pred', 'f4', self._node_time_dims, **self._ncopts)
+            self.z_pred.setncattr('long_name', 'Predicted Surface Elevation')
+            self.z_pred.setncattr('standard_name', 'surface_elevation')
+            self.z_pred.setncattr('units', 'meters')
+            self.z_pred.setncattr('grid', 'fvcom_grid')
+            self.z_pred.setncattr('type', 'data')
+            self.z_pred.setncattr('coordinates', 'time lat lon')
+            self.z_pred.setncattr('location', 'node')
+
+        self.u_const_names = self._nc.createVariable('u_const_names', 'c', ['nconsts', 'NameStrLen'], **self._ncopts)
+        self.u_const_names.setncattr('long_name', 'Tidal constituent names for u-velocity')
+        self.u_const_names.setncattr('standard_name', 'u_constituent_names')
+
+        self.v_const_names = self._nc.createVariable('v_const_names', 'c', ['nconsts', 'NameStrLen'], **self._ncopts)
+        self.v_const_names.setncattr('long_name', 'Tidal constituent names for v-velocity')
+        self.v_const_names.setncattr('standard_name', 'v_constituent_names')
+
+        self.z_const_names = self._nc.createVariable('z_const_names', 'c', ['nconsts', 'NameStrLen'], **self._ncopts)
+        self.z_const_names.setncattr('long_name', 'Tidal constituent names for surface elevation')
+        self.z_const_names.setncattr('standard_name', 'z_constituent_names')
+
+        self.u_amp = self._nc.createVariable('u_amp', 'f4', self._nele_siglay_nconsts_dims, **self._ncopts)
+        self.u_amp.setncattr('long_name', 'Tidal harmonic amplitudes of the u velocity')
+        self.u_amp.setncattr('standard_name', 'u_amplitude')
+        self.u_amp.setncattr('units', 'meters')
+        self.u_amp.setncattr('grid', 'fvcom_grid')
+        self.u_amp.setncattr('type', 'data')
+        self.u_amp.setncattr('coordinates', self._nconsts_coordinates)
+
+        self.v_amp = self._nc.createVariable('v_amp', 'f4', self._nele_siglay_nconsts_dims, **self._ncopts)
+        self.v_amp.setncattr('long_name', 'Tidal harmonic amplitudes of the v velocity')
+        self.v_amp.setncattr('standard_name', 'v_amplitude')
+        self.v_amp.setncattr('units', 'meters')
+        self.v_amp.setncattr('grid', 'fvcom_grid')
+        self.v_amp.setncattr('type', 'data')
+        self.v_amp.setncattr('coordinates', self._nconsts_coordinates)
+
+        self.ua_amp = self._nc.createVariable('ua_amp', 'f4', self._nele_nconsts_dims, **self._ncopts)
+        self.ua_amp.setncattr('long_name', 'Tidal harmonic amplitudes of the ua velocity')
+        self.ua_amp.setncattr('standard_name', 'ua_amplitude')
+        self.ua_amp.setncattr('units', 'meters')
+        self.ua_amp.setncattr('grid', 'fvcom_grid')
+        self.ua_amp.setncattr('type', 'data')
+        self.ua_amp.setncattr('coordinates', self._nconsts_coordinates)
+
+        self.va_amp = self._nc.createVariable('va_amp', 'f4', self._nele_nconsts_dims, **self._ncopts)
+        self.va_amp.setncattr('long_name', 'Tidal harmonic amplitudes of the va velocity')
+        self.va_amp.setncattr('standard_name', 'va_amplitude')
+        self.va_amp.setncattr('units', 'meters')
+        self.va_amp.setncattr('grid', 'fvcom_grid')
+        self.va_amp.setncattr('type', 'data')
+        self.va_amp.setncattr('coordinates', self._nconsts_coordinates)
+
+        self.z_amp = self._nc.createVariable('z_amp', 'f4', self._node_nconsts_dims, **self._ncopts)
+        self.z_amp.setncattr('long_name', 'Tidal harmonic amplitudes of the surface elevation')
+        self.z_amp.setncattr('standard_name', 'z_amplitude')
+        self.z_amp.setncattr('units', 'meters')
+        self.z_amp.setncattr('grid', 'fvcom_grid')
+        self.z_amp.setncattr('type', 'data')
+        self.z_amp.setncattr('coordinates', 'lon lat nconsts')
+
+        self.u_phase = self._nc.createVariable('u_phase', 'f4', self._nele_siglay_nconsts_dims, **self._ncopts)
+        self.u_phase.setncattr('long_name', 'Tidal harmonic phases of the u velocity')
+        self.u_phase.setncattr('standard_name', 'u_amplitude')
+        self.u_phase.setncattr('units', 'meters')
+        self.u_phase.setncattr('grid', 'fvcom_grid')
+        self.u_phase.setncattr('type', 'data')
+        self.u_phase.setncattr('coordinates', self._nconsts_coordinates)
+
+        self.v_phase = self._nc.createVariable('v_phase', 'f4', self._nele_siglay_nconsts_dims, **self._ncopts)
+        self.v_phase.setncattr('long_name', 'Tidal harmonic phases of the v velocity')
+        self.v_phase.setncattr('standard_name', 'v_amplitude')
+        self.v_phase.setncattr('units', 'meters')
+        self.v_phase.setncattr('grid', 'fvcom_grid')
+        self.v_phase.setncattr('type', 'data')
+        self.v_phase.setncattr('coordinates', self._nconsts_coordinates)
+
+        self.ua_phase = self._nc.createVariable('ua_phase', 'f4', self._nele_nconsts_dims, **self._ncopts)
+        self.ua_phase.setncattr('long_name', 'Tidal harmonic phases of the ua velocity')
+        self.ua_phase.setncattr('standard_name', 'ua_amplitude')
+        self.ua_phase.setncattr('units', 'meters')
+        self.ua_phase.setncattr('grid', 'fvcom_grid')
+        self.ua_phase.setncattr('type', 'data')
+        self.ua_phase.setncattr('coordinates', self._nconsts_coordinates)
+
+        self.va_phase = self._nc.createVariable('va_phase', 'f4', self._nele_nconsts_dims, **self._ncopts)
+        self.va_phase.setncattr('long_name', 'Tidal harmonic phases of the va velocity')
+        self.va_phase.setncattr('standard_name', 'va_amplitude')
+        self.va_phase.setncattr('units', 'meters')
+        self.va_phase.setncattr('grid', 'fvcom_grid')
+        self.va_phase.setncattr('type', 'data')
+        self.va_phase.setncattr('coordinates', self._nconsts_coordinates)
+
+        self.z_phase = self._nc.createVariable('z_phase', 'f4', self._node_nconsts_dims, **self._ncopts)
+        self.z_phase.setncattr('long_name', 'Tidal harmonic phases of the surface elevation'),
+        self.z_phase.setncattr('standard_name', 'z_amplitude')
+        self.z_phase.setncattr('units', 'meters')
+        self.z_phase.setncattr('grid', 'fvcom_grid')
+        self.z_phase.setncattr('type', 'data')
+        self.z_phase.setncattr('coordinates', 'lon lat nconsts')
+
+    def _populate_grid(self):
+        # Add the data we already have.
+        self.lon[:] = self._lon
+        self.lat[:] = self._lat
+        self.lonc[:] = self._lonc
+        self.latc[:] = self._latc
+        self.h[:] = self._h
+        self.h_center[:] = self._h_center
+        self.nv[:] = self._nv
+        self.z_const_names[:] = self._consts
+        self.u_const_names[:] = self._consts
+        self.v_const_names[:] = self._consts
+        self.siglay[:] = self._siglay
+        self.siglev[:] = self._siglev
+        if self._predict or self._dump_raw:
+            self._write_fvcom_time(self._time)
+
+    def _write_fvcom_time(self, time, **kwargs):
+        """
+        Write the four standard FVCOM time variables (time, Times, Itime, Itime2) for the given time series.
+
+        Parameters
+        ----------
+        time : np.ndarray, list, tuple
+            Times as datetime objects.
+
+        """
+
+        mjd = date2num(time, units='days since 1858-11-17 00:00:00')
+        Itime = np.floor(mjd)  # integer Modified Julian Days
+        Itime2 = (mjd - Itime) * 24 * 60 * 60 * 1000  # milliseconds since midnight
+        Times = [t.strftime('%Y-%m-%dT%H:%M:%S.%f') for t in time]
+
+        # time
+        self.time = self._nc.createVariable('time', 'f4', ['time'], **self._ncopts)
+        self.time.setncattr('units', 'days since 1858-11-17 00:00:00')
+        self.time.setncattr('format', 'modified julian day (MJD)')
+        self.time.setncattr('long_name', 'time')
+        self.time.setncattr('time_zone', 'UTC')
+        # Itime
+        self.Itime = self._nc.createVariable('Itime', 'i', ['time'], **self._ncopts)
+        self.Itime.setncattr('units', 'days since 1858-11-17 00:00:00')
+        self.Itime.setncattr('format', 'modified julian day (MJD)')
+        self.Itime.setncattr('time_zone', 'UTC')
+        self.Itime[:] = Itime
+        # Itime2
+        self.Itime2 = self._nc.createVariable('Itime2', 'i', ['time'], **self._ncopts)
+        self.Itime2.setncattr('units', 'msec since 00:00:00')
+        self.Itime2.setncattr('time_zone', 'UTC')
+        self.Itime2[:] = Itime2
+        # Times
+        self.Times = self._nc.createVariable('Itime2', 'c', ['time', 'DateStrLen'], **self._ncopts)
+        self.Times.setncattr('long_name', 'Calendar Date')
+        self.Times.setncattr('format', 'String: Calendar Time')
+        self.Times.setncattr('time_zone', 'UTC')
+        self.Times[:] = Times
+
+    def close(self):
+        """ Close the netCDF file handle. """
+        self._nc.close()
+
+    def sync(self):
+        """ Sync data to disk now. """
+        self._nc.sync()
 
 
 def add_harmonic_results(db, stationName, constituentName, phase, amplitude, speed, inferred, ident=None, noisy=False):

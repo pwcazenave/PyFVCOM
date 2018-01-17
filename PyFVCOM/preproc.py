@@ -933,8 +933,9 @@ class Model(Domain):
         from PML's Western Channel Observatory L4 buoy data. These are: 'Z4_c', 'Z5c', 'Z5n', 'Z5p', 'Z6c', 'Z6n' and
         'Z6p'.
 
-        If `sediment' is True, then the variables in the sediment are added. Cohesive sediments are expected to have names like
-        'mud_*' and non-cohesive sediments names like 'sand_*'.
+        If `sediment' is supplied, then the variables in the sediment are added. Cohesive sediments are expected to have
+        names like 'mud_*' and non-cohesive sediments names like 'sand_*'.
+
         TO DO: Add Regs formula for calculating spm from flux
 
         """
@@ -1108,7 +1109,7 @@ class Model(Domain):
             # Now drop all those indices from the relevant river data.
             for field in self.obj_iter(self.river):
                 if field != 'time':
-                    setattr(self.river, field, np.delete(getattr(self.river, field), self.__flatten_list(boundary_river_indices), axis=-1))
+                    setattr(self.river, field, np.delete(getattr(self.river, field), flatten_list(boundary_river_indices), axis=-1))
 
             # Update the dimension too.
             self.dims.river -= len(boundary_river_indices)
@@ -1163,7 +1164,7 @@ class Model(Domain):
             - O3_c : dissolved inorganic carbon [time, river]
             - O3_bioalk : bio-alkalinity [time, river]
             - Z4_c : mesozooplankton carbon [time, river]
-        If using sediments then any objects of the self.river whos name matches 'mud_*' or 'sand_*' will be added
+        If using sediments then any objects of the self.river whose name matches 'mud_*' or 'sand_*' will be added
         to the output.
 
         Uses self.river.source for the 'title' global attribute in the netCDF and self.river.history for the 'info'
@@ -1250,16 +1251,19 @@ class Model(Domain):
                 if muddy_sediment_names:
                     for this_sediment in muddy_sediment_names:
                         atts = {'long_name': '{} - muddy stuff'.format(this_sediment), 'units': 'kgm^-3'} 
-                        river.add_variable(this_sediment, getattr(self.river, this_sediment), ['time', 'rivers'], attributes=atts, ncopts=ncopts)
+                        river.add_variable(this_sediment, getattr(self.river, this_sediment), ['time', 'rivers'],
+                                           attributes=atts, ncopts=ncopts)
     
                 if sandy_sediment_names:
                     for this_sediment in sandy_sediment_names:
                         atts = {'long_name': '{} - sandy stuff'.format(this_sediment), 'units': 'kgm^-3'}    
-                        river.add_variable(this_sediment, getattr(self.river, this_sediment), ['time', 'rivers'], attributes=atts, ncopts=ncopts)
+                        river.add_variable(this_sediment, getattr(self.river, this_sediment), ['time', 'rivers'],
+                                           attributes=atts, ncopts=ncopts)
 
 
     def write_river_namelist(self, output_file, forcing_file, vertical_distribution='uniform'):
         """
+        Write an FVCOM river namelist file.
 
         Parameters
         ----------
@@ -1276,12 +1280,13 @@ class Model(Domain):
                 f.write(' &NML_RIVER\n')
                 f.write('  RIVER_NAME          = ''{}'',\n'.format(self.river.names[ri]))
                 f.write('  RIVER_FILE          = ''{}'',\n'.format(forcing_file))
-                f.write('  RIVER_GRID_LOCATION = {:d},\n'.format(self.river.node[ri]))
+                f.write('  RIVER_GRID_LOCATION = {:d},\n'.format(self.river.node[ri] + 1))
                 f.write('  RIVER_VERTICAL_DISTRIBUTION = {}\n'.format(vertical_distribution))
                 f.write('  /\n')
 
     def read_nemo_rivers(self, nemo_file, remove_baltic=True):
         """
+        Read a NEMO river netCDF file.
 
         Parameters
         ----------
@@ -1559,31 +1564,39 @@ class Model(Domain):
                     f.write(' PROBE_VAR_NAME = "{}"\n'.format(long_name))
                     f.write('/\n')
 
-    def read_regular(self, regular, variables):
-        """
-        Read regularly gridded model data and provides a RegularReader object which mimics a FileReader object.
+    def read_regular(self, *args, **kwargs):
+        read_regular.__doc__
+        self.regular = read_regular(*args, noisy=self.noisy, **kwargs)
 
-        Parameters
-        ----------
-        regular : str, pathlib.Path
-            Files to read.
-        variables : list
-            Variables to extract. Variables missing in the files raise an error.
 
-        Provides
-        --------
-        A RegularReader object with the requested variables loaded.
+def read_regular(regular, variables, noisy=False):
+    """
+    Read regularly gridded model data and provides a RegularReader object which mimics a FileReader object.
 
-        """
+    Parameters
+    ----------
+    regular : str, pathlib.Path
+        Files to read.
+    variables : list
+        Variables to extract. Variables missing in the files raise an error.
+    noisy : bool, optional
+        Set to True to enable verbose output. Defaults to False.
 
-        for ii, file in enumerate(regular):
-            if self.noisy:
-                print('Loading file {}'.format(file))
-            if ii == 0:
-                self.regular = RegularReader(str(file), variables=variables)
-            else:
-                self.regular += RegularReader(str(file), variables=variables)
+    Provides
+    --------
+    A RegularReader object with the requested variables loaded.
 
+    """
+
+    for ii, file in enumerate(regular):
+        if noisy:
+            print('Loading file {}'.format(file))
+        if ii == 0:
+            regular = RegularReader(str(file), variables=variables)
+        else:
+            regular += RegularReader(str(file), variables=variables)
+
+    return regular
 
 class WriteForcing:
     """ Create an FVCOM netCDF input file. """
@@ -1654,7 +1667,7 @@ class WriteForcing:
         Parameters
         ----------
         time : np.ndarray, list, tuple
-            Times as date time objects.
+            Times as datetime objects.
 
         """
 
