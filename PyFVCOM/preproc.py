@@ -1863,8 +1863,8 @@ class RegularReader(FileReader):
                                   np.min(self.grid.lat), np.max(self.grid.lat))
 
     def load_data(self, var):
-        """ Add a given variable/variables at the given indices. If any indices are omitted or Falsey, return all
-        data for the missing dimensions.
+        """
+        Load the given variable/variables.
 
         Parameters
         ----------
