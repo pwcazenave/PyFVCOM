@@ -1513,7 +1513,7 @@ class Model(Domain):
         self.regular = read_regular(*args, noisy=self.noisy, **kwargs)
 
 
-def read_regular(regular, variables, noisy=False):
+def read_regular(regular, variables, noisy=False, **kwargs):
     """
     Read regularly gridded model data and provides a RegularReader object which mimics a FileReader object.
 
@@ -1525,22 +1525,27 @@ def read_regular(regular, variables, noisy=False):
         Variables to extract. Variables missing in the files raise an error.
     noisy : bool, optional
         Set to True to enable verbose output. Defaults to False.
+    Remaining keyword arguments are passed to RegularReader.
 
-    Provides
-    --------
-    A RegularReader object with the requested variables loaded.
+    Returns
+    -------
+    regular_model : PyFVCOM.preproc.RegularReader
+        A RegularReader object with the requested variables loaded.
 
     """
+
+    if variables not in kwargs:
+        kwargs.update({'variables': variables})
 
     for ii, file in enumerate(regular):
         if noisy:
             print('Loading file {}'.format(file))
         if ii == 0:
-            regular_array = RegularReader(str(file), variables=variables)
+            regular_model = RegularReader(str(file), **kwargs)
         else:
-            regular_array += RegularReader(str(file), variables=variables)
+            regular_model += RegularReader(str(file), **kwargs)
 
-    return regular_array
+    return regular_model
 
 class WriteForcing:
     """ Create an FVCOM netCDF input file. """
