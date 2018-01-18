@@ -1536,11 +1536,11 @@ def read_regular(regular, variables, noisy=False):
         if noisy:
             print('Loading file {}'.format(file))
         if ii == 0:
-            regular = RegularReader(str(file), variables=variables)
+            regular_array = RegularReader(str(file), variables=variables)
         else:
-            regular += RegularReader(str(file), variables=variables)
+            regular_array += RegularReader(str(file), variables=variables)
 
-    return regular
+    return regular_array
 
 class WriteForcing:
     """ Create an FVCOM netCDF input file. """
