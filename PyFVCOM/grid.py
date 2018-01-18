@@ -29,7 +29,7 @@ from PyFVCOM.coordinate import utm_from_lonlat, lonlat_from_utm
 from PyFVCOM.utilities.time import date_range
 
 
-class Domain:
+class Domain(object):
     """
     Class to hold information for unstructured grid from a range of file types. The aim is to abstract away the file
     format into a consistent object.
