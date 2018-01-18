@@ -1923,7 +1923,7 @@ class RegularReader(FileReader):
 
             if 'time' not in var_dim:
                 # Should we error here or carry on having warned?
-                warn('{} does not contain a time dimension.'.format(v))
+                warn("{} does not contain a `time' dimension.".format(v))
 
             attributes = type('attributes', (object,), {})()
             for attribute in self.ds.variables[v].ncattrs():
