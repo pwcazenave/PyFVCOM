@@ -1941,3 +1941,371 @@ class RegularReader(FileReader):
     def closest_element(self, *args, **kwargs):
         """ Compatibility function. """
         return self.closest_node(*args, **kwargs)
+
+
+class HYCOMReader(RegularReader):
+    """
+    Class for reading HYCOM data.
+
+    """
+
+    def __add__(self, other, debug=False):
+        """
+        This special method means we can stack two RegularReader objects in time through a simple addition (e.g. nemo1
+        += nemo2)
+
+        """
+
+        # This is only subtly different from the one in RegularReader, but since the dimensions associated with each
+        # variable differ in name, we have to adjust the code here. This is bound to introduce bugs eventually.
+
+        # Check we've already got all the same data objects before we start.
+        lon_compare = self.dims.lon == other.dims.lon
+        lat_compare = self.dims.lat == other.dims.lat
+        depth_compare = self.dims.depth == other.dims.depth
+        time_compare = self.time.datetime[-1] <= other.time.datetime[0]
+        data_compare = self.obj_iter(self.data) == self.obj_iter(other.data)
+        old_data = self.obj_iter(self.data)
+        new_data = self.obj_iter(other.data)
+        if not lon_compare:
+            raise ValueError('Horizontal longitude data are incompatible.')
+        if not lat_compare:
+            raise ValueError('Horizontal latitude data are incompatible.')
+        if not depth_compare:
+            raise ValueError('Vertical depth layers are incompatible.')
+        if not time_compare:
+            raise ValueError("Time periods are incompatible (`fvcom2' must be greater than or equal to `fvcom1')."
+                             "`fvcom1' has end {} and `fvcom2' has start {}".format(self.time.datetime[-1],
+                                                                                    other.time.datetime[0]))
+        if not data_compare:
+            raise ValueError('Loaded data sets for each RegularReader class must match.')
+        if not (old_data == new_data) and (old_data or new_data):
+            warn('Subsequent attempts to load data for this merged object will only load data from the first object. '
+                 'Load data into each object before merging them.')
+
+        # Copy ourselves to a new version for concatenation. self is the old so we get appended to by the new.
+        idem = copy.copy(self)
+
+        for var in self.obj_iter(idem.data):
+            if 'MT' in idem.ds.variables[var].dimensions:
+                setattr(idem.data, var, np.ma.concatenate((getattr(idem.data, var), getattr(other.data, var))))
+        for time in self.obj_iter(idem.time):
+            setattr(idem.time, time, np.concatenate((getattr(idem.time, time), getattr(other.time, time))))
+
+        # Remove duplicate times.
+        time_indices = np.arange(len(idem.time.time))
+        _, dupes = np.unique(idem.time.time, return_index=True)
+        dupe_indices = np.setdiff1d(time_indices, dupes)
+        time_mask = np.ones(time_indices.shape, dtype=bool)
+        time_mask[dupe_indices] = False
+        for var in self.obj_iter(idem.data):
+            # Only delete things with a time dimension.
+            if 'MT' in idem.ds.variables[var].dimensions:
+                # time_axis = idem.ds.variables[var].dimensions.index('time')
+                setattr(idem.data, var, getattr(idem.data, var)[time_mask, ...])  # assume time is first
+                # setattr(idem.data, var, np.delete(getattr(idem.data, var), dupe_indices, axis=time_axis))
+        for time in self.obj_iter(idem.time):
+            try:
+                time_axis = idem.ds.variables[time].dimensions.index('MT')
+                setattr(idem.time, time, np.delete(getattr(idem.time, time), dupe_indices, axis=time_axis))
+            except KeyError:
+                # This is hopefully one of the additional time variables which doesn't exist in the netCDF dataset.
+                # Just delete the relevant indices by assuming that time is the first axis.
+                setattr(idem.time, time, np.delete(getattr(idem.time, time), dupe_indices, axis=0))
+            except ValueError:
+                # If we're fiddling around with the HYCOMReader data, we might not have the right name for the time
+                # dimension, so the .index('time') will fail. Just assume that that is the case and therefore time is
+                # the first dimension.
+                setattr(idem.time, time, np.delete(getattr(idem.time, time), dupe_indices, axis=0))
+
+        # Update dimensions accordingly.
+        idem.dims.time = len(idem.time.time)
+
+        return idem
+
+
+    def _load_time(self):
+        """
+        Populate a time object with additional useful time representations from the netCDF time data.
+
+        """
+
+        # Fake it till we make it by adding variables to the HYCOM data which match the other files we use. I get the
+        # feeling this should all be in __init__() really.
+
+        # For each variable, replace its dimension names with our standard ones.
+        standard_variables = {'Longitude': 'lon', 'Latitude': 'lat', 'MT': 'time', 'Depth': 'depth'}
+        standard_dimensions = {'X': 'lon', 'Y': 'lat', 'MT': 'time', 'Depth': 'depth'}
+        for var in list(self.ds.variables.keys()):
+            if var in standard_variables:
+                self.ds.variables[standard_variables[var]] = self.ds.variables[var]
+        # Also make dimension attributes for the standard dimension names.
+        for dim in standard_dimensions:
+            setattr(self.dims, standard_dimensions[dim], getattr(self.dims, dim))
+
+        time = self.ds.variables['time'][:]
+
+        # Make other time representations.
+        self.time.datetime = num2date(time, units=getattr(self.ds.variables['time'], 'units'))
+        if isinstance(self.time.datetime, (list, tuple, np.ndarray)):
+            setattr(self.time, 'Times', np.array([datetime.strftime(d, '%Y-%m-%dT%H:%M:%S.%f') for d in self.time.datetime]))
+        else:
+            setattr(self.time, 'Times', datetime.strftime(self.time.datetime, '%Y-%m-%dT%H:%M:%S.%f'))
+        self.time.time = date2num(self.time.datetime, units='days since 1858-11-17 00:00:00')
+        self.time.Itime = np.floor(self.time.time)
+        self.time.Itime2 = (self.time.time - np.floor(self.time.time)) * 1000 * 60 * 60  # microseconds since midnight
+        self.time.datetime = self.time.datetime
+        self.time.matlabtime = self.time.time + 678942.0  # convert to MATLAB-indexed times from Modified Julian Date.
+
+    def _load_grid(self):
+        """
+        Load the grid data.
+
+        Convert from UTM to spherical if we haven't got those data in the existing output file.
+
+        """
+
+        # This is only subtly different from the one in RegularReader, but since the dimensions associated with each
+        # variable differ in name, we have to adjust the code here. This is bound to introduce bugs eventually.
+
+        grid_variables = ['lon', 'lat', 'x', 'y', 'depth']
+
+        # Get the grid data.
+        for grid in grid_variables:
+
+            try:
+                setattr(self.grid, grid, self.ds.variables[grid][:])
+                # Save the attributes.
+                attributes = type('attributes', (object,), {})()
+                for attribute in self.ds.variables[grid].ncattrs():
+                    setattr(attributes, attribute, getattr(self.ds.variables[grid], attribute))
+                setattr(self.atts, grid, attributes)
+            except KeyError:
+                # Make zeros for this missing variable so we can convert from the non-missing data below.
+                setattr(self.grid, grid, np.zeros((self.dims.lon, self.dims.lat)))
+            except ValueError as value_error_message:
+                warn('Variable {} has a problem with the data. Setting value as all zeros.'.format(grid))
+                setattr(self.grid, grid, np.zeros(self.ds.variables[grid].shape))
+
+        # Fix the longitudes.
+        _lon = getattr(self.grid, 'lon') % int(self.ds.variables['lon'].modulo.split(' ')[0])
+        _lon[_lon > 180] -= 360
+        setattr(self.grid, 'lon', _lon)
+
+        # Make the grid data the right shape for us to assume it's an FVCOM-style data set.
+        # self.grid.lon, self.grid.lat = np.meshgrid(self.grid.lon, self.grid.lat)
+        # self.grid.lon, self.grid.lat = self.grid.lon.ravel(), self.grid.lat.ravel()
+
+        # Update dimensions to match those we've been given, if any. Omit time here as we shouldn't be touching that
+        # dimension for any variable in use in here.
+        for dim in self._dims:
+            if dim != 'MT':
+                setattr(self.dims, dim, len(self._dims[dim]))
+
+        # Convert the given W/E/S/N coordinates into node and element IDs to subset.
+        if self._bounding_box:
+            # We need to use the original Dataset lon and lat values here as they have the right shape for the
+            # subsetting.
+
+            # HYCOM longitude values are modulo this value. Latitudes are just as is. No idea why.
+            weird_modulo = int(self.ds.variables['lon'].modulo.split(' ')[0])
+            hycom_lon = self.ds.variables['lon'][:] % weird_modulo
+            hycom_lon[hycom_lon > 180] -= 360  # make range -180 to 180.
+            self._dims['X'] = (hycom_lon > self._dims['wesn'][0]) & (hycom_lon < self._dims['wesn'][1])
+            # Latitude is much more straightforward.
+            self._dims['Y'] = (self.ds.variables['lat'][:] > self._dims['wesn'][2]) & \
+                              (self.ds.variables['lat'][:] < self._dims['wesn'][3])
+            # self._dims['X'] = np.argwhere((self.ds.variables['lon'][:] > self._dims['wesn'][0]) &
+            #                               (self.ds.variables['lon'][:] < self._dims['wesn'][1]))
+            # self._dims['Y'] = np.argwhere((self.ds.variables['lat'][:] > self._dims['wesn'][2]) &
+            #                               (self.ds.variables['lat'][:] < self._dims['wesn'][3]))
+
+        related_variables = {'X': ('Longitude', 'lon'), 'Y': ('Latitude', 'lat')}
+        for spatial_dimension in 'X', 'Y':
+            if spatial_dimension in self._dims:
+                spatial_index = self.ds.variables[spatial_dimension].dimensions.index(spatial_dimension)
+                setattr(self.dims, spatial_dimension, self._dims[spatial_dimension].shape[spatial_index])
+                for var in related_variables[spatial_dimension]:
+                    try:
+                        var_shape = [i for i in np.shape(self.ds.variables[var])]
+                        if 'Depth' in (self._dims, self.ds.variables[var].dimensions):
+                            var_shape[self.ds.variables[var].dimensions.index('Depth')] = self.dims.siglay
+                        _temp = np.empty(var_shape) * np.nan
+                        # This doesn't work with the HYCOM data at the moment. I haven't translated this from FVCOM's
+                        # approach yet.
+                        if 'Depth' in self.ds.variables[var].dimensions:
+                            # First get the depth layers, then get the horizontal positions. Untested!
+                            # TODO: Test this!
+                            if 'Depth' in self._dims:
+                                _temp = self.ds.variables[var][self._dims['Depth'], ...]
+                                _temp[self._dims[spatial_dimension]] = self.ds.variables[var][:][self._dims[spatial_dimension]]
+                            else:
+                                _temp = self.ds.variables[var][self._dims['Depth'], ...]
+                                _temp[self._dims[spatial_dimension]] = self.ds.variables[var][:][self._dims[spatial_dimension]]
+                        else:
+                            _temp[self._dims[spatial_dimension]] = self.ds.variables[var][:][self._dims[spatial_dimension]]
+                    except KeyError:
+                        # Try and do something vaguely useful.
+                        if 'depth' in var:
+                            _temp = np.empty((self.dims.depth, getattr(self.dims, spatial_dimension)))
+                        else:
+                            _temp = np.empty(getattr(self.dims, spatial_dimension))
+                setattr(self.grid, var, _temp)
+
+            if self._bounding_box:
+                # Make the indices non-dimensional for the spatial dimensions.
+                self._dims[spatial_dimension] = np.ravel_multi_index(np.argwhere(self._dims[spatial_dimension]).T,
+                                                                     self._dims[spatial_dimension].shape)
+
+        # Check if we've been given vertical dimensions to subset in too, and if so, do that. Check we haven't
+        # already done this if the 'node' and 'nele' sections above first.
+        for var in ['depth']:
+            short_dim = copy.copy(var)
+            # Assume we need to subset this one unless 'node' or 'nele' are missing from self._dims. If they're in
+            # self._dims, we've already subsetted in the 'node' and 'nele' sections above, so doing it again here
+            # would fail.
+            subset_variable = True
+            if 'X' in self._dims or 'Y' in self._dims:
+                subset_variable = False
+            # Strip off the _center to match the dimension name.
+            if short_dim.endswith('_center'):
+                short_dim = short_dim.split('_')[0]
+            if short_dim in self._dims:
+                if short_dim in self.ds.variables[var].dimensions and subset_variable:
+                    _temp = getattr(self.grid, var)[self._dims[short_dim], ...]
+                    setattr(self.grid, var, _temp)
+
+        # Check ranges and if zero assume we're missing that particular type, so convert from the other accordingly.
+        self.grid.lon_range = np.ptp(self.grid.lon)
+        self.grid.lat_range = np.ptp(self.grid.lat)
+        self.grid.x_range = np.ptp(self.grid.x)
+        self.grid.y_range = np.ptp(self.grid.y)
+
+        # Only do the conversions when we have more than a single point since the relevant ranges will be zero with
+        # only one position.
+        if self.dims.lon > 1 and self.dims.lat > 1:
+            if self.grid.lon_range == 0 and self.grid.lat_range == 0:
+                self.grid.lon, self.grid.lat = lonlat_from_utm(self.grid.x, self.grid.y, zone=self._zone)
+                self.grid.lon_range = np.ptp(self.grid.lon)
+                self.grid.lat_range = np.ptp(self.grid.lat)
+            if self.grid.lon_range == 0 and self.grid.lat_range == 0:
+                self.grid.x, self.grid.y = utm_from_lonlat(self.grid.lon, self.grid.lat)
+                self.grid.x_range = np.ptp(self.grid.x)
+                self.grid.y_range = np.ptp(self.grid.y)
+
+        # Make a bounding box variable too (spherical coordinates): W/E/S/N
+        self.grid.bounding_box = (np.min(self.grid.lon), np.max(self.grid.lon),
+                                  np.min(self.grid.lat), np.max(self.grid.lat))
+
+    def load_data(self, var):
+        """
+        Load the given variable/variables.
+
+        Parameters
+        ----------
+        var : list-like, str
+            List of variables to load.
+
+        """
+
+        # This is only subtly different from the one in RegularReader, but since the dimensions associated with each
+        # variable differ in name, we have to adjust the code here. This is bound to introduce bugs eventually.
+
+        # Check if we've got iterable variables and make one if not.
+        try:
+            _ = (e for e in var)
+        except TypeError:
+            var = [var]
+
+        for v in var:
+            if v not in self.ds.variables:
+                raise KeyError("Variable '{}' not present in {}.".format(v, self._fvcom))
+
+            # Get this variable's dimensions
+            var_dim = self.ds.variables[v].dimensions
+            variable_shape = self.ds.variables[v].shape
+            variable_indices = [np.arange(i) for i in variable_shape]
+            for dimension in var_dim:
+                if dimension in self._dims:
+                    # Replace their size with anything we've been given in dims.
+                    variable_index = var_dim.index(dimension)
+                    if self._bounding_box and dimension in ('X', 'Y'):
+                        rows, columns = np.unravel_index(self._dims[dimension], (self.ds.dimensions['Y'].size, self.ds.dimensions['X'].size))
+                        if dimension == 'X':
+                            variable_indices[var_dim.index('X')] = np.unique(columns)
+                        elif dimension == 'Y':
+                            variable_indices[var_dim.index('Y')] = np.unique(rows)
+                    else:
+                        variable_indices[variable_index] = self._dims[dimension]
+
+            # Check the data we're loading is the same shape as our existing dimensions.
+            lon_compare = self.ds.dimensions['X'].size == self.dims.lon
+            lat_compare = self.ds.dimensions['Y'].size == self.dims.lat
+            depth_compare = self.ds.dimensions['Depth'].size == self.dims.depth
+            time_compare = self.ds.dimensions['MT'].size == self.dims.time
+            # Check again if we've been asked to subset in any dimension.
+            if 'lon' in self._dims:
+                lon_compare = len(self.ds.variables['X'][self._dims['lon']]) == self.dims.lon
+            if 'lat' in self._dims:
+                lat_compare = len(self.ds.variables['Y'][self._dims['lat']]) == self.dims.lat
+            if 'depth' in self._dims:
+                depth_compare = len(self.ds.variables['Depth'][self._dims['depth']]) == self.dims.depth
+            if 'time' in self._dims:
+                time_compare = len(self.ds.variables['MT'][self._dims['time']]) == self.dims.time
+
+            if not lon_compare:
+                raise ValueError('Longitude data are incompatible. You may be trying to load data after having already '
+                                 'concatenated a RegularReader object, which is unsupported.')
+            if not lat_compare:
+                raise ValueError('Latitude data are incompatible. You may be trying to load data after having already '
+                                 'concatenated a RegularReader object, which is unsupported.')
+            if not depth_compare:
+                raise ValueError('Vertical depth layers are incompatible. You may be trying to load data after having '
+                                 'already concatenated a RegularReader object, which is unsupported.')
+            if not time_compare:
+                raise ValueError('Time period is incompatible. You may be trying to load data after having already '
+                                 'concatenated a RegularReader object, which is unsupported.')
+
+            if 'MT' not in var_dim:
+                # Should we error here or carry on having warned?
+                warn("{} does not contain an `MT' (time) dimension.".format(v))
+
+            attributes = type('attributes', (object,), {})()
+            for attribute in self.ds.variables[v].ncattrs():
+                setattr(attributes, attribute, getattr(self.ds.variables[v], attribute))
+            setattr(self.atts, v, attributes)
+
+            data = self.ds.variables[v][variable_indices]  # data are automatically masked
+            setattr(self.data, v, data)
+
+
+def read_hycom(regular, variables, noisy=False, **kwargs):
+    """
+    Read regularly gridded model data and provides a HYCOMReader object which mimics a FileReader object.
+
+    Parameters
+    ----------
+    regular : str, pathlib.Path
+        Files to read.
+    variables : list
+        Variables to extract. Variables missing in the files raise an error.
+    noisy : bool, optional
+        Set to True to enable verbose output. Defaults to False.
+    Remaining keyword arguments are passed to HYCOMReader.
+
+    Returns
+    -------
+    hycom_model : PyFVCOM.preproc.HYCOMReader
+        A HYCOMReader object with the requested variables loaded.
+
+    """
+
+    for ii, file in enumerate(regular):
+        if noisy:
+            print('Loading file {}'.format(file))
+        if ii == 0:
+            hycom_model = HYCOMReader(str(file), variables=variables, **kwargs)
+        else:
+            hycom_model += HYCOMReader(str(file), variables=variables, **kwargs)
+
+    return hycom_model
