@@ -1039,7 +1039,7 @@ class CrossPlotter(Plotter):
         self.axes.quiver(plot_x, plot_y, cross_u.T, cross_v.T*w_factor)
 
     def _var_prep(self, var, timestep):
-        self.ds.load_data([var], start=timestep, end=timestep+1)
+        self.ds.load_data([var], dims={'time': [timestep]})
         var_sel = np.squeeze(getattr(self.ds.data, var))[..., self.sel_points]
 
         this_step_wet_points = np.asarray(self.wet_points_data[timestep,:], dtype=bool)
