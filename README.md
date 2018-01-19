@@ -303,7 +303,7 @@ The examples directory includes some Jupyter notebooks of some brief examples of
 - Move a field from nodes to elements: `on_elements = nodes2elems(fvcom.data.field, fvcom.grid.triangles)`
 
 #### Model data
-- Read model output: `fvcom = PyFVCOM.read.FileReader('casename_0001.nc')`
+- Read model output: `fvcom = PyFVCOM.read.FileReader('casename_0001.nc', variables=['temp', 'salinity'])`
 - Calculate density from temperature and salinity: `density = PyFVCOM.ocean.dens_jackett(fvcom.data.temp, fvcom.data.salinity)`
 
 #### Miscellaneous tools
