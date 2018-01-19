@@ -78,6 +78,15 @@ Provides
     - `vorticity`
 
 * `grid` - tools to parse SMS, DHI MIKE, GMSH and FVCOM unstructured grids. Also provides functionality to add coasts and clip triangulations to a given domain. Functions to parse FVCOM river files are also included, as is a function to resample an unstructured grid onto a regular grid (without interpolation, simply finding the nearest point within a threshold distance). This module contains a number of generally useful tools related to unstructured grids (node and element lookups, grid connectivity, grid metrics, area tools).
+    - `Domain` - class to abstract loading different grid types away. The `read_*_mesh` methods below are now slighly redundant.
+    - `Domain.closest_node`
+    - `Domain.closest_element`
+    - `Domain.horizontal_transect_nodes`
+    - `Domain.horizontal_transect_elements`
+    - `OpenBoundary` - class to handle model open boundaries.
+    - `OpenBoundary.add_sponge_layer`
+    - `OpenBoundary.add_tpxo_tides`
+    - `OpenBoundary.add_nested_forcing`
     - `read_sms_mesh`
     - `read_fvcom_mesh`
     - `read_mike_mesh`
@@ -87,14 +96,13 @@ Provides
     - `write_mike_mesh`
     - `find_nearest_point`
     - `element_side_lengths`
-    - `fix_coordinates`
     - `clip_triangulation`
     - `get_river_config`
     - `get_rivers`
     - `mesh2grid`
     - `line_sample`
+    - `element_sample`
     - `connectivity`
-    - `clip_domain`
     - `find_connected_nodes`
     - `find_connected_elements`
     - `get_area`
@@ -108,8 +116,15 @@ Provides
     - `node_control_area`
     - `element_control_area`
     - `unstructured_grid_volume`
+    - `unstructured_grid_depths`
     - `elems2nodes`
     - `nodes2elems`
+    - `vincenty_distance`
+    - `haversine_distance`
+    - `shape_coefficients`
+    - `reduce_triangulation`
+    - `getcrossectiontriangles`
+    - `isintriangle`
 
 * `ocean` - a number of routines to convert between combinations of temperature, salinity, pressure, depth and density.
     - `pressure2depth`
@@ -144,9 +159,42 @@ Provides
     - `Plotter.remove_line_plots`
     - `Plotter.plot_scatter`
 
+* `preproc` - class for creating input files for FVCOM model runs.
+    - `Model.write_grid`
+    - `Model.write_coriolis`
+    - `Model.add_bed_roughness`
+    - `Model.write_bed_roughness`
+    - `Model.interp_sst_assimilation`
+    - `Model.write_sstgrd`
+    - `Model.add_sigma_coordinates`
+    - `Model.sigma_generalized`
+    - `Model.sigma_geometric`
+    - `Model.sigma_tanh`
+    - `Model.hybrid_sigma_coordinate`
+    - `Model.write_sigma`
+    - `Model.add_open_boundaries`
+    - `Model.write_sponge`
+    - `Model.add_grid_metrics`
+    - `Model.write_tides`
+    - `Model.add_rivers`
+    - `Model.check_rivers`
+    - `Model.write_river_forcing`
+    - `Model.write_river_namelist`
+    - `Model.read_nemo_rivers`
+    - `Model.add_probes`
+    - `Model.write_probes`
+    - `Model.read_regular`
+    - `WriteForcing.add_variable`
+    - `WriteForcing.write_fvcom_time`
+    - `RegularReader` - like `PyFVCOM.read.FileReader`, but for regularly gridded data.
+    - `read_regular` - load multiple regularly gridded files.
+    - `HYCOMReader` - like `PyFVCOM.read.FileReader`, but for HYCOM data.
+    - `read_hycom` - load multiple regularly gridded files.
+
 * `read` - parse the netCDF model output and extract a subset of the variables.
     - `FileReader`
     - `MFileReader`
+    - `FileReaderFromDict`
     - `ncwrite`
     - `ncread`
     - `read_probes`
@@ -169,6 +217,7 @@ Provides
     - `prep_plot`
 
 * `tide` - tools to use and abuse tidal data from an SQLite database of tidal time series.
+    - `HarmonicOutput`
     - `add_harmonic_results`
     - `get_observed_data`
     - `get_observed_metadata`
@@ -179,16 +228,60 @@ Provides
     - `grid_POLPRED`
     - `get_harmonics_POLPRED`
     - `make_water_column`
+    - `Lanczos` - Lanczos time filter.
+    - `lanczos` - As above, but not a class.
 
 * `utilities` - general utilities (including time utilities)
-    - `StubFile`
-    - `fix_range`
-    - `julian_day`
-    - `gregorian_date`
-    - `overlap`
-    - `common_time`
-    - `ind2sub`
+    - `general.fix_range`
+    - `general.ind2sub`
+    - `general.flatten_list`
+    - `grid.StubFile`
+    - `time.julian_day`
+    - `time.gregorian_date`
+    - `time.overlap`
+    - `time.common_time`
 
+* `validation` - post-processing and validation utilities. Some of these are currently incomplete.
+    - `validation_db`
+    - `validation_db.execute_sql`
+    - `validation_db.create_table`
+    - `validation_db.insert_into_table`
+    - `validation_db.select_qry`
+    - `validation_db.table_exists`
+    - `validation_db.close_conn`
+    - `dt_to_epochsec`
+    - `epochsec_to_dt`
+    - `plot_map`
+    - `plot_tides`
+    - `db_tide`
+    - `db_tide.make_bodc_tables`
+    - `db_tide.insert_tide_file`
+    - `db_tide.get_tidal_series`
+    - `db_tide.get_gauge_locations`
+    - `db_tide.get_nearest_gauge_id`
+    - `bodc_annual_tide_file`
+    - `db_wco`
+    - `db_wco.make_wco_tables`
+    - `db_wco.insert_CTD_file`
+    - `db_wco.insert_buoy_file`
+    - `db_wco.insert_CTD_dir`
+    - `db_wco.insert_csv_file`
+    - `db_wco.get_observations`
+    - `WCO_obs_file`
+    - `csv_formatted`
+    - `comp_data`
+    - `comp_data.retrieve_file_data`
+    - `comp_data.retrieve_obs_data`
+    - `comp_data.get_comp_data_interpolated`
+    - `comp_data.comp_data_nearest`
+    - `comp_data.model_closest_time`
+    - `comp_data_filereader`
+    - `comp_data_filereader.retrieve_file_data`
+    - `comp_data_filereader.model_closest_time`
+    - `comp_data_probe`
+    - `comp_data_probe.retrieve_file_data`
+    - `ICES_comp`
+    - `ICES_comp.get_var_comp`
 
 Examples
 --------
