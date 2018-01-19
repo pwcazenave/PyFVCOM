@@ -12,7 +12,7 @@ setup(
     keywords = ['fvcom', 'unstructured grid', 'mesh'],
     license = 'MIT',
     platforms = 'any',
-    install_requires = ['pyshp', 'jdcal', 'scipy', 'numpy', 'matplotlib', 'netCDF4', 'lxml', 'pyproj', 'pytz', 'networkx'],
+    install_requires = ['pyshp', 'jdcal', 'scipy', 'numpy', 'matplotlib', 'netCDF4', 'lxml', 'pyproj', 'pytz', 'networkx', 'UTide'],
     classifiers = []
 )
 
