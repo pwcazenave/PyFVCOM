@@ -1133,7 +1133,6 @@ class Model(Domain):
         col_to_add = np.tile(col_to_add, [1, no_cols_to_add])
         setattr(self.river, var_name, np.hstack([old_data, col_to_add]))
 
-
     def write_river_forcing(self, output_file, ersem=False, ncopts={'zlib': True, 'complevel': 7}, sediments=False, **kwargs):
         """
         Write out an FVCOM river forcing netCDF file.
@@ -1259,7 +1258,6 @@ class Model(Domain):
                         atts = {'long_name': '{} - sandy stuff'.format(this_sediment), 'units': 'kgm^-3'}    
                         river.add_variable(this_sediment, getattr(self.river, this_sediment), ['time', 'rivers'],
                                            attributes=atts, ncopts=ncopts)
-
 
     def write_river_namelist(self, output_file, forcing_file, vertical_distribution='uniform'):
         """
