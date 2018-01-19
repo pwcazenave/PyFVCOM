@@ -60,6 +60,11 @@ Provides
     - `read_CST`
     - `write_CST`
 
+* `coordinate` - convert from spherical and cartesian (UTM) coordinates. Also work with British National Grid coordinates and spherical.
+    - `utm_from_lonlat`
+    - `lonlat_from_utm`
+    - `british_national_grid_to_lonlat`
+
 * `ctd` - interrogate an SQLite data base of CTD casts.
     - `get_CTD_metadata`
     - `get_CTD_data`
@@ -105,11 +110,6 @@ Provides
     - `unstructured_grid_volume`
     - `elems2nodes`
     - `nodes2elems`
-
-* `coordinate` - convert from spherical and cartesian (UTM) coordinates. Also work with British National Grid coordinates and spherical.
-    - `utm_from_lonlat`
-    - `lonlat_from_utm`
-    - `british_national_grid_to_lonlat`
 
 * `ocean` - a number of routines to convert between combinations of temperature, salinity, pressure, depth and density.
     - `pressure2depth`
