@@ -1590,7 +1590,7 @@ def read_regular(regular, variables, noisy=False, **kwargs):
 
     """
 
-    if variables not in kwargs:
+    if 'variables' not in kwargs:
         kwargs.update({'variables': variables})
 
     for ii, file in enumerate(regular):
@@ -2356,12 +2356,15 @@ def read_hycom(regular, variables, noisy=False, **kwargs):
 
     """
 
+    if 'variables' not in kwargs:
+        kwargs.update({'variables': variables})
+
     for ii, file in enumerate(regular):
         if noisy:
             print('Loading file {}'.format(file))
         if ii == 0:
-            hycom_model = HYCOMReader(str(file), variables=variables, **kwargs)
+            hycom_model = HYCOMReader(str(file), **kwargs)
         else:
-            hycom_model += HYCOMReader(str(file), variables=variables, **kwargs)
+            hycom_model += HYCOMReader(str(file), **kwargs)
 
     return hycom_model
