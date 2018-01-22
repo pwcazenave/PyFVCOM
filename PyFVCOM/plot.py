@@ -995,7 +995,7 @@ class CrossPlotter(Plotter):
                 self.ds.load_data(['wet_nodes'])
                 self.wet_points_data = np.asarray(self.ds.data.wet_nodes[:,self.sel_points], dtype=bool)
         else:
-            self.wet_points_data = np.asarry(np.ones(self.ds.dims.time, len(self.sel_points)), dtype=bool)
+            self.wet_points_data = np.asarray(np.ones((self.ds.dims.time, len(self.sel_points))), dtype=bool)
 
         self.ylim_vals = [np.floor(np.nanmin(self.cross_plot_y_pcolor)), np.ceil(np.nanmax(self.cross_plot_y_pcolor)) + 1]
         self.xlim_vals = [np.nanmin(self.cross_plot_x_pcolor), np.nanmax(self.cross_plot_x_pcolor)]
