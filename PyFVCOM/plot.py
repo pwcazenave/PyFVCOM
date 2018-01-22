@@ -922,7 +922,7 @@ class CrossPlotter(Plotter):
         if self.title:
             self.axes.set_title(self.title)
 
-    def cross_section_init(self, cross_section_points, dist_res = 50, variable_at_cells=False):
+    def cross_section_init(self, cross_section_points, dist_res = 50, variable_at_cells=False, wetting_and_drying=True):
         # sample the cross section
         [sub_samp, sample_cells, sample_nodes] = getcrossectiontriangles(cross_section_points[0], self.triangles, self.x, self.y, dist_res)
 
@@ -986,13 +986,16 @@ class CrossPlotter(Plotter):
             chan_y_raw[np.isnan(chan_y_raw)] = max_zeta
         self.chan_x, self.chan_y = self._chan_corners(chan_x_raw, chan_y_raw)
 
-        # sort out wetting and drying nodes
-        if variable_at_cells:
-            self.ds.load_data(['wet_cells'])
-            self.wet_points_data = np.asarray(self.ds.data.wet_cells[:,self.sel_points], dtype=bool)
+        # sort out wetting and drying nodes if requested
+        if wetting_and_drying:
+            if variable_at_cells:
+                self.ds.load_data(['wet_cells'])
+                self.wet_points_data = np.asarray(self.ds.data.wet_cells[:,self.sel_points], dtype=bool)
+            else:
+                self.ds.load_data(['wet_nodes'])
+                self.wet_points_data = np.asarray(self.ds.data.wet_nodes[:,self.sel_points], dtype=bool)
         else:
-            self.ds.load_data(['wet_nodes'])
-            self.wet_points_data = np.asarray(self.ds.data.wet_nodes[:,self.sel_points], dtype=bool)
+            self.wet_points_data = np.asarry(np.ones(self.ds.dims.time, len(self.sel_points)), dtype=bool)
 
         self.ylim_vals = [np.floor(np.nanmin(self.cross_plot_y_pcolor)), np.ceil(np.nanmax(self.cross_plot_y_pcolor)) + 1]
         self.xlim_vals = [np.nanmin(self.cross_plot_x_pcolor), np.nanmax(self.cross_plot_x_pcolor)]
