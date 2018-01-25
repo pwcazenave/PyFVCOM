@@ -961,7 +961,6 @@ class CrossPlotter(Plotter):
             h = self.ds.grid.h[self.sel_points]
             zeta = self.ds.data.zeta[:,self.sel_points]
 
-
         depth_sel = -unstructured_grid_depths(h, zeta, siglay, nan_invalid=True)
         depth_sel_pcolor = -unstructured_grid_depths(h, zeta, siglev, nan_invalid=True)
 
@@ -1012,7 +1011,7 @@ class CrossPlotter(Plotter):
             self.vmax = np.nanmax(plot_z)
 
         for this_node in self.sel_points:
-            choose_horiz = np.asarray(self.sample_points == this_node, dtype=bool)
+            # choose_horiz = np.asarray(self.sample_points == this_node, dtype=bool)
             choose_horiz = np.asarray(np.where(self.sample_points == this_node)[0], dtype=int)
             choose_horiz_extend = np.asarray(np.append(choose_horiz, np.max(choose_horiz) +1), dtype=int)
 
