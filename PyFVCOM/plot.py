@@ -1016,8 +1016,12 @@ class CrossPlotter(Plotter):
             choose_horiz_extend = np.asarray(np.append(choose_horiz, np.max(choose_horiz) +1), dtype=int)
 
             y_uniform = np.tile(np.median(plot_y[choose_horiz_extend,:], axis=0), [len(choose_horiz_extend),1])
-            pc = self.axes.pcolormesh(plot_x[choose_horiz_extend,:], y_uniform,
-                                        plot_z[choose_horiz,:], cmap=self.cmap, vmin=self.vmin, vmax=self.vmax)
+            pc = self.axes.pcolormesh(plot_x[choose_horiz_extend,:],
+                                      y_uniform,
+                                      plot_z[choose_horiz,:],
+                                      cmap=self.cmap,
+                                      vmin=self.vmin,
+                                      vmax=self.vmax)
 
         self.axes.plot(self.chan_x, self.chan_y, linewidth=2, color='black')
         self.figure.colorbar(pc)
