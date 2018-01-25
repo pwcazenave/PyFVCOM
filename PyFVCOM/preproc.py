@@ -1996,6 +1996,17 @@ class RegularReader(FileReader):
         """ Compatibility function. """
         return self.closest_node(*args, **kwargs)
 
+    def closest_node(self, where, cartesian=False, threshold=np.inf, vincenty=False, haversine=False):
+        if cartesian:
+            raise ValueError('No cartesian coordinates defined')
+        else:
+            lat_rav, lon_rav = np.meshgrid(self.grid.lat, self.grid.lon)
+            x, y = lon_rav.ravel(), lat_rav.ravel()
+
+        index = self._closest_point(x, y, x, y, where, threshold=threshold, vincenty=vincenty, haversine=haversine)
+        if len(index) == 1:
+            index = index[0]
+        return np.unravel_index(index, (len(self.grid.lon), len(self.grid.lat)))
 
 class HYCOMReader(RegularReader):
     """
