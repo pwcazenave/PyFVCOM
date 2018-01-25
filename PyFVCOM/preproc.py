@@ -1601,6 +1601,7 @@ def read_regular(regular, variables, noisy=False, **kwargs):
 
     return regular_model
 
+
 class WriteForcing:
     """ Create an FVCOM netCDF input file. """
 
@@ -2007,6 +2008,7 @@ class RegularReader(FileReader):
         if len(index) == 1:
             index = index[0]
         return np.unravel_index(index, (len(self.grid.lon), len(self.grid.lat)))
+
 
 class HYCOMReader(RegularReader):
     """
