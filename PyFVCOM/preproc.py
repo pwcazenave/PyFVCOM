@@ -592,16 +592,20 @@ class Model(Domain):
 
         """
 
+        kbm1 = levels - 1
+
         dist = np.zeros(levels)
 
-        for k in range(levels - 1):
+        # Loop has to go to kbm1 + 1 (or levels) since python ranges stop before the end point.
+        for k in range(1, levels):
             x1 = dl + du
-            x1 = x1 * (levels - k - 2) / (levels - 1)
+            x1 = x1 * (kbm1 - k) / (kbm1)
             x1 = x1 - dl
             x1 = np.tanh(x1)
             x2 = np.tanh(dl)
             x3 = x2 + np.tanh(du)
-            dist[k + 1] = (x1 + x2) / x3 - 1
+            # k'th position starts from 1 which is right because we want the initial value to be zero for sigma levels.
+            dist[k] = (x1 + x2) / x3 - 1
 
         return dist
 
