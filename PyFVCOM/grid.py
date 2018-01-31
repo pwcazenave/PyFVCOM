@@ -34,8 +34,6 @@ class Domain(object):
     Class to hold information for unstructured grid from a range of file types. The aim is to abstract away the file
     format into a consistent object.
 
-    Its structure is based on PyFVCOM.read.FileReader.
-
     """
 
     def __init__(self, grid, native_coordinates, zone=None, noisy=False, debug=False):
