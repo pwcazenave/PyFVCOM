@@ -711,56 +711,56 @@ class Model(Domain):
         # Update the open boundaries.
         self.__update_open_boundaries()
 
-    def __hybrid_coordinate_hmin(self, H, levels, DU, DL, KU, KL, ZKU, ZKL):
+    def __hybrid_coordinate_hmin(self, h, levels, du, dl, ku, kl, zku, zkl):
         """
         Helper function to find the relevant minimum depth.
 
         Parameters
         ----------
-        H : float
+        h : float
             Transition depth of the hybrid coordinates?
         levels : int
             Number of vertical levels (layers + 1)
-        DU : float
+        du : float
             Upper water boundary thickness (metres)
-        DL : float
+        dl : float
             Lower water boundary thickness (metres)
-        KU : int
+        ku : int
             Layer number in the water column of DU
-        KL : int
+        kl : int
             Layer number in the water column of DL
 
         Returns
         -------
-        ZZ : float
+        zz : float
             Minimum water depth.
 
         """
         # This is essentially identical to self.sigma_tanh, so we should probably just use that instead. Using
         # self.sigma_tanh doesn't produce the same result, but then I'm fairly certain that the commented out code
         # below is wrong.
-        Z0 = self.sigma_tanh(levels, DU, DL)
-        Z2 = np.zeros(levels)
+        z0 = self.sigma_tanh(levels, du, dl)
+        z2 = np.zeros(levels)
 
         # s-coordinates
-        X1 = (H - DU - DL)
-        X2 = X1 / H
-        DR = X2 / (levels - KU - KL - 1)
+        x1 = (h - du - dl)
+        x2 = x1 / h
+        dr = x2 / (levels - ku - kl - 1)
 
-        for K in range(1, KU + 1):
-            Z2[K] = Z2[K - 1] - (ZKU[K - 1] / H)
+        for k in range(1, ku + 1):
+            z2[k] = z2[k - 1] - (zku[k - 1] / h)
 
-        for K in range(KU + 2, levels - KL):
-            Z2[K] = Z2[K - 1] - DR
+        for k in range(ku + 2, levels - kl):
+            z2[k] = z2[k - 1] - dr
 
-        KK = 0
-        for K in range(levels - KL + 1, levels):
-            KK += 1
-            Z2[K] = Z2[K - 1] - (ZKL[KK] / H)
+        kk = 0
+        for k in range(levels - kl + 1, levels):
+            kk += 1
+            z2[k] = z2[k - 1] - (zkl[kk] / h)
 
-        ZZ = np.max(H * Z0 - H * Z2)
+        zz = np.max(h * z0 - h * z2)
 
-        return ZZ
+        return zz
 
     def write_sigma(self, sigma_file):
         """
