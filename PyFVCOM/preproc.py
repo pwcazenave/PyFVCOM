@@ -736,9 +736,7 @@ class Model(Domain):
             Minimum water depth.
 
         """
-        # This is essentially identical to self.sigma_tanh, so we should probably just use that instead. Using
-        # self.sigma_tanh doesn't produce the same result, but then I'm fairly certain that the commented out code
-        # below is wrong.
+        # This is essentially identical to self.sigma_tanh, so we should probably just use that instead.
         z0 = self.sigma_tanh(levels, du, dl)
         z2 = np.zeros(levels)
 
