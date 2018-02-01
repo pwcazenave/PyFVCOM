@@ -440,7 +440,7 @@ class Model(Domain):
         if sigtype.lower() == 'generalized':
             sigma_levels = np.empty((self.dims.node, nlev)) * np.nan
             for i in range(self.dims.node):
-                sigma_levels[i, :] = self.sigma_generalized(dl, du, kl, ku, zkl, zku, self.grid.h[i], min_constant_depth)
+                sigma_levels[i, :] = self.sigma_generalized(nlev, dl, du, kl, ku, zkl, zku, self.grid.h[i], min_constant_depth)
         elif sigtype.lower() == 'uniform':
             sigma_levels = np.repeat(self.sigma_geometric(nlev, 1), self.dims.node).reshape(self.dims.node, -1)
         elif sigtype.lower() == 'geometric':
