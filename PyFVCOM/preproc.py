@@ -13,6 +13,7 @@ Pierre Cazenave (Plymouth Marine Laboratory)
 
 import copy
 import itertools
+import inspect
 import scipy.optimize
 
 import numpy as np
@@ -210,7 +211,7 @@ class Model(Domain):
 
         """
         globals = {'title': 'bottom roughness',
-                   'history': 'File created using PyFVCOM'}
+                   'history': 'File created using {} from PyFVCOM'.format(inspect.stack()[0][3])}
         dims = {'nele': self.dims.nele}
 
         with WriteForcing(str(roughness_file), dims, global_attributes=globals, clobber=True, format='NETCDF4', **kwargs) as z0:
@@ -347,7 +348,7 @@ class Model(Domain):
                    'title': 'FVCOM SST 1km merged product File',
                    'institution': 'Plymouth Marine Laboratory',
                    'source': 'FVCOM grid (unstructured) surface forcing',
-                   'history': 'File created using PyFVCOM',
+                   'history': 'File created using {} from PyFVCOM'.format(inspect.stack()[0][3]),
                    'references': 'http://fvcom.smast.umassd.edu, http://codfish.smast.umassd.edu, http://pml.ac.uk/modelling',
                    'Conventions': 'CF-1.0',
                    'CoordinateProjection': 'init=WGS84'}
@@ -872,7 +873,7 @@ class Model(Domain):
 
         globals = {'type': 'FVCOM TIME SERIES ELEVATION FORCING FILE',
                    'title': 'TPXO tides',
-                   'history': 'File created using PyFVCOM'}
+                   'history': 'File created using {} from PyFVCOM'.format(inspect.stack()[0][3])}
         dims = {'nobc': self.dims.open_boundary_nodes, 'time': 0, 'DateStrLen': 26}
 
         with WriteForcing(str(output_file), dims, global_attributes=globals, clobber=True, format='NETCDF4', **kwargs) as elev:
@@ -1180,7 +1181,7 @@ class Model(Domain):
         globals = {'type': 'FVCOM RIVER FORCING FILE',
                    'title': self.river.source,
                    'info': self.river.history,
-                   'history': 'File created using PyFVCOM.'}
+                   'history': 'File created using {} from PyFVCOM'.format(inspect.stack()[0][3])}
         dims = {'namelen': 80, 'rivers': self.dims.river, 'time': 0, 'DateStrLen': 26}
         with WriteForcing(str(output_file), dims, global_attributes=globals, clobber=True, format='NETCDF4', **kwargs) as river:
             # We need to force the river names to be right-padded to 80 characters and transposed for the netCDF array.
