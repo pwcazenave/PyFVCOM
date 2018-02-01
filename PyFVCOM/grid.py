@@ -410,6 +410,9 @@ class OpenBoundary:
             self.elements = ids
         self.sponge_coefficient = None
         self.sponge_radius = None
+        # Add fields which get populated if this open boundary is made a part of a nested region.
+        self.weight_node = None
+        self.weight_element = None
         # These get added to by PyFVCOM.preproc.Model and are used in the tide and nest functions below.
         self.tide = type('tide', (), {})()
         self.grid = type('grid', (), {})()
