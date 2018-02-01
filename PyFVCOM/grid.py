@@ -5,27 +5,28 @@ Tools for manipulating and converting unstructured grids in a range of formats.
 
 from __future__ import print_function, division
 
+import copy
+import math
+import multiprocessing
 import os
 import sys
-import math
-import networkx
-import scipy.spatial
-import multiprocessing
-
-import numpy as np
-
-from dateutil.relativedelta import relativedelta
-from scipy.interpolate import RegularGridInterpolator
-from scipy.spatial import Delaunay
 from functools import partial
+
+import networkx
+import numpy as np
+import scipy.spatial
+from dateutil.relativedelta import relativedelta
 from matplotlib.dates import date2num as mtime
 from matplotlib.tri import CubicTriInterpolator
 from matplotlib.tri.triangulation import Triangulation
-from utide.utilities import Bunch
-from utide import reconstruct, ut_constants
 from netCDF4 import Dataset, date2num
+from scipy.interpolate import RegularGridInterpolator
+from scipy.spatial import Delaunay
+from utide import reconstruct, ut_constants
+from utide.utilities import Bunch
 
 from PyFVCOM.coordinate import utm_from_lonlat, lonlat_from_utm
+from PyFVCOM.utilities.general import flatten_list
 from PyFVCOM.utilities.time import date_range
 
 
