@@ -1573,6 +1573,277 @@ class Model(Domain):
                     f.write(' PROBE_VAR_NAME = "{}"\n'.format(long_name))
                     f.write('/\n')
 
+    def write_nested_forcing(self, nests, ncfile, type=3, **kwargs):
+        """
+        Write out the given nested forcing into the specified netCDF file.
+
+        Parameters
+        ----------
+        nests : list
+            List of PyFVCOM.grid.Nest objects.
+        ncfile : str, pathlib.Path
+            Path to the output netCDF file to created.
+        type : int, optional
+            Type of model nesting. Currently only type 3 (indirect) is supported. Defaults to 3.
+
+        Remaining kwargs are passed to WriteForcing with the exception of ncopts which is passed to
+        WriteForcing.add_variable.
+
+        """
+
+        # Get all the nodes, elements and weights ready for dumping to netCDF.
+        nodes = flatten_list([boundary.nodes for nest in nests for boundary in nest.boundaries])
+        elements = flatten_list([boundary.elements for nest in nests for boundary in nest.boundaries if np.any(boundary.elements)])
+        if type == 3:
+            weight_nodes = flatten_list([boundary.weight_node for nest in nests for boundary in nest.boundaries])
+            weight_elements = flatten_list([boundary.weight_element for nest in nests for boundary in nest.boundaries if np.any(boundary.elements)])
+
+        # Get all the interpolated data too. We need to concatenate in the same order as we've done above, so just be
+        # careful.
+        time_number = len(self.time.datetime)
+        nodes_number = len(nodes)
+        elements_number = len(elements)
+
+        # Prepare the data.
+        zeta = np.empty((time_number, nodes_number)) * np.nan
+        ua = np.empty((time_number, elements_number)) * np.nan
+        va = np.empty((time_number, elements_number)) * np.nan
+        u = np.empty((time_number, self.dims.layers, elements_number)) * np.nan
+        v = np.empty((time_number, self.dims.layers, elements_number)) * np.nan
+        temperature = np.empty((time_number, self.dims.layers, nodes_number)) * np.nan
+        salinity = np.empty((time_number, self.dims.layers, nodes_number)) * np.nan
+        hyw = np.zeros((time_number, self.dims.layers, nodes_number))  # we never set this to anything other than zeros
+        weight_nodes = np.repeat(weight_nodes, time_number, 0).reshape(time_number, -1)
+        weight_elements = np.repeat(weight_elements, time_number, 0).reshape(time_number, -1)
+
+        ncopts = {}
+        if 'ncopts' in kwargs:
+            ncopts = kwargs['ncopts']
+            kwargs.pop('ncopts')
+
+        # Define the global attributes
+        globals = {'type': 'FVCOM nestING TIME SERIES FILE',
+                   'title': 'FVCOM nestING TYPE {} TIME SERIES data for open boundary'.format(type),
+                   'history': 'File created using {} from PyFVCOM'.format(inspect.stack()[0][3]),
+                   'filename': str(ncfile),
+                   'Conventions': 'CF-1.0'}
+
+        dims = {'nele': elements_number, 'node': nodes_number, 'time': 0, 'DateStrLen': 26, 'three': 3,
+                'siglay': self.dims.layers, 'siglev': self.dims.levels}
+
+        # Fix the triangulation for the nested region.
+        # nv = reduce_triangulation(self.grid.triangles, nodes).T + 1  # offset by one for FORTRAN indexing and transpose
+
+        with WriteForcing(str(ncfile), dims, global_attributes=globals, clobber=True, format='NETCDF4', **kwargs) as nest:
+            # Add standard times.
+            nest.write_fvcom_time(self.time.datetime, ncopts=ncopts)
+
+            # Add space variables.
+            if self.debug:
+                print('adding x to netCDF')
+            atts = {'units': 'meters', 'long_name': 'nodal x-coordinate'}
+            nest.add_variable('x', self.grid.x[nodes], ['node'], attributes=atts, ncopts=ncopts)
+
+            if self.debug:
+                print('adding y to netCDF')
+            atts = {'units': 'meters', 'long_name': 'nodal y-coordinate'}
+            nest.add_variable('y', self.grid.y[nodes], ['node'], attributes=atts, ncopts=ncopts)
+
+            if self.debug:
+                print('adding lon to netCDF')
+            atts = {'units': 'degrees_east', 'standard_name': 'longitude', 'long_name': 'nodal longitude'}
+            nest.add_variable('lon', self.grid.lon[nodes], ['node'], attributes=atts, ncopts=ncopts)
+
+            if self.debug:
+                print('adding lat to netCDF')
+            atts = {'units': 'degrees_north', 'standard_name': 'latitude', 'long_name': 'nodal latitude'}
+            nest.add_variable('lat', self.grid.lat[nodes], ['node'], attributes=atts, ncopts=ncopts)
+
+            if self.debug:
+                print('adding xc to netCDF')
+            atts = {'units': 'meters', 'long_name': 'zonal x-coordinate'}
+            nest.add_variable('xc', self.grid.xc[elements], ['nele'], attributes=atts, ncopts=ncopts)
+
+            if self.debug:
+                print('adding yc to netCDF')
+            atts = {'units': 'meters', 'long_name': 'zonal y-coordinate'}
+            nest.add_variable('yc', self.grid.yc[elements], ['nele'], attributes=atts, ncopts=ncopts)
+
+            if self.debug:
+                print('adding lonc to netCDF')
+            atts = {'units': 'degrees_east', 'standard_name': 'longitude', 'long_name': 'zonal longitude'}
+            nest.add_variable('lonc', self.grid.lonc[elements], ['nele'], attributes=atts, ncopts=ncopts)
+
+            if self.debug:
+                print('adding latc to netCDF')
+            atts = {'units': 'degrees_north', 'standard_name': 'latitude', 'long_name': 'zonal latitude'}
+            nest.add_variable('latc', self.grid.latc[elements], ['nele'], attributes=atts, ncopts=ncopts)
+
+            # No attributes for nv in the existing nest files, so I won't add any here.
+            # nest.add_variable('nv', nv, ['three', 'nele'], attributes=atts, ncopts=ncopts)
+
+            if self.debug:
+                print('adding siglay to netCDF')
+            atts = {'long_name': 'Sigma Layers',
+                    'standard_name': 'ocean_sigma/general_coordinate',
+                    'positive': 'up',
+                    'valid_min': -1.,
+                    'valid_max': 0.,
+                    'formula_terms': 'sigma: siglay eta: zeta depth: h'}
+            nest.add_variable('siglay', self.sigma.layers[nodes, :].T, ['siglay', 'node'], attributes=atts, ncopts=ncopts)
+
+            if self.debug:
+                print('adding siglev to netCDF')
+            atts = {'long_name': 'Sigma Levels',
+                    'standard_name': 'ocean_sigma/general_coordinate',
+                    'positive': 'up',
+                    'valid_min': -1.,
+                    'valid_max': 0.,
+                    'formula_terms': 'sigma:siglev eta: zeta depth: h'}
+            nest.add_variable('siglev', self.sigma.levels[nodes, :].T, ['siglev', 'node'], attributes=atts, ncopts=ncopts)
+
+            if self.debug:
+                print('adding siglay_center to netCDF')
+            atts = {'long_name': 'Sigma Layers',
+                    'standard_name': 'ocean_sigma/general_coordinate',
+                    'positive': 'up',
+                    'valid_min': -1.,
+                    'valid_max': 0.,
+                    'formula_terms': 'sigma: siglay_center eta: zeta_center depth: h_center'}
+            nest.add_variable('siglay_center', self.sigma.layers_center[elements, :].T, ['siglay', 'nele'], attributes=atts, ncopts=ncopts)
+
+            if self.debug:
+                print('adding siglev_center to netCDF')
+            atts = {'long_name': 'Sigma Levels',
+                    'standard_name': 'ocean_sigma/general_coordinate',
+                    'positive': 'up',
+                    'valid_min': -1.,
+                    'valid_max': 0.,
+                    'formula_terms': 'sigma: siglev_center eta: zeta_center depth: h_center'}
+            nest.add_variable('siglev_center', self.sigma.levels_center[elements, :].T, ['siglev', 'nele'], attributes=atts, ncopts=ncopts)
+
+            if self.debug:
+                print('adding h to netCDF')
+            atts = {'long_name': 'Bathymetry',
+                    'standard_name': 'sea_floor_depth_below_geoid',
+                    'units': 'm',
+                    'positive': 'down',
+                    'grid': 'Bathymetry_mesh',
+                    'coordinates': 'x y',
+                    'type': 'data'}
+            nest.add_variable('h', self.grid.h[nodes], ['node'], attributes=atts, ncopts=ncopts)
+
+            if self.debug:
+                print('adding h_center to netCDF')
+            atts = {'long_name': 'Bathymetry',
+                    'standard_name': 'sea_floor_depth_below_geoid',
+                    'units': 'm',
+                    'positive': 'down',
+                    'grid': 'grid1 grid3',
+                    'coordinates': 'latc lonc',
+                    'grid_location': 'center'}
+            nest.add_variable('h_center', self.grid.h_center[elements], ['nele'], attributes=atts, ncopts=ncopts)
+
+            if type == 3:
+                if self.debug:
+                    print('adding weight_node to netCDF')
+                atts = {'long_name': 'Weights for nodes in relaxation zone',
+                        'units': 'no units',
+                        'grid': 'fvcom_grid',
+                        'type': 'data'}
+                nest.add_variable('weight_node', weight_nodes, ['time', 'node'], attributes=atts, ncopts=ncopts)
+
+                if self.debug:
+                    print('adding weight_cell to netCDF')
+                atts = {'long_name': 'Weights for elements in relaxation zone',
+                        'units': 'no units',
+                        'grid': 'fvcom_grid',
+                        'type': 'data'}
+                nest.add_variable('weight_cell', weight_elements, ['time', 'nele'], attributes=atts, ncopts=ncopts)
+
+            # Now all the data.
+            if self.debug:
+                print('adding zeta to netCDF')
+            atts = {'long_name': 'Water Surface Elevation',
+                    'units': 'meters',
+                    'positive': 'up',
+                    'standard_name': 'sea_surface_height_above_geoid',
+                    'grid': 'Bathymetry_Mesh',
+                    'coordinates': 'time lat lon',
+                    'type': 'data',
+                    'location': 'node'}
+            nest.add_variable('zeta', zeta, ['time','node'], attributes=atts, ncopts=ncopts)
+
+            if self.debug:
+                print('adding ua to netCDF')
+            atts = {'long_name': 'Vertically Averaged x-velocity',
+                    'units': 'meters  s-1',
+                    'grid': 'fvcom_grid',
+                    'type': 'data'}
+            nest.add_variable('ua', ua, ['time', 'nele'], attributes=atts, ncopts=ncopts)
+
+            if self.debug:
+                print('adding va to netCDF')
+            atts = {'long_name': 'Vertically Averaged y-velocity',
+                    'units': 'meters  s-1',
+                    'grid': 'fvcom_grid',
+                    'type': 'data'}
+            nest.add_variable('va', va, ['time', 'nele'], attributes=atts, ncopts=ncopts)
+
+            if self.debug:
+                print('adding u to netCDF')
+            atts = {'long_name': 'Eastward Water Velocity',
+                    'units': 'meters  s-1',
+                    'standard_name': 'eastward_sea_water_velocity',
+                    'grid': 'fvcom_grid',
+                    'coordinates': 'time siglay latc lonc',
+                    'type': 'data',
+                    'location': 'face'}
+            nest.add_variable('u', u, ['time', 'siglay', 'nele'], attributes=atts, ncopts=ncopts)
+
+            if self.debug:
+                print('adding v to netCDF')
+            atts = {'long_name': 'Northward Water Velocity',
+                    'units': 'meters  s-1',
+                    'standard_name': 'Northward_sea_water_velocity',
+                    'grid': 'fvcom_grid',
+                    'coordinates': 'time siglay latc lonc',
+                    'type': 'data',
+                    'location': 'face'}
+            nest.add_variable('v', v, ['time', 'siglay', 'nele'], attributes=atts, ncopts=ncopts)
+
+            if self.debug:
+                print('adding temp to netCDF')
+            atts = {'long_name': 'Temperature',
+                    'standard_name': 'sea_water_temperature',
+                    'units': 'degrees Celcius',
+                    'grid': 'fvcom_grid',
+                    'coordinates': 'time siglay lat lon',
+                    'type': 'data',
+                    'location': 'node'}
+            nest.add_variable('temp', temperature, ['time', 'siglay', 'node'], attributes=atts, ncopts=ncopts)
+
+            if self.debug:
+                print('adding salinity to netCDF')
+            atts = {'long_name': 'Salinity',
+                    'standard_name': 'sea_water_salinity',
+                    'units': '1e-3',
+                    'grid': 'fvcom_grid',
+                    'coordinates': 'time siglay lat lon',
+                    'type': 'data',
+                    'location': 'node'}
+            nest.add_variable('salinity', salinity, ['time', 'siglay', 'node'], attributes=atts, ncopts=ncopts)
+
+            if self.debug:
+                print('adding hyw to netCDF')
+            atts = {'long_name': 'hydro static vertical velocity',
+                    'units': 'meters s-1',
+                    'grid': 'fvcom_grid',
+                    'type': 'data',
+                    'coordinates': 'time siglay lat lon'}
+            nest.add_variable('hyw', hyw, ['time', 'siglay', 'node'], attributes=atts, ncopts=ncopts)
+
+
     def read_regular(self, *args, **kwargs):
         read_regular.__doc__
         self.regular = read_regular(*args, noisy=self.noisy, **kwargs)
