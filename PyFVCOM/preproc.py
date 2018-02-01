@@ -1127,8 +1127,8 @@ class Model(Domain):
 
     def __add_river_col(self, var_name, col_to_copy, no_cols_to_add):
         """
-        Helper function to copy the existing data for river variable to a new splinter river (when they are split for excessive discharge at
-        one node
+        Helper function to copy the existing data for river variable to a new splinter river (when they are split for
+        excessive discharge at one node
 
         Parameters
         ----------
