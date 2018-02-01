@@ -445,6 +445,8 @@ class Model(Domain):
             sigma_levels = np.repeat(self.sigma_geometric(nlev, 1), self.dims.node).reshape(self.dims.node, -1)
         elif sigtype.lower() == 'geometric':
             sigma_levels = np.repeat(self.sigma_geometric(nlev, sigpow), self.dims.node).reshape(self.dims.node, -1)
+        elif sigtype.lower() == 'tanh':
+            sigma_levels = np.repeat(self.sigma_tanh(nlev, dl, du), self.dims.node).reshape(self.dims.node, -1)
         else:
             raise ValueError('Unrecognised sigtype {} (is it supported?)'.format(sigtype))
 
