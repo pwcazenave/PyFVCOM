@@ -392,7 +392,7 @@ class OpenBoundary:
         ids : np.ndarray
             Array of unstructured grid IDs representing a model open boundary.
         mode : str, optional
-            Set the boundary to work on nodes ('nodes') or element-centres ('elements'). Defaults to 'nodes'.
+            Specify whether the IDs given are node ('nodes') or element-centre ('elements') IDs. Defaults to 'nodes'.
 
         Provides
         --------
