@@ -50,6 +50,11 @@ class Model(Domain):
 
     def __init__(self, start, end, *args, **kwargs):
 
+        sampling = 1
+        if 'sampling' in kwargs:
+            sampling = kwargs['sampling']
+            kwargs.pop('sampling')
+
         # Inherit everything from PyFVCOM.grid.Domain, but extend it for our purposes. This doesn't work with Python 2.
         super().__init__(*args, **kwargs)
 
@@ -66,6 +71,7 @@ class Model(Domain):
         # Make some potentially useful time representations.
         self.start = start
         self.end = end
+        self.sampling = sampling
         self.__add_time()
 
         # Initialise the open boundary objects from the nodes we've read in from the grid (if any).
@@ -97,7 +103,7 @@ class Model(Domain):
 
         """
 
-        self.time.datetime = date_range(self.start, self.end)
+        self.time.datetime = date_range(self.start, self.end, inc=self.sampling)
         self.time.time = date2num(getattr(self.time, 'datetime'), units='days since 1858-11-17 00:00:00')
         self.time.Itime = np.floor(getattr(self.time, 'time'))  # integer Modified Julian Days
         self.time.Itime2 = (getattr(self.time, 'time') - getattr(self.time, 'Itime')) * 24 * 60 * 60 * 1000  # milliseconds since midnight
