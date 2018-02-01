@@ -401,8 +401,10 @@ class OpenBoundary:
         add_nested_forcing : interpolate some regularly gridded data onto the open boundary.
 
         """
-        self.mode = mode
-        if self.mode == 'nodes':
+
+        self.nodes = None
+        self.elements = None
+        if mode == 'nodes':
             self.nodes = ids
         else:
             self.elements = ids
@@ -577,7 +579,7 @@ class OpenBoundary:
 
         return zeta
 
-    def add_nested_forcing(self, fvcom_name, coarse_name, coarse, interval=1, constrain_coordinates=False):
+    def add_nested_forcing(self, fvcom_name, coarse_name, coarse, interval=1, constrain_coordinates=False, mode='nodes'):
         """
         Interpolate the given data onto the open boundary nodes for the period from `self.time.start' to
         `self.time.end'.
@@ -597,15 +599,18 @@ class OpenBoundary:
             Set to True to constrain the open boundary coordinates (lon, lat, depth) to the supplied coarse data.
             This essentially squashes the open boundary to fit inside the coarse data and is, therefore, a bit of a
             fudge! Defaults to False.
+        mode : bool, optional
+            Set to 'nodes' to interpolate onto the open boundary node positions or 'elements' for the elements.
+            Defaults to 'nodes'.
 
         """
 
         # Check we have what we need.
         raise_error = False
-        if self.mode == 'nodes':
+        if mode == 'nodes':
             if not hasattr(self.sigma, 'layers'):
                 raise_error = True
-        elif self.mode == 'elements':
+        elif mode == 'elements':
             if not hasattr(self.sigma, 'layers_center'):
                 raise_error = True
         if raise_error:
@@ -620,7 +625,7 @@ class OpenBoundary:
         self.nest.time.Itime2 = (getattr(self.nest.time, 'time') - getattr(self.nest.time, 'Itime')) * 24 * 60 * 60 * 1000  # milliseconds since midnight
         self.nest.time.Times = [t.strftime('%Y-%m-%dT%H:%M:%S.%f') for t in getattr(self.nest.time, 'datetime')]
 
-        if self.mode == 'elements':
+        if mode == 'elements':
             boundary_points = self.elements
             x = self.grid.lonc
             y = self.grid.latc
