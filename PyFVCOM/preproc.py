@@ -59,6 +59,7 @@ class Model(Domain):
         super().__init__(*args, **kwargs)
 
         self.noisy = False
+        self.debug = True
         if 'noisy' in kwargs:
             self.noisy = kwargs['noisy']
 
