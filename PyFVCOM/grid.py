@@ -472,8 +472,8 @@ class OpenBoundary:
 
         """
 
-        if self.time is None:
-            raise ValueError('No time data have been added to this OpenBoundary object, so we cannot predict tides.')
+        if not hasattr(self.time, 'start'):
+            raise AttributeError('No time data have been added to this OpenBoundary object, so we cannot predict tides.')
 
         dates = date_range(self.time.start - relativedelta(days=1), self.time.end + relativedelta(days=1), inc=interval / 24)
         self.tide.time = dates
