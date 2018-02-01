@@ -483,17 +483,16 @@ class OpenBoundary:
         if predict == 'zeta':
             amplitude_var, phase_var = 'ha', 'hp'
             x, y = self.grid.lon, self.grid.lat
-            obc = self.nodes
+            xdim = self.nodes
         elif predict == 'u':
             amplitude_var, phase_var = 'ua', 'up'
             x, y = self.grid.lonc, self.grid.latc
-            obc = self.elements
+            xdim = self.elements
         elif predict == 'v':
             amplitude_var, phase_var = 'va', 'vp'
             x, y = self.grid.lonc, self.grid.latc
-            obc = self.elements
+            xdim = self.elements
 
-        xdim = len(obc)
         latitudes = y
 
         with Dataset(str(tpxo_harmonics), 'r') as tides:
