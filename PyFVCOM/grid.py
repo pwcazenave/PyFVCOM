@@ -494,7 +494,7 @@ class OpenBoundary:
             obc = self.elements
 
         xdim = len(obc)
-        latitudes = y[obc]
+        latitudes = y
 
         with Dataset(str(tpxo_harmonics), 'r') as tides:
             tpxo_const = [''.join(i).upper().strip() for i in tides.variables['con'][:].astype(str)]
@@ -505,7 +505,7 @@ class OpenBoundary:
             amplitudes = np.empty((xdim, len(cidx))) * np.nan
             phases = np.empty((xdim, len(cidx))) * np.nan
 
-            for xi, xy in enumerate(zip(x[obc], y[obc])):
+            for xi, xy in enumerate(zip(x, y)):
                 idx = [np.argmin(np.abs(tides['lon_z'][:, 0] - xy[0])),
                        np.argmin(np.abs(tides['lat_z'][0, :] - xy[1]))]
                 amplitudes[xi, :] = tides.variables[amplitude_var][cidx, idx[0], idx[1]]
