@@ -69,6 +69,7 @@ class Model(Domain):
         self.tide = type('tide', (), {})()
         self.sst = type('sst', (), {})()
         self.nest = type('nest', (), {})()
+        self.regular = None
 
         # Make some potentially useful time representations.
         self.start = start
