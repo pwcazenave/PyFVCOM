@@ -483,12 +483,128 @@ class CTD(object):
                         line = next(f).strip()
                         self.header['long_name'][self.header['names'][-1]] = line
 
+        def _read_wco_header(self):
             """
+            Get the Western Channel Observatory CTD header. Store the information as a dictionary to make extracting
+            relevant information easier.
 
+            Provides
+            --------
             header : dict
+                Dictionary of the header information in the BODC LST-formatted file. This includes a standard set of
+                keys plus those defined in the header itself. The standard keys are:
+                    'file_name' - the file name from which we've read.
+                    'names' - the variable names in the file.
+                    'units' - the variable units.
+                    'long_name' - the variable descriptions.
 
             """
 
+            self.header['file_name'] = str(self._file)  # keep a record of the file we're opening.
+            self.header['names'] = []  # store the variable names
+            self.header['units'] = {}  # the variables' units
+            self.header['long_name'] = {}  # the variable descriptions
+            self.header['depth'] = []  # this will be NaN for now
+            self.header['sensor'] = []  # again, mostly Nones for the WCO data
+            self.header['record_indices'] = []  # at what line numbers are the CTD headers?
+            self.header['num_records'] = []
+            self.header['num_fields'] = []
+            self.header['lon'] = []
+            self.header['lat'] = []
+            self.header['datetime'] = []
+            self.header['time_units'] = []
+            self.header['interval'] = []
+            self.header['units'] = []
+            self.header['long_name'] = []
+
+            # Given the state of the WCO data, I need to hard code some useful information about the variables (long
+            # names, units etc.)
+            units = {'DepSM': 'metres',
+                     'Tv290C': 'unknown',
+                     'CStarTr0': 'unknown',
+                     'Par': 'unknown',
+                     'V3': 'unknown',
+                     'Latitude': 'degrees north',
+                     'Longitude': 'degrees east',
+                     'Density00': 'kg/m3',
+                     'Sbeox0Mm/Kg': 'unknown',
+                     'Sal00': 'PSU',
+                     'Nbin': '-',
+                     'Flag': '-',
+                     'CStarTr0': 'unknown',
+                     'TurbWETntu0': 'unknown',
+                     'FlECO-AFL': 'unknown'}
+            long_name = {'DepSM': 'Depth below surface',
+                         'Tv290C': 'unknown',
+                         'CStarTr0': 'unknown',
+                         'Par': 'Photosynthetically Active Radiation',
+                         'V3': 'unknown',
+                         'Latitude': 'Latitude',
+                         'Longitude': 'Longitude',
+                         'Density00': 'Water density',
+                         'Sbeox0Mm/Kg': 'unknown',
+                         'Sal00': 'Water salinity',
+                         'Nbin': 'unknown',
+                         'Flag': 'unknown',
+                         'CStarTr0': 'unknown',
+                         'TurbWETntu0': 'unknown',
+                         'FlECO-AFL': 'unknown'}
+
+            ctd_counter = -1
+            with self._file.open('r') as f:
+                for line in f:
+                    ctd_counter += 1
+                    line = line.strip()
+                    if line:
+                        line_list = split_string(line, separator=';')
+                        if line_list[0] == 'DepSM':
+                            # We've got a new CTD cast.
+                            self.header['num_fields'].append(len(line_list))
+                            self.header['record_indices'].append(ctd_counter)
+                            self.header['names'].append(line_list)
+                            # In order to make the header vaguely usable, grab the initial time and position for this
+                            # cast.
+                            line = next(f)
+                            line_list = split_string(line, separator=';')
+
+                            lon_idx = self.header['names'][-1].index('Longitude')
+                            lat_idx = self.header['names'][-1].index('Latitude')
+                            date_idx = self.header['names'][-1].index('mm/dd/yyyy')
+                            time_idx = self.header['names'][-1].index('hh:mm:ss')
+                            datetime_string = ' '.join((line_list[date_idx], line_list[time_idx]))
+
+                            self.header['lon'].append(float(line_list[lon_idx]))
+                            self.header['lat'].append(float(line_list[lat_idx]))
+                            self.header['datetime'].append(datetime.strptime(datetime_string, '%m/%d/%Y %H:%M:%S'))
+                            self.header['time_units'].append('datetime')
+                            # Some sampling interval. Set to zero as the casts are relatively quick (a few minutes,
+                            # tops).
+                            self.header['interval'].append(0)
+                            self.header['units'].append({i: units[i] for i in self.header['names'][-1] if i in units})
+                            self.header['long_name'].append({i: long_name[i] for i in self.header['names'][-1] if i in long_name})
+
+                            # The WCO data have lots of sensors, so just put some placeholders in for the time being.
+                            self.header['sensor'].append([None, None])
+
+                            # Manually increment the counter here as we're skipping a line and it would otherwise be
+                            # off by one.
+                            ctd_counter += 1
+
+            # Get the number of records per cast.
+            self.header['num_records'] = np.diff(np.concatenate((self.header['record_indices'], [ctd_counter])))
+            # Get the depths for each cast too.
+            with self._file.open('r') as f:
+                lines = f.readlines()
+                for counter, cast_index in enumerate(self.header['record_indices']):
+                    offset_index = cast_index - 1  # we want the depth which is the line for the end of the last cast
+                    if offset_index > 0:
+                        line_list = split_string(lines[offset_index], separator=';')
+                        depth_index = self.header['names'][counter].index('DepSM')
+                        self.header['depth'].append(float(line_list[depth_index]))
+                # Also add the last line's value.
+                line_list = split_string(lines[-1], separator=';')
+                depth_index = self.header['names'][-1].index('DepSM')
+                self.header['depth'].append(float(line_list[depth_index]))
 
     class _ReadData(object):
 
