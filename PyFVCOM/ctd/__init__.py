@@ -5,7 +5,6 @@ Functions to interrogate and extract CTD data from the ctd.db SQLite3 database.
 
 from __future__ import print_function
 
-import inspect
 from pathlib import Path
 from warnings import warn
 from datetime import datetime
@@ -672,17 +671,7 @@ class CTD(object):
                                 getattr(self, name)[data_index] = float(line_list[name_index + 1])
 
 
-# Add for backwards compatibility.
-def getCTDMetadata(*args, **kwargs):
-    warn('{} is deprecated. Use get_CTD_metadata instead.'.format(inspect.stack()[0][3]))
-    return get_CTD_metadata(*args, **kwargs)
 
 
-def getCTDData(*args, **kwargs):
-    warn('{} is deprecated. Use get_CTD_data instead.'.format(inspect.stack()[0][3]))
-    return get_CTD_data(*args, **kwargs)
 
 
-def getFerryBoxData(*args, **kwargs):
-    warn('{} is deprecated. Use get_ferrybox_data instead.'.format(inspect.stack()[0][3]))
-    return get_ferrybox_data(*args, **kwargs)
