@@ -11,7 +11,7 @@ from warnings import warn
 from datetime import datetime
 
 import numpy as np
-from PyFVCOM.utilities.general import split_string
+from PyFVCOM.utilities.general import split_string, ObjectFromDict
 
 use_sqlite = True
 try:
@@ -227,10 +227,10 @@ class CTD(object):
         # is probably the most sensible thing.
         self.header = self._ParseHeader(self.file)
         # Store the variable names in here for ease of access.
-        self.variables = self._ReadNames(self.header.header)
+        self.variables = ObjectFromDict(self.header.header, keys=['units', 'names', 'long_name'])
         # These two functions extract bits of information from the header we've just parsed.
-        self.time = self._ReadTime(self.header.header)
-        self.position = self._ReadPosition(self.header.header)
+        self.time = ObjectFromDict(self.header.header, keys=['datetime', 'time_units', 'interval'])
+        self.position = ObjectFromDict(self.header.header, keys=['lon', 'lat', 'depth', 'sensor'])
 
     def load(self):
         """
@@ -483,66 +483,12 @@ class CTD(object):
                         line = next(f).strip()
                         self.header['long_name'][self.header['names'][-1]] = line
 
-    class _ReadTime(object):
-        """
-        Using the header we've extracted, populate ourselves with the time information.
-
-        """
-        def __init__(self, header):
             """
-            With the given header, populate ourselves with the time information.
 
-            Parameters
-            ----------
             header : dict
-                Header parsed with _ParseHeader().
 
             """
 
-            self.datetime = header['time']
-            self.interval = header['interval']
-            self.units = header['time_units']
-
-    class _ReadPosition(object):
-        """
-        Using the header we've extracted, populate ourselves with the position information.
-
-        """
-        def __init__(self, header):
-            """
-            With the given header, populate ourselves with the position information.
-
-            Parameters
-            ----------
-            header : dict
-                Header parsed with _ParseHeader().
-
-            """
-
-            self.lon = header['longitude']
-            self.lat = header['latitude']
-            self.depth = header['depth']
-            self.sensor = header['sensor']
-
-    class _ReadNames(object):
-        """
-        Using the header we've extracted, populate ourselves with the variables' information.
-
-        """
-        def __init__(self, header):
-            """
-            With the given header, populate ourselves with the variables' information.
-
-            Parameters
-            ----------
-            header : dict
-                Header parsed with _ParseHeader().
-
-            """
-
-            self.units = header['units']
-            self.names = header['names']
-            self.long_name = header['long_name']
 
     class _ReadData(object):
 

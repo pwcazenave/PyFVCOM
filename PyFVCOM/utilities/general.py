@@ -94,3 +94,34 @@ def split_string(x, separator=' '):
     """
 
     return [i.strip() for i in x.split(separator) if i.strip()]
+
+
+class ObjectFromDict:
+    """ Convert a dictionary into an object with attributes named from the dictionary keys. """
+    def __init__(self, *initial_data, keys=[], **kwargs):
+        """
+        Convert a dictionary into an object with attributes named from the dictionary keys.
+
+        Parameters
+        ----------
+        dictionary : dict
+            Dictionary to convert to an object with attributes named from the dictionary keys.
+        keys : list, optional
+            Supply a list of keys which should be extracted from the given dictionary. All others are ignored.
+            Defaults to all keys in the dictionary.
+
+        """
+
+        if len(initial_data) > 1:
+            raise ValueError('Supply a single dictionary only to convert to an object.')
+
+        for dictionary in initial_data:
+            if not keys:
+                keys = dictionary.keys()
+
+            for key in keys:
+                setattr(self, key, dictionary[key])
+
+        for key in kwargs:
+            if key in keys:
+                setattr(self, key, kwargs[key])
