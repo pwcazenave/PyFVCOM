@@ -381,11 +381,18 @@ class Domain(object):
 
 
 class OpenBoundary:
-    """ FVCOM grid open boundary object. Handles reading, writing and interpolating. """
+    """
+    FVCOM grid open boundary object. Handles reading, writing and interpolating.
+
+    Not sure this is the right place for this. Might be better placed in PyFVCOM.preproc. Also, this should probably
+    be a superclass of Nest as an open boundary is just a special case of a PyFVCOM.preproc.Nest (one with 0 levels,
+    essentially).
+
+    """
 
     def __init__(self, ids, mode='nodes'):
         """
-        Given a set of open boundary nodes, create some methods based on their positions.
+        Given a set of open boundary nodes, initialise a new open boundary object with relevant arrays.
 
         Parameters
         ----------
