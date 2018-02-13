@@ -218,13 +218,13 @@ class CTD(object):
 
         """
 
-        self.debug = False
+        self._debug = False
         self.data = None  # assume we're not reading data unless self.read() is called.
 
-        self.file = Path(filename)
+        self._file = Path(filename)
         # Read the header into self so we can pass it around more easily. Really, having the header as a dictionary
         # is probably the most sensible thing.
-        self.header = self._ParseHeader(self.file)
+        self.header = self._ParseHeader(self._file)
         # Store the variable names in here for ease of access.
         self.variables = ObjectFromDict(self.header.header, keys=['units', 'names', 'long_name'])
         # These two functions extract bits of information from the header we've just parsed.
@@ -393,7 +393,7 @@ class CTD(object):
                     'long_name' - the variable descriptions.
 
             """
-            self.file = Path(filename)
+            self._file = Path(filename)
             self.datetime = None
             self.interval = None
             self.units = None
@@ -428,12 +428,12 @@ class CTD(object):
 
             """
 
-            self.header['file_name'] = str(self.file)  # keep a record of the file we're opening.
+            self.header['file_name'] = str(self._file)  # keep a record of the file we're opening.
             self.header['names'] = []  # store the variable names
             self.header['units'] = {}  # the variables' units
             self.header['long_name'] = {}  # the variable descriptions
 
-            with self.file.open('r') as f:
+            with self._file.open('r') as f:
                 for line in f:
                     line = line.strip()
                     if line:
