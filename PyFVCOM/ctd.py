@@ -7,18 +7,16 @@ from __future__ import print_function
 
 import inspect
 from pathlib import Path
+from warnings import warn
 from datetime import datetime
 
 import numpy as np
 
-from warnings import warn
-
+use_sqlite = True
 try:
     import sqlite3
-    use_sqlite = True
 except ImportError:
-    warn('No sqlite standard library found in this python '
-         'installation. Some functions will be disabled.')
+    warn('No sqlite standard library found in this python installation. Some functions will be disabled.')
     use_sqlite = False
 
 
