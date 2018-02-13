@@ -30,7 +30,7 @@ from pathlib import Path
 from PyFVCOM.grid import Domain, grid_metrics, read_fvcom_obc, nodes2elems
 from PyFVCOM.grid import write_fvcom_mesh, connectivity, haversine_distance
 from PyFVCOM.grid import find_bad_node, get_attached_unique_nodes
-from PyFVCOM.grid import OpenBoundary, reduce_triangulation, find_connected_elements
+from PyFVCOM.grid import OpenBoundary, find_connected_elements
 from PyFVCOM.utilities.time import date_range
 from PyFVCOM.utilities.general import flatten_list
 from PyFVCOM.read import FileReader
