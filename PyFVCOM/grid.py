@@ -1005,10 +1005,7 @@ def read_gmsh_mesh(mesh):
         # Grab the number of nodes.
         if _nodes:
             nn = int(line.strip())
-            x, y, z, nodes = np.zeros((nn,)) - 1, \
-                             np.zeros((nn,)) - 1, \
-                             np.zeros((nn,)) - 1, \
-                             np.zeros((nn,)).astype(int) - 1
+            x, y, z, nodes = np.zeros(nn) - 1, np.zeros(nn) - 1, np.zeros(nn) - 1, np.zeros(nn).astype(int) - 1
             _nodes = False
             continue
 
