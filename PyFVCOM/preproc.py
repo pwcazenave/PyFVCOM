@@ -1576,6 +1576,34 @@ class Model(Domain):
                     f.write(' PROBE_VAR_NAME = "{}"\n'.format(long_name))
                     f.write('/\n')
 
+    def add_nests(self, nest_levels, nesting_type=3):
+        """
+        Add a set of nested levels to each open boundary.
+
+        Parameters
+        ----------
+        nest_levels : int
+            Number of node levels in addition to the existing open boundary.
+        nesting_type : int
+            FVCOM nesting type (1, 2 or 3). Defaults to 3. Currently, only 3 is supported.
+
+        Provides
+        --------
+        self.nests : list
+            List of PyFVCOM.preproc.Nest objects.
+
+        """
+
+        self.nest = []
+
+        for boundary in self.open_boundaries:
+            self.nest.append(Nest(self.grid, self.sigma, boundary))
+            # Add all the nested levels and assign weights as necessary.
+            for _ in range(nest_levels):
+                self.nest[-1].add_level()
+            if nesting_type == 3:
+                self.nest[-1].add_weights()
+
     def write_nested_forcing(self, nests, ncfile, type=3, **kwargs):
         """
         Write out the given nested forcing into the specified netCDF file.
