@@ -17,6 +17,9 @@ from PyFVCOM.coordinate import lonlat_from_utm, utm_from_lonlat
 from PyFVCOM.grid import unstructured_grid_volume, nodes2elems, Domain
 from PyFVCOM.utilities.general import fix_range
 
+class _passive_data_store():
+    def __init__(self):
+        pass
 
 class FileReader(Domain):
     """ Load FVCOM model output.
@@ -223,11 +226,11 @@ class FileReader(Domain):
         # classes, but I can't figure it out. That approach would also mean we can set __iter__ to make the object
         # iterable without the need for obj_iter, which is a bit of a hack. It might also make FileReader object
         # pickleable, meaning we can pass them with multiprocessing. Another day, perhaps.
-        self.data = type('data', (object,), {})()
-        self.dims = type('dims', (object,), {})()
-        self.atts = type('atts', (object,), {})()
-        self.grid = type('grid', (object,), {})()
-        self.time = type('time', (object,), {})()
+        self.data = _passive_data_store()
+        self.dims = _passive_data_store()
+        self.atts = _passive_data_store()
+        self.grid = _passive_data_store()
+        self.time = _passive_data_store()
 
         # Add docstrings for the relevant objects.
         self.data.__doc__ = "This object will contain data as loaded from the netCDFs specified. Use " \
@@ -251,7 +254,7 @@ class FileReader(Domain):
             if time in self.ds.variables:
                 setattr(self.time, time, self.ds.variables[time][:])
                 got_time.append(time)
-                attributes = type('attributes', (object,), {})()
+                attributes = _passive_data_store()
                 for attribute in self.ds.variables[time].ncattrs():
                     setattr(attributes, attribute, getattr(self.ds.variables[time], attribute))
                 setattr(self.atts, time, attributes)
@@ -295,7 +298,7 @@ class FileReader(Domain):
                 except ValueError:
                     self.time.Times = np.array([datetime.strftime(d, '%Y/%m/%d %H:%M:%S.%f') for d in _dates])
                 # Add the relevant attribute for the Times variable.
-                attributes = type('attributes', (object,), {})()
+                attributes = _passive_data_store()
                 setattr(attributes, 'time_zone', 'UTC')
                 setattr(self.atts, 'Times', attributes)
 
@@ -310,7 +313,7 @@ class FileReader(Domain):
                 # We're making Modified Julian Days here to replicate FVCOM's 'time' variable.
                 self.time.time = date2num(_dates, units='days since 1858-11-17 00:00:00')
                 # Add the relevant attributes for the time variable.
-                attributes = type('attributes', (object,), {})()
+                attributes = _passive_data_store()
                 setattr(attributes, 'units', 'days since 1858-11-17 00:00:00')
                 setattr(attributes, 'long_name', 'time')
                 setattr(attributes, 'format', 'modified julian day (MJD)')
@@ -329,12 +332,12 @@ class FileReader(Domain):
                 _datenum = date2num(_dates, units='days since 1858-11-17 00:00:00')
                 self.time.Itime = np.floor(_datenum)
                 self.time.Itime2 = (_datenum - np.floor(_datenum)) * 1000 * 60 * 60  # microseconds since midnight
-                attributes = type('attributes', (object,), {})()
+                attributes = _passive_data_store()
                 setattr(attributes, 'units', 'days since 1858-11-17 00:00:00')
                 setattr(attributes, 'format', 'modified julian day (MJD)')
                 setattr(attributes, 'time_zone', 'UTC')
                 setattr(self.atts, 'Itime', attributes)
-                attributes = type('attributes', (object,), {})()
+                attributes = _passive_data_store()
                 setattr(attributes, 'units', 'msec since 00:00:00')
                 setattr(attributes, 'time_zone', 'UTC')
                 setattr(self.atts, 'Itime2', attributes)
@@ -345,13 +348,13 @@ class FileReader(Domain):
                     self.time.datetime = np.array([datetime.strptime(d, '%Y-%m-%dT%H:%M:%S.%f') for d in self.time.Times])
                 except ValueError:
                     self.time.datetime = np.array([datetime.strptime(d, '%Y/%m/%d %H:%M:%S.%f') for d in self.time.Times])
-                attributes = type('attributes', (object,), {})()
+                attributes = _passive_data_store()
                 setattr(attributes, 'long_name', 'Python datetime.datetime')
                 setattr(self.atts, 'datetime', attributes)
             else:
                 self.time.datetime = _dates
             self.time.matlabtime = self.time.time + 678942.0  # convert to MATLAB-indexed times from Modified Julian Date.
-            attributes = type('attributes', (object,), {})()
+            attributes = _passive_data_store()
             setattr(attributes, 'long_name', 'MATLAB datenum')
             setattr(self.atts, 'matlabtime', attributes)
 
@@ -384,7 +387,7 @@ class FileReader(Domain):
             try:
                 setattr(self.grid, grid, self.ds.variables[grid][:])
                 # Save the attributes.
-                attributes = type('attributes', (object,), {})()
+                attributes = _passive_data_store()
                 for attribute in self.ds.variables[grid].ncattrs():
                     setattr(attributes, attribute, getattr(self.ds.variables[grid], attribute))
                 setattr(self.atts, grid, attributes)
@@ -404,7 +407,7 @@ class FileReader(Domain):
             if metric in self.ds.variables:
                 setattr(self.grid, metric, self.ds.variables[metric][:])
                 # Save the attributes.
-                attributes = type('attributes', (object,), {})()
+                attributes = _passive_data_store()
                 for attribute in self.ds.variables[metric].ncattrs():
                     setattr(attributes, attribute, getattr(self.ds.variables[metric], attribute))
                 setattr(self.atts, metric, attributes)
@@ -467,7 +470,7 @@ class FileReader(Domain):
             try:
                 setattr(self.grid, var, self.ds.variables[var][:])
                 # Save the attributes.
-                attributes = type('attributes', (object,), {})()
+                attributes = _passive_data_store()
                 for attribute in self.ds.variables[var].ncattrs():
                     setattr(attributes, attribute, getattr(self.ds.variables[var], attribute))
                 setattr(self.atts, var, attributes)
@@ -686,7 +689,7 @@ class FileReader(Domain):
                     variable_indices[variable_index] = dims[dimension]
 
             # Save any attributes associated with this variable before trying to load the data.
-            attributes = type('attributes', (object,), {})()
+            attributes = _passive_data_store()
             for attribute in self.ds.variables[v].ncattrs():
                 setattr(attributes, attribute, getattr(self.ds.variables[v], attribute))
             setattr(self.atts, v, attributes)
