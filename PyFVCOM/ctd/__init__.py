@@ -403,8 +403,11 @@ class CTD(object):
             self.sensor = [None, None]
             self.header = {}
 
-            if self.file.suffix == '.lst':
+            if self._file.suffix == '.lst':
                 self._read_bodc_header()
+            elif self._file.suffix == '.txt':
+                # I don't like this one bit.
+                self._read_wco_header()
             else:
                 # Add more readers here.
                 pass
