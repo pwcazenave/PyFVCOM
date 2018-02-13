@@ -1143,7 +1143,7 @@ class Model(Domain):
             The number of columns (i.e. extra rivers) to add to the end of the array
         """
         old_data = getattr(self.river, var_name)
-        col_to_add = old_data[:, col_to_copy][:,np.newaxis]
+        col_to_add = old_data[:, col_to_copy][:, np.newaxis]
         col_to_add = np.tile(col_to_add, [1, no_cols_to_add])
         setattr(self.river, var_name, np.hstack([old_data, col_to_add]))
 
@@ -1167,7 +1167,7 @@ class Model(Domain):
             - flux : river discharge data [time, river]
             - temperature : river temperature data [time, river]
             - salinity : river salinity data [time, river]
-        If using ersem them it should also contain:
+        If using ERSEM, then it should also contain:
             - N1_p : phosphate [time, river]
             - N3_n : nitrate [time, river]
             - N4_n : ammonium [time, river]
