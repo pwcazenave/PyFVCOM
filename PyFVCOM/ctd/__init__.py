@@ -562,18 +562,19 @@ class CTD(object):
                             # We've got a new CTD cast.
                             self.header['num_fields'].append(len(line_list))
                             self.header['record_indices'].append(ctd_counter)
-                            self.header['names'].append(line_list)
+                            # Drop the date/time columns.
+                            clean_names = [i for i in line_list if i not in ('mm/dd/yyyy', 'hh:mm:ss')]
+                            self.header['names'].append(clean_names)
                             # In order to make the header vaguely usable, grab the initial time and position for this
-                            # cast.
+                            # cast. This means we need to skip a line as we're currently on the header.
+                            lon_idx = line_list.index('Longitude')
+                            lat_idx = line_list.index('Latitude')
+                            date_idx = line_list.index('mm/dd/yyyy')
+                            time_idx = line_list.index('hh:mm:ss')
+                            # Now we know where to look, extract the relevant information.
                             line = next(f)
                             line_list = split_string(line, separator=';')
-
-                            lon_idx = self.header['names'][-1].index('Longitude')
-                            lat_idx = self.header['names'][-1].index('Latitude')
-                            date_idx = self.header['names'][-1].index('mm/dd/yyyy')
-                            time_idx = self.header['names'][-1].index('hh:mm:ss')
                             datetime_string = ' '.join((line_list[date_idx], line_list[time_idx]))
-
                             self.header['lon'].append(float(line_list[lon_idx]))
                             self.header['lat'].append(float(line_list[lat_idx]))
                             self.header['datetime'].append(datetime.strptime(datetime_string, '%m/%d/%Y %H:%M:%S'))
