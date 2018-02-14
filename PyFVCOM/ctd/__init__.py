@@ -621,8 +621,16 @@ class CTD(object):
                 Header parsed with _ParseHeader().
 
             """
-            if Path(header['file_name']).suffix == '.lst':
+
+            self._debug = False
+
+            file = Path(header['file_name'])
+            suffix = file.suffix
+            if suffix == '.lst':
                 self._read_lst(header)
+            elif suffix == '.txt':
+                # I don't like this one bit.
+                self._read_wco(header)
             else:
                 # Add more readers here.
                 pass
