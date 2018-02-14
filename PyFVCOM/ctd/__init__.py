@@ -282,85 +282,110 @@ class CTD(object):
         """
 
         # Parse the data for relevant metadata.
-        num_fields = len(self.variables.names)
-        num_samples = len(getattr(self.data, self.variables.names[0]))
-
-        # For the Header field, there seems to be 12 lines of standard headers plus pairs of lines for each
-        # variable.
-        bodc_header_lines = 12 + (num_fields * 2)
-
-        start = np.min(self.time.datetime).strftime('%Y%m%d%H%M%S')
-        lon = np.mean(self.position.lon)
-        lat = np.mean(self.position.lat)
-        northsouth = 'N'
-        westeast = 'E'
-        if lat < 0:
-            northsouth = 'S'
-        if lon < 0:
-            westeast = 'W'
-
-        # Some stuff, we'll just ignore/make up for now.
-        try:
-            sensor = self.position.sensor
-        except AttributeError:
-            sensor = [np.min(self.position.depth), np.max(self.position.depth)]
-
-        # The BODC format is... unique. Try to replicate it to the extent which is useful for me. May not be 100%
-        # compatible with actual BODC formatting.
         filename = Path(filename)
-        with filename.open('w') as f:
-            # Naturally, we start with three blank lines.
-            f.write('\n\n\n')
-            f.write('BODC Request Format Std. V1.0           Headers=  {} Data Cycles=   {}\n'.format(bodc_header_lines, num_samples))
-            f.write('Series=      {}                     Produced: {}\n'.format('AAAAAAA', datetime.now().strftime('%d-%b-%Y')))  # dummy data for now
-            f.write('Id                       AAAAAAAA PML\n')  # more dummy data
-            position = '{deglat:03d}d{minlat:.1f}m{hemilat}{deglon:03d}d{minlon:.1f}m{hemilon}'.format(deglat=int(lat),
-                                                                                                       minlat=(lat - int(lat)) * 60,
-                                                                                                       hemilat=northsouth,
-                                                                                                       deglon=int(lon),
-                                                                                                       minlon=(lon - int(lon)) * 60,
-                                                                                                       hemilon=westeast)
-            f.write('{position}                     start:{start}\n'.format(position=position, start=start))
-            format_string = 'Dep: floor {depth:.1f} sensor    {sensor_1:.1f}  {sensor_2:.1f} Nom. sample int.:    {interval:.1f} {units}\n'
-            f.write(format_string.format(depth=self.position.depth,
-                                         sensor_1=sensor[0],
-                                         sensor_2=sensor[1],
-                                         interval=self.time.interval,
-                                         units=self.time.units))
-            f.write('    {} Parameters included:\n'.format(num_fields))
-            # Now we're into the headers for each variable.
-            f.write('Parameter f    P    Q Absent Data Value Minimum Value  Maximum Value       Units\n')
-            for name in self.variables.names:
-                header_string = '{name:8s}  {f} {P} {Q} {missing:.2f} {min:.2f} {max:.2f} {unit}\n'
-                f.write(header_string.format(name=name[:8],
-                                             f='Y',
-                                             P=0,
-                                             Q=0,
-                                             missing=-1,
-                                             min=np.min(getattr(self.data, name)),
-                                             max=np.max(getattr(self.data, name)),
-                                             unit=self.variables.units[name]))
-                f.write('{}\n'.format(self.variables.long_name[name][:80]))  # maximum line length is 80 characters
-            f.write('\n')
-            f.write('Format Record\n')
-            f.write('(some nonesense for now)\n')
-            # A few more new lines in case we're missing some.
-            f.write('\n\n\n')
-            # The data header.
-            f.write('  Cycle     {}\n'.format('   '.join([i[:8] for i in self.variables.names])))
-            f.write('Number             {}\n'.format('          '.join('f' * num_fields)))
-            # Now add the data.
-            cycle = ['{})'.format(i) for i in np.arange(num_samples) + 1]
-            data = []
-            for name in self.variables.names:
-                data.append(['{:<0}'.format(i) for i in getattr(self.data, name)])
-            data = np.column_stack((cycle, np.asarray(data).T))
+        if isinstance(self.variables.names[0], list):
+            # Append a number per file we create. This is for the case where we've read in WCO data.
+            stem = filename.stem
+            suffix = filename.suffix
+            number_of_casts = len(self.header.header['record_indices'])
+            precision = len(str(number_of_casts))
+            file_string = '{st}_{ct:0{pr}d}{sx}'
+            file_names = [Path(file_string.format(st=stem, ct=i + 1, pr=precision, sx=suffix)) for i in range(number_of_casts)]
+        else:
+            file_names = [filename]
 
-        # Must be possible to dump a whole numpy array in one shot...
-        with filename.open('ab') as f:
-            np.savetxt(f, data, fmt=['%10s'] * (num_fields + 1))
+        for counter, current_file in enumerate(file_names):
+            # We need to account for the crappy date/time columns in the WCO data (which we haven't read in to each
+            # self.data attribute).
+            num_fields = len(self.variables.names[counter])
+            if 'mm_dd_yyyy' in self.variables.names[counter] and 'hh:mm:ss' in self.variables.names[counter]:
+                num_fields -= 2
+            num_samples = len(getattr(self.data, self.variables.names[counter][0])[counter])
 
-    def write_qxf(self, filename):
+            # For the Header field, there seems to be 12 lines of standard headers plus pairs of lines for each
+            # variable.
+            bodc_header_lines = 12 + (num_fields * 2)
+
+            start = self.time.datetime[counter].strftime('%Y%m%d%H%M%S')
+            lon = np.mean(self.position.lon[counter])
+            lat = np.mean(self.position.lat[counter])
+            northsouth = 'N'
+            westeast = 'E'
+            if lat < 0:
+                northsouth = 'S'
+            if lon < 0:
+                westeast = 'W'
+
+            # Some stuff, we'll just ignore/make up for now.
+            try:
+                sensor = self.position.sensor[counter]
+                # If this sensor set is a pair of Nones, then use the depth as below.
+                if sensor == [None, None]:
+                    sensor = [np.min(self.position.depth[counter]), np.max(self.position.depth[counter])]
+            except AttributeError:
+                sensor = [np.min(self.position.depth[counter]), np.max(self.position.depth[counter])]
+
+            # The BODC format is... unique. Try to replicate it to the extent which is useful for me. May not be 100%
+            # compatible with actual BODC formatting.
+            with current_file.open('w') as f:
+                # Naturally, we start with three blank lines.
+                f.write('\n\n\n')
+                f.write('BODC Request Format Std. V1.0           Headers=  {} Data Cycles=   {}\n'.format(bodc_header_lines, num_samples))
+                f.write('Series=      {}                     Produced: {}\n'.format('AAAAAAA', datetime.now().strftime('%d-%b-%Y')))  # dummy data for now
+                f.write('Id                       AAAAAAAA PML\n')  # more dummy data
+                position = '{deglat:03d}d{minlat:.1f}m{hemilat}{deglon:03d}d{minlon:.1f}m{hemilon}'.format(deglat=int(lat),
+                                                                                                           minlat=(lat - int(lat)) * 60,
+                                                                                                           hemilat=northsouth,
+                                                                                                           deglon=int(lon),
+                                                                                                           minlon=(lon - int(lon)) * 60,
+                                                                                                           hemilon=westeast)
+                f.write('{position}                     start:{start}\n'.format(position=position, start=start))
+                format_string = 'Dep: floor {depth:.1f} sensor    {sensor_1:.1f}  {sensor_2:.1f} Nom. sample int.:    {interval:.1f} {units}\n'
+                f.write(format_string.format(depth=self.position.depth[counter],
+                                             sensor_1=sensor[0],
+                                             sensor_2=sensor[1],
+                                             interval=self.time.interval[counter],
+                                             units=self.time.time_units[counter]))
+                f.write('    {} Parameters included:\n'.format(num_fields))
+                # Now we're into the headers for each variable.
+                f.write('Parameter f    P    Q Absent Data Value Minimum Value  Maximum Value       Units\n')
+                for name in self.variables.names[counter]:
+                    # Skip WCO time data columns as we haven't saved those with _ReadData._read_wco().
+                    if name in ('mm_dd_yyyy', 'hh:mm:ss'):
+                        continue
+                    header_string = '{name:8s}  {f} {P} {Q} {missing:.2f} {min:.2f} {max:.2f} {unit}\n'
+                    f.write(header_string.format(name=name[:8],
+                                                 f='Y',
+                                                 P=0,
+                                                 Q=0,
+                                                 missing=-1,
+                                                 min=np.nanmin(getattr(self.data, name)[counter]),
+                                                 max=np.nanmax(getattr(self.data, name)[counter]),
+                                                 unit=self.variables.units[counter][name]))
+                    f.write('{}\n'.format(self.variables.long_name[counter][name][:80]))  # maximum line length is 80 characters
+                f.write('\n')
+                f.write('Format Record\n')
+                f.write('(some nonesense for now)\n')
+                # A few more new lines in case we're missing some.
+                f.write('\n\n\n')
+                # The data header.
+                f.write('  Cycle     {}\n'.format('   '.join([i[:8] for i in self.variables.names[counter]])))
+                f.write('Number             {}\n'.format('          '.join('f' * num_fields)))
+                # Now add the data.
+                cycle = ['{})'.format(i) for i in np.arange(num_samples) + 1]
+                data = []
+                for name in self.variables.names[counter]:
+                    # Skip WCO time data columns as we haven't saved those with _ReadData._read_wco().
+                    if name in ('mm_dd_yyyy', 'hh:mm:ss'):
+                        continue
+                    data.append(['{:<0}'.format(i) for i in getattr(self.data, name)[counter]])
+                data = np.column_stack((cycle, np.asarray(data).T))
+
+            # Must be possible to dump a whole numpy array in one shot...
+            with current_file.open('ab') as f:
+                np.savetxt(f, data, fmt=['%10s'] * (num_fields + 1))
+
+    def _write_qxf(self, filename):
         """
         Write CTD data to a QXF (netCDF) file.
 
