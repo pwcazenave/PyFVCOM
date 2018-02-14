@@ -369,7 +369,7 @@ class CTD(object):
                 # A few more new lines in case we're missing some.
                 f.write('\n\n\n')
                 # The data header.
-                f.write('  Cycle     {}\n'.format('   '.join([i[:8] for i in self.variables.names[counter]])))
+                f.write('  Cycle     {}\n'.format('   '.join([i[:8] for i in self.variables.names[counter] if i not in ('mm_dd_yyyy', 'hh:mm:ss')])))
                 f.write('Number             {}\n'.format('          '.join('f' * num_fields)))
                 # Now add the data.
                 cycle = ['{})'.format(i) for i in np.arange(num_samples) + 1]
