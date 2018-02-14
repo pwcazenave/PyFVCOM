@@ -504,20 +504,19 @@ class CTD(object):
 
             self.header['file_name'] = str(self._file)  # keep a record of the file we're opening.
             self.header['names'] = []  # store the variable names
-            self.header['units'] = {}  # the variables' units
-            self.header['long_name'] = {}  # the variable descriptions
-            self.header['depth'] = []  # this will be NaN for now
+            self.header['units'] = []  # list of the variables' units
+            self.header['long_name'] = []  # the variable descriptions (list of dictionaries)
+            self.header['depth'] = []
             self.header['sensor'] = []  # again, mostly Nones for the WCO data
             self.header['record_indices'] = []  # at what line numbers are the CTD headers?
-            self.header['num_records'] = []
-            self.header['num_fields'] = []
+            self.header['num_records'] = []  # how many samples per cast?
+            self.header['num_fields'] = []  # how many variables per cast?
             self.header['lon'] = []
             self.header['lat'] = []
             self.header['datetime'] = []
-            self.header['time_units'] = []
-            self.header['interval'] = []
-            self.header['units'] = []
-            self.header['long_name'] = []
+            self.header['time_units'] = []  # ignored here
+            self.header['interval'] = []  # ignored here
+            self.header['units'] = []  # list of dictionaries
 
             # Given the state of the WCO data, I need to hard code some useful information about the variables (long
             # names, units etc.)
