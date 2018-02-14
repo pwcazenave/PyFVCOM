@@ -680,8 +680,44 @@ class CTD(object):
                                 data_index = int(line_list[0].replace(')', '')) - 1
                                 getattr(self, name)[data_index] = float(line_list[name_index + 1])
 
+        def _read_wco(self, header):
+            """
+            Read the given Western Channel Observatory-formatted annual file and process the data accordingly.
 
+            Parameters
+            ----------
+            header : dict
+                Header parsed with _ParseHeader().
 
+            Provides
+            --------
 
+            Each variable is an object in self whose names are based on the header information extracted in
+            _ParseHeader().
 
+            """
 
+            file = Path(header['file_name'])
+
+            # Use the header['record_indices'] and header['num_samples'] to read each CTD cast into a list called
+            # self.<variable_name>.
+            variable_names = np.unique(header['names'])
+            for name in variable_names:
+                setattr(self, name, [])
+
+            with file.open('r') as f:
+                lines = f.readlines()
+                for start, length, names in zip(header['record_indices'], header['num_records'], header['names']):
+                    data = lines[start + 1:start + length]
+                    data = np.asarray([split_string(i, separator=';') for i in data])
+                    if self._debug:
+                        print(start, length, start + length + 1)
+                        print(data[0, :], data[-1, :])
+                    # Dump the data we've got for this cast.
+                    for name in names:
+                        getattr(self, name).append(data[:, names.index(name)])
+                    # Put None in the cumulative list if the current cast is missing a given variable to account for
+                    # variables appearing midway through a year.
+                    missing_names = set(variable_names) - set(names)
+                    for name in missing_names:
+                        getattr(self, name).append(None)
