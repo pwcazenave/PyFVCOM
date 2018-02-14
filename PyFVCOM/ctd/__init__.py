@@ -271,6 +271,9 @@ class CTD(object):
         """
         Write CTD data to an LST-formatted file.
 
+        If we've read in mulitple CTD casts (i.e. the various self.data attributes are lists of arrays), then we write
+        one file per cast with a suitably zero-padded number appended for each cast.
+
         Parameters
         ----------
         filename : str, pathlib.Path
