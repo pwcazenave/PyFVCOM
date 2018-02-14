@@ -449,12 +449,12 @@ class CTD(object):
                             nice_position = [float(raw_position[:3]), float(raw_position[4:7]), raw_position[8],
                                              float(raw_position[9:12]), float(raw_position[13:17]), raw_position[18]]
                             # More useful for us are positions as decimal degrees.
-                            self.header['longitude'] = nice_position[3] + (nice_position[4] / 60)
+                            self.header['lon'] = nice_position[3] + (nice_position[4] / 60)
                             if nice_position[5] == 'W':
-                                self.header['longitude'] = -self.header['longitude']
-                            self.header['latitude'] = nice_position[0] + (nice_position[1] / 60)
+                                self.header['lon'] = -self.header['lon']
+                            self.header['lat'] = nice_position[0] + (nice_position[1] / 60)
                             if nice_position[2] == 'S':
-                                self.header['latitude'] = -self.header['latitude']
+                                self.header['lat'] = -self.header['lat']
 
                             start = line_list[1].split(':')[1]
                             self.header['time'] = [datetime.strptime(start, '%Y%m%d%H%M%S')]
