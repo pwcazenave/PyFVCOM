@@ -485,7 +485,7 @@ class CTD(object):
                                 self.header['lat'] = -self.header['lat']
 
                             start = line_list[1].split(':')[1]
-                            self.header['time'] = [datetime.strptime(start, '%Y%m%d%H%M%S')]
+                            self.header['datetime'] = [datetime.strptime(start, '%Y%m%d%H%M%S')]
                         elif line.startswith('Dep'):
                             if 'floor' in line:
                                 self.header['depth'] = float(line_list[2])
