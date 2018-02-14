@@ -567,14 +567,14 @@ class CTD(object):
                             # We've got a new CTD cast.
                             self.header['num_fields'].append(len(line_list))
                             self.header['record_indices'].append(ctd_counter)
-                            # Drop the date/time columns.
-                            clean_names = [i for i in line_list if i not in ('mm/dd/yyyy', 'hh:mm:ss')]
-                            self.header['names'].append(clean_names)
+                            # Drop the date/time columns. Also remove illegal characters (specifically /).
+                            line_list = [i.replace('/', '_') for i in line_list]
+                            self.header['names'].append(line_list)
                             # In order to make the header vaguely usable, grab the initial time and position for this
                             # cast. This means we need to skip a line as we're currently on the header.
                             lon_idx = line_list.index('Longitude')
                             lat_idx = line_list.index('Latitude')
-                            date_idx = line_list.index('mm/dd/yyyy')
+                            date_idx = line_list.index('mm_dd_yyyy')
                             time_idx = line_list.index('hh:mm:ss')
                             # Now we know where to look, extract the relevant information.
                             line = next(f)
@@ -708,6 +708,8 @@ class CTD(object):
             # Use the header['record_indices'] and header['num_samples'] to read each CTD cast into a list called
             # self.<variable_name>.
             variable_names = np.unique(header['names'])
+            # Remove date/time columns.
+            variable_names = [i for i in variable_names if i not in ('mm_dd_yyyy', 'hh:mm:ss')]
             for name in variable_names:
                 setattr(self, name, [])
 
@@ -719,9 +721,11 @@ class CTD(object):
                     if self._debug:
                         print(start, length, start + length + 1)
                         print(data[0, :], data[-1, :])
-                    # Dump the data we've got for this cast.
+                    # Dump the data we've got for this cast, excluding the date/time columns.
                     for name in names:
-                        getattr(self, name).append(data[:, names.index(name)])
+                        if name in ('mm_dd_yyyy', 'hh:mm:ss'):
+                            continue
+                        getattr(self, name).append(data[:, names.index(name)].astype(float))
                     # Put None in the cumulative list if the current cast is missing a given variable to account for
                     # variables appearing midway through a year.
                     missing_names = set(variable_names) - set(names)
