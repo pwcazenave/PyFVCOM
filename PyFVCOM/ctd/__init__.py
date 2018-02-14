@@ -419,8 +419,8 @@ class CTD(object):
             Provides
             --------
             header : dict
-                Dictionary of the header information in the BODC LST-formatted file. This includes a standard set of keys
-                plus those defined in the header itself. The standard keys are:
+                Dictionary of the header information in the BODC LST-formatted file. This includes a standard set of
+                keys plus those defined in the header itself. The standard keys are:
                     'file_name' - the file name from which we've read.
                     'names' - the variable names in the file.
                     'units' - the variable units.
