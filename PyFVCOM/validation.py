@@ -136,6 +136,14 @@ class validation_db():
         """ Close the connection to the database. """
         self.conn.close()
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """ Tidy up the connection to the SQLite database. """
+        self.conn.close()
+
+
 
 def dt_to_epochsec(time_to_convert):
     """
