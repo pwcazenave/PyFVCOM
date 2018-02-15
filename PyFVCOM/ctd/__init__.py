@@ -10,7 +10,9 @@ from warnings import warn
 from datetime import datetime
 
 import numpy as np
-from PyFVCOM.utilities.general import split_string, ObjectFromDict
+from netCDF4 import Dataset
+
+from PyFVCOM.utilities.general import split_string, ObjectFromDict, cleanhtml
 
 use_sqlite = True
 try:
@@ -436,6 +438,8 @@ class CTD(object):
 
             if self._file.suffix == '.lst':
                 self._read_lst_header()
+            elif self._file.suffix == '.qxf':
+                self._read_qxf_header()
             elif self._file.suffix == '.txt':
                 # I don't like this one bit.
                 self._read_wco_header()
@@ -531,6 +535,94 @@ class CTD(object):
                         # Skip to the next line now so we can get the long_name value.
                         line = next(f).strip()
                         self.header['long_name'][self.header['names'][-1]] = line
+
+        def _read_qxf_header(self):
+            """
+            Get the BODC QXF-formatted (netCDF) header. Store the information as a dictionary to make extracting
+            relevant information easier.
+
+            Provides
+            --------
+            header : dict
+                Dictionary of the header information in the BODC LST-formatted file. This includes a standard set of
+                keys plus those defined in the header itself. The standard keys are:
+                    'file_name' - the file name from which we've read.
+                    'names' - the variable names in the file.
+                    'units' - the variable units.
+                    'long_name' - the variable descriptions.
+
+            """
+
+            self.header['file_name'] = str(self._file)  # keep a record of the file we're opening.
+            self.header['names'] = []  # store the variable names
+            self.header['units'] = {}  # the variables' units
+            self.header['long_name'] = {}  # the variable descriptions
+            self.header['lon'] = []
+            self.header['lat'] = []
+            self.header['datetime'] = []
+            self.header['time_units'] = []
+
+            # As ever, nothing's easy with the BODC data. The QXF files are actually just netCDF files, and yet,
+            # there is almost no useful information in them (no names, units anything). However, what BODC do is
+            # instead supply a HTML file which has this information in it (I wish I was making this up). So,
+            # what we'll do is silently open that file (if it exists) and try to grab as much useful information as
+            # possible from it. If it's not there, well, we'll just put blank information everywhere.
+
+            # Drop the b prefix and leading zeros for the HTML file name.
+            html_info = Path(self._file.parent, '{}.html'.format(self._file.stem[1:].lstrip('0')))
+            with Dataset(self.header['file_name'], 'r') as ds:
+                self.header['names'] = list(ds.variables)
+                self.header['num_fields'] = len(self.header['names'])
+                if html_info.exists():
+                    with html_info.open('r') as html:
+                        lines = html.readlines()
+                        cleanlines = [cleanhtml(line) for line in lines]
+                        cleanlines = [i for i in cleanlines if i]
+                        # Iterate through the cleaned HTML and extract information from certain keywords.
+                        keywords = ('Longitude', 'Latitude', 'Start Time (yyyy-mm-dd hh:mm)', 'End Time (yyyy-mm-dd hh:mm)',
+                                    'Nominal Cycle Interval', 'Minimum Sensor Depth', 'Maximum Sensor Depth',
+                                    'Sea Floor Depth', 'BODC Series Reference')
+                        mapped_names = ('lon', 'lat', 'datetime1', 'datetime2',
+                                        'interval', 'sensor1', 'sensor2',
+                                        'depth', 'series_id')
+                        for mapped, key in zip(mapped_names, keywords):
+                            self.header[mapped] = cleanlines[cleanlines.index(key) + 1]
+                        # sensor1 and sensor2 need to be merged into sensor. Likewise, datetime1 and datetime2 need
+                        # to be made into a single list.
+                        self.header['sensor'] = [self.header['sensor1'], self.header['sensor2']]
+                        self.header['datetime'] = [self.header['datetime1'], self.header['datetime2']]
+                        # Assume the format is '%Y-%m-%d %H:%M' since that's what we've search with above.
+                        self.header['datetime'] = [datetime.strptime(i, '%Y-%m-%d %H:%M') for i in self.header['datetime']]
+                        # Remove the temporary keys from the header.
+                        for var in ('sensor1', 'sensor2', 'datetime1', 'datetime2'):
+                            self.header.pop(var, None)
+
+                        # Get some useful information about the variables.
+                        description_indices = [cleanlines.index('Parameters'), cleanlines.index('Definition of Rank')]
+                        variable_info = cleanlines[description_indices[0] + 1:description_indices[1]]
+                        # To get the number of columns in the table, revert to the raw HTML so we can see the tags
+                        # indicated then end of the header row.
+                        header_start = [c for c, i in enumerate(lines) if 'BODC CODE' in i][0]  # use the first hit
+                        num_columns = [c for c, i in enumerate(lines[header_start:]) if i.strip() == '</tr>'][0]
+                        header_names = variable_info[:num_columns]
+                        variable_info = variable_info[num_columns:]
+                        variables = {i: None for i in header_names}
+                        for header_index, name in enumerate(header_names):
+                            variables[name] = variable_info[header_index::len(header_names)]
+                        # Now convert those into my format.
+                        if 'Units' in variables:
+                            self.header['units'] = variables['Units']
+                        if 'Title' in variables:
+                            self.header['long_name'] = variables['Title']
+                        if 'BODC CODE' in variables:
+                            self.header['names'] = variables['BODC CODE']
+                else:
+                    # Well, we haven't got much choice here but to just add placeholders.
+                    for var in self.header['names']:
+                        self.header['num_records'] = len(getattr(self.ds.variables, var)[:][:])
+                        self.header['units'].append(None)
+                        self.header['long_name'].append(None)
+
 
         def _read_wco_header(self):
             """
