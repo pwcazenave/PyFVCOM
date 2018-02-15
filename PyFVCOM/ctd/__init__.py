@@ -5,9 +5,9 @@ Functions to interrogate and extract CTD data from the ctd.db SQLite3 database.
 
 from __future__ import print_function
 
+from datetime import datetime
 from pathlib import Path
 from warnings import warn
-from datetime import datetime
 
 import numpy as np
 from netCDF4 import Dataset
