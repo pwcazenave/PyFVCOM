@@ -619,7 +619,10 @@ class CTD(object):
                         self.header['num_records'] = len(getattr(self.ds.variables, var)[:][:])
                         self.header['units'].append(None)
                         self.header['long_name'].append(None)
-
+                        self.header['lon'].append(None)
+                        self.header['lat'].append(None)
+                        self.header['datetime'].append([None, None])
+                        self.header['time_units'].append(None)
 
         def _read_wco_header(self):
             """
