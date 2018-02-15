@@ -735,7 +735,7 @@ class CTD(object):
             # self.<variable_name>.
             variable_names = np.unique(header['names'])
             # Remove date/time columns.
-            variable_names = [i for i in variable_names if i not in ('mm_dd_yyyy', 'hh:mm:ss')]
+            variable_names = [i for i in variable_names if i not in ('mm_dd_yyyy', 'hh_mm_ss')]
             for name in variable_names:
                 setattr(self, name, [])
 
@@ -749,7 +749,7 @@ class CTD(object):
                         print(data[0, :], data[-1, :])
                     # Dump the data we've got for this cast, excluding the date/time columns.
                     for name in names:
-                        if name in ('mm_dd_yyyy', 'hh:mm:ss'):
+                        if name in ('mm_dd_yyyy', 'hh_mm_ss'):
                             continue
                         getattr(self, name).append(data[:, names.index(name)].astype(float))
                     # Put None in the cumulative list if the current cast is missing a given variable to account for
