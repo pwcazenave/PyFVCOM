@@ -566,6 +566,17 @@ class CTD(object):
             with Dataset(self.header['file_name'], 'r') as ds:
                 self.header['names'] = list(ds.variables)
                 self.header['num_fields'] = len(self.header['names'])
+                # Populate everything with Nones or whatever we can gather from the netCDF. This may be overwritten
+                # by the HTML file scraping.
+                for var in self.header['names']:
+                    self.header['num_records'] = len(np.ravel(ds.variables[var][:]))
+                    self.header['units'][var] = None
+                    self.header['long_name'][var] = None
+                    self.header['lon'].append(None)
+                    self.header['lat'].append(None)
+                    self.header['datetime'].append([None, None])
+                    self.header['time_units'].append(None)
+
                 if html_info.exists():
                     with html_info.open('r') as html:
                         lines = html.readlines()
@@ -578,8 +589,21 @@ class CTD(object):
                         mapped_names = ('lon', 'lat', 'datetime1', 'datetime2',
                                         'interval', 'sensor1', 'sensor2',
                                         'depth', 'series_id')
+                        missed = 0
                         for mapped, key in zip(mapped_names, keywords):
-                            self.header[mapped] = cleanlines[cleanlines.index(key) + 1]
+                            try:
+                                self.header[mapped] = cleanlines[cleanlines.index(key) + 1]
+                            except ValueError:
+                                # Missing this piece of information. Keep trying the others, but keep a track of how
+                                # many we've missed. If that number equals the length of those we were trying to get,
+                                # then bail out as there's obviously something wrong with the HTML file (truncated,
+                                # nonsense etc.).
+                                missed += 1
+
+                        # We haven't found anything useful, so just quit now.
+                        if missed == len(keywords):
+                            return
+
                         # sensor1 and sensor2 need to be merged into sensor. Likewise, datetime1 and datetime2 need
                         # to be made into a single list.
                         self.header['sensor'] = [self.header['sensor1'], self.header['sensor2']]
@@ -613,16 +637,6 @@ class CTD(object):
                             self.header['long_name'] = variables['Title']
                         if 'BODC CODE' in variables:
                             self.header['names'] = variables['BODC CODE']
-                else:
-                    # Well, we haven't got much choice here but to just add placeholders.
-                    for var in self.header['names']:
-                        self.header['num_records'] = len(getattr(self.ds.variables, var)[:][:])
-                        self.header['units'].append(None)
-                        self.header['long_name'].append(None)
-                        self.header['lon'].append(None)
-                        self.header['lat'].append(None)
-                        self.header['datetime'].append([None, None])
-                        self.header['time_units'].append(None)
 
         def _read_wco_header(self):
             """
