@@ -611,15 +611,15 @@ class CTD(object):
                             # We've got a new CTD cast.
                             self.header['num_fields'].append(len(line_list))
                             self.header['record_indices'].append(ctd_counter)
-                            # Drop the date/time columns. Also remove illegal characters (specifically /).
-                            line_list = [i.replace('/', '_') for i in line_list]
+                            # Drop the date/time columns. Also remove illegal characters (specifically / and :).
+                            line_list = [i.replace('/', '_').replace(':', '_') for i in line_list]
                             self.header['names'].append(line_list)
                             # In order to make the header vaguely usable, grab the initial time and position for this
                             # cast. This means we need to skip a line as we're currently on the header.
                             lon_idx = line_list.index('Longitude')
                             lat_idx = line_list.index('Latitude')
                             date_idx = line_list.index('mm_dd_yyyy')
-                            time_idx = line_list.index('hh:mm:ss')
+                            time_idx = line_list.index('hh_mm_ss')
                             # Now we know where to look, extract the relevant information.
                             line = next(f)
                             line_list = split_string(line, separator=';')
