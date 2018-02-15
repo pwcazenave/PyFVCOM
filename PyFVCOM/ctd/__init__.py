@@ -556,7 +556,7 @@ class CTD(object):
             self.header['time_units'] = []
 
             # As ever, nothing's easy with the BODC data. The QXF files are actually just netCDF files, and yet,
-            # there is almost no useful information in them (no names, units anything). However, what BODC do is
+            # there is almost no useful information in them (no names, units, anything). However, what BODC do do is
             # instead supply a HTML file which has this information in it (I wish I was making this up). So,
             # what we'll do is silently open that file (if it exists) and try to grab as much useful information as
             # possible from it. If it's not there, well, we'll just put blank information everywhere.
@@ -584,8 +584,12 @@ class CTD(object):
                         # to be made into a single list.
                         self.header['sensor'] = [self.header['sensor1'], self.header['sensor2']]
                         self.header['datetime'] = [self.header['datetime1'], self.header['datetime2']]
-                        # Assume the format is '%Y-%m-%d %H:%M' since that's what we've search with above.
-                        self.header['datetime'] = [datetime.strptime(i, '%Y-%m-%d %H:%M') for i in self.header['datetime']]
+                        # Check we've got a valid end time. If not, remove it from the list.
+                        if self.header['datetime2'] != '-':
+                            # Assume the format is '%Y-%m-%d %H:%M' since that's what we've search with above.
+                            self.header['datetime'] = [datetime.strptime(i, '%Y-%m-%d %H:%M') for i in self.header['datetime']]
+                        else:
+                            self.header['datetime'] = [datetime.strptime(self.header['datetime1'], '%Y-%m-%d %H:%M')]
                         # Remove the temporary keys from the header.
                         for var in ('sensor1', 'sensor2', 'datetime1', 'datetime2'):
                             self.header.pop(var, None)
