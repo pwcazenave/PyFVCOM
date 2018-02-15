@@ -473,10 +473,16 @@ class CTD(object):
                         elif line.startswith('Series'):
                             self.header['series_id'] = line_list[1]
                         elif 'start:' in line:
-                            raw_position = line_list[0]
-                            # Extract degrees, minutes, hemisphere for latitude and longitude.
-                            nice_position = [float(raw_position[:3]), float(raw_position[4:7]), raw_position[8],
-                                             float(raw_position[9:12]), float(raw_position[13:17]), raw_position[18]]
+                            # Extract degrees, minutes, hemisphere for latitude and longitude. The least awful way of
+                            # dealing with the total mess that is this formatting is to convert the whole string
+                            # into a list of characters and read through them one by one, pulling out numbers where
+                            # necessary otherwise grabbing the letters.
+                            raw_position = list(line_list[0])
+                            numbers = [i if i.isnumeric() or i == '.' else ' ' for i in raw_position]
+                            numbers = [float(i) for i in ''.join(numbers).strip().split(' ') if i]
+                            letters = [i if i.isalpha() else '' for i in raw_position]
+                            letters = [i for i in ''.join(letters) if i]
+                            nice_position = [numbers[0], numbers[1], letters[2], numbers[2], numbers[3], letters[-1]]
                             # More useful for us are positions as decimal degrees.
                             self.header['lon'] = nice_position[3] + (nice_position[4] / 60)
                             if nice_position[5] == 'W':
