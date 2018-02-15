@@ -554,6 +554,7 @@ class CTD(object):
             self.header['lat'] = []
             self.header['datetime'] = []
             self.header['time_units'] = []
+            self.header['interval'] = []
 
             # As ever, nothing's easy with the BODC data. The QXF files are actually just netCDF files, and yet,
             # there is almost no useful information in them (no names, units, anything). However, what BODC do do is
@@ -576,6 +577,7 @@ class CTD(object):
                     self.header['lat'].append(None)
                     self.header['datetime'].append([None, None])
                     self.header['time_units'].append(None)
+                    self.header['interval'].append(None)
 
                 if html_info.exists():
                     with html_info.open('r') as html:
