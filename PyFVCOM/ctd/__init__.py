@@ -449,7 +449,7 @@ class CTD(object):
 
         def _read_lst_header(self):
             """
-            Get the BODC lst-formatted header. Store the information as a dictionary to make extracting relevant
+            Get the BODC LST-formatted header. Store the information as a dictionary to make extracting relevant
             information easier.
 
             Provides
@@ -819,7 +819,7 @@ class CTD(object):
                             # Some data have a couple of time columns, usually called 'Date' and 'Time'. Convert them to datetime objects.
                             if 'Date' in columns and 'Time' in columns:
                                 had_time = True
-                                # A quick grep of my lst files shows the date and time formats are %Y/%m/%d and
+                                # A quick grep of my LST files shows the date and time formats are %Y/%m/%d and
                                 # %H:%M:%S. Offset the indices by one to account for the omitted 'Cycle'.
                                 date_index = columns.index('Date') + 1
                                 time_index = columns.index('Time') + 1
