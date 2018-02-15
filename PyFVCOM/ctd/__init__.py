@@ -706,6 +706,8 @@ class CTD(object):
                 # but this number doesn't seem to include blank lines, so we're going to ignore anything until we hit
                 # the data itself.
                 at_data = False
+                had_time = False  # do we have time data?
+                datetimes = []  # in case we've got time data
                 for line in f:
                     line_list = split_string(line.strip())
                     if line.strip():
@@ -719,13 +721,27 @@ class CTD(object):
                             # but doesn't seem worth the effort right now. Skip it.
                             continue
                         if at_data:
+                            # Some data have a couple of time columns, usually called 'Date' and 'Time'. Convert them to datetime objects.
+                            if 'Date' in columns and 'Time' in columns:
+                                had_time = True
+                                # A quick grep of my lst files shows the date and time formats are %Y/%m/%d and
+                                # %H:%M:%S. Offset the indices by one to account for the omitted 'Cycle'.
+                                date_index = columns.index('Date') + 1
+                                time_index = columns.index('Time') + 1
+                                datetimes.append(datetime.strptime(' '.join((line_list[date_index], line_list[time_index])), '%Y/%m/%d %H:%M:%S'))
                             for name_index, name in enumerate(columns):
+                                if name in ('Date', 'Time'):
+                                    continue
                                 # Use the cycle number to get the index for the data. Offset the name_index by 1 to
                                 # account for the missing Cycle column.
                                 if not hasattr(self, name):
                                     setattr(self, name, np.zeros(header['num_records']))
                                 data_index = int(line_list[0].replace(')', '')) - 1
                                 getattr(self, name)[data_index] = float(line_list[name_index + 1])
+
+                # If we found date/time data, dump it into the header.
+                if had_time:
+                    header['datetime'] = datetimes
 
         def _read_wco(self, header):
             """
