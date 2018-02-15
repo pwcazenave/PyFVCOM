@@ -69,7 +69,7 @@ class validation_db():
         create_str = 'CREATE TABLE IF NOT EXISTS {table} ({cols});'.format(table=table_name, cols=', '.join(col_list))
         self.execute_sql(create_str)
 
-    def insert_into_table(self, table_name, data):
+    def insert_into_table(self, table_name, data, column=None):
         """
         Insert data into a table.
 
@@ -79,16 +79,23 @@ class validation_db():
             Table name into which to insert the given data.
         data : np.ndarray
             Data to insert into the database.
+        column : list, optional
+            Insert the supplied `data' into this `column' within the given `table_name'.
 
         """
-        no_rows = len(data)
-        no_cols = len(data[0])
+        no_rows, no_cols = np.asarray(data).shape
         qs_string = '({})'.format(','.join('?' * no_cols))
 
+        # Format our optional column.
+        if column is not None:
+            column = '({})'.format(','.join(column))
+        else:
+            column = ''
+
         if no_rows > 1:
-            self.c.executemany('insert or ignore into ' + table_name + ' values ' + qs_string, data)
+            self.c.executemany('insert or ignore into {tab} {col} values {val}'.format(tab=table_name, col=column, val=qs_string), data)
         elif no_rows == 1:
-            self.c.execute('insert into ' + table_name + ' values ' + qs_string, data[0])
+            self.c.execute('insert into {tab} {col} values {val}'.format(tab=table_name, col=column, val=qs_string), data[0])
         self.conn.commit()
 
     def select_qry(self, table_name, where_str, select_str='*', order_by_str=None, inner_join_str=None, group_by_str=None):
