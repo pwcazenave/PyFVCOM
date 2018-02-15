@@ -27,6 +27,14 @@ class validation_db():
     """ Work with an SQLite database. """
 
     def __init__(self, db_name):
+        """ Create a new database `db_name'.
+
+        Parameters
+        ----------
+        db_name : str
+            The path and name for the new database.
+
+        """
         if db_name[-3:] != '.db':
             db_name += '.db'
         self.conn = sq.connect(db_name)
