@@ -860,7 +860,7 @@ class CTD(object):
                 for variable in ds.variables:
                     if variable.startswith('ADEP') and ':' in variable:
                         # This is probably a depth array and we need to repeat it to match the raveled array lengths.
-                    self.depth =
+                        self.depth = 0
                 pass
 
 
