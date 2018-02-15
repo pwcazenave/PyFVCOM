@@ -244,6 +244,9 @@ class CTD(object):
 
         self.data = self._ReadData(self.header.header)
 
+        # Update the time object in case we've read time information from the data columns.
+        self.time = ObjectFromDict(self.header.header, keys=['datetime', 'time_units', 'interval'])
+
     def write(self, filename):
         """
         Wrapper around the two main BODC file formats I'm interested in (QXF. vs LST, essentially netCDF vs.
