@@ -495,11 +495,20 @@ class CTD(object):
                             self.header['datetime'] = [datetime.strptime(start, '%Y%m%d%H%M%S')]
                         elif line.startswith('Dep'):
                             if 'floor' in line:
-                                self.header['depth'] = float(line_list[2])
-                                self.header['sensor'] = [float(i) for i in line_list[4:6]]
+                                # We're missing the depth information, so set it to NaN here.
+                                if line_list[2] == 'sensor':
+                                    self.header['depth'] = np.nan
+                                    self.header['sensor'] = np.nan
+                                else:
+                                    self.header['depth'] = float(line_list[2])
+                                    self.header['sensor'] = [float(i) for i in line_list[4:6]]
                             else:
                                 self.header['depth'] = float(line_list[1])
-                            self.header['interval'] = float(line_list[-2])
+                            interval_to_check = line_list[-2].split(':')[-1]
+                            if interval_to_check == 'no':
+                                self.header['interval'] = '-'
+                            else:
+                                self.header['interval'] = float(interval_to_check)
                             self.header['time_units'] = line_list[-1]
                         elif 'included' in line:
                             # Get the number of parameters in this file.
