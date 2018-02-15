@@ -469,7 +469,7 @@ class CTD(object):
                         line_list = split_string(line)
                         if line.startswith('BODC'):
                             self.header['header_length'] = int(line_list[6])
-                            self.header['num_records'] = int(line_list[-1])
+                            self.header['num_records'] = int(line_list[9])
                         elif line.startswith('Series'):
                             self.header['series_id'] = line_list[1]
                         elif 'start:' in line:
