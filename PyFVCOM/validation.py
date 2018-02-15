@@ -66,12 +66,7 @@ class validation_db():
 
         """
 
-        create_str = 'CREATE TABLE IF NOT EXISTS ' + table_name + ' ('
-        for this_col in col_list:
-            create_str += this_col
-            create_str += ', '
-        create_str = create_str[0:-2]
-        create_str += ');'
+        create_str = 'CREATE TABLE IF NOT EXISTS {table} ({cols});'.format(table=table_name, cols=', '.join(col_list))
         self.execute_sql(create_str)
 
     def insert_into_table(self, table_name, data):
@@ -88,11 +83,7 @@ class validation_db():
         """
         no_rows = len(data)
         no_cols = len(data[0])
-        qs_string = '('
-        for this_x in range(no_cols):
-            qs_string += '?,'
-        qs_string = qs_string[:-1]
-        qs_string += ')'
+        qs_string = '({})'.format(','.join('?' * no_cols))
 
         if no_rows > 1:
             self.c.executemany('insert or ignore into ' + table_name + ' values ' + qs_string, data)
