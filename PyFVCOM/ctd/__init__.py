@@ -432,7 +432,7 @@ class CTD(object):
             self.header = {}
 
             if self._file.suffix == '.lst':
-                self._read_bodc_header()
+                self._read_lst_header()
             elif self._file.suffix == '.txt':
                 # I don't like this one bit.
                 self._read_wco_header()
@@ -440,9 +440,10 @@ class CTD(object):
                 # Add more readers here.
                 pass
 
-        def _read_bodc_header(self):
+        def _read_lst_header(self):
             """
-            Get the BODC header. Store the information as a dictionary to make extracting relevant information easier.
+            Get the BODC lst-formatted header. Store the information as a dictionary to make extracting relevant
+            information easier.
 
             Provides
             --------
