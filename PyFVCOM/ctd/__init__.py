@@ -427,13 +427,6 @@ class CTD(object):
 
             """
             self._file = Path(filename)
-            self.datetime = None
-            self.interval = None
-            self.units = None
-            self.lon = None
-            self.lat = None
-            self.depth = None
-            self.sensor = [None, None]
             self.header = {}
 
             if self._file.suffix == '.lst':
