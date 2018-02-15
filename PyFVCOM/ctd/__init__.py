@@ -746,6 +746,32 @@ class CTD(object):
                 if had_time:
                     header['datetime'] = datetimes
 
+        def _read_qxf(self, header):
+            """
+            Read the given QXF-formatted (netCDF) file and process the data accordingly.
+
+            Parameters
+            ----------
+            header : dict
+                Header parsed with _ParseHeader().
+
+            Provides
+            --------
+
+            Each variable is an object in self whose names are based on the header information extracted in
+            _ParseHeader().
+
+            """
+            with Dataset(header['file_name'], 'r') as ds:
+                # Grab each variable and dump it into self. Special care is taken to make depth arrays (
+                # ADEP-something) match the data.
+                for variable in ds.variables:
+                    if variable.startswith('ADEP') and ':' in variable:
+                        # This is probably a depth array and we need to repeat it to match the raveled array lengths.
+                    self.depth =
+                pass
+
+
         def _read_wco(self, header):
             """
             Read the given Western Channel Observatory-formatted annual file and process the data accordingly.
