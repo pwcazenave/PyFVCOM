@@ -226,12 +226,12 @@ class CTD(object):
         self._file = Path(filename)
         # Read the header into self so we can pass it around more easily. Really, having the header as a dictionary
         # is probably the most sensible thing.
-        self.header = self._ParseHeader(self._file)
+        self.header = self._ParseHeader(self._file).header
         # Store the variable names in here for ease of access.
-        self.variables = ObjectFromDict(self.header.header, keys=['units', 'names', 'long_name'])
+        self.variables = ObjectFromDict(self.header, keys=['units', 'names', 'long_name'])
         # These two functions extract bits of information from the header we've just parsed.
-        self.time = ObjectFromDict(self.header.header, keys=['datetime', 'time_units', 'interval'])
-        self.position = ObjectFromDict(self.header.header, keys=['lon', 'lat', 'depth', 'sensor'])
+        self.time = ObjectFromDict(self.header, keys=['datetime', 'time_units', 'interval'])
+        self.position = ObjectFromDict(self.header, keys=['lon', 'lat', 'depth', 'sensor'])
 
     def load(self):
         """
@@ -244,10 +244,10 @@ class CTD(object):
 
         """
 
-        self.data = self._ReadData(self.header.header)
+        self.data = self._ReadData(self.header)
 
         # Update the time object in case we've read time information from the data columns.
-        self.time = ObjectFromDict(self.header.header, keys=['datetime', 'time_units', 'interval'])
+        self.time = ObjectFromDict(self.header, keys=['datetime', 'time_units', 'interval'])
 
     def write(self, filename):
         """
@@ -292,7 +292,7 @@ class CTD(object):
             # Append a number per file we create. This is for the case where we've read in WCO data.
             stem = filename.stem
             suffix = filename.suffix
-            number_of_casts = len(self.header.header['record_indices'])
+            number_of_casts = len(self.header['record_indices'])
             precision = len(str(number_of_casts))
             file_string = '{st}_{ct:0{pr}d}{sx}'
             file_names = [Path(file_string.format(st=stem, ct=i + 1, pr=precision, sx=suffix)) for i in range(number_of_casts)]
