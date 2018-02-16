@@ -1071,6 +1071,8 @@ class CTD(object):
                         if len(d) == len(names):
                             new_data.append(d)
                         else:
+                            if self._debug:
+                                print('Line {} has inconsistently formatted data. Replacing with NaNs.')
                             new_data.append([np.nan] * len(names))
                     data = np.asarray(new_data)
 
@@ -1081,6 +1083,8 @@ class CTD(object):
                     for name in names:
                         if name in ('mm_dd_yyyy', 'hh_mm_ss'):
                             continue
+                        if self._debug:
+                            print(data[:, names.index(name)].astype(float).shape)
                         getattr(self, name).append(data[:, names.index(name)].astype(float))
                     # Put None in the cumulative list if the current cast is missing a given variable to account for
                     # variables appearing midway through a year.
