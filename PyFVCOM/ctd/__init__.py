@@ -910,14 +910,22 @@ class CTD(object):
 
             """
             with Dataset(header['file_name'], 'r') as ds:
-                # Grab each variable and dump it into self. Special care is taken to make depth arrays (
-                # ADEP-something) match the data.
+                # Grab each variable and dump it into self. If we have more than 1 dimension in the input file,
+                # repeat 1D arrays to match the 2D array shapes.
                 for variable in ds.variables:
-                    if variable.startswith('ADEP') and ':' in variable:
-                        # This is probably a depth array and we need to repeat it to match the raveled array lengths.
-                        self.depth = 0
-                pass
-
+                    setattr(self, variable, ds.variables[variable][:].ravel())  # make everything 1D
+                    if len(ds.variables[variable].dimensions) == 1 and len(ds.dimensions) > 1:
+                        # In order to make all arrays the same shape, we repeat each 1D one to match the 2D sizes.
+                        # We also do this for the Cycle array.
+                        num_time = ds.dimensions['primary'].size
+                        num_depth = ds.dimensions['secondary'].size
+                        # If the number of dimensions in the netCDF is more than 1, then we're assuming the data are
+                        # 2D (time, depth) and we need a time-resolved depth array.
+                        # Use the appropriate dimension when tiling.
+                        if ds.variables[variable].dimensions[0] == 'primary':
+                            setattr(self, variable, np.tile(ds.variables[variable][:], num_depth))
+                        elif ds.variables[variable].dimensions[0] == 'secondary':
+                            setattr(self, variable, np.tile(ds.variables[variable][:], num_time))
 
         def _read_wco(self, header):
             """
