@@ -315,14 +315,23 @@ class CTD(object):
             # variable.
             bodc_header_lines = 12 + (num_fields * 2)
 
-            start = self.time.datetime[counter].strftime('%Y%m%d%H%M%S')
-            lon = np.mean(self.position.lon[counter])
-            lat = np.mean(self.position.lat[counter])
+            if self.time.datetime[counter] is not None:
+                start = self.time.datetime[counter].strftime('%Y%m%d%H%M%S')
+            else:
+                start = self.time.datetime[counter]
+            if self.position.lon[counter] is not None:
+                lon = np.mean(self.position.lon[counter])
+            else:
+                lon = self.position.lon[counter]
+            if self.position.lat[counter] is not None:
+                lat = np.mean(self.position.lat[counter])
+            else:
+                lat = self.position.lat[counter]
             northsouth = 'N'
             westeast = 'E'
-            if lat < 0:
+            if lat is not None and lat < 0:
                 northsouth = 'S'
-            if lon < 0:
+            if lon is not None and lon < 0:
                 westeast = 'W'
 
             # Some stuff, we'll just ignore/make up for now.
