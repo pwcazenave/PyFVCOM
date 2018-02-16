@@ -206,6 +206,33 @@ def get_ferrybox_data(db, fields, table='PrideOfBilbao', noisy=False):
     return data
 
 
+def _split_wco_lines(line):
+    """
+    Custom function based on invocations of split_string to handle the inconsistently formatted WCO data. It
+    currently tries to split based on (in this order): ';', ',', ' '.
+
+    Parameters
+    ----------
+    line : str
+        Line the split
+
+    Returns
+    -------
+    line_list : list
+        The split line.
+
+    """
+
+    delimiters = (';', ',', ' ')
+    delimiter = None
+    for d in delimiters:
+        if d in line:
+            delimiter = d
+            break
+
+    return split_string(line, delimiter)
+
+
 class CTD(object):
     """ Generic class for CTD data. """
 
@@ -766,7 +793,7 @@ class CTD(object):
                     ctd_counter += 1
                     line = line.strip()
                     if line:
-                        line_list = split_string(line, separator=';')
+                        line_list = _split_wco_lines(line)
                         if 'DepSM' in line_list:
                             # We've got a new CTD cast.
                             self.header['num_fields'].append(len(line_list))
@@ -838,7 +865,7 @@ class CTD(object):
                 for counter, cast_index in enumerate(self.header['record_indices']):
                     offset_index = cast_index - 1  # we want the depth which is the line for the end of the last cast
                     if offset_index > 0:
-                        line_list = split_string(lines[offset_index], separator=';')
+                        line_list = _split_wco_lines(lines[offset_index])
                         depth_index = self.header['names'][counter].index('DepSM')
                         try:
                             self.header['depth'].append(float(line_list[depth_index]))
@@ -846,7 +873,7 @@ class CTD(object):
                             # The data are probably crappy. Just set the maximum depth to NaN.
                             self.header['depth'].append(np.nan)
                 # Also add the last line's value.
-                line_list = split_string(lines[-1], separator=';')
+                line_list = _split_wco_lines(lines[-1])
                 depth_index = self.header['names'][-1].index('DepSM')
                 self.header['depth'].append(float(line_list[depth_index]))
 
@@ -1004,7 +1031,7 @@ class CTD(object):
                 lines = f.readlines()
                 for start, length, names in zip(header['record_indices'], header['num_records'], header['names']):
                     data = lines[start + 1:start + length]
-                    data = np.asarray([split_string(i, separator=';') for i in data])
+                    data = [_split_wco_lines(i) for i in data]
                     if self._debug:
                         print(start, length, start + length + 1)
                         print(data[0, :], data[-1, :])
