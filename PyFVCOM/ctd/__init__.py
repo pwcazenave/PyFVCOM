@@ -852,8 +852,12 @@ class CTD(object):
 
                             if lon_idx is None and lat_idx is None:
                                 station = self._file.stem.split('_')[-1]
-                                self.header['lon'].append(wco_positions[station]['lon'])
-                                self.header['lat'].append(wco_positions[station]['lat'])
+                                try:
+                                    self.header['lon'].append(wco_positions[station]['lon'])
+                                    self.header['lat'].append(wco_positions[station]['lat'])
+                                except KeyError:
+                                    self.header['lon'].append(np.nan)
+                                    self.header['lat'].append(np.nan)
                             else:
                                 self.header['lon'].append(float(line_list[lon_idx]))
                                 self.header['lat'].append(float(line_list[lat_idx]))
