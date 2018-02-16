@@ -809,7 +809,7 @@ class CTD(object):
                             line_list = [i.replace('/', '_').replace(':', '_') for i in line_list]
                             self.header['names'].append(line_list)
                             # In order to make the header vaguely usable, grab the initial time and position for this
-                            # cast. This means we need to skip a line as we're currently on the header.
+                            # cast.
                             lon_idx, lat_idx, date_idx, time_idx = None, None, None, None
                             if 'Longitude' in line_list:
                                 lon_idx = line_list.index('Longitude')
