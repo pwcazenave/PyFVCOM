@@ -606,6 +606,22 @@ class CTD(object):
                                 # nonsense etc.).
                                 missed += 1
 
+                        # Clean the positions a bit.
+                        try:
+                            lon, lon_hemisphere = self.header['lon'].split(' ')[:2]
+                            lat, lat_hemisphere = self.header['lat'].split(' ')[:2]
+                            lon = float(lon.strip())
+                            lat = float(lat.strip())
+                            if lon_hemisphere == 'W':
+                                lon = -lon
+                            if lat_hemisphere == 'S':
+                                lat = -lat
+                            self.header['lon'] = lon
+                            self.header['lat'] = lat
+                        except AttributeError:
+                            # This is probably a list of Nones, so just skip it. This happens when we've got a
+                            # corrupted HTML metadata file.
+                            pass
                         # We haven't found anything useful, so just quit now.
                         if missed == len(keywords):
                             return
