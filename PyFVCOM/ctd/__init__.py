@@ -8,6 +8,7 @@ from __future__ import print_function
 from datetime import datetime
 from pathlib import Path
 from warnings import warn
+from collections import OrderedDict
 
 import numpy as np
 from netCDF4 import Dataset
@@ -860,6 +861,11 @@ class CTD(object):
                             # Manually increment the counter here as we're skipping a line and it would otherwise be
                             # off by one.
                             ctd_counter += 1
+
+                            # Some casts have the same data repeated in the files, because why not! So, remove those
+                            # duplicate names and update header information accordingly.
+                            self.header['names'][-1] = list(OrderedDict.fromkeys(self.header['names'][-1]))
+                            self.header['num_fields'][-1] = len(self.header['names'][-1])
 
             # Get the number of records per cast.
             self.header['num_records'] = np.diff(np.concatenate((self.header['record_indices'], [ctd_counter])))
