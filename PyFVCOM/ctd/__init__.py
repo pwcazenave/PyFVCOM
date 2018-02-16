@@ -429,6 +429,9 @@ class CTD(object):
                     if name in ('mm_dd_yyyy', 'hh_mm_ss'):
                         continue
                     data.append(['{:<0}'.format(i) for i in getattr(self.data, name)[counter]])
+                if self._debug:
+                    if np.diff([len(i) for i in data]).max() == 1:
+                        raise ValueError('broken data')
                 data = np.column_stack((cycle, np.asarray(data).T))
 
             # Must be possible to dump a whole numpy array in one shot...
