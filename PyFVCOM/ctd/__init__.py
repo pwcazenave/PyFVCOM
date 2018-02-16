@@ -415,7 +415,7 @@ class CTD(object):
                     f.write('{}\n'.format(self.variables.long_name[counter][name][:80]))  # maximum line length is 80 characters
                 f.write('\n')
                 f.write('Format Record\n')
-                f.write('(some nonesense for now)\n')
+                f.write('(some nonsense for now)\n')
                 # A few more new lines in case we're missing some.
                 f.write('\n\n\n')
                 # The data header.
