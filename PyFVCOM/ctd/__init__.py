@@ -805,7 +805,7 @@ class CTD(object):
                             # We've got a new CTD cast.
                             self.header['num_fields'].append(len(line_list))
                             self.header['record_indices'].append(ctd_counter)
-                            # Drop the date/time columns. Also remove illegal characters (specifically / and :).
+                            # Remove illegal characters (specifically / and :) from variable names.
                             line_list = [i.replace('/', '_').replace(':', '_') for i in line_list]
                             self.header['names'].append(line_list)
                             # In order to make the header vaguely usable, grab the initial time and position for this
