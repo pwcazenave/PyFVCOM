@@ -217,8 +217,8 @@ class CTD(object):
         ----------
         filename : str, pathlib.Path
             The file name to read in.
-            noisy : bool, optional
-                If True, verbose output is printed to screen. Defaults to False.
+        noisy : bool, optional
+            If True, verbose output is printed to screen. Defaults to False.
 
         """
 
