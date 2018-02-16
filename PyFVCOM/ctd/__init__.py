@@ -334,7 +334,7 @@ class CTD(object):
             # We need to account for the crappy date/time columns in the WCO data (which we haven't read in to each
             # self.data attribute).
             num_fields = len(self.variables.names[counter])
-            if 'mm_dd_yyyy' in self.variables.names[counter] and 'hh:mm:ss' in self.variables.names[counter]:
+            if 'mm_dd_yyyy' in self.variables.names[counter] and 'hh_mm_ss' in self.variables.names[counter]:
                 num_fields -= 2
             num_samples = len(getattr(self.data, self.variables.names[counter][0])[counter])
 
@@ -418,7 +418,7 @@ class CTD(object):
                 # A few more new lines in case we're missing some.
                 f.write('\n\n\n')
                 # The data header.
-                f.write('  Cycle     {}\n'.format('   '.join([i[:8] for i in self.variables.names[counter] if i not in ('mm_dd_yyyy', 'hh:mm:ss')])))
+                f.write('  Cycle     {}\n'.format('   '.join([i[:8] for i in self.variables.names[counter] if i not in ('mm_dd_yyyy', 'hh_mm_ss')])))
                 f.write('Number             {}\n'.format('          '.join('f' * num_fields)))
                 # Now add the data.
                 cycle = ['{})'.format(i) for i in np.arange(num_samples) + 1]
