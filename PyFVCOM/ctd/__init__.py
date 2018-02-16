@@ -1036,6 +1036,15 @@ class CTD(object):
                 for start, length, names in zip(header['record_indices'], header['num_records'], header['names']):
                     data = lines[start + 1:start + length]
                     data = [_split_wco_lines(i) for i in data]
+                    # Replace lines with NaNs where we have too few columns.
+                    new_data = []
+                    for d in data:
+                        if len(d) == len(names):
+                            new_data.append(d)
+                        else:
+                            new_data.append([np.nan] * len(names))
+                    data = np.asarray(new_data)
+
                     if self._debug:
                         print(start, length, start + length + 1)
                         print(data[0, :], data[-1, :])
