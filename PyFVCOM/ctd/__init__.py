@@ -808,6 +808,31 @@ class CTD(object):
                             # Remove illegal characters (specifically / and :) from variable names.
                             line_list = [i.replace('/', '_').replace(':', '_') for i in line_list]
                             self.header['names'].append(line_list)
+
+                            # Get the first line of data so we can check the header is in order. Once we've got that,
+                            # we can begin extracting data.
+                            line = next(f)
+                            line_list = _split_wco_lines(line)
+
+                            # First, check the number of columns in the headers matches the number of columns in the
+                            # data. Yes, that's right folks, sometimes the header doesn't have all the variables
+                            # listed!
+                            if len(line_list) != len(self.header['names'][-1]):
+                                # Now, this is a tricky one to solve. My experience is that this is usually because
+                                # the date/time headers are missing. So, we'll search for things formatted dd/mm/yyyy
+                                # and hh:mm:ss and insert the headers accordingly.
+                                new_indices = []
+                                new_headers = []
+                                for position, entry in enumerate(line_list):
+                                    if len(entry.split('/')) == 3:
+                                        new_indices.append(position)
+                                        new_headers.append('mm_dd_yyyy')
+                                    if len(entry.split(':')) == 3:
+                                        new_indices.append(position)
+                                        new_headers.append('hh_mm_ss')
+                                for header, pos in zip(new_headers, new_indices):
+                                    self.header['names'][-1].insert(pos, header)
+
                             # In order to make the header vaguely usable, grab the initial time and position for this
                             # cast.
                             lon_idx, lat_idx, date_idx, time_idx = None, None, None, None
