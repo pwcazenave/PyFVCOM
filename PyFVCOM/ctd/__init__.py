@@ -706,6 +706,9 @@ class CTD(object):
 
             """
 
+            # Hardcoded WCO buoy positions for those files which are missing those data.
+            wco_positions = {'L4': {'lon': -4.21495, 'lat': 50.25015}, 'E1': {'lon': -4.365, 'lat': 50.0355}}
+
             self.header['file_name'] = str(self._file)  # keep a record of the file we're opening.
             self.header['names'] = []  # store the variable names
             self.header['units'] = []  # list of the variables' units
@@ -773,23 +776,52 @@ class CTD(object):
                             self.header['names'].append(line_list)
                             # In order to make the header vaguely usable, grab the initial time and position for this
                             # cast. This means we need to skip a line as we're currently on the header.
-                            lon_idx = line_list.index('Longitude')
-                            lat_idx = line_list.index('Latitude')
-                            date_idx = line_list.index('mm_dd_yyyy')
-                            time_idx = line_list.index('hh_mm_ss')
-                            # Now we know where to look, extract the relevant information.
+                            lon_idx, lat_idx, date_idx, time_idx = None, None, None, None
+                            if 'Longitude' in line_list:
+                                lon_idx = line_list.index('Longitude')
+                            if 'Latitude' in line_list:
+                                lat_idx = line_list.index('Latitude')
+                            if 'mm_dd_yyyy' in line_list:
+                                date_idx = line_list.index('mm_dd_yyyy')
+                            if 'hh_mm_ss' in line_list:
+                                time_idx = line_list.index('hh_mm_ss')
+                            # Now we know where to look, extract the relevant information. If we've not got any valid
+                            # indices, then instead parse the file name for the locations. This is pretty horrible,
+                            # frankly.
                             line = next(f)
-                            line_list = split_string(line, separator=';')
-                            datetime_string = ' '.join((line_list[date_idx], line_list[time_idx]))
-                            self.header['lon'].append(float(line_list[lon_idx]))
-                            self.header['lat'].append(float(line_list[lat_idx]))
-                            self.header['datetime'].append(datetime.strptime(datetime_string, '%m/%d/%Y %H:%M:%S'))
-                            self.header['time_units'].append('datetime')
+                            if lon_idx is None and lat_idx is None:
+                                station = self._file.stem.split('_')[-1]
+                                self.header['lon'].append(wco_positions[station]['lon'])
+                                self.header['lat'].append(wco_positions[station]['lat'])
+                            else:
+                                line_list = _split_wco_lines(line)
+                                datetime_string = ' '.join((line_list[date_idx], line_list[time_idx]))
+                                self.header['lon'].append(float(line_list[lon_idx]))
+                                self.header['lat'].append(float(line_list[lat_idx]))
+
+                            if date_idx is None:
+                                self.header['datetime'].append(None)
+                            else:
+                                self.header['datetime'].append(datetime.strptime(datetime_string, '%m/%d/%Y %H:%M:%S'))
+                            if time_idx is None:
+                                self.header['time_units'].append(None)
+                            else:
+                                self.header['time_units'].append('datetime')
                             # Some sampling interval. Set to zero as the casts are relatively quick (a few minutes,
                             # tops).
                             self.header['interval'].append(0)
-                            self.header['units'].append({i: units[i] for i in self.header['names'][-1] if i in units})
-                            self.header['long_name'].append({i: long_name[i] for i in self.header['names'][-1] if i in long_name})
+                            self.header['units'].append({})
+                            for unit in self.header['names'][-1]:
+                                if unit in units:
+                                    self.header['units'][-1].update({unit: units[unit]})
+                                else:
+                                    self.header['units'][-1].update({unit: 'unknown'})
+                            self.header['long_name'].append({})
+                            for l_name in self.header['names'][-1]:
+                                if l_name in long_name:
+                                    self.header['long_name'][-1].update({l_name: units[l_name]})
+                                else:
+                                    self.header['long_name'][-1].update({l_name: '-'})
 
                             # The WCO data have lots of sensors, so just put some placeholders in for the time being.
                             self.header['sensor'].append([None, None])
@@ -808,7 +840,11 @@ class CTD(object):
                     if offset_index > 0:
                         line_list = split_string(lines[offset_index], separator=';')
                         depth_index = self.header['names'][counter].index('DepSM')
-                        self.header['depth'].append(float(line_list[depth_index]))
+                        try:
+                            self.header['depth'].append(float(line_list[depth_index]))
+                        except ValueError:
+                            # The data are probably crappy. Just set the maximum depth to NaN.
+                            self.header['depth'].append(np.nan)
                 # Also add the last line's value.
                 line_list = split_string(lines[-1], separator=';')
                 depth_index = self.header['names'][-1].index('DepSM')
