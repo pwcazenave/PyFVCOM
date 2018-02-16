@@ -375,17 +375,21 @@ class CTD(object):
             with current_file.open('w') as f:
                 # Naturally, we start with three blank lines.
                 f.write('\n\n\n')
-                f.write('BODC Request Format Std. V1.0           Headers=  {} Data Cycles=   {}\n'.format(bodc_header_lines, num_samples))
-                f.write('Series=      {}                     Produced: {}\n'.format('AAAAAAA', datetime.now().strftime('%d-%b-%Y')))  # dummy data for now
+                header_string = 'BODC Request Format Std. V1.0           Headers=  {} Data Cycles=   {}\n'
+                f.write(header_string.format(bodc_header_lines, num_samples))
+                series_string = 'Series=      {}                     Produced: {}\n'
+                f.write(series_string.format('AAAAAAA', datetime.now().strftime('%d-%b-%Y')))  # dummy data for now
                 f.write('Id                       AAAAAAAA PML\n')  # more dummy data
-                position = '{deglat:03d}d{minlat:.1f}m{hemilat}{deglon:03d}d{minlon:.1f}m{hemilon}'.format(deglat=int(lat),
-                                                                                                           minlat=(lat - int(lat)) * 60,
-                                                                                                           hemilat=northsouth,
-                                                                                                           deglon=int(lon),
-                                                                                                           minlon=(lon - int(lon)) * 60,
-                                                                                                           hemilon=westeast)
+                position_string = '{deglat:03d}d{minlat:.1f}m{hemilat}{deglon:03d}d{minlon:.1f}m{hemilon}'
+                position = position_string.format(deglat=abs(int(lat)),
+                                                  minlat=(abs(lat) - abs(int(lat))) * 60,
+                                                  hemilat=northsouth,
+                                                  deglon=abs(int(lon)),
+                                                  minlon=(abs(lon) - abs(int(lon))) * 60,
+                                                  hemilon=westeast)
                 f.write('{position}                     start:{start}\n'.format(position=position, start=start))
-                format_string = 'Dep: floor {depth:.1f} sensor    {sensor_1:.1f}  {sensor_2:.1f} Nom. sample int.:    {interval:.1f} {units}\n'
+                format_string = 'Dep: floor {depth:.1f} sensor    {sensor_1:.1f}  {sensor_2:.1f} ' \
+                                'Nom. sample int.:    {interval:.1f} {units}\n'
                 f.write(format_string.format(depth=self.position.depth[counter],
                                              sensor_1=sensor[0],
                                              sensor_2=sensor[1],
