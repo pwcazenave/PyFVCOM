@@ -366,9 +366,9 @@ class CTD(object):
                 sensor = self.position.sensor[counter]
                 # If this sensor set is a pair of Nones, then use the depth as below.
                 if sensor == [None, None]:
-                    sensor = [np.min(self.position.depth[counter]), np.max(self.position.depth[counter])]
+                    sensor = [np.nanmin(self.position.depth[counter]), np.nanmax(self.position.depth[counter])]
             except AttributeError:
-                sensor = [np.min(self.position.depth[counter]), np.max(self.position.depth[counter])]
+                sensor = [np.nanmin(self.position.depth[counter]), np.nanmax(self.position.depth[counter])]
 
             # The BODC format is... unique. Try to replicate it to the extent which is useful for me. May not be 100%
             # compatible with actual BODC formatting.
