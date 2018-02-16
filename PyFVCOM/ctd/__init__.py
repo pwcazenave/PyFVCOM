@@ -819,23 +819,19 @@ class CTD(object):
                                 date_idx = line_list.index('mm_dd_yyyy')
                             if 'hh_mm_ss' in line_list:
                                 time_idx = line_list.index('hh_mm_ss')
-                            # Now we know where to look, extract the relevant information. If we've not got any valid
-                            # indices, then instead parse the file name for the locations. This is pretty horrible,
-                            # frankly.
-                            line = next(f)
+
                             if lon_idx is None and lat_idx is None:
                                 station = self._file.stem.split('_')[-1]
                                 self.header['lon'].append(wco_positions[station]['lon'])
                                 self.header['lat'].append(wco_positions[station]['lat'])
                             else:
-                                line_list = _split_wco_lines(line)
-                                datetime_string = ' '.join((line_list[date_idx], line_list[time_idx]))
                                 self.header['lon'].append(float(line_list[lon_idx]))
                                 self.header['lat'].append(float(line_list[lat_idx]))
 
                             if date_idx is None:
                                 self.header['datetime'].append(None)
                             else:
+                                datetime_string = ' '.join((line_list[date_idx], line_list[time_idx]))
                                 self.header['datetime'].append(datetime.strptime(datetime_string, '%m/%d/%Y %H:%M:%S'))
                             if time_idx is None:
                                 self.header['time_units'].append(None)
