@@ -595,10 +595,12 @@ class CTD(object):
                         cleanlines = [cleanhtml(line) for line in lines]
                         cleanlines = [i for i in cleanlines if i]
                         # Iterate through the cleaned HTML and extract information from certain keywords.
-                        keywords = ('Longitude', 'Latitude', 'Start Time (yyyy-mm-dd hh:mm)', 'End Time (yyyy-mm-dd hh:mm)',
+                        keywords = ('Longitude', 'Latitude',
+                                    'Start Time (yyyy-mm-dd hh:mm)', 'End Time (yyyy-mm-dd hh:mm)',
                                     'Nominal Cycle Interval', 'Minimum Sensor Depth', 'Maximum Sensor Depth',
                                     'Sea Floor Depth', 'BODC Series Reference')
-                        mapped_names = ('lon', 'lat', 'datetime1', 'datetime2',
+                        mapped_names = ('lon', 'lat',
+                                        'datetime1', 'datetime2',
                                         'interval', 'sensor1', 'sensor2',
                                         'depth', 'series_id')
                         missed = 0
