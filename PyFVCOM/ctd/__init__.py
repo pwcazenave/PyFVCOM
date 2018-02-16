@@ -427,7 +427,6 @@ class CTD(object):
                 for name in self.variables.names[counter]:
                     # Skip WCO time data columns as we haven't saved those with _ReadData._read_wco().
                     if name in ('mm_dd_yyyy', 'hh_mm_ss'):
-                        num_fields -= 1
                         continue
                     data.append(['{:<0}'.format(i) for i in getattr(self.data, name)[counter]])
                 data = np.column_stack((cycle, np.asarray(data).T))
