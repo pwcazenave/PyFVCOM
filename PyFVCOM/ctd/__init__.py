@@ -209,7 +209,7 @@ def get_ferrybox_data(db, fields, table='PrideOfBilbao', noisy=False):
 class CTD(object):
     """ Generic class for CTD data. """
 
-    def __init__(self, filename):
+    def __init__(self, filename, noisy=False):
         """
         Initialise a CTD object.
 
@@ -217,16 +217,19 @@ class CTD(object):
         ----------
         filename : str, pathlib.Path
             The file name to read in.
+            noisy : bool, optional
+                If True, verbose output is printed to screen. Defaults to False.
 
         """
 
         self._debug = False
+        self._noisy = noisy
         self.data = None  # assume we're not reading data unless self.read() is called.
 
         self._file = Path(filename)
         # Read the header into self so we can pass it around more easily. Really, having the header as a dictionary
         # is probably the most sensible thing.
-        self.header = self._ParseHeader(self._file).header
+        self.header = self._ParseHeader(self._file, self._noisy).header
         # Store the variable names in here for ease of access.
         self.variables = ObjectFromDict(self.header, keys=['units', 'names', 'long_name'])
         # These two functions extract bits of information from the header we've just parsed.
@@ -406,7 +409,7 @@ class CTD(object):
     class _ParseHeader(object):
         """ Parse a file for the information found in the header. """
 
-        def __init__(self, filename):
+        def __init__(self, filename, noisy=False):
             """
             Based on file extension, call one of the header parsers below. For now, that's only BODC LST-formatted files.
 
@@ -414,6 +417,8 @@ class CTD(object):
             ----------
             filename : str, pathlib.Path
                 The file name to read in.
+            noisy : bool, optional
+                If True, verbose output is printed to screen. Defaults to False.
 
             Returns
             -------
@@ -426,6 +431,7 @@ class CTD(object):
                     'long_name' - the variable descriptions.
 
             """
+            self._noisy = noisy
             self._file = Path(filename)
             self.header = {}
 
@@ -590,7 +596,8 @@ class CTD(object):
                             lines = html.readlines()
                         except UnicodeDecodeError as e:
                             # Something weird in the file. Skip out.
-                            print('Corrupt metadata file {}'.format(str(html_info)))
+                            if self._noisy:
+                                print('Corrupt metadata file {}'.format(str(html_info)))
                             return
                         cleanlines = [cleanhtml(line) for line in lines]
                         cleanlines = [i for i in cleanlines if i]
@@ -630,8 +637,11 @@ class CTD(object):
                             # This is probably a list of Nones, so just skip it. This happens when we've got a
                             # corrupted HTML metadata file.
                             pass
+
                         # We haven't found anything useful, so just quit now.
                         if missed == len(keywords):
+                            if self._noisy:
+                                print('Insufficient useful metadata in file {}'.format(str(html_info)))
                             return
 
                         # sensor1 and sensor2 need to be merged into sensor. Likewise, datetime1 and datetime2 need
@@ -832,7 +842,6 @@ class CTD(object):
 
             Provides
             --------
-
             Each variable is an object in self whose names are based on the header information extracted in
             _ParseHeader().
 
@@ -868,6 +877,7 @@ class CTD(object):
                                 date_index = columns.index('Date') + 1
                                 time_index = columns.index('Time') + 1
                                 datetimes.append(datetime.strptime(' '.join((line_list[date_index], line_list[time_index])), '%Y/%m/%d %H:%M:%S'))
+
                             for name_index, name in enumerate(columns):
                                 if name in ('Date', 'Time'):
                                     continue
@@ -893,7 +903,6 @@ class CTD(object):
 
             Provides
             --------
-
             Each variable is an object in self whose names are based on the header information extracted in
             _ParseHeader().
 
@@ -919,7 +928,6 @@ class CTD(object):
 
             Provides
             --------
-
             Each variable is an object in self whose names are based on the header information extracted in
             _ParseHeader().
 
