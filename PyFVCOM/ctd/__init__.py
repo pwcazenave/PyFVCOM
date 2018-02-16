@@ -767,7 +767,7 @@ class CTD(object):
                     line = line.strip()
                     if line:
                         line_list = split_string(line, separator=';')
-                        if line_list[0] == 'DepSM':
+                        if 'DepSM' in line_list:
                             # We've got a new CTD cast.
                             self.header['num_fields'].append(len(line_list))
                             self.header['record_indices'].append(ctd_counter)
