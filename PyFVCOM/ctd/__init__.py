@@ -824,6 +824,8 @@ class CTD(object):
             suffix = file.suffix
             if suffix == '.lst':
                 self._read_lst(header)
+            elif suffix == '.qxf':
+                self._read_qxf(header)
             elif suffix == '.txt':
                 # I don't like this one bit.
                 self._read_wco(header)
