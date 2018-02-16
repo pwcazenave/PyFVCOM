@@ -867,8 +867,8 @@ class CTD(object):
                             self.header['names'][-1] = list(OrderedDict.fromkeys(self.header['names'][-1]))
                             self.header['num_fields'][-1] = len(self.header['names'][-1])
 
-            # Get the number of records per cast.
-            self.header['num_records'] = np.diff(np.concatenate((self.header['record_indices'], [ctd_counter])))
+            # Get the number of records per cast. Offset by one since we count between headers.
+            self.header['num_records'] = np.diff(np.concatenate((self.header['record_indices'], [ctd_counter]))) - 1
             # Get the depths for each cast too.
             with self._file.open('r') as f:
                 lines = f.readlines()
