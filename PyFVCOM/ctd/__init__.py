@@ -293,12 +293,13 @@ class CTD(object):
         filename = Path(filename)
         if isinstance(self.variables.names[0], list):
             # Append a number per file we create. This is for the case where we've read in WCO data.
+            parent = filename.parent
             stem = filename.stem
             suffix = filename.suffix
             number_of_casts = len(self.header['record_indices'])
             precision = len(str(number_of_casts))
             file_string = '{st}_{ct:0{pr}d}{sx}'
-            file_names = [Path(file_string.format(st=stem, ct=i + 1, pr=precision, sx=suffix)) for i in range(number_of_casts)]
+            file_names = [Path(parent) / Path(file_string.format(st=stem, ct=i + 1, pr=precision, sx=suffix)) for i in range(number_of_casts)]
         else:
             file_names = [filename]
 
