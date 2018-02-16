@@ -851,6 +851,7 @@ class CTD(object):
                                 time_idx = line_list.index('hh_mm_ss')
 
                             if lon_idx is None and lat_idx is None:
+                                # Assume some file format for the data and use that for the position.
                                 station = self._file.stem.split('_')[-1]
                                 try:
                                     self.header['lon'].append(wco_positions[station]['lon'])
