@@ -833,6 +833,11 @@ class CTD(object):
                                 for header, pos in zip(new_headers, new_indices):
                                     self.header['names'][-1].insert(pos, header)
 
+                                # This might also be because we have the spurious zeros in the second column. Add a
+                                # new header which means we can process this later.
+                                if line_list[1] == '0.00':
+                                    self.header['names'][-1].insert(1, 'Zeros')
+
                             # In order to make the header vaguely usable, grab the initial time and position for this
                             # cast.
                             lon_idx, lat_idx, date_idx, time_idx = None, None, None, None
