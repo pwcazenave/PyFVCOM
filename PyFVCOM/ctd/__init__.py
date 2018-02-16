@@ -555,6 +555,8 @@ class CTD(object):
             self.header['datetime'] = []
             self.header['time_units'] = []
             self.header['interval'] = []
+            self.header['depth'] = []
+            self.header['sensor'] = []
 
             # As ever, nothing's easy with the BODC data. The QXF files are actually just netCDF files, and yet,
             # there is almost no useful information in them (no names, units, anything). However, what BODC do do is
@@ -575,9 +577,11 @@ class CTD(object):
                     self.header['long_name'][var] = None
                     self.header['lon'].append(None)
                     self.header['lat'].append(None)
+                    self.header['depth'].append(None)
                     self.header['datetime'].append([None, None])
                     self.header['time_units'].append(None)
                     self.header['interval'].append(None)
+                    self.header['sensor'].append(None)
 
                 if html_info.exists():
                     with html_info.open('r') as html:
