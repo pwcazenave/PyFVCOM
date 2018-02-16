@@ -12,7 +12,7 @@ from warnings import warn
 import numpy as np
 from netCDF4 import Dataset
 
-from PyFVCOM.utilities.general import split_string, ObjectFromDict, cleanhtml
+from PyFVCOM.utilities.general import split_string, ObjectFromDict, cleanhtml, flatten_list
 
 use_sqlite = True
 try:
@@ -1025,7 +1025,7 @@ class CTD(object):
 
             # Use the header['record_indices'] and header['num_samples'] to read each CTD cast into a list called
             # self.<variable_name>.
-            variable_names = np.unique(header['names'])
+            variable_names = np.unique(flatten_list(header['names']))
             # Remove date/time columns.
             variable_names = [i for i in variable_names if i not in ('mm_dd_yyyy', 'hh_mm_ss')]
             for name in variable_names:
