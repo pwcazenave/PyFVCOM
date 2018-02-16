@@ -1023,7 +1023,7 @@ class CTD(object):
 
             file = Path(header['file_name'])
 
-            # Use the header['record_indices'] and header['num_samples'] to read each CTD cast into a list called
+            # Use the header['record_indices'] and header['num_records'] to read each CTD cast into a list called
             # self.<variable_name>.
             variable_names = np.unique(flatten_list(header['names']))
             # Remove date/time columns.
