@@ -379,8 +379,8 @@ class CTD(object):
                 header_string = 'BODC Request Format Std. V1.0           Headers=  {} Data Cycles=   {}\n'
                 f.write(header_string.format(bodc_header_lines, num_samples))
                 series_string = 'Series=      {}                     Produced: {}\n'
-                f.write(series_string.format('AAAAAAA', datetime.now().strftime('%d-%b-%Y')))  # dummy data for now
-                f.write('Id                       AAAAAAAA PML\n')  # more dummy data
+                f.write(series_string.format(current_file.stem, datetime.now().strftime('%d-%b-%Y')))  # dummy data for now
+                f.write('Id                       {}\n'.format(current_file.stem))  # more dummy data
                 position_string = '{deglat:03d}d{minlat:.1f}m{hemilat}{deglon:03d}d{minlon:.1f}m{hemilon}'
                 position = position_string.format(deglat=abs(int(lat)),
                                                   minlat=(abs(lat) - abs(int(lat))) * 60,
