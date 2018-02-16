@@ -1063,7 +1063,7 @@ class CTD(object):
             with file.open('r') as f:
                 lines = f.readlines()
                 for start, length, names in zip(header['record_indices'], header['num_records'], header['names']):
-                    data = lines[start + 1:start + length]
+                    data = lines[start + 1:start + length + 1]
                     data = [_split_wco_lines(i) for i in data]
                     # Replace lines with NaNs where we have too few columns.
                     new_data = []
