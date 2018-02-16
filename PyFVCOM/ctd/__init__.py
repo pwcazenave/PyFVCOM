@@ -584,8 +584,14 @@ class CTD(object):
                     self.header['sensor'].append(None)
 
                 if html_info.exists():
-                    with html_info.open('r') as html:
-                        lines = html.readlines()
+                    # Ignore crappy characters by forcing everything to ASCII.
+                    with html_info.open('r', encoding='ascii', errors='ignore') as html:
+                        try:
+                            lines = html.readlines()
+                        except UnicodeDecodeError as e:
+                            # Something weird in the file. Skip out.
+                            print('Corrupt metadata file {}'.format(str(html_info)))
+                            return
                         cleanlines = [cleanhtml(line) for line in lines]
                         cleanlines = [i for i in cleanlines if i]
                         # Iterate through the cleaned HTML and extract information from certain keywords.
