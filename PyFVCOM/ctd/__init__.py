@@ -369,7 +369,7 @@ class CTD(object):
                 f.write('Parameter f    P    Q Absent Data Value Minimum Value  Maximum Value       Units\n')
                 for name in self.variables.names[counter]:
                     # Skip WCO time data columns as we haven't saved those with _ReadData._read_wco().
-                    if name in ('mm_dd_yyyy', 'hh:mm:ss'):
+                    if name in ('mm_dd_yyyy', 'hh_mm_ss'):
                         continue
                     header_string = '{name:8s}  {f} {P} {Q} {missing:.2f} {min:.2f} {max:.2f} {unit}\n'
                     f.write(header_string.format(name=name[:8],
@@ -394,7 +394,7 @@ class CTD(object):
                 data = []
                 for name in self.variables.names[counter]:
                     # Skip WCO time data columns as we haven't saved those with _ReadData._read_wco().
-                    if name in ('mm_dd_yyyy', 'hh:mm:ss'):
+                    if name in ('mm_dd_yyyy', 'hh_mm_ss'):
                         continue
                     data.append(['{:<0}'.format(i) for i in getattr(self.data, name)[counter]])
                 data = np.column_stack((cycle, np.asarray(data).T))
