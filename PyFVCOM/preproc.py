@@ -965,14 +965,14 @@ class Model(Domain):
 
         nodes = []
         river_index = []
-        grid_pts = np.asarray([self.grid.lon[self.grid.coastline], self.grid.lat[self.grid.coastline]]).T
+        grid_pts = np.squeeze(np.asarray([self.grid.lon[self.grid.coastline], self.grid.lat[self.grid.coastline]]).T)
         for ri, position in enumerate(positions):
             # We can't use closest_node here as the candidates we need to search within are the coastline nodes only
             # (closest_node works on the currently loaded model grid only).
             dist = np.asarray([haversine_distance(pt_1, position) for pt_1 in grid_pts])
             breached_distance = dist < threshold
             if np.any(breached_distance):
-                nodes.append(self.grid.coastline[np.argmin(dist)])
+                nodes.append(self.grid.coastline[np.argmin(dist)][0])
                 river_index.append(ri)
 
         self.river.node = nodes
