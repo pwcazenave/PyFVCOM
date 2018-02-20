@@ -1174,7 +1174,7 @@ class ICES_comp():
                     return
             this_day_index = np.where(np.asarray(current_modelfile_dt) == this_day)[0]
             this_day_fr = FileReader(self.model_files[current_modelfile_ind], self.model_varkeys, 
-                                                                    dims={'time':[np.min(this_day_index),np.max(this_day_index)+1]}) 
+                                                                    dims={'time':np.arange(np.min(this_day_index),np.max(this_day_index)+1)}) 
             this_day_obs_inds = np.where(np.asarray([this_dt.date() for this_dt in self.ices_data['time_dt']]) == this_day)[0]
     
             for this_record_ind in this_day_obs_inds:
