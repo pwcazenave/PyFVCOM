@@ -127,7 +127,7 @@ def get_CTD_data(db, table, fields, noisy=False):
             c.execute('SELECT {} FROM {}'.format(','.join(fields), table))
 
             # Now get the data in a format we might actually want to use
-            data = np.asarray(c.fetchall())
+            data = np.asarray(c.fetchall()).astype(float)
 
         if noisy:
             print('done.')
