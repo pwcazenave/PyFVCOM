@@ -758,6 +758,7 @@ class CTD(object):
             self.header['time_units'] = []  # ignored here
             self.header['interval'] = []  # ignored here
             self.header['units'] = []  # list of dictionaries
+            self.header['series_id'] = []  # make up a series ID based on file name.
 
             # Given the state of the WCO data, I need to hard code some useful information about the variables (long
             # names, units etc.)
@@ -900,6 +901,11 @@ class CTD(object):
                             self.header['names'][-1] = list(OrderedDict.fromkeys(self.header['names'][-1]))
                             self.header['num_fields'][-1] = len(self.header['names'][-1])
 
+            # Make a set of series IDs for each cast. Pad with an appropriate number of zeros.
+            prefix = Path(self.header['file_name']).stem
+            number = len(self.header['names'])
+            precision = len(str(number))
+            self.header['series_id'] = ['{pref}_{id:0{pr}}'.format(pref=prefix, pr=precision, id=i + 1) for i in range(number)]
             # Get the number of records per cast. Offset by one since we count between headers.
             self.header['num_records'] = np.diff(np.concatenate((self.header['record_indices'], [ctd_counter]))) - 1
             # Get the depths for each cast too.
