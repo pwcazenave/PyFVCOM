@@ -1033,6 +1033,7 @@ class Model(Domain):
             Remove rivers within some radius (in kilometres) of an open boundary node.
 
         """
+        self.river.bad_nodes = []
 
         # Do nothing here if we have no rivers.
         if self.dims.river == 0:
@@ -1041,7 +1042,7 @@ class Model(Domain):
         if max_discharge:
             # Find rivers in excess of the given discharge maximum.
             big_rivers = np.unique(np.argwhere(self.river.flux > max_discharge)[:,1])
-            if big_rivers:
+            if np.any(big_rivers):
                 for this_river in big_rivers:
                     no_of_splits = np.ceil(np.max(self.river.flux[:,this_river])/max_discharge)
                     original_river_name = self.river.names[this_river]
@@ -1050,15 +1051,15 @@ class Model(Domain):
                     for this_i in np.arange(2,no_of_splits +1):
                         self.river.names.append(original_river_name + str(this_i))        
                     
-                    self.river.flux[:, this_river] = self.river.flux[:,this_river]/no_of_splits # everything else is concentrations so can just be copied
+                    self.river.flux[:, this_river] = each_flux # everything else is concentrations so can just be copied
                     
                     # Collect all variables to add columns for
                     all_vars = ['flux', 'temperature', 'salinity']
     
                     # Ersem variables if they're in there
-                    N_names = list(filter(lambda x:'mud_' in x, list(self.river.__dict__.keys())))
-                    Z_names = list(filter(lambda x:'mud_' in x, list(self.river.__dict__.keys()))) 
-                    O_names = list(filter(lambda x:'mud_' in x, list(self.river.__dict__.keys())))
+                    N_names = list(filter(lambda x:'N' in x, list(self.river.__dict__.keys())))
+                    Z_names = list(filter(lambda x:'Z' in x, list(self.river.__dict__.keys()))) 
+                    O_names = list(filter(lambda x:'O' in x, list(self.river.__dict__.keys())))
 
                     # And sediment ones
                     muddy_sediment_names = list(filter(lambda x:'mud_' in x, list(self.river.__dict__.keys())))
@@ -1067,36 +1068,26 @@ class Model(Domain):
                     all_vars = flatten_list([all_vars, N_names, Z_names, O_names, muddy_sediment_names, sandy_sediment_names]) 
 
                     for this_var in all_vars:
-                        self.__add_river_col(self, this_var, this_river, no_of_splits -1)
+                        self.__add_river_col(this_var, this_river, no_of_splits -1)
 
+                    original_river_node = self.river.node[this_river]
+                    for this_new_riv in np.arange(1, no_of_splits):    
+                        self.river.node.append(self.__find_near_free_node(original_river_node))
 
-            # update no of rivers
-
-
-
-               
-
+        # Move rivers in bad nodes
         for i, node in enumerate(self.river.node):
             bad = find_bad_node(self.grid.triangles, node)
             if bad:
-                if noisy:
-                    print('Moving river at {}/{}'.format(self.grid.lon[node], self.grid.lat[node]))
-                candidates = get_attached_unique_nodes(node, self.grid.triangles)
-                # Check both candidates are good and if so, pick the closest to the current node.
-                for candidate in candidates:
-                    still_bad = find_bad_node(self.grid.triangles, candidate)
-                    if still_bad:
-                        # Is this even possible?
-                        candidates = get_attached_unique_nodes(candidate, self.grid.triangles)
-
-                # TO DO - Add check for two rivers on one node
-
-                dist = [haversine_distance((self.grid.lon[i], self.grid.lat[i]), (self.grid.lon[node], self.grid.lat[node])) for i in candidates]
-                self.river.node[i] = np.argmin(candidates[np.argmin(dist)])
-
+                self.river.node[i] = self.__find_near_free_node(node)
+                        
         if min_depth:
-            deep_rivers = np.argwhere(self.grid.h[self.river.node] > min_depth)
-            # TODO: implement this!
+            shallow_rivers = np.argwhere(self.grid.h[self.river.node] < min_depth)
+                      
+            for this_shallow_node in self.grid.coastline[self.grid.h[self.grid.coastline] < min_depth]:
+                self.river.bad_nodes.append(this_shallow_node)
+            if np.any(shallow_rivers):
+                for this_river in shallow_rivers:
+                    self.river.node[this_river[0]] = self.__find_near_free_node(self.river.node[this_river[0]])
 
         if open_boundary_proximity:
             # Remove nodes close to the open boundary joint with the coastline. Identifying the coastline/open
@@ -1122,11 +1113,12 @@ class Model(Domain):
 
             # Now drop all those indices from the relevant river data.
             for field in self.obj_iter(self.river):
-                if field != 'time':
+                if field not in ['time', 'names']:
                     setattr(self.river, field, np.delete(getattr(self.river, field), flatten_list(boundary_river_indices), axis=-1))
+            self.river.names = [this_name for this_ind, this_name in self.river.names if this_ind not in boundary_river_indices]
 
-            # Update the dimension too.
-            self.dims.river -= len(boundary_river_indices)
+        # Update the dimension
+        self.dims.river = len(self.river.node)
 
     def __add_river_col(self, var_name, col_to_copy, no_cols_to_add):
         """
@@ -1143,10 +1135,42 @@ class Model(Domain):
             The number of columns (i.e. extra rivers) to add to the end of the array
         """
         old_data = getattr(self.river, var_name)
+        if var_name == 'flux':
+            old_data = old_data/(no_cols_to_add + 1)
         col_to_add = old_data[:, col_to_copy][:, np.newaxis]
-        col_to_add = np.tile(col_to_add, [1, no_cols_to_add])
+        col_to_add = np.tile(col_to_add, [1, int(no_cols_to_add)])
         setattr(self.river, var_name, np.hstack([old_data, col_to_add]))
 
+    def __find_near_free_node(self, start_node):
+        if find_bad_node(self.grid.triangles, start_node) and ~np.any(np.isin(self.river.bad_nodes, start_node)):
+            self.river.bad_nodes.append(start_node)
+        elif ~np.any(np.isin(self.river.node, start_node)):
+            return start_node # start node is already free for use
+
+        possible_nodes = []
+        start_nodes = [start_node]
+        while len(possible_nodes) == 0:
+            candidates = []
+            for this_node in start_nodes:
+                for this_attached in get_attached_unique_nodes(this_node, self.grid.triangles):
+                    candidates.append(this_attached)
+            start_nodes = candidates
+            for this_candidate in candidates:
+                if find_bad_node(self.grid.triangles, this_candidate):
+                    self.river.bad_nodes.append(this_candidate)
+                elif ~np.any(np.isin(self.river.node, this_candidate)):
+                    possible_nodes.append(this_candidate)
+
+        # if more than one possible node choose the closest
+        if len(possible_nodes) > 1:        
+            start_node_ll = [self.grid.lon[start_node], self.grid.lat[start_node]]
+            possible_nodes_ll = [self.grid.lon[np.asarray(possible_nodes)], self.grid.lat[np.asarray(possible_nodes)]]
+            dist = np.asarray([haversine_distance(pt_1, start_node_ll) for pt_1 in possible_nodes_ll])
+            return possible_nodes[dist.argmin()]
+        else:
+            return possible_nodes[0]
+    
+    
     def write_river_forcing(self, output_file, ersem=False, ncopts={'zlib': True, 'complevel': 7}, sediments=False, **kwargs):
         """
         Write out an FVCOM river forcing netCDF file.
