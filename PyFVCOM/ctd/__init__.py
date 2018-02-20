@@ -908,23 +908,32 @@ class CTD(object):
             self.header['series_id'] = ['{pref}_{id:0{pr}}'.format(pref=prefix, pr=precision, id=i + 1) for i in range(number)]
             # Get the number of records per cast. Offset by one since we count between headers.
             self.header['num_records'] = np.diff(np.concatenate((self.header['record_indices'], [ctd_counter]))) - 1
-            # Get the depths for each cast too.
+            # Get the depths for each cast too. Some WCO data store the depth in ascending order, some in descending
+            # order. So, grab the first and last of each cast and find the largest value.
             with self._file.open('r') as f:
                 lines = f.readlines()
-                for counter, cast_index in enumerate(self.header['record_indices']):
-                    offset_index = cast_index - 1  # we want the depth which is the line for the end of the last cast
-                    if offset_index > 0:
-                        line_list = _split_wco_lines(lines[offset_index])
-                        depth_index = self.header['names'][counter].index('DepSM')
-                        try:
-                            self.header['depth'].append(float(line_list[depth_index]))
-                        except ValueError:
-                            # The data are probably crappy. Just set the maximum depth to NaN.
-                            self.header['depth'].append(np.nan)
-                # Also add the last line's value.
-                line_list = _split_wco_lines(lines[-1])
-                depth_index = self.header['names'][-1].index('DepSM')
-                self.header['depth'].append(float(line_list[depth_index]))
+                headers = zip(self.header['names'], self.header['record_indices'], self.header['num_records'])
+                for names, cast_index, record_length in headers:
+                    # We need two depth values here: the one immediately after the header and the one immediately
+                    # before the next header.
+                    depth_index = names.index('DepSM')
+                    first_line_list = _split_wco_lines(lines[cast_index + 1])
+                    last_line_list = _split_wco_lines(lines[cast_index + record_length])
+                    try:
+                        first_depth = float(first_line_list[depth_index])
+                    except ValueError:
+                        # The data are probably crappy. Just set the maximum depth to NaN.
+                        first_depth = np.nan
+                    try:
+                        last_depth = float(last_line_list[depth_index])
+                    except ValueError:
+                        # The data are probably crappy. Just set the maximum depth to NaN.
+                        last_depth = np.nan
+                    # Also add the last line of this cast's value.
+                    # line_list = _split_wco_lines(lines[offset_index + self.header['num_records'][counter]])
+                    # depth_index = self.header['names'][-1].index('DepSM')
+                    # last_depth = float(line_list[depth_index])
+                    self.header['depth'].append(np.nanmax((first_depth, last_depth)))
 
     class _ReadData(object):
 
