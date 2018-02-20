@@ -24,6 +24,7 @@ from scipy.interpolate import RegularGridInterpolator
 from scipy.spatial import Delaunay
 from utide import reconstruct, ut_constants
 from utide.utilities import Bunch
+from collections import defaultdict, deque
 
 from PyFVCOM.coordinate import utm_from_lonlat, lonlat_from_utm
 from PyFVCOM.utilities.general import flatten_list
@@ -3254,3 +3255,203 @@ def isintriangle(tri_x, tri_y, point_x, point_y):
     is_in = 0 <= a <= 1 and 0 <= b <= 1 and 0 <= c <= 1
 
     return is_in
+
+
+class Graph(object):
+    """
+    Base class for graph theoretic functions. 
+
+    """
+
+    def __init__(self):
+        self.nodes = set()
+        self.edges = defaultdict(list)
+        self.distances = {}
+
+    def add_node(self, value):
+        self.nodes.add(value)
+
+    def add_edge(self, from_node, to_node, distance):
+        self.edges[from_node].append(to_node)
+        self.edges[to_node].append(from_node)
+        self.distances[(from_node, to_node)] = distance
+
+    def dijkstra(self, initial):
+        visited = {initial: 0}
+        path = {}
+
+        nodes = set(self.nodes)
+
+        while nodes:
+            min_node = None
+            for node in nodes:
+                if node in visited:
+                    if min_node is None:
+                        min_node = node
+                    elif visited[node] < visited[min_node]:
+                        min_node = node
+            if min_node is None:
+                break
+
+            nodes.remove(min_node)
+            current_weight = visited[min_node]
+
+            for edge in self.edges[min_node]:
+                try:
+                    weight = current_weight + self.distances[(min_node, edge)]
+                except:
+                    continue
+                if edge not in visited or weight < visited[edge]:
+                    visited[edge] = weight
+                    path[edge] = min_node
+
+        return visited, path
+
+    def shortest_path(self, origin, destination):
+        visited, paths = self.dijkstra(origin)
+        full_path = deque()
+        _destination = paths[destination]
+
+        while _destination != origin:
+            full_path.appendleft(_destination)
+            _destination = paths[_destination]
+
+        full_path.appendleft(origin)
+        full_path.append(destination)
+
+        return visited[destination], list(full_path)
+
+
+class GraphFVCOMdepth(Graph):
+    """
+    A class for setting up a graph of an FVCOM grid, weighting the edges by the depth. This allows automatic identification of channel
+    nodes between two points.
+
+    Example use:
+
+    import PyFVCOM as pf
+    import matplotlib.pyplot as plt
+
+    bounding_box = [[408975.302, 421555.45], [5576821.85, 5598995.61]]
+    test_graph = pf.grid.GraphFVCOMdepth.('tamar_v2_grd.dat', depth_weight = 200, depth_power = 8, bounding_box = bounding_box)
+    channel_nodes = test_graph.get_channel_between_points(([414409.23, 5596831.30], [415268.13, 5580529.97])
+
+    channel_nodes_bool = np.isin(test_graph.node_index, channel_nodes)
+    plt.scatter(test_graph.X, test_graph.Y, c='lightgray')
+    plt.scatter(test_graph.X[channel_nodes_bool], test_graph.Y[channel_nodes_bool], c='red')
+
+
+    Play with the weighting factors if the channel isn't looking right. depth_weight should adjust for the difference between the horizontal
+    and vertical length scales. depth_power allows the difference in depths to be exaggerated so for channels with shallower cross-channel 
+    gradients it needs to be higher
+
+    """
+
+
+    def __init__(self, fvcom_grid_file, depth_weight = 200, depth_power = 8, bounding_box=None):
+
+        """
+
+        Parameters
+        ----------
+        fvcom_grid_file : str
+            location of the .grd file as read by the read_fvcom_mesh function 
+
+        depth_weight : float
+            weighting by which the depths are multiplied 
+
+        depth_power : int
+            power by which the depths are raised, this helps exaggerate differences between depths
+
+        bounding_box : list 2x2, optional
+            to reduce computation times can subset the grid, the bounding box expects [[x_min, x_max], [y_min, y_max]] format
+        
+        """
+
+        super(GraphFVCOMdepth, self).__init__()
+        triangle, nodes, X, Y, Z = read_fvcom_mesh(fvcom_grid_file)
+        nodes = nodes -1 # triangle is python indexed and nodes isn't...
+        elem_sides = element_side_lengths(triangle, X, Y)
+
+        if bounding_box is not None:
+            x_lim = bounding_box[0]
+            y_lim = bounding_box[1]
+            nodes_in_box = np.logical_and(np.logical_and(X>x_lim[0], X<x_lim[1]),np.logical_and(Y>y_lim[0], Y<y_lim[1]))
+
+            nodes = nodes[nodes_in_box]
+            X = X[nodes_in_box]
+            Y = Y[nodes_in_box]
+            Z = Z[nodes_in_box]
+
+            elem_sides = elem_sides[np.all(np.isin(triangle, nodes), axis=1), :]
+            triangle = reduce_triangulation(triangle, nodes)
+
+        Z = np.mean(Z[triangle], axis =1) # adjust to cell depths rather than nodes, could use FVCOM output depths instead
+        Z = Z - np.min(Z) # make it so depths are all >= 0
+        Z = np.max(Z) - Z # and flip so deeper areas have lower numbers
+        
+        depth_weighted = (Z*depth_weight)**depth_power 
+        edge_weights = elem_sides*np.tile(depth_weighted, [3,1]).T
+
+        self.X = X
+        self.Y = Y
+        self.Z = Z
+        self.node_index = nodes
+        self.triangle = triangle
+        self.edge_weights = edge_weights
+
+        for this_node in nodes:
+            self.add_node(this_node)
+
+        tri_inds = [[0,1], [1,2], [2,0]]
+
+        for this_tri, this_sides in zip(self.triangle, edge_weights):
+            for these_inds in tri_inds:
+                self.add_edge(self.node_index[this_tri[these_inds[0]]], self.node_index[this_tri[these_inds[1]]], this_sides[these_inds[0]])
+                self.add_edge(self.node_index[this_tri[these_inds[0]]], self.node_index[this_tri[these_inds[1]]], this_sides[these_inds[0]])
+
+    def get_nearest_node_ind(self, near_xy):
+        """
+        Find the nearest graph node to a given xy point
+
+        Parameters
+        ----------
+        near_xy : list-like
+            x and y coordinates of the point 
+
+        Returns
+        -------
+        node_number : int
+            the node in the grid closes to xy
+
+        """
+
+        dists = (self.X - near_xy[0])**2 + (self.Y - near_xy[1])**2
+        return self.node_index[dists.argmin()]
+
+    def get_channel_between_points(self, start_xy, end_xy):
+        """        
+        Find the shortest path between two points according to depth weighted distance (hopefully the channel...)
+
+        Parameters
+        ----------
+        near_xy : list-like
+            x and y coordinates of the start point
+
+        end_xy : list-like
+            x and y coordinates of the end point
+
+        Returns
+        -------
+        node_list : ndarray
+            list of fvcom node numbers forming the predicted channel between the start and end points
+            
+        """
+        start_node_ind = self.get_nearest_node_ind(start_xy)
+        end_node_ind = self.get_nearest_node_ind(end_xy)
+
+        _, node_list = self.shortest_path(start_node_ind, end_node_ind)
+
+        return np.asarray(node_list) + 1 # to get fvcom node number not python indices
+
+
