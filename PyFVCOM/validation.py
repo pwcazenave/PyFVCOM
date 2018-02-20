@@ -27,6 +27,14 @@ class validation_db():
     """ Work with an SQLite database. """
 
     def __init__(self, db_name):
+        """ Create a new database `db_name'.
+
+        Parameters
+        ----------
+        db_name : str
+            The path and name for the new database.
+
+        """
         if db_name[-3:] != '.db':
             db_name += '.db'
         self.conn = sq.connect(db_name)
@@ -66,15 +74,10 @@ class validation_db():
 
         """
 
-        create_str = 'CREATE TABLE IF NOT EXISTS ' + table_name + ' ('
-        for this_col in col_list:
-            create_str += this_col
-            create_str += ', '
-        create_str = create_str[0:-2]
-        create_str += ');'
+        create_str = 'CREATE TABLE IF NOT EXISTS {table} ({cols});'.format(table=table_name, cols=', '.join(col_list))
         self.execute_sql(create_str)
 
-    def insert_into_table(self, table_name, data):
+    def insert_into_table(self, table_name, data, column=None):
         """
         Insert data into a table.
 
@@ -84,20 +87,23 @@ class validation_db():
             Table name into which to insert the given data.
         data : np.ndarray
             Data to insert into the database.
+        column : list, optional
+            Insert the supplied `data' into this `column' within the given `table_name'.
 
         """
-        no_rows = len(data)
-        no_cols = len(data[0])
-        qs_string = '('
-        for this_x in range(no_cols):
-            qs_string += '?,'
-        qs_string = qs_string[:-1]
-        qs_string += ')'
+        no_rows, no_cols = np.asarray(data).shape
+        qs_string = '({})'.format(','.join('?' * no_cols))
+
+        # Format our optional column.
+        if column is not None:
+            column = '({})'.format(','.join(column))
+        else:
+            column = ''
 
         if no_rows > 1:
-            self.c.executemany('insert or ignore into ' + table_name + ' values ' + qs_string, data)
+            self.c.executemany('insert or ignore into {tab} {col} values {val}'.format(tab=table_name, col=column, val=qs_string), data)
         elif no_rows == 1:
-            self.c.execute('insert into ' + table_name + ' values ' + qs_string, data[0])
+            self.c.execute('insert into {tab} {col} values {val}'.format(tab=table_name, col=column, val=qs_string), data[0])
         self.conn.commit()
 
     def select_qry(self, table_name, where_str, select_str='*', order_by_str=None, inner_join_str=None, group_by_str=None):
@@ -144,6 +150,14 @@ class validation_db():
     def close_conn(self):
         """ Close the connection to the database. """
         self.conn.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """ Tidy up the connection to the SQLite database. """
+        self.conn.close()
+
 
 
 def dt_to_epochsec(time_to_convert):

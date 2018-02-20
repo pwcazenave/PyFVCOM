@@ -29,21 +29,28 @@ Prerequisites
 
 * Python. This is mostly written to run in Python 3.5+, but may (should) work in 2.7.
 
-* numpy
+* pyshp
+
+* jdcal
 
 * scipy
+
+* numpy
 
 * matplotlib
 
 * netCDF4
 
-* pyshp
-
-* jdcal
+* lxml
 
 * pyproj
 
-* lxml
+* pytz
+
+* networkx
+
+* UTide
+
 
 We recommend Jupyter (formerly iPython) for interactive use of PyFVCOM (and python generally).
 
