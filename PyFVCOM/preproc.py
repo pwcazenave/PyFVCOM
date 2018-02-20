@@ -1095,27 +1095,24 @@ class Model(Domain):
             # Using that position, we can find any river nodes which fall within that distance and simply remove
             # their data from the relevant self.river arrays.
             boundary_river_indices = []
-            for obc in self.grid.open_boundary_nodes:
-                obc_land_nodes = obc[0], obc[-1]
-                grid_pts = np.asarray([self.grid.lon[self.river.node], self.grid.lat[self.river.node]]).T
-                for land_node in obc_land_nodes:
-                    current_end = (self.grid.lon[land_node], self.grid.lat[land_node])
-                    dist = np.asarray([haversine_distance(pt_1, current_end) for pt_1 in grid_pts])
-                    breached_distance = dist < open_boundary_proximity
-                    to_remove = np.sum(breached_distance)
-                    if np.any(breached_distance):
-                        if noisy:
-                            extra = ''
-                            if to_remove > 1:
-                                extra = 's'
-                            print('Removing {} river{}'.format(to_remove, extra))
-                        boundary_river_indices += np.argwhere(breached_distance).tolist()
+            grid_pts = np.asarray([self.grid.lon[self.river.node], self.grid.lat[self.river.node]]).T
+            obc_ll = np.asarray([self.grid.lon[self.grid.open_boundary_nodes], self.grid.lat[self.grid.open_boundary_nodes]])
+            dist = np.min(np.asarray([haversine_distance(obc_ll, this_riv_ll) for this_riv_ll in grid_pts]), axis=1) 
+            breached_distance = dist < open_boundary_proximity
+            
+            to_remove = np.sum(breached_distance)
+            if np.any(breached_distance):
+                if noisy:
+                    extra = ''
+                    if to_remove > 1:
+                        extra = 's'
+                    print('Removing {} river{}'.format(to_remove, extra))
 
+            boundary_river_indices = np.argwhere(breached_distance).tolist()
             # Now drop all those indices from the relevant river data.
             for field in self.obj_iter(self.river):
-                if field not in ['time', 'names']:
+                if field not in ['time']:
                     setattr(self.river, field, np.delete(getattr(self.river, field), flatten_list(boundary_river_indices), axis=-1))
-            self.river.names = [this_name for this_ind, this_name in self.river.names if this_ind not in boundary_river_indices]
 
         # Update the dimension
         self.dims.river = len(self.river.node)
