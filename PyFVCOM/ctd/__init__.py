@@ -811,7 +811,8 @@ class CTD(object):
                             self.header['names'].append(line_list)
 
                             # Get the first line of data so we can check the header is in order. Once we've got that,
-                            # we can begin extracting data.
+                            # we can begin extracting data. Save the header list so we can find indices for data.
+                            header_list = line_list
                             line = next(f)
                             line_list = _split_wco_lines(line)
 
@@ -842,14 +843,14 @@ class CTD(object):
                             # In order to make the header vaguely usable, grab the initial time and position for this
                             # cast.
                             lon_idx, lat_idx, date_idx, time_idx = None, None, None, None
-                            if 'Longitude' in line_list:
-                                lon_idx = line_list.index('Longitude')
-                            if 'Latitude' in line_list:
-                                lat_idx = line_list.index('Latitude')
-                            if 'mm_dd_yyyy' in line_list:
-                                date_idx = line_list.index('mm_dd_yyyy')
-                            if 'hh_mm_ss' in line_list:
-                                time_idx = line_list.index('hh_mm_ss')
+                            if 'Longitude' in header_list:
+                                lon_idx = header_list.index('Longitude')
+                            if 'Latitude' in header_list:
+                                lat_idx = header_list.index('Latitude')
+                            if 'mm_dd_yyyy' in header_list:
+                                date_idx = header_list.index('mm_dd_yyyy')
+                            if 'hh_mm_ss' in header_list:
+                                time_idx = header_list.index('hh_mm_ss')
 
                             if lon_idx is None and lat_idx is None:
                                 # Assume some file format for the data and use that for the position.
