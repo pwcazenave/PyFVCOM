@@ -124,6 +124,7 @@ class Depth:
             Set to True to fill the seabed from the maximum water depth to the edge of the plot with gray.
 
         Remaining args and kwargs are passed to self.axes.pcolormesh.
+
         """
 
         # I'm not much of a fan of all this flipping and transposing. It feels like it's going to be a pain to debug
@@ -393,6 +394,8 @@ class Time:
         fill_seabed : bool, optional
             Set to True to fill the seabed from the maximum water depth to the edge of the plot with gray.
 
+        Remaining kwargs are passed to self.axes.pcolormesh.
+
         """
 
         # Squeeze out singleton dimensions first.
@@ -403,7 +406,8 @@ class Time:
             self.surface_plot = self.axes.pcolormesh(np.tile(self.time, [depth.shape[-1], 1]).T,
                                                      depth,
                                                      np.fliplr(time_series),
-                                                     cmap=self.cmap)
+                                                     cmap=self.cmap,
+                                                     **kwargs)
 
             if fill_seabed:
                 self.axes.fill_between(self.time, np.min(depth, axis=1), self.axes.get_ylim()[0], color='0.6')
