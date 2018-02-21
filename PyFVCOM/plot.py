@@ -728,8 +728,7 @@ class Plotter:
 
         return
 
-    def plot_lines(self, x, y, group_name='Default', colour='r',
-                   zone_number='30N'):
+    def plot_lines(self, x, y, group_name='Default', colour='r', zone_number='30N'):
         """ Plot path lines.
 
         Parameters:
@@ -782,8 +781,7 @@ class Plotter:
             while self.line_plot[group_name]:
                 self.line_plot[group_name].pop(0).remove()
 
-    def plot_scatter(self, x, y, group_name='Default', colour='r',
-                     zone_number='30N'):
+    def plot_scatter(self, x, y, group_name='Default', colour='r', zone_number='30N'):
         """ Plot scatter.
 
         Parameters:
