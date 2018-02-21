@@ -1141,22 +1141,30 @@ class Model(Domain):
     def __find_near_free_node(self, start_node):
         if find_bad_node(self.grid.triangles, start_node) and ~np.any(np.isin(self.river.bad_nodes, start_node)):
             self.river.bad_nodes.append(start_node)
-        elif ~np.any(np.isin(self.river.node, start_node)):
+        elif not np.any(np.isin(self.river.node, start_node)):
             return start_node # start node is already free for use
 
         possible_nodes = []
-        start_nodes = [start_node]
+        start_nodes = np.asarray([start_node])
+        nodes_checked = start_nodes
+
         while len(possible_nodes) == 0:
-            candidates = []
+            start_next = []
             for this_node in start_nodes:
-                for this_attached in get_attached_unique_nodes(this_node, self.grid.triangles):
-                    candidates.append(this_attached)
-            start_nodes = candidates
-            for this_candidate in candidates:
-                if find_bad_node(self.grid.triangles, this_candidate):
-                    self.river.bad_nodes.append(this_candidate)
-                elif ~np.any(np.isin(self.river.node, this_candidate)):
-                    possible_nodes.append(this_candidate)
+                attached_nodes = self.grid.coastline[np.isin(self.grid.coastline, 
+                        self.grid.triangles[np.any(np.isin(self.grid.triangles, this_node), axis=1),:].flatten())]
+                attached_nodes = np.delete(attached_nodes, np.where(np.isin(attached_nodes,nodes_checked)))
+                for this_candidate in attached_nodes:
+                    if not np.any(np.isin(self.river.bad_nodes, this_candidate)) and not np.any(np.isin(self.river.node, this_candidate)):
+                        if find_bad_node(self.grid.triangles, this_candidate):
+                            self.river.bad_nodes.append(this_candidate)
+                        else:
+                            possible_nodes.append(this_candidate)
+                start_next.append(attached_nodes)
+            start_next = [i for sub_list in start_next for i in sub_list]
+
+            nodes_checked = np.hstack([nodes_checked, start_nodes])
+            start_nodes = np.unique(np.asarray(start_next).flatten())
 
         # if more than one possible node choose the closest
         if len(possible_nodes) > 1:        
