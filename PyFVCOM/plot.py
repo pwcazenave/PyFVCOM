@@ -109,7 +109,7 @@ class Depth:
         if self.title:
             self.axes.set_title(self.title)
 
-    def plot_slice(self, horizontal, depth, variable, fill_seabed=False):
+    def plot_slice(self, horizontal, depth, variable, fill_seabed=False, *args, **kwargs):
         """
 
         Parameters
@@ -123,15 +123,18 @@ class Depth:
         fill_seabed : bool, optional
             Set to True to fill the seabed from the maximum water depth to the edge of the plot with gray.
 
+        Remaining args and kwargs are passed to self.axes.pcolormesh.
         """
 
         # I'm not much of a fan of all this flipping and transposing. It feels like it's going to be a pain to debug
         # when it inevitably does something you don't expect.
         try:
-            self.slice_plot = self.axes.pcolormesh(horizontal, -depth, np.flipud(variable), cmap=self.cmap)
+            self.slice_plot = self.axes.pcolormesh(horizontal, -depth, np.flipud(variable),
+                                                   cmap=self.cmap, *args, **kwargs)
         except TypeError:
             # Try flipping the data array, that might make it work.
-            self.slice_plot = self.axes.pcolormesh(horizontal, -depth, np.flipud(variable.T), cmap=self.cmap)
+            self.slice_plot = self.axes.pcolormesh(horizontal, -depth, np.flipud(variable.T),
+                                                   cmap=self.cmap, *args, **kwargs)
 
         if fill_seabed:
             self.axes.fill_between(horizontal, self.axes.get_ylim()[0], -np.max(depth, axis=0), color='0.6')
