@@ -110,7 +110,7 @@ def gregorian_date(julianDay, mjd=False):
 
     Example
     -------
-    >>> greg = gregorianDate(np.array([53583.00390625, 55895.9765625]), mjd=True)
+    >>> greg = gregorian_date(np.array([53583.00390625, 55895.9765625]), mjd=True)
     >>> greg.astype(int)
     array([[2005,    8,    1,    0,    5,   37],
            [2011,   11,   30,   23,   26,   15])
