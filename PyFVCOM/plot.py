@@ -1092,6 +1092,7 @@ class CrossPlotter(Plotter):
 
 def plot_domain(domain, mesh=False, depth=False, **kwargs):
     """
+    Add a domain plot to the given domain (as domain.domain_plot).
 
     Parameters
     ----------
@@ -1102,8 +1103,8 @@ def plot_domain(domain, mesh=False, depth=False, **kwargs):
 
     All remaining arguments are passed to PyFVCOM.plot.Plotter.
 
-    Returns
-    -------
+    Provides
+    --------
     plot : PyFVCOM.plot.Plotter
         The plot object.
     """
