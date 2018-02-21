@@ -449,74 +449,53 @@ class Plotter:
         -----------
         dataset : Dataset, PyFVCOM.read.FileReader
             netCDF4 Dataset or PyFVCOM.read.FileReader object.
-
         stations : 2D array, optional
             List of station coordinates to be plotted ([[lons], [lats]])
-
         extents : 1D array, optional
             Four element numpy array giving lon/lat limits (e.g. [-4.56, -3.76,
             49.96, 50.44])
-
         vmin : float, optional
             Lower bound to be used on colour bar (plot_field only).
-
         vmax : float, optional
             Upper bound to be used colour bar (plot_field only).
-
         mask : float, optional
             Mask out values < mask (plot_field only).
-
         res : string, optional
             Resolution to use when drawing Basemap object
-
         fs : int, optional
             Font size to use when rendering plot text
-
         title : str, optional
             Title to use when creating the plot
-
         cmap : string, optional
             Colormap to use when shading field data (plot_field only).
-
         figure : Figure, optional
             Matplotlib figure object. A figure object is created if not
             provided.
-
         figsize : tuple(float), optional
             Figure size in cm. This is only used if a new Figure object is
             created.
-
         axes : Axes, optional
             Matplotlib Axes object. An Axes object is created if not
             provided.
-
         axis_position : 1D array, optional
             Array giving axis dimensions
-
         s_stations : int, optional
             Symbol size used when producing scatter plot of station locations
-
         s_particles : int, optional
             Symbol size used when producing scatter plot of particle locations
-
         linewidth : float, optional
             Linewidth to be used when generating line plots
-
         tick_inc : list, optional
             Add coordinate axes (i.e. lat/long) at the intervals specified in
             the list ([lon_spacing, lat_spacing]).
-
         cb_label : str, optional
             Set the colour bar label.
-
         extend : str, optional
             Set the colour bar extension ('neither', 'both', 'min', 'max').
             Defaults to 'neither').
-
         norm : matplotlib.colors.Normalize, optional
             Normalise the luminance to 0,1. For example, use from
             matplotlib.colors.LogNorm to do log plots of fields.
-
         m : mpl_toolkits.basemap.Basemap, optional
             Pass a Basemap object rather than creating one on each invocation.
 
