@@ -164,7 +164,7 @@ class Time:
     """
 
     def __init__(self, dataset, figure=None, figsize=(20, 8), axes=None, cmap='viridis', title=None, legend=False,
-                 fs=10, date_format=None, cb_label=None, hold=False):
+                 fs=10, date_format=None, cb_label=None, hold=False, extend='neither'):
         """
         Parameters
         ----------
@@ -194,6 +194,9 @@ class Time:
             Label to apply to the colour bar. Defaults to no label.
         hold : bool, optional
             Set to True to keep existing plots when adding to an existing figure. Defaults to False.
+        extend : str, optional
+            Set the colour bar extension ('neither', 'both', 'min', 'max').
+            Defaults to 'neither').
 
         """
         self.ds = dataset
@@ -207,6 +210,7 @@ class Time:
         self.cmap = cmap
         self.date_format = date_format
         self.cb_label = cb_label
+        self.extend = extend
 
         # Plot instances (initialise to None for truthiness test later)
         self.line_plot = None
@@ -406,7 +410,7 @@ class Time:
             divider = make_axes_locatable(self.axes)
 
             cax = divider.append_axes("right", size="3%", pad=0.1)
-            self.colorbar = self.figure.colorbar(self.surface_plot, cax=cax)
+            self.colorbar = self.figure.colorbar(self.surface_plot, cax=cax, extend=self.extend)
             self.colorbar.ax.tick_params(labelsize=self.fs)
             if self.cb_label:
                 self.colorbar.set_label(self.cb_label)
