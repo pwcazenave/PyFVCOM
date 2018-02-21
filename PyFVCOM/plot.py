@@ -1116,7 +1116,8 @@ def plot_domain(domain, mesh=False, depth=False, **kwargs):
         domain.mesh_plot = domain.domain_plot.axes.triplot(x, y, domain.grid.triangles, 'k-')
 
     if depth:
-        domain.domain_plot.plot_field(domain.grid.h)
+        # Make depths negative down.
+        domain.domain_plot.plot_field(-domain.grid.h)
 
 
 def cm2inch(value):
