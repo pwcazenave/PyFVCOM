@@ -41,7 +41,7 @@ def _split_lines(line, remove_empty=False, remove_trailing=False):
 
     """
 
-    delimiters = (';', ',', ' ')
+    delimiters = (';', ',', '\t', ' ')
     delimiter = None
     for d in delimiters:
         if d in line:
