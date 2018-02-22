@@ -383,7 +383,7 @@ class Buoy:
                             # Only keep values where we've got as many columns as headers.
                             if len(line) == num_columns:
                                 data.append(line[name_index])
-                        setattr(self, name, np.asarray(data))
+                        setattr(self, name.strip().replace(' ', '_').replace('(', '').replace(')', ''), np.asarray(data))
 
             # Now make datetime objects from the time.
             self.datetime = []
@@ -469,7 +469,8 @@ def _read_header(lines, header_names):
 
     header_length += 1
 
-    header = lines[header_length - 1]
+    # Remove annoying characters from header names.
+    header = [i.strip().replace(' ', '_').replace('(', '').replace(')', '') for i in lines[header_length - 1]]
 
     header_indices = {i: header.index(i) for i in header}
 
