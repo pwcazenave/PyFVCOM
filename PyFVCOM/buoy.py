@@ -206,7 +206,7 @@ class Buoy:
         self._noisy = noisy
         self._locations = None
         self._site = 'L4'
-        self._time_header = ['Year', 'Serial', 'Time', 'Time (GMT)']
+        self._time_header = ['Year', 'Serial', 'Jd', 'Time', 'Time_GMT', 'Date_YYMMDD', 'Time_HHMMSS', 'Date/Time_GMT']
         self.data = None
         self.position = None
         self.time = None
@@ -294,7 +294,7 @@ class Buoy:
             self._debug = False
             self._noisy = noisy
             self._lines = lines
-            self._time_header = ['Year', 'Serial', 'Time', 'Time (GMT)']
+            self._time_header = ['Year', 'Serial', 'Jd', 'Time', 'Time_GMT', 'Date_YYMMDD', 'Time_HHMMSS', 'Date/Time_GMT']
 
             self._header, self._header_length, self._header_indices = _read_header(self._lines, self._time_header)
             self._read()
@@ -313,7 +313,7 @@ class Buoy:
 
             """
 
-            # We want everything bar 'Year', 'Serial' and 'Time' (those are parsed by self._ReadTime).
+            # We want everything bar the time column names.
             num_lines = len(self._lines) - self._header_length
             num_columns = len(self._header)
             if num_lines > 1:
@@ -341,12 +341,14 @@ class Buoy:
 
             """
 
-            # We want everything from 'Year', 'Serial' and 'Time'.
+            # Try everything in self._time_header values.
+            self.time_header = []
             num_lines = len(self._lines) - self._header_length
             num_columns = len(self._header)
             if num_lines > 1:
                 for name in self._header:
                     if name in self._time_header:
+                        self.time_header.append(name)
                         name_index = self._header_indices[name]
                         data = []
                         for line in self._lines[self._header_length:]:
