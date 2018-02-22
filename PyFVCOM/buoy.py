@@ -349,7 +349,11 @@ class Buoy:
                             # Only keep values where we've got as many columns as headers.
                             if len(line) == num_columns:
                                 data.append(line[name_index])
-                        setattr(self, name, np.asarray(data, dtype=float))
+                        try:
+                            setattr(self, name.strip().replace(' ', '_').replace('(', '').replace(')', ''), np.asarray(data, dtype=float))
+                        except ValueError:
+                            # Probably strings so just leave as is.
+                            setattr(self, name.strip().replace(' ', '_').replace('(', '').replace(')', ''), np.asarray(data))
 
     class _ReadTime(_Read):
         """ Extract the time from the given WCO file. This is meant to be called by the Buoy class. """
