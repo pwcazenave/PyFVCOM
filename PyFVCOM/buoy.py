@@ -246,6 +246,15 @@ class Buoy:
             elif extension == '.txt':
                 # Probably WCO data, which is usually space separated, so nuke duplicate spaces.
                 empty = True
+            elif 'L4' in str(self._file):
+                # The other WCO data format.
+                empty = False
+                trailing = False
+            elif 'E1' in str(self._file):
+                # The other WCO data format.
+                empty = False
+                trailing = False
+
             self._lines = f.readlines()
             self._lines = [_split_lines(i, remove_empty=empty, remove_trailing=trailing) for i in self._lines]
 
@@ -375,13 +384,31 @@ class Buoy:
             # Now make datetime objects from the time.
             self.datetime = []
             if hasattr(self, 'Year') and hasattr(self, 'Serial') and hasattr(self, 'Time'):
-                # Western Channel Observatory data.
+                # First Western Channel Observatory format.
                 for year, doy, time in zip(self.Year, self.Serial, self.Time):
                     self.datetime.append(datetime.strptime('{y}{doy} {hm}'.format(y=year, doy=doy, hm=time), '%Y%j %H.%M'))
-            elif hasattr(self, 'Time (GMT)'):
-                # CEFAS data
-                for date in getattr(self, 'Time (GMT)'):
+            elif hasattr(self, 'Year') and hasattr(self, 'Jd') and hasattr(self, 'Time'):
+                # Different Western Channel Observatory format.
+                for year, doy, time in zip(self.Year, self.Jd, self.Time):
+                    try:
+                        self.datetime.append(datetime.strptime('{y}{doy} {hm}'.format(y=year, doy=doy, hm=time), '%Y%j %H.%M'))
+                    except ValueError:
+                        self.datetime.append(np.nan)
+            elif hasattr(self, 'Date_YYMMDD') and hasattr(self, 'Time_HHMMSS'):
+                # Another different Western Channel Observatory format.
+                for date, time in zip(getattr(self, 'Date_YYMMDD'), getattr(self, 'Time_HHMMSS')):
+                    if date == 'nan' and time == 'nan':
+                        self.datetime.append(np.nan)
+                    else:
+                        self.datetime.append(datetime.strptime('{date} {time}'.format(date=date, time=time), '%y%m%d %H%M%S'))
+            elif hasattr(self, 'Time_GMT'):
+                # CEFAS format.
+                for date in getattr(self, 'Time_GMT'):
                     self.datetime.append(datetime.strptime(date, '%Y-%m-%d %H:%M:%S'))
+            elif hasattr(self, 'Date/Time_GMT'):
+                # CCO format.
+                for date in getattr(self, 'Date/Time_GMT'):
+                    self.datetime.append(datetime.strptime(date, '%d-%b-%Y %H:%M:%S'))
 
     class _ReadPosition:
         """ Add the position for the buoy. """
