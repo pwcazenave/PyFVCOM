@@ -187,7 +187,7 @@ def get_buoy_data(db, table, fields, noisy=False):
 class Buoy:
     """ Generic class for buoy data (i.e. surface time series). """
 
-    def __init__(self, filename, noisy=False):
+    def __init__(self, filename, position=None, station=None, missing_value=None, noisy=False):
         """
         Create a buoy object from the given file name.
 
@@ -195,6 +195,12 @@ class Buoy:
         ----------
         filename : str, pathlib.Path
             The file name to read in.
+        position : tuple, list, optional
+            Longitude/latitude of the current buoy. If omitted, position is np.nan/np.nan.
+        station : str, optional
+            The name of the current buoy. If omitted, set to None.
+        missing_value : float
+            Supply a value which is the missing value for this buoy time series.
         noisy : bool, optional
             If True, verbose output is printed to screen. Defaults to False.
 
@@ -204,8 +210,9 @@ class Buoy:
 
         self._debug = False
         self._noisy = noisy
-        self._locations = None
-        self._site = 'L4'
+        self._locations = position
+        self._site = station
+        self._missing = missing_value
         self._time_header = ['Year', 'Serial', 'Jd', 'Time', 'Time_GMT', 'Date_YYMMDD', 'Time_HHMMSS', 'Date/Time_GMT']
         self.data = None
         self.position = None
@@ -271,6 +278,14 @@ class Buoy:
 
         # Grab the data.
         self.data = self._ReadData(self._lines)
+
+        # Replace missing values with NaNs.
+        if self._missing is not None:
+            for name in dir(self.data):
+                if not name.startswith('_'):
+                    values = getattr(self.data, name)
+                    values[values == self._missing] = np.nan
+                    setattr(self.data, name, values)
 
     class _Read(object):
         def __init__(self, lines, noisy=False):
@@ -377,8 +392,8 @@ class Buoy:
 
             Parameters
             ----------
-            location : str, pathlib.Path
-                File with the locations in (CSV).
+            location : tuple, list
+                The longitude/latitude of the buoy.
             site : str
                 The name of the site we're working on.
 
@@ -389,8 +404,8 @@ class Buoy:
 
             """
 
-            self.lon = 0
-            self.lat = 0
+            self.lon, self.lat = location
+            self.name = site
 
 
 def _read_header(lines, header_names):
