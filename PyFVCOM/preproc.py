@@ -1045,11 +1045,12 @@ class Model(Domain):
             if np.any(big_rivers):
                 for this_river in big_rivers:
                     no_of_splits = np.ceil(np.max(self.river.flux[:,this_river])/max_discharge)
+                    print('River {} split into {}'.format(this_river, no_of_splits))
                     original_river_name = self.river.names[this_river]
                     each_flux = self.river.flux[:,this_river]/no_of_splits # everything else is concentrations so can just be copied
 
                     for this_i in np.arange(2,no_of_splits +1):
-                        self.river.names.append(original_river_name + str(this_i))        
+                        self.river.names.append('{}_{:d}'.format(original_river_name, int(this_i)))        
                     
                     self.river.flux[:, this_river] = each_flux # everything else is concentrations so can just be copied
                     
@@ -1068,17 +1069,20 @@ class Model(Domain):
                     all_vars = flatten_list([all_vars, N_names, Z_names, O_names, muddy_sediment_names, sandy_sediment_names]) 
 
                     for this_var in all_vars:
-                        self.__add_river_col(this_var, this_river, no_of_splits -1)
+                        self._add_river_col(this_var, this_river, no_of_splits -1)
 
                     original_river_node = self.river.node[this_river]
                     for this_new_riv in np.arange(1, no_of_splits):    
-                        self.river.node.append(self.__find_near_free_node(original_river_node))
+                        self.river.node.append(self._find_near_free_node(original_river_node))
+                    print('Flux array shape {} x {}'.format(self.river.flux.shape[0], self.river.flux.shape[1]))
+                    print('Node list length {}'.format(len(self.river.node)))
+
 
         # Move rivers in bad nodes
         for i, node in enumerate(self.river.node):
             bad = find_bad_node(self.grid.triangles, node)
             if bad:
-                self.river.node[i] = self.__find_near_free_node(node)
+                self.river.node[i] = self._find_near_free_node(node)
                         
         if min_depth:
             shallow_rivers = np.argwhere(self.grid.h[self.river.node] < min_depth)
@@ -1087,7 +1091,7 @@ class Model(Domain):
                 self.river.bad_nodes.append(this_shallow_node)
             if np.any(shallow_rivers):
                 for this_river in shallow_rivers:
-                    self.river.node[this_river[0]] = self.__find_near_free_node(self.river.node[this_river[0]])
+                    self.river.node[this_river[0]] = self._find_near_free_node(self.river.node[this_river[0]])
 
         if open_boundary_proximity:
             # Remove nodes close to the open boundary joint with the coastline. Identifying the coastline/open
@@ -1117,7 +1121,7 @@ class Model(Domain):
         # Update the dimension
         self.dims.river = len(self.river.node)
 
-    def __add_river_col(self, var_name, col_to_copy, no_cols_to_add):
+    def _add_river_col(self, var_name, col_to_copy, no_cols_to_add):
         """
         Helper function to copy the existing data for river variable to a new splinter river (when they are split for
         excessive discharge at one node
@@ -1132,13 +1136,11 @@ class Model(Domain):
             The number of columns (i.e. extra rivers) to add to the end of the array
         """
         old_data = getattr(self.river, var_name)
-        if var_name == 'flux':
-            old_data = old_data/(no_cols_to_add + 1)
         col_to_add = old_data[:, col_to_copy][:, np.newaxis]
         col_to_add = np.tile(col_to_add, [1, int(no_cols_to_add)])
         setattr(self.river, var_name, np.hstack([old_data, col_to_add]))
 
-    def __find_near_free_node(self, start_node):
+    def _find_near_free_node(self, start_node):
         if find_bad_node(self.grid.triangles, start_node) and ~np.any(np.isin(self.river.bad_nodes, start_node)):
             self.river.bad_nodes.append(start_node)
         elif not np.any(np.isin(self.river.node, start_node)):

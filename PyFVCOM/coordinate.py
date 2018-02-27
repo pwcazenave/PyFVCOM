@@ -449,6 +449,62 @@ def british_national_grid_to_lonlat(eastings, northings):
     # Job's a good'n.
     return lon, lat
 
+def lonlat_decimal_from_degminsec(lon_degminsec, lat_degminsec):
+    """
+    Converts from lon lat in degrees minutes and seconds to decimal degrees
+
+    Parameters
+    ----------
+    lon_degminsec : Mx3 array
+        Array of longitude degrees, minutes and seconds in 3 seperate columns (for M positions). East and West is determined by the
+        sign of the leading number (e.g. [-4,20,16] or [0,-3,10])
+    lat_degminsec : Mx3 array
+        Array of latitude degrees, minutes and seconds in 3 seperate columns (for M positions). North and South are determined by the
+        sign of the leading number.
+
+    Returns
+    -------
+    lon : N array
+        Array of converted decimal longitudes.
+    lat : N array
+        Array of converted decimal latitudes.
+
+    """
+    if len(lon_degminsec.shape) != 2 or len(lat_degminsec.shape) != 2 or lon_degminsec.shape[1] !=3 or lat_degminsec.shape[1] !=3:
+        raise ValueError('Input wrong shape')
+    
+    lon_sign = np.ones(lon_degminsec.shape)
+    lon_sign[:,1] = np.sign(lon_degminsec[:,0])
+    lon_sign[:,2] = np.sign(lon_degminsec[:,0])
+
+    if np.any(lon_sign == 0):
+        zero_rows = np.where(lon_sign == 0)[1]
+        lon_sign[zero_rows, 1] = 1    
+        lon_sign[zero_rows, 2] = np.sign(lon_degminsec[zero_rows,1])
+        if np.any(lon_sign == 0):
+            zero_rows = np.where(lon_sign == 0)[1]
+            lon_sign[zero_rows,2] = 1
+
+    lat_sign = np.ones(lat_degminsec.shape)
+    lat_sign[:,1] = np.sign(lat_degminsec[:,0])
+    lat_sign[:,2] = np.sign(lat_degminsec[:,0])
+
+    if np.any(lat_sign == 0):
+        zero_rows = np.where(lat_sign == 0)[1]
+        lat_sign[zero_rows, 1] = 1 
+        lat_sign[zero_rows, 2] = np.sign(lat_degminsec[zero_rows,1])
+        if np.any(lat_sign == 0):
+            zero_rows = np.where(lat_sign == 0)[1]
+            lat_sign[zero_rows,2] = 1
+    
+    lon_adj = lon_degminsec*lon_sign
+    lat_adj = lat_degminsec*lat_sign
+
+    lon = lon_adj[:,0] + lon_adj[:,1]/60 + lon_adj[:,2]/6000    
+    lat = lat_adj[:,0] + lat_adj[:,1]/60 + lat_adj[:,2]/6000
+
+    return lon, lat
+
 
 if __name__ == '__main__':
 
