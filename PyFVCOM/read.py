@@ -492,7 +492,12 @@ class FileReader(Domain):
                     z = self.grid.h
                 # Set the sigma data to the 0-1 range for siglay so that the maximum depth value is equal to the
                 # actual depth. This may be a problem.
-                setattr(self.grid, '{}_z'.format(var), fix_range(getattr(self.grid, var), 0, 1) * z)
+                try:
+                    setattr(self.grid, '{}_z'.format(var), fix_range(getattr(self.grid, var), 0, 1) * z)
+                except ValueError:
+                    # The arrays might be the wrong shape for broadcasing to work, so transpose and retranspose
+                    # accordingly. This is less than ideal.
+                    setattr(self.grid, '{}_z'.format(var), (fix_range(getattr(self.grid, var), 0, 1).T * z).T)
 
         # Convert the given W/E/S/N coordinates into node and element IDs to subset.
         if self._bounding_box:
