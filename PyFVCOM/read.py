@@ -482,6 +482,14 @@ class FileReader(Domain):
                     except IndexError:
                         # Maybe the array's the wrong way around. Flip it and try again.
                         setattr(self.grid, var, nodes2elems(getattr(self.grid, var.split('_')[0]).T, self.grid.triangles))
+                else:
+                    # The triangulation is invalid, so we can't properly move our existing data, so just set things
+                    # to 0 but at least they're the right shape. Warn accordingly.
+                    warn('{} cannot be migrated to element centres (invalid triangulation). Setting to zero.'.format(var))
+                    if 'lev' in var:
+                        setattr(self.grid, var, np.zeros((self.dims.siglev, self.dims.nele)))
+                    else:
+                        setattr(self.grid, var, np.zeros((self.dims.siglay, self.dims.nele)))
 
         # Make depth-resolved sigma data. This is useful for plotting things.
         for var in self.obj_iter(self.grid):
