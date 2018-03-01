@@ -3325,7 +3325,7 @@ class ReducedFVCOMdist(Graph):
     """
     Supporter class for refining paths
 
-    The graph is defined using the triangulation from FVCOM but with only a subset of nodes.i
+    The graph is defined using the triangulation from FVCOM but with only a subset of nodes.
 
     Note - assumes nodes are numbered 0 - len(triangle) and thus correspond to numbers in triangle
 
@@ -3469,6 +3469,10 @@ class GraphFVCOMdepth(Graph):
         end_xy : list-like
             x and y coordinates of the end point
 
+        refine_channel : bool, optional
+            Apply a refinement step, this might help in cases if extreme depth scalings cause the path to take two
+            sides of a triangle when it should take just one    
+
         Returns
         -------
         node_list : ndarray
@@ -3487,7 +3491,7 @@ class GraphFVCOMdepth(Graph):
 
     def _refine_channel(self, node_list):
         """
-        Refines the channel nodes by re running the shortest path algorthim without distance weighting but only on the chosen nodes
+        Refines the channel nodes by re running the shortest path algorthim without depth weighting but only on the chosen nodes
 
         """
         nodes_sel = np.where(np.isin(self.node_index, node_list))[0]
