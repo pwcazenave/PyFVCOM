@@ -3321,6 +3321,33 @@ class Graph(object):
 
         return visited[destination], list(full_path)
 
+class ReducedFVCOMdist(Graph):
+    """
+    Supporter class for refining paths
+
+    The graph is defined using the triangulation from FVCOM but with only a subset of nodes.i
+
+    Note - assumes nodes are numbered 0 - len(triangle) and thus correspond to numbers in triangle
+
+    """
+
+    def __init__(self, nodes_sel, triangle, edge_weights):
+        super(ReducedFVCOMdist, self).__init__()
+ 
+        for this_node in nodes_sel:
+            self.add_node(this_node)
+        
+        self.node_index = nodes_sel
+
+        tri_inds = [[0,1], [1,2], [2,0]]
+
+        for this_tri, this_sides in zip(triangle, edge_weights):
+            for these_inds in tri_inds:
+                if np.all(np.isin(this_tri[these_inds], nodes_sel)):
+                    self.add_edge(this_tri[these_inds[0]], this_tri[these_inds[1]], this_sides[these_inds[0]])
+                    self.add_edge(this_tri[these_inds[1]], this_tri[these_inds[0]], this_sides[these_inds[0]])
+
+
 
 class GraphFVCOMdepth(Graph):
     """
@@ -3393,6 +3420,7 @@ class GraphFVCOMdepth(Graph):
         depth_weighted = (Z*depth_weight)**depth_power 
         edge_weights = elem_sides*np.tile(depth_weighted, [3,1]).T
 
+        self.elem_sides = elem_sides
         self.X = X
         self.Y = Y
         self.Z = Z
@@ -3408,7 +3436,7 @@ class GraphFVCOMdepth(Graph):
         for this_tri, this_sides in zip(self.triangle, edge_weights):
             for these_inds in tri_inds:
                 self.add_edge(self.node_index[this_tri[these_inds[0]]], self.node_index[this_tri[these_inds[1]]], this_sides[these_inds[0]])
-                self.add_edge(self.node_index[this_tri[these_inds[0]]], self.node_index[this_tri[these_inds[1]]], this_sides[these_inds[0]])
+                self.add_edge(self.node_index[this_tri[these_inds[1]]], self.node_index[this_tri[these_inds[0]]], this_sides[these_inds[0]])
 
     def get_nearest_node_ind(self, near_xy):
         """
@@ -3429,7 +3457,7 @@ class GraphFVCOMdepth(Graph):
         dists = (self.X - near_xy[0])**2 + (self.Y - near_xy[1])**2
         return self.node_index[dists.argmin()]
 
-    def get_channel_between_points(self, start_xy, end_xy):
+    def get_channel_between_points(self, start_xy, end_xy, refine_channel=False):
         """        
         Find the shortest path between two points according to depth weighted distance (hopefully the channel...)
 
@@ -3452,6 +3480,24 @@ class GraphFVCOMdepth(Graph):
 
         _, node_list = self.shortest_path(start_node_ind, end_node_ind)
 
-        return np.asarray(node_list) + 1 # to get fvcom node number not python indices
+        if refine_channel:
+            node_list = self._refine_channel(np.asarray(node_list))
+
+        return np.asarray(node_list) + 1 # to get fvcom nodeReducedFVCOMdist number not python indices
+
+    def _refine_channel(self, node_list):
+        """
+        Refines the channel nodes by re running the shortest path algorthim without distance weighting but only on the chosen nodes
+
+        """
+        nodes_sel = np.where(np.isin(self.node_index, node_list))[0]
+        start_node = np.where(self.node_index == node_list[0])[0][0]
+        end_node = np.where(self.node_index == node_list[-1])[0][0]
+
+        red_graph = ReducedFVCOMdist(nodes_sel, self.triangle, self.elem_sides)
+        _, red_node_list = red_graph.shortest_path(start_node, end_node)    
+
+        return np.asarray(self.node_index[np.asarray(red_node_list)])
+
 
 
