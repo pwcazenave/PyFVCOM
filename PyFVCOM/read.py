@@ -42,7 +42,7 @@ class FileReader(Domain):
         """
         Parameters
         ----------
-        fvcom : str
+        fvcom : str, pathlib.Path
             Path to an FVCOM netCDF.
         variables : list-like, optional
             List of variables to extract. If omitted, no variables are extracted, which means you won't be able to
@@ -83,7 +83,7 @@ class FileReader(Domain):
         """
 
         self._debug = debug
-        self._fvcom = fvcom
+        self._fvcom = str(fvcom)
         self._zone = zone
         self._bounding_box = False
         # We may modify the dimensions (for negative indexing), so make a deepcopy (copy isn't sufficient) so
