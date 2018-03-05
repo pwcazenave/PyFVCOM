@@ -2622,7 +2622,6 @@ def control_volumes(x, y, tri, node_control=True, element_control=True, noisy=Fa
     #   3. Find the position of the halfway point along each vertex between our current node and all the other nodes
     #   connected to it.
     #   4. Using those positions and the positions of the centre of each element, create a polygon (ordered clockwise).
-    #   5. Calculate the area of that polygon with the shapely tools.
     if node_control:
         if noisy:
             print('Compute control volume for fluxes at nodes (art1)')
