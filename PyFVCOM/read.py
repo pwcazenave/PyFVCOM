@@ -42,7 +42,7 @@ class FileReader(Domain):
         """
         Parameters
         ----------
-        fvcom : str
+        fvcom : str, pathlib.Path
             Path to an FVCOM netCDF.
         variables : list-like, optional
             List of variables to extract. If omitted, no variables are extracted, which means you won't be able to
@@ -83,11 +83,11 @@ class FileReader(Domain):
         """
 
         self._debug = debug
-        self._fvcom = fvcom
+        self._fvcom = str(fvcom)
         self._zone = zone
         self._bounding_box = False
-        # We may modify the dimensions (for negative indexing), so make a deepcopy (copy isn't sufficient) so
-        # successive calls to FileReader from MFileReader work properly.
+        # We may modify the dimensions, so make a deepcopy (copy isn't sufficient) so successive calls to FileReader
+        # from MFileReader work properly.
         self._dims = copy.deepcopy(dims)
         # Silently convert a string variable input to an iterable list.
         if isinstance(variables, str):
@@ -102,8 +102,6 @@ class FileReader(Domain):
         for dim in self.ds.dimensions:
             setattr(self.dims, dim, self.ds.dimensions[dim].size)
 
-        # Convert negative indexing to positive in dimensions to extract. We do this since we end up using range for
-        # the extraction of each dimension since you can't (easily) pass slices as arguments.
         for dim in self._dims:
             # Check if we've got iterable dimensions and make them if not.
             try:
