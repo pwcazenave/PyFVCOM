@@ -97,10 +97,6 @@ class FileReader(Domain):
         # Prepare this object with all the objects we'll need later on (data, dims, time, grid, atts).
         self._prep()
 
-        # Get the things to iterate over for a given object. This is a bit hacky, but until or if I create separate
-        # classes for the dims, time, grid and data objects, this'll have to do.
-        self.obj_iter = lambda x: [a for a in dir(x) if not a.startswith('__')]
-
         self.ds = Dataset(self._fvcom, 'r')
 
         for dim in self.ds.dimensions:
@@ -221,6 +217,23 @@ class FileReader(Domain):
         idem.dims.time = len(idem.time.time)
 
         return idem
+
+    def obj_iter(self, x):
+        """
+        Get the things to iterate over for a given object.
+
+        This is a bit hacky, but until or if I create separate classes for the dims, time, grid and data objects,
+        this'll have to do.
+
+        Parameters
+        ----------
+        x : object
+            Object from which to identify attributes which are useful for us.
+        attributes : list
+            The attributes of interest.
+        """
+
+        return [a for a in dir(x) if not a.startswith('__')]
 
     def _prep(self):
         # Create empty object for the grid, dimension, data and time data. This ought to be possible with nested
@@ -847,8 +860,6 @@ class FileReaderFromDict(FileReader):
 
         # Prepare this object with all the objects we'll need later on (data, dims, time, grid, atts).
         self._prep()
-
-        self.obj_iter = lambda x: [a for a in dir(x) if not a.startswith('__')]
 
         grid_names = ('lon', 'lat', 'lonc', 'latc', 'nv',
                       'h', 'h_center',
