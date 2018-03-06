@@ -185,9 +185,9 @@ def overlap(t1start, t1end, t2start, t2end):
 
     Parameters
     ----------
-    datastart, dataend : datetime
+    datastart, dataend : datetime, float
         Observation start and end datetimes.
-    modelstart, modelend :
+    modelstart, modelend : datetime, float
         Observation start and end datetimes.
 
     Returns
