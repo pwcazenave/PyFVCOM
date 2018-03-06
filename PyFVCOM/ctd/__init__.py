@@ -114,16 +114,14 @@ def get_CTD_data(db, table, fields, noisy=False):
                            ' is unavailable.')
 
     if noisy:
-        print('Getting data for {} from the database...'.format(table),
-              end=' ')
+        print('Getting data for {} from the database...'.format(table), end=' ')
 
     try:
         con = sqlite3.connect(db)
 
         with con:
             c = con.cursor()
-            # I know, using a string is Bad. But it works and it's only me
-            # working with this.
+            # I know, using a string is Bad. But it works and it's only me working with this.
             c.execute('SELECT {} FROM {}'.format(','.join(fields), table))
 
             # Now get the data in a format we might actually want to use
