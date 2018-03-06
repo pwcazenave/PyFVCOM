@@ -91,7 +91,14 @@ class validation_db():
             Insert the supplied `data' into this `column' within the given `table_name'.
 
         """
-        no_rows, no_cols = np.asarray(data).shape
+
+        data = np.asarray(data)
+        if np.ndim(data) == 1:
+            no_cols = len(data)
+            no_rows = 1
+            data = data[np.newaxis, :]
+        else:
+            no_rows, no_cols = data.shape
         qs_string = '({})'.format(','.join('?' * no_cols))
 
         # Format our optional column.
