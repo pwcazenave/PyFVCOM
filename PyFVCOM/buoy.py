@@ -90,26 +90,14 @@ def get_buoy_metadata(db):
             d[col[0]] = row[idx]
         return d
 
+    meta_info = [False]
     try:
-        con = sqlite3.connect(db)
-
-        con.row_factory = _dict_factory
-
-        c = con.cursor()
-
-        out = c.execute('SELECT * from Stations')
-
-        meta_info = out.fetchall()
-
+        with sqlite3.connect(db) as con:
+            con.row_factory = _dict_factory
+            c = con.cursor()
+            meta_info = c.execute('SELECT * from Stations').fetchall()
     except sqlite3.Error as e:
-        if con:
-            con.close()
-            print('Error %s:' % e.args[0])
-            meta_info = [False]
-
-    finally:
-        if con:
-            con.close()
+        print('Error %s: {}'.format(e.args[0]))
 
     return meta_info
 
@@ -153,35 +141,20 @@ def get_buoy_data(db, table, fields, noisy=False):
                            'unavailable.')
 
     if noisy:
-        print('Getting data for {} from the database...'.format(table),
-              end=' ')
+        print('Getting data for {} from the database...'.format(table), end=' ')
 
     try:
-        con = sqlite3.connect(db)
-
-        with con:
+        with sqlite3.connect(db) as con:
             c = con.cursor()
-            # I know, using a string is Bad. But it works and it's only me
-            # working with this.
-            c.execute('SELECT {} FROM {}'.format(','.join(fields), table))
-
-            # Now get the data in a format we might actually want to use
-            data = np.asarray(c.fetchall())
-
+            # I know, using a string is Bad. But it works and it's only me # working with this.
+            data = np.asarray(c.execute('SELECT {} FROM {}'.format(','.join(fields), table)).fetchall()).astype(float)
         if noisy:
             print('done.')
-
     except sqlite3.Error as e:
-        if con:
-            con.close()
-            print('Error %s:' % e.args[0])
-            data = np.asarray([False])
+        print('Error %s:' % e.args[0])
+        data = np.asarray([False])
 
-    finally:
-        if con:
-            con.close()
-
-    return data.astype(float)
+    return data
 
 
 class Buoy:
