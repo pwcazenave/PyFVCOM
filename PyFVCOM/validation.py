@@ -131,15 +131,16 @@ class validation_db():
             The data which matches the given query.
 
         """
-        qry_string = 'select ' + select_str + ' from ' + table_name
+
+        qry_string = 'select {} from {}'.format(select_str, table_name)
         if inner_join_str:
-            qry_string += ' inner join ' + inner_join_str
+            qry_string += ' inner join {}'.format(inner_join_str)
         if where_str:
-            qry_string += ' where ' + where_str
+            qry_string += ' where {}'.format(where_str)
         if order_by_str:
-            qry_string += ' order by ' + order_by_str
+            qry_string += ' order by {}'.format(order_by_str)
         if group_by_str:
-            qry_string += ' group by ' + group_by_str
+            qry_string += ' group by {}'.format(group_by_str)
 
         return self.execute_sql(qry_string)
 
