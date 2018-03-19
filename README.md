@@ -33,7 +33,7 @@ pip install --user -e .
 Prerequisites
 -------------
 
-* Python. We are targeting Python 3.5+. PyFVCOM no longer support Python 2.
+* Python. We are targeting Python 3.5+. PyFVCOM no longer supports Python 2.
 
 * pyshp
 
