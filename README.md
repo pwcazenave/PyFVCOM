@@ -315,3 +315,24 @@ The examples directory includes some Jupyter notebooks of some brief examples of
 
 #### Miscellaneous tools
 - Make an array of datetime objects: `times = PyFVCOM.utilities.date_range(start, end, inc=0.5)`
+
+Coding conventions
+------------------
+
+- Use 4 spaces per indentation level
+- Never mix tabs and spaces
+- Imports should usually be on separate lines
+- `from module import *` is not OK; rather, use `from module import name`
+- Imports are always put at the top of the file
+- Avoid extraneous whitespace
+- Use parentheses sparingly
+- Don't put an if/for/while with a small body on a single line
+- Do not terminate your lines with semi-colons and do not use semi-colons to put two commands on the same line
+- If a class inherits from no other base classes, explicitly inherit from object. This also applies to nested classes.
+- Function names should be lowercase, underscore separated. Class names should be of the form `MyClass'.
+- Names of members considered private shall start with two underscores
+- Use lambda expressions only for one-liners (else: hard to read and to debug)
+- Use properties for accessing or setting data where you would normally have used simple, lightweight getter or setter methods
+- Use `with` when opening files or explicitly close files and sockets when done with them
+- Use TODO comments for code that is temporary, a short-term solution, or good-enough but not perfect
+
