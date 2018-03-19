@@ -20,13 +20,13 @@ Installing
 
 Easiest way is to install with pip/pip3:
 
-```python
+```bash
 pip install PyFVCOM
 ```
 
 If you want to install the development version, checkout the `dev' branch and then from within the top-level directory:
 
-```python
+```bash
 pip install --user -e .
 ```
 
