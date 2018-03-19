@@ -1124,7 +1124,10 @@ def plot_domain(domain, mesh=False, depth=False, **kwargs):
 
     if depth:
         # Make depths negative down.
-        domain.domain_plot.plot_field(-domain.grid.h)
+        if np.all(domain.grid.h < 0):
+            domain.domain_plot.plot_field(domain.grid.h)
+        else:
+            domain.domain_plot.plot_field(-domain.grid.h)
 
 
 def cm2inch(value):
