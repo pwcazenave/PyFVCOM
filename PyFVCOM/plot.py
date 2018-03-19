@@ -1109,8 +1109,10 @@ def plot_domain(domain, mesh=False, depth=False, **kwargs):
 
     Provides
     --------
-    plot : PyFVCOM.plot.Plotter
+    domain_plot : PyFVCOM.plot.Plotter
         The plot object.
+    mesh_plot : matplotlib.axes, optional
+        The mesh axis object, if enabled.
     """
 
     domain.domain_plot = Plotter(domain, **kwargs)
