@@ -30,33 +30,7 @@ If you want to install the development version, checkout the `dev' branch and th
 pip install --user -e .
 ```
 
-Prerequisites
--------------
-
-* Python. We are targeting Python 3.5+. PyFVCOM no longer supports Python 2.
-
-* pyshp
-
-* jdcal
-
-* scipy
-
-* numpy
-
-* matplotlib
-
-* netCDF4
-
-* lxml
-
-* pyproj
-
-* pytz
-
-* networkx
-
-* UTide
-
+We are targeting Python 3.5+. PyFVCOM no longer supports Python 2.
 
 We recommend Jupyter (formerly iPython) for interactive use of PyFVCOM (and python generally).
 
