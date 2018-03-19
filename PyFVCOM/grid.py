@@ -380,6 +380,21 @@ class Domain(object):
 
         return indices, distance
 
+    def calculate_areas(self):
+        """
+        Calculate the area of each element for the current grid.
+
+        Provides
+        --------
+        area : np.ndarray
+            The area of each triangular element in the grid.
+
+        """
+
+        self.area = get_area(np.asarray((fvcom.grid.x[fvcom.grid.triangles[:, 0]], fvcom.grid.y[fvcom.grid.triangles[:, 0]])).T,
+                             np.asarray((fvcom.grid.x[fvcom.grid.triangles[:, 1]], fvcom.grid.y[fvcom.grid.triangles[:, 1]])).T,
+                             np.asarray((fvcom.grid.x[fvcom.grid.triangles[:, 2]], fvcom.grid.y[fvcom.grid.triangles[:, 2]])).T)
+
 
 class OpenBoundary:
     """

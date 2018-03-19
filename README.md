@@ -70,6 +70,7 @@ Provides
     - `Domain.closest_element`
     - `Domain.horizontal_transect_nodes`
     - `Domain.horizontal_transect_elements`
+    - `Domain.calculate_areas`
     - `OpenBoundary` - class to handle model open boundaries.
     - `OpenBoundary.add_sponge_layer`
     - `OpenBoundary.add_tpxo_tides`
