@@ -667,8 +667,8 @@ class Plotter:
 
         # Add colorbar scaled to axis width
         divider = make_axes_locatable(self.axes)
-        cax = divider.append_axes("right", size="5%", pad=0.05)
-        self.cbar = self.figure.colorbar(self.tripcolor_plot, cax=cax, extend=self.extend)
+        self.colorbar_axis = divider.append_axes("right", size="5%", pad=0.05)
+        self.cbar = self.figure.colorbar(self.tripcolor_plot, cax=self.colorbar_axis, extend=self.extend)
         self.cbar.ax.tick_params(labelsize=self.fs)
         if self.cb_label:
             self.cbar.set_label(self.cb_label)
