@@ -507,8 +507,10 @@ class FileReader(Domain):
                         print('{} cannot be migrated to element centres (invalid triangulation). Setting to zero.'.format(var))
                     if 'lev' in var:
                         setattr(self.grid, var, np.zeros((self.dims.siglev, self.dims.nele)))
-                    else:
+                    elif 'lay' in var:
                         setattr(self.grid, var, np.zeros((self.dims.siglay, self.dims.nele)))
+                    else:
+                        setattr(self.grid, var, np.zeros((self.dims.nele)))
 
         # Make depth-resolved sigma data. This is useful for plotting things.
         for var in self.obj_iter(self.grid):
