@@ -3406,7 +3406,9 @@ class GraphFVCOMdepth(Graph):
 
         super(GraphFVCOMdepth, self).__init__()
         triangle, nodes, X, Y, Z = read_fvcom_mesh(fvcom_grid_file)
-        nodes -= 1  # triangle is python indexed and nodes isn't...
+        # Only offset the nodes by 1 if we've got 1-based indexing.
+        if np.min(nodes) == 1:
+            nodes -= 1
         elem_sides = element_side_lengths(triangle, X, Y)
 
         if bounding_box is not None:
