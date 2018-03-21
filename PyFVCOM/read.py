@@ -38,7 +38,7 @@ class FileReader(Domain):
 
     """
 
-    def __init__(self, fvcom, variables=[], dims=[], zone='30N', debug=False):
+    def __init__(self, fvcom, variables=[], dims=[], zone='30N', debug=False, verbose=False):
         """
         Parameters
         ----------
@@ -58,6 +58,8 @@ class FileReader(Domain):
             grid and data.
         zone : str, list-like, optional
             UTM zones (defaults to '30N') for conversion of UTM to spherical coordinates.
+        verbose : bool, optional
+            Set to True to enable verbose output. Defaults to False.
         debug : bool, optional
             Set to True to enable debug output. Defaults to False.
 
@@ -83,6 +85,7 @@ class FileReader(Domain):
         """
 
         self._debug = debug
+        self._noisy = verbose
         self._fvcom = str(fvcom)
         self._zone = zone
         self._bounding_box = False
@@ -472,6 +475,8 @@ class FileReader(Domain):
         # dimension for any variable in use in here.
         for dim in self._dims:
             if dim != 'time':
+                if self._noisy:
+                    print('Resetting {} dimension length from {} to {}'.format(getattr(self.dims, dim), len(self._dims[dim])))
                 setattr(self.dims, dim, len(self._dims[dim]))
 
         # Add compatibility for FVCOM3 (these variables are only specified on the element centres in FVCOM4+ output
@@ -487,6 +492,8 @@ class FileReader(Domain):
                     setattr(attributes, attribute, getattr(self.ds.variables[var], attribute))
                 setattr(self.atts, var, attributes)
             except KeyError:
+                if self._noisy:
+                    print('Missing {} from the netCDF file. Trying to recreate it from other sources.'.format(var))
                 if self.grid.nv.max() == len(self.grid.x):
                     try:
                         setattr(self.grid, var, nodes2elems(getattr(self.grid, var.split('_')[0]), self.grid.triangles))
@@ -496,7 +503,8 @@ class FileReader(Domain):
                 else:
                     # The triangulation is invalid, so we can't properly move our existing data, so just set things
                     # to 0 but at least they're the right shape. Warn accordingly.
-                    warn('{} cannot be migrated to element centres (invalid triangulation). Setting to zero.'.format(var))
+                    if self._noisy:
+                        print('{} cannot be migrated to element centres (invalid triangulation). Setting to zero.'.format(var))
                     if 'lev' in var:
                         setattr(self.grid, var, np.zeros((self.dims.siglev, self.dims.nele)))
                     else:
@@ -597,6 +605,8 @@ class FileReader(Domain):
                             _temp[..., ni] = self.ds.variables[var][..., nele]
                 except KeyError:
                     # FVCOM3 files don't have h_center, siglay_center and siglev_center, so make var_shape manually.
+                    if self._noisy:
+                        print('Adding element-centred {} for compatibility.'.format(var))
                     if var.startswith('siglev'):
                         var_shape = [self.dims.siglev, self.dims.nele]
                     elif var.startswith('siglay'):
