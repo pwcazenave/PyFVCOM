@@ -3335,6 +3335,7 @@ class Graph(object):
 
         return visited[destination], list(full_path)
 
+
 class ReducedFVCOMdist(Graph):
     """
     Supporter class for refining paths
@@ -3362,7 +3363,6 @@ class ReducedFVCOMdist(Graph):
                     self.add_edge(this_tri[these_inds[1]], this_tri[these_inds[0]], this_sides[these_inds[0]])
 
 
-
 class GraphFVCOMdepth(Graph):
     """
     A class for setting up a graph of an FVCOM grid, weighting the edges by the depth. This allows automatic identification of channel
@@ -3374,44 +3374,39 @@ class GraphFVCOMdepth(Graph):
     import matplotlib.pyplot as plt
 
     bounding_box = [[408975.302, 421555.45], [5576821.85, 5598995.61]]
-    test_graph = pf.grid.GraphFVCOMdepth.('tamar_v2_grd.dat', depth_weight = 200, depth_power = 8, bounding_box = bounding_box)
+    test_graph = pf.grid.GraphFVCOMdepth.('tamar_v2_grd.dat', depth_weight=200, depth_power=8, bounding_box=bounding_box)
     channel_nodes = test_graph.get_channel_between_points(([414409.23, 5596831.30], [415268.13, 5580529.97])
 
     channel_nodes_bool = np.isin(test_graph.node_index, channel_nodes)
     plt.scatter(test_graph.X, test_graph.Y, c='lightgray')
     plt.scatter(test_graph.X[channel_nodes_bool], test_graph.Y[channel_nodes_bool], c='red')
 
-
-    Play with the weighting factors if the channel isn't looking right. depth_weight should adjust for the difference between the horizontal
-    and vertical length scales. depth_power allows the difference in depths to be exaggerated so for channels with shallower cross-channel 
-    gradients it needs to be higher
+    Play with the weighting factors if the channel isn't looking right. depth_weight should adjust for the difference
+    between the horizontal and vertical length scales. depth_power allows the difference in depths to be exaggerated
+    so for channels with shallower cross-channel gradients it needs to be higher
 
     """
 
-
-    def __init__(self, fvcom_grid_file, depth_weight = 200, depth_power = 8, bounding_box=None):
-
+    def __init__(self, fvcom_grid_file, depth_weight=200, depth_power=8, bounding_box=None):
         """
 
         Parameters
         ----------
         fvcom_grid_file : str
-            location of the .grd file as read by the read_fvcom_mesh function 
-
+            Location of the .grd file as read by the read_fvcom_mesh function.
         depth_weight : float
-            weighting by which the depths are multiplied 
-
+            Weighting by which the depths are multiplied.
         depth_power : int
-            power by which the depths are raised, this helps exaggerate differences between depths
-
+            Power by which the depths are raised, this helps exaggerate differences between depths.
         bounding_box : list 2x2, optional
-            to reduce computation times can subset the grid, the bounding box expects [[x_min, x_max], [y_min, y_max]] format
+            To reduce computation times can subset the grid, the bounding box expects [[x_min, x_max], [y_min,
+            y_max]] format.
         
         """
 
         super(GraphFVCOMdepth, self).__init__()
         triangle, nodes, X, Y, Z = read_fvcom_mesh(fvcom_grid_file)
-        nodes = nodes -1 # triangle is python indexed and nodes isn't...
+        nodes -= 1  # triangle is python indexed and nodes isn't...
         elem_sides = element_side_lengths(triangle, X, Y)
 
         if bounding_box is not None:
@@ -3427,9 +3422,9 @@ class GraphFVCOMdepth(Graph):
             elem_sides = elem_sides[np.all(np.isin(triangle, nodes), axis=1), :]
             triangle = reduce_triangulation(triangle, nodes)
 
-        Z = np.mean(Z[triangle], axis =1) # adjust to cell depths rather than nodes, could use FVCOM output depths instead
-        Z = Z - np.min(Z) # make it so depths are all >= 0
-        Z = np.max(Z) - Z # and flip so deeper areas have lower numbers
+        Z = np.mean(Z[triangle], axis =1)  # adjust to cell depths rather than nodes, could use FVCOM output depths instead
+        Z = Z - np.min(Z)  # make it so depths are all >= 0
+        Z = np.max(Z) - Z  # and flip so deeper areas have lower numbers
         
         depth_weighted = (Z*depth_weight)**depth_power 
         edge_weights = elem_sides*np.tile(depth_weighted, [3,1]).T
@@ -3501,11 +3496,12 @@ class GraphFVCOMdepth(Graph):
         if refine_channel:
             node_list = self._refine_channel(np.asarray(node_list))
 
-        return np.asarray(node_list) + 1 # to get fvcom nodeReducedFVCOMdist number not python indices
+        return np.asarray(node_list) + 1  # to get fvcom nodeReducedFVCOMdist number not python indices
 
     def _refine_channel(self, node_list):
         """
-        Refines the channel nodes by re running the shortest path algorthim without depth weighting but only on the chosen nodes
+        Refines the channel nodes by re running the shortest path algorthim without depth weighting but only on the
+        chosen nodes
 
         """
         nodes_sel = np.where(np.isin(self.node_index, node_list))[0]
