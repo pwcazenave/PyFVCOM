@@ -505,12 +505,14 @@ class FileReader(Domain):
                     # to 0 but at least they're the right shape. Warn accordingly.
                     if self._noisy:
                         print('{} cannot be migrated to element centres (invalid triangulation). Setting to zero.'.format(var))
-                    if 'lev' in var:
+                    if var is 'siglev_center':
                         setattr(self.grid, var, np.zeros((self.dims.siglev, self.dims.nele)))
-                    elif 'lay' in var:
+                    elif var is 'siglay_center':
                         setattr(self.grid, var, np.zeros((self.dims.siglay, self.dims.nele)))
-                    else:
+                    elif var is 'h_center':
                         setattr(self.grid, var, np.zeros((self.dims.nele)))
+                    else:
+                        raise ValueError('Inexplicably, we have a variable not in the loop we have defined.')
 
         # Make depth-resolved sigma data. This is useful for plotting things.
         for var in self.obj_iter(self.grid):
