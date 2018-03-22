@@ -109,7 +109,6 @@ class HarmonicOutput:
             self._node_nconsts_dims = ['nconsts', 'node']
             self._nele_coordinates = 'time latc lonc'
             self._nconsts_coordinates = 'nconsts lonc latc'
-
         else:
             # Space last
             self._node_siglay_dims = ['siglay', 'node']
@@ -179,7 +178,7 @@ class HarmonicOutput:
         self.h_center.setncattr('standard_name', 'sea_floor_depth_below_geoid')
         self.h_center.setncattr('units', 'm')
         self.h_center.setncattr('positive', 'down')
-        self.h_center.setncattr('grid', 'grid1 ')
+        self.h_center.setncattr('grid', 'grid1 grid3')
         self.h_center.setncattr('coordinates', 'latc lonc')
         self.h_center.setncattr('grid_location', 'center')
 
