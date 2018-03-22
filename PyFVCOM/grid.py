@@ -391,9 +391,12 @@ class Domain(object):
 
         """
 
-        self.area = get_area(np.asarray((self.grid.x[self.grid.triangles[:, 0]], self.grid.y[self.grid.triangles[:, 0]])).T,
-                             np.asarray((self.grid.x[self.grid.triangles[:, 1]], self.grid.y[self.grid.triangles[:, 1]])).T,
-                             np.asarray((self.grid.x[self.grid.triangles[:, 2]], self.grid.y[self.grid.triangles[:, 2]])).T)
+        triangles = self.grid.triangles
+        x = self.grid.x
+        y = self.grid.y
+        self.area = get_area(np.asarray((x[triangles[:, 0]], y[triangles[:, 0]])).T,
+                             np.asarray((x[triangles[:, 1]], y[triangles[:, 1]])).T,
+                             np.asarray((x[triangles[:, 2]], y[triangles[:, 2]])).T)
 
 
 class OpenBoundary:
