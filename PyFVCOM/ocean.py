@@ -988,7 +988,7 @@ def pea(temp, salinity, depth, levels):
     Returns
     -------
     PEA : ndarray
-        Potential energy anomaly (J/m^{3}).
+        Potential energy anomaly (J/m^{2}).
 
     Notes
     -----
