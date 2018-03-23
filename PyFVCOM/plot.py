@@ -836,7 +836,7 @@ class Plotter:
 
 
 class CrossPlotter(Plotter):
-    """ Create plot objects based on output from the FVCOM.
+    """ Create cross-section plots based on output from the FVCOM.
 
     Class to assist in the creation of cross section plots of FVCOM data
 
@@ -871,7 +871,6 @@ class CrossPlotter(Plotter):
     TO DO
     -----
     Currently only works for scalar variables, want to get it working for vectors to do u/v/w plots
-    Add quiver plots
     Sort colorbars
     Sort left hand channel justification for multiple channels.
     Error handling for no wet/dry, no land
