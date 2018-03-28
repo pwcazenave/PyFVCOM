@@ -1,11 +1,11 @@
 from __future__ import division
 
-import pytz
+from collections import namedtuple
+from datetime import datetime
+
 import jdcal
 import numpy as np
-
-from datetime import datetime
-from collections import namedtuple
+import pytz
 
 
 def julian_day(gregorianDateTime, mjd=False):
