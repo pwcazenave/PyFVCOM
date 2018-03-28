@@ -67,11 +67,6 @@ def calculate_regression(x, y, type='lin'):
 
     yf = (m * xf) + c
 
-    if xFactorFix:
-        xf = xf / 10**xFactor
-    if yFactorFix:
-        yf = yf / 10**yFactor
-
     return xf, yf, m, c, r
 
 
