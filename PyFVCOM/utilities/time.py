@@ -119,7 +119,7 @@ def gregorian_date(julianDay, mjd=False):
 
     if not mjd:
         # It's easier to use jdcal in Modified Julian Day
-        julianDay = julianDay + 2400000.5
+        julianDay -= 2400000.5
 
     try:
         nt = len(julianDay)
