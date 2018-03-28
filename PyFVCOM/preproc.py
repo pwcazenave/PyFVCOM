@@ -12,29 +12,27 @@ Pierre Cazenave (Plymouth Marine Laboratory)
 """
 
 import copy
-import itertools
 import inspect
-import scipy.optimize
-
-import numpy as np
 import multiprocessing
-
-from netCDF4 import Dataset, date2num, num2date, stringtochar
-from scipy.interpolate import RegularGridInterpolator
-from dateutil.relativedelta import relativedelta
 from datetime import datetime
 from functools import partial
-from warnings import warn
 from pathlib import Path
+from warnings import warn
 
-from PyFVCOM.grid import Domain, grid_metrics, read_fvcom_obc, nodes2elems
-from PyFVCOM.grid import write_fvcom_mesh, connectivity, haversine_distance
-from PyFVCOM.grid import find_bad_node, get_attached_unique_nodes
-from PyFVCOM.grid import OpenBoundary, find_connected_elements
-from PyFVCOM.utilities.time import date_range
-from PyFVCOM.utilities.general import flatten_list
-from PyFVCOM.read import FileReader
+import numpy as np
+import scipy.optimize
+from dateutil.relativedelta import relativedelta
+from netCDF4 import Dataset, date2num, num2date, stringtochar
+from scipy.interpolate import RegularGridInterpolator
+
 from PyFVCOM.coordinate import utm_from_lonlat, lonlat_from_utm
+from PyFVCOM.grid import Domain, grid_metrics, read_fvcom_obc, nodes2elems
+from PyFVCOM.grid import OpenBoundary, find_connected_elements
+from PyFVCOM.grid import find_bad_node
+from PyFVCOM.grid import write_fvcom_mesh, connectivity, haversine_distance
+from PyFVCOM.read import FileReader
+from PyFVCOM.utilities.general import flatten_list
+from PyFVCOM.utilities.time import date_range
 
 
 class Model(Domain):
