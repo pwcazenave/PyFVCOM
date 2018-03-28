@@ -476,7 +476,7 @@ class FileReader(Domain):
         for dim in self._dims:
             if dim != 'time':
                 if self._noisy:
-                    print('Resetting {} dimension length from {} to {}'.format(getattr(self.dims, dim), len(self._dims[dim])))
+                    print('Resetting {} dimension length from {} to {}'.format(dim, getattr(self.dims, dim), len(self._dims[dim])))
                 setattr(self.dims, dim, len(self._dims[dim]))
 
         # Add compatibility for FVCOM3 (these variables are only specified on the element centres in FVCOM4+ output
