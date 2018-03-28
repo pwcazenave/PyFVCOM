@@ -16,27 +16,36 @@ from scipy import stats, polyfit, polyval
 from PyFVCOM.utilities.general import fix_range
 
 
-def calculate_regression(x, y, type):
+def calculate_regression(x, y, type='lin'):
     """
-    Calculate three types of regression:
+    Calculate four types of regression:
         1. Linear (lin)
         2. Log (log)
         3. Exponential (exp)
         4. Linear through zero (lin0)
-    """
 
-    # Check the smallest value in x or y isn't below ~1x10-7 otherwise
-    # we hit numerical instabilities.
-    xFactorFix, xFactor = False, 0
-    yFactorFix, yFactor = False, 0
-    minX = min(x)
-    minY = min(y)
-    if minX < 2e-7:
-        print('Scaling x-data to improve numerical stability')
-        x, xFactor, xFactorFix = fixRange(x)
-    if minY < 2e-7:
-        print('Scaling y-data to improve numerical stability')
-        y, yFactor, yFactorFix = fixRange(y)
+    Parameters
+    ----------
+    x, y : np.ndarray
+        The two data series from which to calculate the regression (1D arrays).
+    type : str, optional
+        The type of regression to calculate. Options are: `lin0' (linear through zero), `lin' (linear), `log' and
+        `exp' (exponential).
+
+    Returns
+    -------
+    xf : np.ndarray
+        The input array x ready for plotting.
+    yf : np.ndarray
+        The input array y ready for plotting.
+    m : float
+        The gradient.
+    c : float
+        The intercept
+    r : float
+        The exponent. If irrelevant (for the linear cases), will be NaN.
+
+    """
 
     if type is 'lin0':
         xf = x
