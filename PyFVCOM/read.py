@@ -623,6 +623,10 @@ class FileReader(Domain):
         # Check if we've been given vertical dimensions to subset in too, and if so, do that. Check we haven't
         # already done this if the 'node' and 'nele' sections above first.
         for var in 'siglay', 'siglev', 'siglay_center', 'siglev_center':
+            # Only carry on if we have this variable in the output file with which we're working (mainly this
+            # is for compatibility with FVCOM 3 outputs which do not have the _center variables).
+            if var not in self.ds.variables:
+                continue
             short_dim = copy.copy(var)
             # Assume we need to subset this one unless 'node' or 'nele' are missing from self._dims. If they're in
             # self._dims, we've already subsetted in the 'node' and 'nele' sections above, so doing it again here
