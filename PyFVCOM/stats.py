@@ -133,7 +133,6 @@ def calculate_coefficient(x, y, noisy=False):
 
     Parameters
     ----------
-
     x, y : ndarray
         Time series arrays to correlate.
     noisy : bool, optional
@@ -141,7 +140,6 @@ def calculate_coefficient(x, y, noisy=False):
 
     Returns
     -------
-
     r : ndarray
         Correlation coefficient.
     p : ndarray
@@ -150,18 +148,21 @@ def calculate_coefficient(x, y, noisy=False):
     Notes
     -----
 
-    Using numpy.ma.corrcoef is ~5 slower than using scipy.stats.pearsonr
-    despite giving the same results. In fact, the latter also gives the
-    p-value.
+    Using numpy.ma.corrcoef is ~5 slower than using scipy.stats.pearsonr despite giving the same results. In fact,
+    the latter also gives the p-value.
+
     """
 
     # Timings for np.ma.corrcoef and scipy.stats.pearsonr:
     #   numpy:  738s
     #   scipy:  139s
 
+    # Make sure we always have something to return in case we have fewer than 9 points.
+    r, p = np.nan, np.nan
+
     # Skip data with fewer than nine points.
     if len(np.ma.compressed(x)) > 9:
-        #r = np.ma.corrcoef(xt, yt)[0, 1]
+        # r = np.ma.corrcoef(xt, yt)[0, 1]
         r, p = stats.pearsonr(x, y)
     else:
         if noisy:
