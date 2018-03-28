@@ -676,9 +676,10 @@ class Model(Domain):
         upper_layer_thickness = np.repeat(upper_layer_depth / total_upper_layers, total_upper_layers)
         lower_layer_thickness = np.repeat(lower_layer_depth / total_lower_layers, total_lower_layers)
         optimisation_settings = {'maxfun': 5000, 'maxiter': 5000, 'ftol': 10e-5, 'xtol': 1e-7}
-        fparams = lambda depth_guess: self.__hybrid_coordinate_hmin(depth_guess, self.dims.levels, upper_layer_depth,
-                                                                    lower_layer_depth, total_upper_layers,
-                                                                    total_lower_layers, upper_layer_thickness, lower_layer_thickness)
+        fparams = lambda depth_guess: self.__hybrid_coordinate_hmin(depth_guess, self.dims.levels,
+                                                                    upper_layer_depth, lower_layer_depth,
+                                                                    total_upper_layers, total_lower_layers,
+                                                                    upper_layer_thickness, lower_layer_thickness)
         optimised_depth = scipy.optimize.fmin(func=fparams, x0=transition_depth, disp=False, **optimisation_settings)
         min_error = transition_depth - optimised_depth  # this isn't right
         self.sigma.transition_depth = optimised_depth
@@ -810,6 +811,7 @@ class Model(Domain):
 
     def add_open_boundaries(self, obc_file, reload=False):
         """
+        Add open boundaries from a given FVCOM-formatted open boundary file.
 
         Parameters
         ----------
@@ -948,7 +950,7 @@ class Model(Domain):
         If `sediment' is supplied, then the variables in the sediment are added. Cohesive sediments are expected to have
         names like 'mud_*' and non-cohesive sediments names like 'sand_*'.
 
-        TO DO: Add Regs formula for calculating spm from flux
+        TO DO: Add Reg's formula for calculating spm from flux.
 
         """
 
@@ -997,8 +999,8 @@ class Model(Domain):
                 for variable in ersem:
                     setattr(self.river, variable, ersem[variable][:, river_index])
 
-                # Add small zooplankton values if we haven't been given any already. Taken to be 10^-6 of Western Channel
-                # Observatory L4 initial conditions.
+                # Add small zooplankton values if we haven't been given any already. Taken to be 10^-6 of Western
+                # Channel Observatory L4 initial conditions.
                 fac = 10**-6
                 extra_data = {'Z4_c': 1.2 * fac,
                               'Z5_c': 7.2 * fac,
@@ -1056,13 +1058,13 @@ class Model(Domain):
                     all_vars = ['flux', 'temperature', 'salinity']
     
                     # Ersem variables if they're in there
-                    N_names = list(filter(lambda x:'N' in x, list(self.river.__dict__.keys())))
-                    Z_names = list(filter(lambda x:'Z' in x, list(self.river.__dict__.keys()))) 
-                    O_names = list(filter(lambda x:'O' in x, list(self.river.__dict__.keys())))
+                    N_names = list(filter(lambda x: 'N' in x, list(self.river.__dict__.keys())))
+                    Z_names = list(filter(lambda x: 'Z' in x, list(self.river.__dict__.keys())))
+                    O_names = list(filter(lambda x: 'O' in x, list(self.river.__dict__.keys())))
 
                     # And sediment ones
-                    muddy_sediment_names = list(filter(lambda x:'mud_' in x, list(self.river.__dict__.keys())))
-                    sandy_sediment_names = list(filter(lambda x:'sand_' in x, list(self.river.__dict__.keys())))
+                    muddy_sediment_names = list(filter(lambda x: 'mud_' in x, list(self.river.__dict__.keys())))
+                    sandy_sediment_names = list(filter(lambda x: 'sand_' in x, list(self.river.__dict__.keys())))
 
                     all_vars = flatten_list([all_vars, N_names, Z_names, O_names, muddy_sediment_names, sandy_sediment_names]) 
 
@@ -1902,7 +1904,6 @@ class Model(Domain):
                     'type': 'data',
                     'coordinates': 'time siglay lat lon'}
             nest.add_variable('hyw', hyw, ['time', 'siglay', 'node'], attributes=atts, ncopts=ncopts)
-
 
     def read_regular(self, *args, **kwargs):
         read_regular.__doc__
