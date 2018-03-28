@@ -116,9 +116,13 @@ def rmse(a, b, axis=0):
     rmse: ndarray
         RMSE of `a' and `b'.
 
+    Notes
+    -----
+    NaN values are omitted (the mean is a nanmean).
+
     """
 
-    rmse = np.sqrt(np.mean((a - b)**2, axis=axis))
+    rmse = np.sqrt(np.nanmean((a - b)**2, axis=axis))
 
     return rmse
 
