@@ -204,7 +204,7 @@ def overlap(t1start, t1end, t2start, t2end):
 
 def common_time(times1, times2):
     """
-    Return the common date rage in two time series. At least three dates are
+    Return the common date range in two time series. At least three dates are
     required for a valid overlapping time.
 
     Neither date range supplied need have the same sampling or number of
