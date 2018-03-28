@@ -169,21 +169,3 @@ def calculate_coefficient(x, y, noisy=False):
             print('Skipping data (all masked or fewer than 9 data points).')
 
     return r, p
-
-
-# For backwards compatibility.
-def calculateRegression(*args, **kwargs):
-    warn('{} is deprecated. Use calculate_regression instead.'.format(inspect.stack()[0][3]))
-    return calculate_regression(*args, **kwargs)
-
-
-# For backwards compatibility.
-def calculatePolyfit(*args, **kwargs):
-    warn('{} is deprecated. Use calculate_polyfit instead.'.format(inspect.stack()[0][3]))
-    return calculate_polyfit(*args, **kwargs)
-
-
-# For backwards compatibility.
-def fixRange(*args, **kwargs):
-    warn('{} is deprecated. Use fix_range instead.'.format(inspect.stack()[0][3]))
-    return fix_range(*args, **kwargs)
