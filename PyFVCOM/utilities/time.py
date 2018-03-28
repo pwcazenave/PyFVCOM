@@ -210,6 +210,9 @@ def common_time(times1, times2):
     Neither date range supplied need have the same sampling or number of
     times.
 
+    If there is no overlap between the two time series, returns a tuple of
+    (False, False).
+
     Parameters
     ----------
     times1 : list-like
@@ -231,11 +234,16 @@ def common_time(times1, times2):
     """
     if len(times1) < 3 or len(times2) < 3:
         raise ValueError('Too few times for an overlap (times1 = {}, times2 = {})'.format(len(times1), len(times2)))
-    Range = namedtuple('Range', ['start', 'end'])
-    r1 = Range(start=times1[0], end=times1[-1])
-    r2 = Range(start=times2[0], end=times2[-1])
-    latest_start = max(r1.start, r2.start)
-    earliest_end = min(r1.end, r2.end)
+
+    # Check our times overlap at all and if not, return a couple of Falses.
+    latest_start, earliest_end = False, False
+
+    if overlap(times1[0], times1[-1], times2[0], times2[-1]):
+        Range = namedtuple('Range', ['start', 'end'])
+        r1 = Range(start=times1[0], end=times1[-1])
+        r2 = Range(start=times2[0], end=times2[-1])
+        latest_start = max(r1.start, r2.start)
+        earliest_end = min(r1.end, r2.end)
 
     return latest_start, earliest_end
 
