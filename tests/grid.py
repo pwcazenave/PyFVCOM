@@ -23,30 +23,6 @@ class GridToolsTest(TestCase):
         # Save some grid metrics for tests which require them.
         self.ntve, self.nbve, self.nbe, self.isbce, self.isonb = grid_metrics(self.tri)
 
-    def test_get_node_control_area(self):
-        test_node_area = 2 / 3
-        node = 1
-        node_area = node_control_area(node, self.x, self.y, self.xc, self.yc, self.tri)
-        test.assert_almost_equal(node_area, test_node_area)
-
-    def test_get_element_control_area(self):
-        test_element_area = 2
-        node = 2
-        art = get_area(np.asarray((self.x[self.tri[:, 0]], self.y[self.tri[:, 0]])).T,
-                       np.asarray((self.x[self.tri[:, 1]], self.y[self.tri[:, 1]])).T,
-                       np.asarray((self.x[self.tri[:, 2]], self.y[self.tri[:, 2]])).T)
-        element_area = element_control_area(node, self.tri, art)
-        test.assert_almost_equal(element_area, test_element_area)
-
-    def test_get_control_volumes(self):
-        test_node_areas = [1 / 6, 2 / 3, 2 / 3,
-                           2 / 3, 1 / 6, 2 / 3,
-                           1 / 6, 2 / 3, 1 / 6]
-        test_element_areas = [0.5, 2, 2, 2, 0.5, 2, 0.5, 2, 0.5]
-        node_areas, element_areas = control_volumes(self.x, self.y, self.tri)
-        test.assert_almost_equal(node_areas, test_node_areas)
-        test.assert_almost_equal(element_areas, test_element_areas)
-
     def test_find_nearest_point(self):
         target_x, target_y = 0.5, 0.75
         test_x, test_y, test_dist, test_index = 0, 1, np.min(np.hypot(self.x - target_x, self.y - target_y)), 2
@@ -253,25 +229,32 @@ class GridToolsTest(TestCase):
         test.assert_equal(isbce, test_isbce)
         test.assert_equal(isonb, test_isonb)
 
-    def test_shape_coefficients(self):
-        known_a1u = np.array([[np.nan, -0.5, -0.5, np.nan, 0.5, np.nan, 0.5, np.nan],
-                              [np.nan, -0.25, 1.25, np.nan, 0.25, np.nan, 0.5, np.nan],
-                              [np.nan, 1.25, -0.25, np.nan, 0.5, np.nan, 0.25, np.nan],
-                              [np.nan, -0.5, -0.5, np.nan, -1.25, np.nan, -1.25, np.nan]])
-        known_a2u = np.array([[np.nan, -0.5, 0.5, np.nan, -0.5, np.nan, 0.5, np.nan],
-                              [np.nan, 1.25, 0.25, np.nan, 1.25, np.nan, 0.5, np.nan],
-                              [np.nan, -0.25, -1.25, np.nan, -0.5, np.nan, -1.25, np.nan],
-                              [np.nan, -0.5, 0.5, np.nan, -0.25, np.nan, 0.25, np.nan]])
+    def test_get_control_volumes(self):
+        test_node_areas = [1 / 6, 2 / 3, 2 / 3,
+                           2 / 3, 1 / 6, 2 / 3,
+                           1 / 6, 2 / 3, 1 / 6]
+        test_element_areas = [0.5, 2, 2, 2, 0.5, 2, 0.5, 2, 0.5]
+        node_areas, element_areas = control_volumes(self.x, self.y, self.tri)
+        test.assert_almost_equal(node_areas, test_node_areas)
+        test.assert_almost_equal(element_areas, test_element_areas)
 
-        a1u, a2u = shape_coefficients(self.xc, self.yc, self.nbe, self.isbce)
-        test.assert_almost_equal(a1u, known_a1u)
-        test.assert_almost_equal(a2u, known_a2u)
+    def test_get_node_control_area(self):
+        test_node_area = 2 / 3
+        node = 1
+        node_area = node_control_area(node, self.x, self.y, self.xc, self.yc, self.tri)
+        test.assert_almost_equal(node_area, test_node_area)
 
-    def test_reduce_triangulation(self):
-        known_reduced = np.array([[0, 2, 1], [1, 2, 3]])
+    def test_get_element_control_area(self):
+        test_element_area = 2
+        node = 2
+        art = get_area(np.asarray((self.x[self.tri[:, 0]], self.y[self.tri[:, 0]])).T,
+                       np.asarray((self.x[self.tri[:, 1]], self.y[self.tri[:, 1]])).T,
+                       np.asarray((self.x[self.tri[:, 2]], self.y[self.tri[:, 2]])).T)
+        element_area = element_control_area(node, self.tri, art)
+        test.assert_almost_equal(element_area, test_element_area)
 
-        reduced = reduce_triangulation(self.tri, np.arange(5))
-        test.assert_equal(reduced, known_reduced)
+
+
 
     def test_vincenty_distance(self):
         """
@@ -302,6 +285,26 @@ class GridToolsTest(TestCase):
         result_miles = haversine_distance(test_positions[0], test_positions[1], miles=True)
         test.assert_equal(known_good, result)
         test.assert_equal(known_good_miles, result_miles)
+
+    def test_shape_coefficients(self):
+        known_a1u = np.array([[np.nan, -0.5, -0.5, np.nan, 0.5, np.nan, 0.5, np.nan],
+                              [np.nan, -0.25, 1.25, np.nan, 0.25, np.nan, 0.5, np.nan],
+                              [np.nan, 1.25, -0.25, np.nan, 0.5, np.nan, 0.25, np.nan],
+                              [np.nan, -0.5, -0.5, np.nan, -1.25, np.nan, -1.25, np.nan]])
+        known_a2u = np.array([[np.nan, -0.5, 0.5, np.nan, -0.5, np.nan, 0.5, np.nan],
+                              [np.nan, 1.25, 0.25, np.nan, 1.25, np.nan, 0.5, np.nan],
+                              [np.nan, -0.25, -1.25, np.nan, -0.5, np.nan, -1.25, np.nan],
+                              [np.nan, -0.5, 0.5, np.nan, -0.25, np.nan, 0.25, np.nan]])
+
+        a1u, a2u = shape_coefficients(self.xc, self.yc, self.nbe, self.isbce)
+        test.assert_almost_equal(a1u, known_a1u)
+        test.assert_almost_equal(a2u, known_a2u)
+
+    def test_reduce_triangulation(self):
+        known_reduced = np.array([[0, 2, 1], [1, 2, 3]])
+
+        reduced = reduce_triangulation(self.tri, np.arange(5))
+        test.assert_equal(reduced, known_reduced)
 
     def test_isintriangle(self):
         test_point_x_in = 0.1
