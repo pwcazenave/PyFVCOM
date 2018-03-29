@@ -88,3 +88,11 @@ class CoordinateToolsTest(TestCase):
         test.assert_almost_equal(lon, test_lon)
         test.assert_almost_equal(lat, test_lat)
 
+    def test_lonlat_decimal_from_degminsec(self):
+        test_lon_dms = np.asarray([[-5, 30, 10], [88, 15, 30]])
+        test_lat_dms = np.asarray([[55, 20, 15], [-55, 25, 6]])
+        actual_lon_dd = np.asarray([-5.5016666666666669, 88.255])
+        actual_lat_dd = np.asarray([55.335833333333333, -55.417666666666662])
+        calculated_lon_dd, calculated_lat_dd = lonlat_decimal_from_degminsec(test_lon_dms, test_lat_dms)
+        test.assert_equal(actual_lon_dd, calculated_lon_dd)
+        test.assert_equal(actual_lat_dd, calculated_lat_dd)
