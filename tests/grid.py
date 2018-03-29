@@ -159,8 +159,8 @@ class GridToolsTest(TestCase):
                    0.039367708704254094, 1.3455913122791008, 1.8486495653813806,
                    1.2570462168215415, 0.5794506650966351, 0.06288323675218344]
         dx, dy = trigradient(self.x, self.y, self.z)
-        test.assert_equal(dx, test_dx)
-        test.assert_equal(dy, test_dy)
+        test.assert_almost_equal(dx, test_dx)
+        test.assert_almost_equal(dy, test_dy)
 
     def test_rotate_points(self):
         angle = 45
