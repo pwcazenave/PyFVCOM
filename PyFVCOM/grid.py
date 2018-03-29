@@ -5,11 +5,11 @@ Tools for manipulating and converting unstructured grids in a range of formats.
 
 from __future__ import print_function, division
 
-import copy
 import math
 import multiprocessing
 import os
 import sys
+from collections import defaultdict, deque
 from functools import partial
 
 import networkx
@@ -24,10 +24,8 @@ from scipy.interpolate import RegularGridInterpolator
 from scipy.spatial import Delaunay
 from utide import reconstruct, ut_constants
 from utide.utilities import Bunch
-from collections import defaultdict, deque
 
 from PyFVCOM.coordinate import utm_from_lonlat, lonlat_from_utm
-from PyFVCOM.utilities.general import flatten_list
 from PyFVCOM.utilities.time import date_range
 
 
