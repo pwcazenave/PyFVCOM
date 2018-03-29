@@ -257,7 +257,10 @@ class GridToolsTest(TestCase):
         area = np.asarray([10, 20, 30, 40])
         depth = np.asarray([100, 110, 110, 150])
         surface_elevation = np.asarray([[0.1, 0.2, 0.1, 0.2], [0.2, 0.3, 0.2, 0.3]])
-        thickness = np.asarray([0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0])
+        thickness = np.asarray([[0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
+                                [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
+                                [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
+                                [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]]).T
         dz = np.diff(thickness, axis=0)
         test_volume = area * (depth + surface_elevation)
         test_volume = test_volume[:, np.newaxis, :] * dz[np.newaxis, ...]
