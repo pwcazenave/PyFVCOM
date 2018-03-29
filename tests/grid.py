@@ -253,8 +253,25 @@ class GridToolsTest(TestCase):
         element_area = element_control_area(node, self.tri, art)
         test.assert_almost_equal(element_area, test_element_area)
 
+    def test_unstructured_grid_volume(self):
+        area = np.asarray([10, 20, 30, 40])
+        depth = np.asarray([100, 110, 110, 150])
+        surface_elevation = np.asarray([[0.1, 0.2, 0.1, 0.2], [0.2, 0.3, 0.2, 0.3]])
+        thickness = np.asarray([0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0])
+        dz = np.diff(thickness, axis=0)
+        test_volume = area * (depth + surface_elevation)
+        test_volume = test_volume[:, np.newaxis, :] * dz[np.newaxis, ...]
+        volume = unstructured_grid_volume(area, depth, surface_elevation, thickness)
+        test.assert_equal(test_volume, volume)
 
+    def test_unstructured_grid_depths(self):
+        pass
 
+    def test_elems2nodes(self):
+        pass
+
+    def test_nodes2elems(self):
+        pass
 
     def test_vincenty_distance(self):
         """
@@ -305,6 +322,9 @@ class GridToolsTest(TestCase):
 
         reduced = reduce_triangulation(self.tri, np.arange(5))
         test.assert_equal(reduced, known_reduced)
+
+    def test_getcrosssectiontriangles(self):
+        pass
 
     def test_isintriangle(self):
         test_point_x_in = 0.1
