@@ -31,6 +31,18 @@ class Residuals_test(TestCase):
         os.remove(self.model.ncfile.name)
         del(self.model)
 
+    def test_scalar2vector(self):
+        actual_u, actual_v = 1, 1
+        test_u, test_v = scalar2vector(45, np.sqrt(2))
+        test.assert_almost_equal(test_u, actual_u)
+        test.assert_almost_equal(test_v, actual_v)
+
+    def test_vector2scalar(self):
+        actual_direction, actual_magnitude = 45, np.sqrt(2)
+        test_direction, test_magnitude = vector2scalar(1, 1)
+        test.assert_equal(actual_direction, test_direction)
+        test.assert_equal(actual_magnitude, test_magnitude)
+
     def test_depth_resolved_vorticity(self):
         expected_vorticity = np.array([np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan,
                                        -1.69406589e-21, np.nan, np.nan, -1.64608942e-22, 6.08804931e-22, np.nan, np.nan,
