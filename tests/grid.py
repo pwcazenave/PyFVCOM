@@ -18,9 +18,18 @@ class GridToolsTest(TestCase):
         self.xc = nodes2elems(self.x, self.tri)
         self.yc = nodes2elems(self.y, self.tri)
         self.lonc, self.latc = self.xc / 11, self.yc / 21  # make some fake spherical data
-        self.z = np.array([0, 1, 1, 0, 2, 1, 2, 3, 3])
+        self.z = np.array([0, 1, 1, 0, 2, 1, 2, 3, 3])  # nodes
         # Save some grid metrics for tests which require them.
         self.ntve, self.nbve, self.nbe, self.isbce, self.isonb = grid_metrics(self.tri)
+
+        self.area = np.array([10, 20, 30, 40])
+        self.depth = np.array([100, 110, 110, 150])
+        self.surface_elevation = np.array([[0.1, 0.2, 0.1, 0.2], [0.2, 0.3, 0.2, 0.3], [0.2, 0.3, 0.2, 0.3]])
+        self.thickness = np.array([[0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
+                                   [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
+                                   [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
+                                   [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]]).T
+        self.dz = np.diff(self.thickness, axis=0)
 
     def test_find_nearest_point(self):
         target_x, target_y = 0.5, 0.75
@@ -253,17 +262,9 @@ class GridToolsTest(TestCase):
         test.assert_almost_equal(element_area, test_element_area)
 
     def test_unstructured_grid_volume(self):
-        area = np.asarray([10, 20, 30, 40])
-        depth = np.asarray([100, 110, 110, 150])
-        surface_elevation = np.asarray([[0.1, 0.2, 0.1, 0.2], [0.2, 0.3, 0.2, 0.3]])
-        thickness = np.asarray([[0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
-                                [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
-                                [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
-                                [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]]).T
-        dz = np.diff(thickness, axis=0)
-        test_volume = area * (depth + surface_elevation)
-        test_volume = test_volume[:, np.newaxis, :] * dz[np.newaxis, ...]
-        volume = unstructured_grid_volume(area, depth, surface_elevation, thickness)
+        test_volume = self.area * (self.depth + self.surface_elevation)
+        test_volume = test_volume[:, np.newaxis, :] * self.dz[np.newaxis, ...]
+        volume = unstructured_grid_volume(self.area, self.depth, self.surface_elevation, self.thickness)
         test.assert_equal(test_volume, volume)
 
     def test_unstructured_grid_depths(self):
