@@ -5,14 +5,16 @@ Tools to work with current data. Reuses some functions from PyFVCOM.tide.
 
 from __future__ import division
 
+import copy
+from datetime import datetime
+from math import atan2
+
 import matplotlib.pyplot as plt
 import numpy as np
-import copy
 
-from datetime import datetime
-
-from PyFVCOM.utilities.time import common_time
 from PyFVCOM.grid import grid_metrics, shape_coefficients
+from PyFVCOM.utilities.time import common_time
+
 
 class Residuals:
 
