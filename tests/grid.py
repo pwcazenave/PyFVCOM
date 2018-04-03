@@ -268,13 +268,22 @@ class GridToolsTest(TestCase):
         test.assert_equal(test_volume, volume)
 
     def test_unstructured_grid_depths(self):
-        pass
+        total_depth = (self.depth + self.surface_elevation)
+        test_depths = (total_depth[:, np.newaxis, :] * self.thickness[np.newaxis, :, :]) + self.surface_elevation[:, np.newaxis, :]
+
+        grid_depths = unstructured_grid_depths(self.depth, self.surface_elevation, self.thickness)
+        test.assert_equal(grid_depths, test_depths)
 
     def test_elems2nodes(self):
-        pass
+        test_nodes = np.array([2/3, 2/3, 2/3, 1 + 1/3, 1 + 1/3, 2, 1 + 1/3, 2 + 1/3])
+        moved_nodes = nodes2elems(self.z, self.tri)
+        test.assert_equal(test_nodes, moved_nodes)
 
     def test_nodes2elems(self):
-        pass
+        test_elements = np.array([2/3, 1 + 1/6, 1/1.2, 1, 1 + 1/3, 1.4 + 1/60, 2, 1.75, 2 + 1/3])
+        # Not sure I like the dependency on nodes2elems for this test.
+        moved_elements = elems2nodes(nodes2elems(self.z, self.tri), self.tri)
+        test.assert_almost_equal(moved_elements, test_elements)
 
     def test_vincenty_distance(self):
         """
