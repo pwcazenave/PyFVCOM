@@ -2774,8 +2774,6 @@ def unstructured_grid_depths(h, zeta, sigma, nan_invalid=False):
     """
     Calculate the depth time series for cells in an unstructured grid.
 
-    I think this is a reimplementation of PyFVCOM.tide.make_water_column.
-
     Parameters
     ----------
     h : np.ndarray
@@ -2783,12 +2781,15 @@ def unstructured_grid_depths(h, zeta, sigma, nan_invalid=False):
     zeta : np.ndarray
         Surface elevation time series
     sigma : np.ndarray
-        Sigma level layer thickness, range 0-1 (siglev or siglay)
+        Sigma level layer thickness, range 0-1 (`siglev' or `siglay')
+    nan_invalid : bool, optional
+        Set values shallower than the mean sea level (`h') to NaN. Defaults to not doing that.
 
     Returns
     -------
     allDepths : np.ndarray
         Time series of model depths.
+
     """
 
     if nan_invalid:
@@ -2796,7 +2797,9 @@ def unstructured_grid_depths(h, zeta, sigma, nan_invalid=False):
         zeta[invalid] = np.NAN
 
     abs_water_depth = zeta + h
-    allDepths = abs_water_depth[:, np.newaxis,:] * sigma[np.newaxis, :, :] + zeta[:, np.newaxis, :]
+    # Add zeta again so the range is surface elevation (`zeta') to mean water depth rather (`h') than zero to water
+    # depth (`h' + `zeta') which is much more useful for plotting.
+    allDepths = abs_water_depth[:, np.newaxis, :] * sigma[np.newaxis, :, :] + zeta[:, np.newaxis, :]
 
     return allDepths
 

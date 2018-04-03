@@ -17,7 +17,7 @@ import scipy
 from lxml import etree
 from netCDF4 import Dataset, date2num
 
-from PyFVCOM.grid import find_nearest_point
+from PyFVCOM.grid import find_nearest_point, unstructured_grid_depths
 from PyFVCOM.utilities.general import fix_range
 from PyFVCOM.utilities.time import julian_day
 
@@ -1128,48 +1128,34 @@ def get_harmonics_POLPRED(harmonics, constituents, lon, lat, stations, noisy=Fal
     return out
 
 
-def make_water_column(zeta, h, siglay):
+def make_water_column(zeta, h, siglay, **kwargs):
     """
-    Make a time varying water column array with the surface elevation at the
-    surface and depth negative down.
+    Calculate the depth time series for cells in an unstructured grid.
 
     Parameters
     ----------
-    siglay : ndarray
-        Sigma layers [lay, nodes]
-    h : ndarray
-        Water depth [nodes] or [time, nodes]
-    zeta : ndarray
-        Surface elevation [time, nodes]
+    zeta : np.ndarray
+        Surface elevation time series
+    h : np.ndarray
+        Water depth
+    sigma : np.ndarray
+        Sigma level layer thickness, range 0-1 (`siglev' or `siglay')
+    nan_invalid : bool, optional
+        Set values shallower than the mean sea level (`h') to NaN. Defaults to not doing that.
 
     Returns
     -------
-    depth : ndarray
-        Time-varying water depth (with the surface depth varying rather than
-        the seabed) [time, lay, nodes].
-
-    Todo
-    ----
-    Tidy up the try/excepth block with an actual error.
+    z : np.ndarray
+        Time series of model depths.
 
     """
 
-    # Fix the range of siglay to be -1 to 0 so we don't get a wobbly seabed.
-    siglay = fix_range(siglay, -1, 0)
+    # This function has been replaced with a call to the more correct PyFVCOM.grid.unstructured_grid_depths and this
+    # alias remains for compatibility.
+    z = unstructured_grid_depths(h, zeta, siglay, **kwargs)
 
-    # We may have a single node, in which case we don't need the newaxis,
-    # otherwise, we do.
-    try:
-        z = (zeta + h) * -siglay
-    except:
-        z = (zeta + h)[:, np.newaxis, :] * -siglay[np.newaxis, ...]
-
-    try:
-        z = z - h
-    except ValueError:
-        z = z - h[:, np.newaxis, :]
-
-    return z
+    # Transpose so the shape is the same as in the old version.
+    return z.transpose(1, 0, 2)
 
 
 class Lanczos:
