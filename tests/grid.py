@@ -5,7 +5,6 @@ import numpy as np
 
 from unittest import TestCase
 
-from PyFVCOM.read import nodes2elems
 from PyFVCOM.grid import *
 
 
