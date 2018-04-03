@@ -52,6 +52,17 @@ class TideTest(TestCase):
                                      1.02071083, 0.84353814, 0.59888118, 0.22995842, -0.27103678,
                                      -0.85306816, -1.41322768, -1.81958148, -1.9446488, -1.70121962])
 
+        self.h = np.asarray([100, 120, 95, 200])
+        self.siglay = np.tile(np.arange(0, 1, 0.1) + 0.05, (len(self.h), 1)).T
+        self.zeta = np.tile(self.test_signal[:2], (len(self.h), 1)).T  # shorter series for easier checking
+
+    def test_make_water_column(self):
+        full_depth = self.h + self.zeta
+        water_column = (full_depth[:, np.newaxis, :] * self.siglay[np.newaxis, :, :] + self.zeta[:, np.newaxis, :]).transpose(1, 0, 2)
+
+        test_water_column = make_water_column(self.zeta, self.h, self.siglay)
+        test.assert_equal(test_water_column, water_column)
+
     def test_lanczos(self):
         """ Lanczos cosine time series filter """
         filtered_signal, _, _, _, _ = lanczos(self.signal,
