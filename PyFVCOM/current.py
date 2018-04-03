@@ -624,7 +624,7 @@ def principal_axis(u, v):
 
     # Rotation angle of major axis in radians relative to cartesian coordinates
     # ra = np.arctan2(V[0,1], V[1,1])
-    ra = atan2(V[0,1], V[1,1])
+    ra = atan2(V[0, 1], V[1, 1])
     # Express principal axis in compass coordinates.
     # TR: still not sure here
     principal_axis = np.rad2deg(-ra)
