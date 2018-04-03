@@ -1,14 +1,14 @@
 import os
-import numpy.testing as test
-import numpy as np
-
 from unittest import TestCase
 
-from PyFVCOM.read import FileReader
+import numpy as np
+import numpy.testing as test
+from read import _prep
+
 from PyFVCOM.coordinate import utm_from_lonlat
 from PyFVCOM.current import *
+from PyFVCOM.read import FileReader
 from PyFVCOM.utilities.grid import StubFile
-from read import _prep
 
 
 class Residuals_test(TestCase):
