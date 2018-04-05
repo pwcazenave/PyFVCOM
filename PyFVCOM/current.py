@@ -18,7 +18,7 @@ from PyFVCOM.utilities.time import common_time
 
 class Residuals:
 
-    def __init__(self, FVCOM, PREDICTED, periods=None, max_speed=None, noisy=False):
+    def __init__(self, fvcom, predicted, periods=None, max_speed=None, noisy=False):
         """
         Calculate the residuals (differences between two time series).
         Optionally average over some period.
@@ -29,11 +29,11 @@ class Residuals:
 
         Parameters
         ----------
-        FVCOM : PyFVCOM.read.FileReader
+        fvcom : PyFVCOM.read.FileReader
             Times series object and grid. Must have loaded the current data (u,
             v).
-        PREDICTED : PyFVCOM.read.FileReader
-            Times series object which is subtracted from `FVCOM'.
+        predicted : PyFVCOM.read.FileReader
+            Times series object which is subtracted from `fvcom'.
         periods : list-like
             Give a list of strings for averaging the residuals. Choose from
             `daily' or `monthly'. The latter assumes a month is 30 days.
@@ -48,8 +48,8 @@ class Residuals:
         """
 
         self._noisy = noisy
-        self._fvcom = FVCOM
-        self._pred = PREDICTED
+        self._fvcom = fvcom
+        self._pred = predicted
         self._max_speed = max_speed
 
         # Make the differences in the currents.
@@ -57,46 +57,46 @@ class Residuals:
             print('Compute residuals')
 
         # Check we've got comparable sampling. Interpolate or subsample if not.
-        _inc_fvcom = np.unique(np.diff(FVCOM.time.datetime))[0].seconds / 60 / 60  # in hours
-        _inc_predicted = np.unique(np.diff(PREDICTED.time.datetime))[0].seconds / 60 / 60  # in hours
+        _inc_fvcom = np.unique(np.diff(self._fvcom.time.datetime))[0].seconds / 60 / 60  # in hours
+        _inc_predicted = np.unique(np.diff(self._pred.time.datetime))[0].seconds / 60 / 60  # in hours
         if _inc_fvcom != _inc_predicted:
             # Try subsampling first as that should yield the fastest result.
             if _inc_fvcom > _inc_predicted:
                 skip = int(_inc_fvcom / _inc_predicted)
-                _new_time = PREDICTED.time.datetime[::skip]
+                _new_time = self._pred.time.datetime[::skip]
                 # Get overlapping period between the two data sets.
-                overlap = common_time(FVCOM.time.datetime, _new_time)
-                # Find the indices for FVCOM.time.datetime for that overlap.
+                overlap = common_time(self._fvcom.time.datetime, _new_time)
+                # Find the indices for self._fvcom.time.datetime for that overlap.
                 f_start = _new_time.tolist().index(overlap[0])
                 f_end = _new_time.tolist().index(overlap[1])
                 # Check we've got a common time series now.
-                if np.max(_new_time[f_start:f_end + 1] - FVCOM.time.datetime).total_seconds() == 0:
+                if np.max(_new_time[f_start:f_end + 1] - self._fvcom.time.datetime).total_seconds() == 0:
                     # Do the subsampling on the rest of the data.
-                    for var in PREDICTED.obj_iter(PREDICTED.data):
-                        setattr(PREDICTED.data, var, getattr(PREDICTED.data, var)[::skip, ...])
-                    for time in PREDICTED.obj_iter(PREDICTED.time):
-                        setattr(PREDICTED.time, time, getattr(PREDICTED.time, time)[::skip])
+                    for var in self._pred.obj_iter(self._pred.data):
+                        setattr(self._pred.data, var, getattr(self._pred.data, var)[::skip, ...])
+                    for time in self._pred.obj_iter(self._pred.time):
+                        setattr(self._pred.time, time, getattr(self._pred.time, time)[::skip])
                 else:
                     # We need to interpolate.
                     print('On my todo list...')
                     pass
             elif _inc_fvcom < _inc_predicted:
                 skip = int(_inc_predicted / _inc_fvcom)
-                _new_time = FVCOM.time.datetime[::skip]
-                if np.max(_new_time - PREDICTED.time.datetime).total_seconds() == 0:
+                _new_time = self._fvcom.time.datetime[::skip]
+                if np.max(_new_time - self._pred.time.datetime).total_seconds() == 0:
                     # Do the subsampling on the rest of the data.
-                    for var in FVCOM.obj_iter(FVCOM.data):
-                        setattr(FVCOM.data, var, getattr(FVCOM.data, var)[::skip, ...])
-                    for time in FVCOM.obj_iter(FVCOM.time):
-                        setattr(FVCOM.time, time, getattr(FVCOM.time, time)[::skip])
+                    for var in self._fvcom.obj_iter(self._fvcom.data):
+                        setattr(self._fvcom.data, var, getattr(self._fvcom.data, var)[::skip, ...])
+                    for time in self._fvcom.obj_iter(self._fvcom.time):
+                        setattr(self._fvcom.time, time, getattr(self._fvcom.time, time)[::skip])
                 else:
                     # We need to interpolate.
                     print('On my todo list...')
                     pass
 
-        # Now make a common time variable for use throughout (PREDICTED and
-        # FVCOM should be identical in length now).
-        self.time = copy.copy(FVCOM.time)
+        # Now make a common time variable for use throughout (self._pred and self._fvcom should be identical in
+        # length now).
+        self.time = copy.copy(self._fvcom.time)
         self._inc = np.unique(np.diff(self.time.datetime))[0].total_seconds() / 60 / 60  # in hours
 
         self.u_diff = self._fvcom.data.u - self._pred.data.u
