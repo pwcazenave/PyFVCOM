@@ -110,8 +110,7 @@ class Residuals:
             self.speed = self._clip(self.speed, self._max_speed['instantaneous'])
 
         # Make the components after we've clipped so our plots look nice.
-        self.u_res = np.sin(np.deg2rad(self.direction)) * self.speed
-        self.v_res = np.cos(np.deg2rad(self.direction)) * self.speed
+        self.u_res, self.v_res = scalar2vector(self.direction, self.speed)
 
         if periods:
             for period in periods:
