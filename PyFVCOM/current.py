@@ -141,9 +141,8 @@ class Residuals:
         monthly_inc = daily_inc * 30  # get model steps per 30 days (~month)
         nt = self.time.datetime.shape[0]
         dnt = self.time.datetime[::daily_inc].shape[0]
-        # Monthly increment might mean we end up trying to skip over more days
-        # than we have in the input. So, set the number of montly times to be
-        # 1 (only one month of data) or the number of times when subsampled at
+        # Monthly increment might mean we end up trying to skip over more days than we have in the input. So,
+        # set the number of montly times to be 1 (only one month of data) or the number of times when subsampled at
         # the monthly increment, whichever is larger.
         mnt = np.max((self.time.datetime[::monthly_inc].shape[0], 1))
         nx = self.u_diff.shape[-1]
@@ -156,9 +155,8 @@ class Residuals:
             for var in ('u_diff', 'v_diff'):
                 datetime = []  # has to be a list so we can insert a datetime object.
                 daily = np.empty((dnt, nx))
-                # This could be done with a neat reshaping, but I can't be
-                # bothered to figure it out, so we'll just do it the
-                # old-fashioned way.
+                # This could be done with a neat reshaping, but I can't be bothered to figure it out, so we'll just
+                # do it the old-fashioned way.
                 for ti, t in enumerate(np.arange(0, nt, daily_inc).astype(int)):
                     daily[ti, :] = np.median(getattr(self, var)[t:t + daily_inc, :], axis=0)
                     datetime.append(self.time.datetime[np.min((t, nt - 1))])
@@ -182,9 +180,8 @@ class Residuals:
             for var in ('u_diff', 'v_diff'):
                 datetime = []  # has to be a list so we can insert a datetime object.
                 monthly = np.empty((mnt, nx))
-                # This could be done with a neat reshaping, but I can't be
-                # bothered to figure it out, so we'll just do it the
-                # old-fashioned way.
+                # This could be done with a neat reshaping, but I can't be bothered to figure it out, so we'll just
+                # do it the old-fashioned way.
                 for ti, t in enumerate(np.arange(0, nt / 60 / 30, monthly_inc).astype(int)):
                     monthly[ti, :] = np.median(getattr(self, var)[t:t + monthly_inc, :], axis=0)
                     datetime.append(self.time.datetime[np.min(((t + monthly_inc) // 2, nt - 1))])  # mid-point
@@ -204,8 +201,7 @@ class Residuals:
             self.monthly.v_res = np.cos(np.deg2rad(self.monthly.direction)) * self.monthly.speed
 
         if period == 'monthly':
-            # We need to add a pseudo-time dimension to the monthly data so we
-            # can still use the plot_var function.
+            # We need to add a pseudo-time dimension to the monthly data so we can still use the plot_var function.
             if np.ndim(self.monthly.speed) == 1:
                 self.monthly.speed = self.monthly.speed[np.newaxis, :]
                 self.monthly.direction = self.monthly.direction[np.newaxis, :]
