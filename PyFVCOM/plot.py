@@ -689,20 +689,15 @@ class Plotter:
         -----------
         u : 1D or 2D array
             u-component of the velocity field.
-
         v : 1D or 2D array
             v-component of the velocity field
-
         field : 1D or 2D array
             velocity magnitude field. Used to colour the vectors. Also adds a colour bar which uses the cb_label and
             cmap, if provided.
-
         add_key : bool, optional
             Add key for the quiver plot. Defaults to True.
-
         scale : float, optional
             Scaling to be provided to arrows with scale_units of inches. Defaults to 1.0.
-
         label : str, optional
             Give label to use for the quiver key (defaults to "`scale' ms^{-1}").
 
