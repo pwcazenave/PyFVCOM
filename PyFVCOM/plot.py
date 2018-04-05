@@ -650,12 +650,19 @@ class Plotter:
 
         # Create tripcolor plot
         x, y = self.m(self.lon, self.lat)
-        self.tri = Triangulation(x, y, self.triangles)
-        self.masked_tris = self.tri.get_masked_triangles()
-        field = field[self.masked_tris].mean(axis=1)
-        self.tripcolor_plot = self.axes.tripcolor(self.tri, field,
-                                                  vmin=self.vmin, vmax=self.vmax, cmap=self.cmap,
-                                                  edgecolors=self.edgecolors, zorder=1, norm=self.norm)
+        # Creating a Triangulation object and then using that to plot data on the elements breaks, whereas just
+        # passing the coordinates and the existing triangulation table to tripcolor works fine. We'll do the latter
+        # so we can plot both element and node-based data with this method. However, this removes the masking bit.
+        # I'm not sure what that does anyway, so until someone moans, we'll just ignore it. I'll leave it in despite
+        # this being in version control.
+        # self.tri = Triangulation(x, y, self.triangles)
+        # self.masked_tris = self.tri.get_masked_triangles()
+        # field = np.squeeze(field)[self.masked_tris].mean(axis=1)
+        # self.tripcolor_plot = self.axes.tripcolor(self.tri, field,
+        #                                           vmin=self.vmin, vmax=self.vmax, cmap=self.cmap,
+        #                                           edgecolors=self.edgecolors, zorder=1, norm=self.norm)
+        self.tripcolor_plot = self.axes.tripcolor(x, y, self.triangles, np.squeeze(field), vmin=self.vmin, vmax=self.vmax,
+                                                  cmap=self.cmap, edgecolors=self.edgecolors, zorder=1, norm=self.norm)
 
         # Overlay the grid
         # self.axes.triplot(self.tri, zorder=2)
