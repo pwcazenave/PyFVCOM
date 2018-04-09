@@ -894,10 +894,9 @@ class Model(Domain):
             elev.add_variable('obc_nodes', np.asarray(flatten_list(self.grid.open_boundary_nodes)) + 1, ['nobc'], attributes=atts, ncopts=ncopts, format='i')
             atts = {'long_name': 'internal mode iteration number'}
             # Not sure this variable is actually necessary.
-            elev.add_variable('iint', np.arange(len(self.tide.time)), ['time'], attributes=atts, ncopts=ncopts, format=int)
+            elev.add_variable('iint', np.arange(len(self.tide.time)), ['time'], attributes=atts, ncopts=ncopts, format='i')
             elev.write_fvcom_time(self.tide.time)
-            atts = {'long_name': 'Open Boundary Elevation',
-                    'units': 'meters'}
+            atts = {'long_name': 'Open Boundary Elevation', 'units': 'meters'}
             elev.add_variable('elevation', np.asarray(self.tide.zeta).T, ['time', 'nobc'], attributes=atts, ncopts=ncopts)
 
     def add_rivers(self, positions, names, times, flux, temperature, salinity, threshold=np.inf, history='', info='', ersem=None, sediments=None):
