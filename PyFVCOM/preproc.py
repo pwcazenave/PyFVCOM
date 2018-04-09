@@ -2937,23 +2937,24 @@ class Restart(FileReader):
 
         with Dataset(restart_file, 'w', clobber=True, **ncopts) as ds:
             # Re-create all the dimensions and global attributes in the loaded restart file.
-            for dimension in dimensions:
-                ds.createDimension(dimension, self.ds.dimensions[dimension])
-            for attribute in self.ds.ncattrs():
-                setattr(self.ds, attribute, self.ds.ncattrs()[attribute])
+            for name, dimension in self.ds.dimensions.items():
+                ds.createDimension(name, (len(dimension) if not dimension.isunlimited() else None))
+            # Job-lot copy of the global attributes.
+            ds.setncatts(self.ds.__dict__)
 
             # Make all the variables.
-            for name, variable in self.ds.variables:
+            for name, variable in self.ds.variables.items():
                 x = ds.createVariable(name, variable.datatype, variable.dimensions)
-                if self.noisy:
+                # Copy variable attributes all at once via dictionary
+                ds[name].setncatts(self.ds[name].__dict__)
+                if self._noisy:
                     print('Writing {}'.format(name), end=' ')
                 if name in self.replaced:
-                    if self.noisy:
+                    if self._noisy:
                         print('NEW DATA')
                     ds[name][:] = getattr(self.data, name)
                 else:
-                    if self.noisy:
+                    if self._noisy:
                         print('existing data')
                     ds[name][:] = self.ds[name][:]
-                # Copy variable attributes all at once via dictionary
-                dst[name].setncatts(src[name].__dict__)
+
