@@ -2890,3 +2890,70 @@ def read_hycom(regular, variables, noisy=False, **kwargs):
             hycom_model += HYCOMReader(str(file), **kwargs)
 
     return hycom_model
+
+
+class Restart(FileReader):
+    """
+    Use and abuse FVCOM restart files.
+
+    """
+
+    def __init__(self):
+
+        super().__init__(*args, **kwargs)
+
+        # Store which variables have been replaced so we can do the right thing when writing to netCDF (i.e. use the
+        # replaced data rather than what's in the input restart file).
+        self.replaced = []
+
+    def replace_variable(self, variable, data):
+        """
+        Replace the values in `variable' with the given `data'.
+
+        Parameters
+        ----------
+        variable : str
+            The variable in the restart file to replace.
+        data : numpy.ndarray
+            The data with which to replace it.
+
+        """
+
+        setattr(self.data, variable, data)
+        self.replaced.append(variable)
+
+    def write_restart(self, restart_file, **ncopts):
+        """
+        Write out an FVCOM-formatted netCDF file based.
+
+        Parameters
+        ----------
+        restart_file : str, pathlib.Path
+            The output file to create.
+        ncopts : dict
+            The netCDF options passed as kwargs to netCDF4.Dataset.
+
+        """
+
+        with Dataset(restart_file, 'w', clobber=True, **ncopts) as ds:
+            # Re-create all the dimensions and global attributes in the loaded restart file.
+            for dimension in dimensions:
+                ds.createDimension(dimension, self.ds.dimensions[dimension])
+            for attribute in self.ds.ncattrs():
+                setattr(self.ds, attribute, self.ds.ncattrs()[attribute])
+
+            # Make all the variables.
+            for name, variable in self.ds.variables:
+                x = ds.createVariable(name, variable.datatype, variable.dimensions)
+                if self.noisy:
+                    print('Writing {}'.format(name), end=' ')
+                if name in self.replaced:
+                    if self.noisy:
+                        print('NEW DATA')
+                    ds[name][:] = getattr(self.data, name)
+                else:
+                    if self.noisy:
+                        print('existing data')
+                    ds[name][:] = self.ds[name][:]
+                # Copy variable attributes all at once via dictionary
+                dst[name].setncatts(src[name].__dict__)
