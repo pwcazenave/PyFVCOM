@@ -890,7 +890,8 @@ class Model(Domain):
         with WriteForcing(str(output_file), dims, global_attributes=globals, clobber=True, format='NETCDF4', **kwargs) as elev:
             # Add the variables.
             atts = {'long_name': 'Open Boundary Node Number', 'grid': 'obc_grid'}
-            elev.add_variable('obc_nodes', flatten_list(self.grid.open_boundary_nodes), ['nobc'], attributes=atts, ncopts=ncopts)
+            # Don't forget to offset the open boundary node IDs by one to account for Python indexing!
+            elev.add_variable('obc_nodes', np.asarray(flatten_list(self.grid.open_boundary_nodes)) + 1, ['nobc'], attributes=atts, ncopts=ncopts, format='i')
             atts = {'long_name': 'internal mode iteration number'}
             # Not sure this variable is actually necessary.
             elev.add_variable('iint', np.arange(len(self.tide.time)), ['time'], attributes=atts, ncopts=ncopts, format=int)
