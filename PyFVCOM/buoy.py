@@ -319,8 +319,9 @@ class Buoy:
                         name_index = self._header_indices[name]
                         data = []
                         for line in self._lines[self._header_length:]:
-                            # Only keep values where we've got as many columns as headers.
-                            if len(line) == num_columns:
+                            if name_index >= len(line):
+                                data.append(np.nan)
+                            else:
                                 data.append(line[name_index])
                         try:
                             setattr(self, name.strip().replace(' ', '_').replace('(', '').replace(')', ''), np.asarray(data, dtype=float))
@@ -353,9 +354,7 @@ class Buoy:
                         name_index = self._header_indices[name]
                         data = []
                         for line in self._lines[self._header_length:]:
-                            # Only keep values where we've got as many columns as headers.
-                            if len(line) == num_columns:
-                                data.append(line[name_index])
+                            data.append(line[name_index])
                         setattr(self, name.strip().replace(' ', '_').replace('(', '').replace(')', ''), np.asarray(data))
 
             # Now make datetime objects from the time.
