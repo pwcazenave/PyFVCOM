@@ -160,7 +160,7 @@ def get_buoy_data(db, table, fields, noisy=False):
 class Buoy:
     """ Generic class for buoy data (i.e. surface time series). """
 
-    def __init__(self, filename, position=None, station=None, missing_value=None, noisy=False):
+    def __init__(self, filename, position=(np.nan, np.nan), station=None, missing_value=None, noisy=False):
         """
         Create a buoy object from the given file name.
 
