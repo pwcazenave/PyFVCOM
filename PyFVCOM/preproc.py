@@ -172,6 +172,7 @@ class Model(Domain):
 
     def write_coriolis(self, coriolis_file):
         """
+        Write an FVCOM-formatted Coriolis file.
 
         Parameters
         ----------
