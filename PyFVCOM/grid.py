@@ -434,6 +434,7 @@ class OpenBoundary:
             self.elements = ids
         self.sponge_coefficient = None
         self.sponge_radius = None
+        self.type = None
         # Add fields which get populated if this open boundary is made a part of a nested region.
         self.weight_node = None
         self.weight_element = None
@@ -472,6 +473,24 @@ class OpenBoundary:
         self.sponge_radius = radius
 
         self.sponge_coefficient = coefficient
+
+    def add_type(self, type=1):
+        """
+        Add an FVCOM open boundary type to the current boundary.
+
+        Parameters
+        ----------
+        type : int, optional
+            The open boundary type. See the types listed in mod_obcs.F, lines 29 to 49, reproduced in the notes below
+            for convenience. Defaults to 1 (prescribed surface elevation).
+
+        Provides
+        --------
+        Populates the self.boundaries open boundary objects with the relevant `type' attribute.
+
+        """
+
+        setattr(self, 'type', type)
 
     def add_tpxo_tides(self, tpxo_harmonics, predict='zeta', interval=1, constituents=['M2'], serial=False, pool_size=None, noisy=False):
         """

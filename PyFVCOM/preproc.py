@@ -1915,6 +1915,56 @@ class Model(Domain):
                     'coordinates': 'time siglay lat lon'}
             nest.add_variable('hyw', hyw, ['time', 'siglay', 'node'], attributes=atts, ncopts=ncopts)
 
+    def add_obc_types(self, types):
+        """
+        For each open boundary in self.boundaries, add a type.
+
+        Parameters
+        ----------
+        type : int, list, optional
+            The open boundary type. See the types listed in mod_obcs.F, lines 29 to 49, reproduced in the notes below
+            for convenience. Defaults to 1 (prescribed surface elevation). If given as a list, there must be one
+            value per open boundary.
+
+        Provides
+        --------
+        Populates the self.boundaries open boundary objects with the relevant `type' attribute.
+
+        """
+        try:
+            [_ for _ in types]
+        except TypeError:
+            types = [types for _ in len(self.open_boundaries)]
+
+        for boundary, value in zip(self.open_boundaries, types):
+            boundary.add_type(value)
+
+    def write_obc(self, obc_file):
+        """
+        Write out the open boundary configuration data to an FVCOM-formatted ASCII file.
+
+        Parameters
+        ----------
+        obc_file : str, pathlib.Path
+            Path to the file to create.
+
+        """
+
+        # Work through all the open boundary objects collecting all the information we need and then dump that to file.
+        types = []
+        ids = []
+        for boundary in self.open_boundaries:
+            ids += boundary.nodes
+            types += [boundary.type] * len(boundary.nodes)
+
+        # I feel like this should be in self.dims.
+        number_of_nodes = len(ids)
+
+        with open(str(obc_file), 'w') as f:
+            f.write('OBC Node Number = {:d}\n'.format(number_of_nodes))
+            for count, node, obc_type in zip(np.arange(number_of_nodes) + 1, ids, types):
+                f.write('{} {:d} {:d}\n'.format(count, node + 1, obc_type))
+
     def read_regular(self, *args, **kwargs):
         read_regular.__doc__
         self.regular = read_regular(*args, noisy=self.noisy, **kwargs)
