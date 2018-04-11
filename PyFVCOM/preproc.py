@@ -1187,8 +1187,7 @@ class Model(Domain):
             return possible_nodes[dist.argmin()]
         else:
             return possible_nodes[0]
-    
-    
+
     def write_river_forcing(self, output_file, ersem=False, ncopts={'zlib': True, 'complevel': 7}, sediments=False, **kwargs):
         """
         Write out an FVCOM river forcing netCDF file.
