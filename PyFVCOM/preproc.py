@@ -181,7 +181,10 @@ class Model(Domain):
 
         """
 
-        with open(coriolis_file, 'w') as f:
+        if isinstance(coriolis_file, str):
+            coriolis_file = Path(coriolis_file)
+
+        with coriolis_file.open('w') as f:
             if self.grid.native_coordinates.lower() == 'spherical':
                 x, y = self.grid.lon, self.grid.lat
             else:
@@ -787,7 +790,10 @@ class Model(Domain):
 
         """
 
-        with open(sigma_file, 'w') as f:
+        if isinstance(sigma_file, str):
+            sigma_file = Path(sigma_file)
+
+        with sigma_file.open('w') as f:
             # All types of sigma distribution have the two following lines.
             f.write('NUMBER OF SIGMA LEVELS = {:d}\n'.format(self.dims.levels))
             f.write('SIGMA COORDINATE TYPE = {}\n'.format(self.sigma.type))
@@ -840,6 +846,9 @@ class Model(Domain):
 
         """
 
+        if isinstance(sponge_file, str):
+            sponge_file = Path(sponge_file)
+
         # Work through all the open boundary objects collecting all the information we need and then dump that to file.
         radius = []
         coefficient = []
@@ -850,7 +859,7 @@ class Model(Domain):
         # I feel like this should be in self.dims.
         number_of_nodes = len(radius)
 
-        with open(str(sponge_file), 'w') as f:
+        with sponge_file.open('w') as f:
             f.write('Sponge Node Number = {:d}\n'.format(number_of_nodes))
             for node in zip(np.arange(number_of_nodes) + 1, radius, coefficient):
                 f.write('{} {:.6f} {:.6f}\n'.format(*node))
