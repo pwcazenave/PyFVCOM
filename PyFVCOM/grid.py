@@ -421,7 +421,8 @@ class OpenBoundary(object):
         Provides
         --------
         add_sponge_layer : add a sponge layer to the open boundary.
-        add_tpxo_tides : predict tidal elevations/currents along the open boundary.
+        add_type : give the open boundary a type (see mod_obcs.F and Table 6.1 in the FVCOM manual)
+        add_tpxo_tides : predict tidal elevations/currents along the open boundary from TPXO harmonics.
         add_nested_forcing : interpolate some regularly gridded data onto the open boundary.
 
         """
