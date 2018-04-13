@@ -474,13 +474,13 @@ class OpenBoundary(object):
 
         self.sponge_coefficient = coefficient
 
-    def add_type(self, type=1):
+    def add_type(self, obc_type=1):
         """
         Add an FVCOM open boundary type to the current boundary.
 
         Parameters
         ----------
-        type : int, optional
+        obc_type : int, optional
             The open boundary type. See the types listed in mod_obcs.F, lines 29 to 49, reproduced in the notes below
             for convenience. Defaults to 1 (prescribed surface elevation).
 
@@ -490,7 +490,8 @@ class OpenBoundary(object):
 
         """
 
-        setattr(self, 'type', type)
+        # Feels a bit ridiculous having a whole method for this...
+        setattr(self, 'type', obc_type)
 
     def add_tpxo_tides(self, tpxo_harmonics, predict='zeta', interval=1, constituents=['M2'], serial=False, pool_size=None, noisy=False):
         """
