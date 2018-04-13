@@ -397,7 +397,7 @@ class Domain(object):
                              np.asarray((x[triangles[:, 2]], y[triangles[:, 2]])).T)
 
 
-class OpenBoundary:
+class OpenBoundary(object):
     """
     FVCOM grid open boundary object. Handles reading, writing and interpolating.
 
