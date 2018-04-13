@@ -14,7 +14,7 @@
 
 # In[1]:
 
-get_ipython().magic('matplotlib inline')
+# get_ipython().magic('matplotlib inline')
 
 
 # In[2]:
@@ -92,9 +92,4 @@ z = make_water_column(fvcom.data.zeta, fvcom.grid.h, fvcom.grid.siglay)
 # position.
 time.plot_surface(z, np.squeeze(fvcom.data.temp), fill_seabed=True)
 time.axes.set_ylabel('Depth (m)')
-
-
-# In[ ]:
-
-
 

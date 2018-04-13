@@ -1,24 +1,21 @@
 
 # coding: utf-8
 
-# In[ ]:
+# In[1]:
 
-get_ipython().magic('matplotlib inline')
+# get_ipython().magic('matplotlib inline')
 
 
-# In[ ]:
+# In[2]:
 
 import numpy as np
 import matplotlib.pyplot as plt
-
-from netCDF4 import num2date
-from matplotlib import rcParams
 
 from PyFVCOM.read import MFileReader
 from PyFVCOM.plot import Time
 
 
-# In[ ]:
+# In[3]:
 
 # Multiple output files can be loaded with MFileReader.
 files = ['sample_april.nc', 'sample_may.nc', 'sample_june.nc']
@@ -36,13 +33,13 @@ varlist = ['temp']
 fvcom = MFileReader(files, variables=varlist, dims=dims)
 
 
-# In[ ]:
+# In[4]:
 
 # Find the nodes in the grid closest to the positions we're interested in plotting.
 indices = [fvcom.closest_node(i) for i in xy]
 
 
-# In[ ]:
+# In[5]:
 
 # Now plot the time series.
 fig = plt.figure(figsize=(14, 7))  # size in inches
@@ -52,9 +49,4 @@ for c, ind in enumerate(indices):
     time.plot_line(fvcom.data.temp[:, 0, ind])
     time.axes.set_title('Sea surface temperature nearest to position {}, {}'.format(*xy[c, :]))
     time.axes.set_ylabel('{} ({})'.format(fvcom.atts.temp.long_name, fvcom.atts.temp.units))
-
-
-# In[ ]:
-
-
 

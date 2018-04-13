@@ -3,7 +3,7 @@
 
 # In[1]:
 
-get_ipython().magic('matplotlib inline')
+# get_ipython().magic('matplotlib inline')
 
 
 # In[2]:
@@ -67,7 +67,7 @@ x, y = m(FVCOM['lon'], FVCOM['lat'])
 fig = plt.figure(figsize=(10, 10))  # units are inches for the size
 ax = fig.add_subplot(111)
 
-tp = ax.tripcolor(x, y, triangles, FVCOM['zeta'][5, :], cmap=cm.balance)
+tp = ax.tripcolor(x, y, triangles, FVCOM['zeta'][19, :], cmap=cm.balance)
 tp.set_clim(-5, 5)  # clip the colours to +/- 5m.
 
 # Add the coastline.
@@ -77,16 +77,11 @@ m.fillcontinents(color='0.6')
 m.drawparallels(parallels, labels=[1, 0, 0, 0], linewidth=0)
 m.drawmeridians(meridians, labels=[0, 0, 0, 1], linewidth=0)
 
-# # Add a nice colour bar.
-# div = make_axes_locatable(ax)
-# cax = div.append_axes("right", size="5%", pad=0.2)
-# cb = fig.colorbar(tp, cax=cax)
-# cb.set_label("Surface elevation (m)")
+# Add a nice colour bar.
+div = make_axes_locatable(ax)
+cax = div.append_axes("right", size="5%", pad=0.2)
+cb = fig.colorbar(tp, cax=cax)
+cb.set_label("Surface elevation (m)")
 
 ax.set_title(''.join(FVCOM['Times'][-1, :-7].astype(str)))
-
-
-# In[ ]:
-
-
 
