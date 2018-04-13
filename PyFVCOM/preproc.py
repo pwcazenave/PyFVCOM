@@ -64,7 +64,6 @@ class Model(Domain):
         # Initialise things so we can add attributes to them later.
         self.time = type('time', (), {})()
         self.sigma = type('sigma', (), {})()
-        self.tide = type('tide', (), {})()
         self.sst = type('sst', (), {})()
         self.nest = type('nest', (), {})()
         self.regular = None
@@ -884,7 +883,8 @@ class Model(Domain):
 
     def write_tides(self, output_file, ncopts={'zlib': True, 'complevel': 7}, **kwargs):
         """
-        Generate a tidal elevation forcing file for the given FVCOM domain from the self.tides data.
+        Generate a tidal elevation forcing file for the given FVCOM domain from the tide data in each open boundary
+        object.
 
         Parameters
         ----------
@@ -896,6 +896,16 @@ class Model(Domain):
         Remaining arguments are passed to WriteForcing.
 
         """
+
+        # Collate all the tides into an appropriate single array. The tidal forcing is offset by a day either way,
+        # so we need to use that rather than self.time.datetime. This is also required because simple tidal forcing
+        # can be defined on a finer time series than other data.
+        time = self.open_boundaries[0].tide.time
+        zeta = np.full((len(time), self.dims.open_boundary_nodes), np.nan)
+        for id, boundary in enumerate(self.open_boundaries):
+            start_index = id * len(boundary.nodes)
+            end_index = start_index + len(boundary.nodes)
+            zeta[:, start_index:end_index] = boundary.tide.zeta
 
         globals = {'type': 'FVCOM TIME SERIES ELEVATION FORCING FILE',
                    'title': 'TPXO tides',
@@ -909,10 +919,10 @@ class Model(Domain):
             elev.add_variable('obc_nodes', np.asarray(flatten_list(self.grid.open_boundary_nodes)) + 1, ['nobc'], attributes=atts, ncopts=ncopts, format='i')
             atts = {'long_name': 'internal mode iteration number'}
             # Not sure this variable is actually necessary.
-            elev.add_variable('iint', np.arange(len(self.tide.time)), ['time'], attributes=atts, ncopts=ncopts, format='i')
-            elev.write_fvcom_time(self.tide.time)
+            elev.add_variable('iint', np.arange(len(time)), ['time'], attributes=atts, ncopts=ncopts, format='i')
+            elev.write_fvcom_time(time)
             atts = {'long_name': 'Open Boundary Elevation', 'units': 'meters'}
-            elev.add_variable('elevation', np.asarray(self.tide.zeta).T, ['time', 'nobc'], attributes=atts, ncopts=ncopts)
+            elev.add_variable('elevation', zeta, ['time', 'nobc'], attributes=atts, ncopts=ncopts)
 
     def add_rivers(self, positions, names, times, flux, temperature, salinity, threshold=np.inf, history='', info='', ersem=None, sediments=None):
         """
