@@ -114,9 +114,11 @@ class Model(Domain):
         """ Add the relevant node-based grid information for any open boundaries we've got. """
 
         self.open_boundaries = []
+        self.dims.open_boundary_nodes = 0  # assume no open boundary nodes
         if np.any(self.grid.open_boundary_nodes):
             for nodes in self.grid.open_boundary_nodes:
                 self.open_boundaries.append(OpenBoundary(nodes))
+                self.dims.open_boundary_nodes += len(nodes)
                 # Add the positions of the relevant bits of information.
                 for attribute in ('lon', 'lat', 'x', 'y', 'h'):
                     try:
@@ -138,6 +140,8 @@ class Model(Domain):
 
         # Add the sigma data to any open boundaries we've got loaded.
         for boundary in self.open_boundaries:
+            # Update the dimensions.
+            self.dims.open_boundary_nodes += len(boundary.nodes)
             for attribute in self.obj_iter(self.sigma):
                 try:
                     # Ignore element-based data for now.
