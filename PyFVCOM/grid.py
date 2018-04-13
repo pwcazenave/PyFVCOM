@@ -521,40 +521,19 @@ class OpenBoundary(object):
             raise AttributeError('No time data have been added to this OpenBoundary object, so we cannot predict tides.')
         self.tide.time = date_range(self.time.start - relativedelta(days=1), self.time.end + relativedelta(days=1), inc=interval)
 
-        # UTide needs MATLAB times.
-        times = mtime(dates)
+        amplitudes, phases, tpxo_constituents, latitudes = self._load_tpxo_harmonics(tpxo_harmonics, constituents, predict)
+        self.tide.constituents = tpxo_constituents
 
-        if predict == 'zeta':
-            amplitude_var, phase_var = 'ha', 'hp'
-            x, y = self.grid.lon, self.grid.lat
-            xdim = self.nodes
-        elif predict == 'u':
-            amplitude_var, phase_var = 'ua', 'up'
-            x, y = self.grid.lonc, self.grid.latc
-            xdim = self.elements
-        elif predict == 'v':
-            amplitude_var, phase_var = 'va', 'vp'
-            x, y = self.grid.lonc, self.grid.latc
-            xdim = self.elements
+        # Predict the tides
+        results = self._prepare_tides(amplitudes, phases, latitudes, serial, pool_size)
 
-        latitudes = y
+        # Dump the results into the object.
+        setattr(self.tide, predict, np.asarray(results).T)  # put the time dimension first, space last.
 
-        with Dataset(str(tpxo_harmonics), 'r') as tides:
-            tpxo_const = [''.join(i).upper().strip() for i in tides.variables['con'][:].astype(str)]
-            # If we've been given variables that aren't in the TPXO data, just find the indices we do have.
-            cidx = [tpxo_const.index(i) for i in constituents if i in tpxo_const]
-            # Save the names of the constituents we've actually used.
-            self.tide.constituents = [constituents[i] for i in cidx]
-            amplitudes = np.empty((xdim, len(cidx))) * np.nan
-            phases = np.empty((xdim, len(cidx))) * np.nan
 
-            for xi, xy in enumerate(zip(x, y)):
-                idx = [np.argmin(np.abs(tides['lon_z'][:, 0] - xy[0])),
-                       np.argmin(np.abs(tides['lat_z'][0, :] - xy[1]))]
-                amplitudes[xi, :] = tides.variables[amplitude_var][cidx, idx[0], idx[1]]
-                phases[xi, :] = tides.variables[phase_var][cidx, idx[0], idx[1]]
 
-        # Prepare the UTide inputs for the constituents in the TPXO data.
+    def _prepare_tides(self, amplitudes, phases, latitudes, serial=False, pool_size=None, noisy=False):
+        # Prepare the UTide inputs for the constituents we've loaded.
         const_idx = np.asarray([ut_constants['const']['name'].tolist().index(i) for i in self.tide.constituents])
         frq = ut_constants['const']['freq'][const_idx]
 
@@ -563,21 +542,86 @@ class OpenBoundary(object):
         coef['aux']['opt'] = Bunch(twodim=False, nodsatlint=False, nodsatnone=False,
                                    gwchlint=False, gwchnone=False, notrend=False, prefilt=[])
 
-        args = [(latitudes[i], times, coef, amplitudes[i], phases[i], noisy) for i in range(xdim)]
+        # Prepare the time data for predicting the time series. UTide needs MATLAB times.
+        times = mtime(self.tide.time)
+        args = [(latitudes[i], times, coef, amplitudes[i], phases[i], noisy) for i in range(len(latitudes))]
         if serial:
             results = []
             for arg in args:
                 results.append(self._predict_tide(arg))
         else:
-            if not pool_size:
+            if pool_size is not None:
                 pool = multiprocessing.Pool()
             else:
                 pool = multiprocessing.Pool(pool_size)
             results = pool.map(self._predict_tide, args)
             pool.close()
 
-        # Dump the results into the object.
-        setattr(self.tide, predict, np.asarray(results))
+        return results
+
+    def _load_tpxo_harmonics(self, tpxo_harmonics, constituents, predict):
+        """
+        Load the TPXO harmonics data from the given file for the given variables.
+
+        Parameters
+        ----------
+        tpxo_harmonics : str, pathlib.Path
+            Path to the TPXO netCDF file.
+        constituents : list
+            List of constituent names to use in UTide.reconstruct.
+        predict : str, optional
+            Type of data to predict. Select 'zeta', 'u' or 'v'.
+
+        Return
+        ------
+        amplitudes : np.ndarray
+            The amplitudes for the given constituents.
+        phases : np.darray
+            The amplitudes for the given constituents.
+        tpxo_constituents : list
+            The constituents which have been requested that actually exist in the TPXO netCDF file.
+
+        """
+
+        if predict == 'zeta':
+            amplitude_var, phase_var = 'ha', 'hp'
+            x, y = copy.copy(self.grid.lon), self.grid.lat
+            xdim = self.nodes
+        elif predict == 'u':
+            amplitude_var, phase_var = 'ua', 'up'
+            x, y = copy.copy(self.grid.lonc), self.grid.latc
+            xdim = self.elements
+        elif predict == 'v':
+            amplitude_var, phase_var = 'va', 'vp'
+            x, y = copy.copy(self.grid.lonc), self.grid.latc
+            xdim = self.elements
+
+        # Fix our input position longitudes to be in the 0-360 range to match the TPXO data range.
+        x[x < 0] += 360
+
+        with Dataset(str(tpxo_harmonics), 'r') as tides:
+            tpxo_const = [''.join(i).upper().strip() for i in tides.variables['con'][:].astype(str)]
+            # If we've been given constituents that aren't in the TPXO data, just find the indices we do have.
+            cidx = [tpxo_const.index(i) for i in constituents if i in tpxo_const]
+            # Save the names of the constituents we've actually used.
+            tpxo_constituents = [constituents[i] for i in cidx]
+
+            tpxo_lon = tides.variables['lon_z'][:, 0]
+            tpxo_lat = tides.variables['lat_z'][0, :]
+            # Interpolate from the TPXO data onto the current open boundary positions.
+            tpxo_amp_data = tides.variables[amplitude_var][cidx, :, :]
+            tpxo_phase_data = tides.variables[phase_var][cidx, :, :]
+            amplitude_interp = RegularGridInterpolator((np.asarray(cidx), tpxo_lon, tpxo_lat), tpxo_amp_data, method='linear', fill_value=None)
+            phase_interp = RegularGridInterpolator((cidx, tpxo_lon, tpxo_lat), tpxo_phase_data, method='linear', fill_value=None)
+
+            # Make our boundary positions suitable for interpolation with a RegularGridInterpolator.
+            xx = np.tile(x, [len(cidx), 1])
+            yy = np.tile(y, [len(cidx), 1])
+            ccidx = np.tile(cidx, [len(x), 1]).T
+            amplitudes = amplitude_interp((ccidx, xx, yy)).T
+            phases = phase_interp((ccidx, xx, yy)).T
+
+        return amplitudes, phases, tpxo_constituents, y
 
     @staticmethod
     def _predict_tide(args):
