@@ -493,7 +493,7 @@ class OpenBoundary(object):
         # Feels a bit ridiculous having a whole method for this...
         setattr(self, 'type', obc_type)
 
-    def add_tpxo_tides(self, tpxo_harmonics, predict='zeta', interval=1, constituents=['M2'], serial=False, pool_size=None, noisy=False):
+    def add_tpxo_tides(self, tpxo_harmonics, predict='zeta', interval=1 / 24, constituents=['M2'], serial=False, pool_size=None, noisy=False):
         """
         Add TPXO tides at the open boundary nodes.
 
@@ -518,9 +518,8 @@ class OpenBoundary(object):
 
         if not hasattr(self.time, 'start'):
             raise AttributeError('No time data have been added to this OpenBoundary object, so we cannot predict tides.')
+        self.tide.time = date_range(self.time.start - relativedelta(days=1), self.time.end + relativedelta(days=1), inc=interval)
 
-        dates = date_range(self.time.start - relativedelta(days=1), self.time.end + relativedelta(days=1), inc=interval / 24)
-        self.tide.time = dates
         # UTide needs MATLAB times.
         times = mtime(dates)
 
