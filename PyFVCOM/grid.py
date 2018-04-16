@@ -586,15 +586,12 @@ class OpenBoundary(object):
         if predict == 'zeta':
             amplitude_var, phase_var = 'ha', 'hp'
             x, y = copy.copy(self.grid.lon), self.grid.lat
-            xdim = self.nodes
         elif predict == 'u':
             amplitude_var, phase_var = 'ua', 'up'
             x, y = copy.copy(self.grid.lonc), self.grid.latc
-            xdim = self.elements
         elif predict == 'v':
             amplitude_var, phase_var = 'va', 'vp'
             x, y = copy.copy(self.grid.lonc), self.grid.latc
-            xdim = self.elements
 
         # Fix our input position longitudes to be in the 0-360 range to match the TPXO data range.
         x[x < 0] += 360
