@@ -1041,11 +1041,11 @@ class Model(Domain):
                 for extra in extra_data:
                     if not hasattr(self.river, extra):
                         setattr(self.river, extra, extra_data[extra])
-                
+
             if sediments:
                 for variable in sediments:
                     setattr(self.river, variable, sediments[variable][:, river_index])
-                
+
     def check_rivers(self, max_discharge=None, min_depth=None, open_boundary_proximity=None, noisy=False):
         """
         Check the river nodes are suitable for an FVCOM run. By default, this only checks for rivers attached to
@@ -1079,13 +1079,13 @@ class Model(Domain):
                     each_flux = self.river.flux[:,this_river]/no_of_splits # everything else is concentrations so can just be copied
 
                     for this_i in np.arange(2,no_of_splits +1):
-                        self.river.names.append('{}_{:d}'.format(original_river_name, int(this_i)))        
-                    
+                        self.river.names.append('{}_{:d}'.format(original_river_name, int(this_i)))
+
                     self.river.flux[:, this_river] = each_flux # everything else is concentrations so can just be copied
-                    
+
                     # Collect all variables to add columns for
                     all_vars = ['flux', 'temperature', 'salinity']
-    
+
                     # Ersem variables if they're in there
                     N_names = list(filter(lambda x: 'N' in x, list(self.river.__dict__.keys())))
                     Z_names = list(filter(lambda x: 'Z' in x, list(self.river.__dict__.keys())))
@@ -1095,13 +1095,13 @@ class Model(Domain):
                     muddy_sediment_names = list(filter(lambda x: 'mud_' in x, list(self.river.__dict__.keys())))
                     sandy_sediment_names = list(filter(lambda x: 'sand_' in x, list(self.river.__dict__.keys())))
 
-                    all_vars = flatten_list([all_vars, N_names, Z_names, O_names, muddy_sediment_names, sandy_sediment_names]) 
+                    all_vars = flatten_list([all_vars, N_names, Z_names, O_names, muddy_sediment_names, sandy_sediment_names])
 
                     for this_var in all_vars:
                         self._add_river_col(this_var, this_river, no_of_splits -1)
 
                     original_river_node = self.river.node[this_river]
-                    for this_new_riv in np.arange(1, no_of_splits):    
+                    for this_new_riv in np.arange(1, no_of_splits):
                         self.river.node.append(self._find_near_free_node(original_river_node))
                     print('Flux array shape {} x {}'.format(self.river.flux.shape[0], self.river.flux.shape[1]))
                     print('Node list length {}'.format(len(self.river.node)))
@@ -1112,10 +1112,10 @@ class Model(Domain):
             bad = find_bad_node(self.grid.triangles, node)
             if bad:
                 self.river.node[i] = self._find_near_free_node(node)
-                        
+
         if min_depth:
             shallow_rivers = np.argwhere(self.grid.h[self.river.node] < min_depth)
-                      
+
             for this_shallow_node in self.grid.coastline[self.grid.h[self.grid.coastline] < min_depth]:
                 self.river.bad_nodes.append(this_shallow_node)
             if np.any(shallow_rivers):
@@ -1182,7 +1182,7 @@ class Model(Domain):
         while len(possible_nodes) == 0:
             start_next = []
             for this_node in start_nodes:
-                attached_nodes = self.grid.coastline[np.isin(self.grid.coastline, 
+                attached_nodes = self.grid.coastline[np.isin(self.grid.coastline,
                         self.grid.triangles[np.any(np.isin(self.grid.triangles, this_node), axis=1),:].flatten())]
                 attached_nodes = np.delete(attached_nodes, np.where(np.isin(attached_nodes,nodes_checked)))
                 for this_candidate in attached_nodes:
@@ -1198,7 +1198,7 @@ class Model(Domain):
             start_nodes = np.unique(np.asarray(start_next).flatten())
 
         # if more than one possible node choose the closest
-        if len(possible_nodes) > 1:        
+        if len(possible_nodes) > 1:
             start_node_ll = [self.grid.lon[start_node], self.grid.lat[start_node]]
             possible_nodes_ll = [self.grid.lon[np.asarray(possible_nodes)], self.grid.lat[np.asarray(possible_nodes)]]
             dist = np.asarray([haversine_distance(pt_1, start_node_ll) for pt_1 in possible_nodes_ll])
@@ -1255,7 +1255,7 @@ class Model(Domain):
         dims = {'namelen': 80, 'rivers': self.dims.river, 'time': 0, 'DateStrLen': 26}
         with WriteForcing(str(output_file), dims, global_attributes=globals, clobber=True, format='NETCDF4', **kwargs) as river:
             # We need to force the river names to be right-padded to 80 characters and transposed for the netCDF array.
-            river_names = stringtochar(np.asarray(self.river.names, dtype='S80')) 
+            river_names = stringtochar(np.asarray(self.river.names, dtype='S80'))
             river.add_variable('river_names', river_names, ['rivers', 'namelen'], format='c', ncopts=ncopts)
 
             river.write_fvcom_time(self.river.time, ncopts=ncopts)
@@ -1315,20 +1315,20 @@ class Model(Domain):
                                                ['time', 'rivers'],
                                                attributes=atts,
                                                ncopts=ncopts)
-        
+
             if sediments:
                 muddy_sediment_names = list(filter(lambda x:'mud_' in x, list(self.river.__dict__.keys())))
                 sandy_sediment_names = list(filter(lambda x:'sand_' in x, list(self.river.__dict__.keys())))
 
                 if muddy_sediment_names:
                     for this_sediment in muddy_sediment_names:
-                        atts = {'long_name': '{} - muddy stuff'.format(this_sediment), 'units': 'kgm^-3'} 
+                        atts = {'long_name': '{} - muddy stuff'.format(this_sediment), 'units': 'kgm^-3'}
                         river.add_variable(this_sediment, getattr(self.river, this_sediment), ['time', 'rivers'],
                                            attributes=atts, ncopts=ncopts)
-    
+
                 if sandy_sediment_names:
                     for this_sediment in sandy_sediment_names:
-                        atts = {'long_name': '{} - sandy stuff'.format(this_sediment), 'units': 'kgm^-3'}    
+                        atts = {'long_name': '{} - sandy stuff'.format(this_sediment), 'units': 'kgm^-3'}
                         river.add_variable(this_sediment, getattr(self.river, this_sediment), ['time', 'rivers'],
                                            attributes=atts, ncopts=ncopts)
 
