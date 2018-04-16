@@ -1658,16 +1658,16 @@ class Model(Domain):
             if nesting_type == 3:
                 self.nest[-1].add_weights()
 
-    def write_nested_forcing(self, nests, ncfile, type=3, **kwargs):
+    def write_nested_forcing(self, ncfile, nests, type=3, **kwargs):
         """
         Write out the given nested forcing into the specified netCDF file.
 
         Parameters
         ----------
-        nests : list
-            List of PyFVCOM.grid.Nest objects.
         ncfile : str, pathlib.Path
             Path to the output netCDF file to created.
+        nests : list
+            List of PyFVCOM.grid.Nest objects.
         type : int, optional
             Type of model nesting. Currently only type 3 (indirect) is supported. Defaults to 3.
 
