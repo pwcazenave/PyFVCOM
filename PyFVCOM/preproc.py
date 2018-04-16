@@ -117,7 +117,6 @@ class Model(Domain):
         if np.any(self.grid.open_boundary_nodes):
             for nodes in self.grid.open_boundary_nodes:
                 self.open_boundaries.append(OpenBoundary(nodes))
-                self.dims.open_boundary_nodes += len(nodes)
                 # Add the positions of the relevant bits of information.
                 for attribute in ('lon', 'lat', 'x', 'y', 'h'):
                     try:
