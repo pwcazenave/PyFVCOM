@@ -996,7 +996,12 @@ class Model(Domain):
             dist = np.asarray([haversine_distance(pt_1, position) for pt_1 in grid_pts])
             breached_distance = dist < threshold
             if np.any(breached_distance):
-                nodes.append(self.grid.coastline[np.argmin(dist)][0])
+                # I don't know why sometimes we have to [0] the distance and other times we don't. This feels prone
+                # to failure.
+                try:
+                    nodes.append(self.grid.coastline[np.argmin(dist)][0])
+                except IndexError:
+                    nodes.append(self.grid.coastline[np.argmin(dist)])
                 river_index.append(ri)
 
         self.river.node = nodes
