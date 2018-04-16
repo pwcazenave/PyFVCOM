@@ -799,7 +799,7 @@ class Model(Domain):
 
         with sigma_file.open('w') as f:
             # All types of sigma distribution have the two following lines.
-            f.write('NUMBER OF SIGMA LEVELS = {:d}\n'.format(self.dims.levels))
+            f.write('NUMBER OF SIGMA LEVELS = {:d}\n'.format(self.sigma.levels))
             f.write('SIGMA COORDINATE TYPE = {}\n'.format(self.sigma.type))
             if self.sigma.type.lower() == 'generalized':
                 f.write('DU = {:4.1f}\n'.format(self.sigma.upper_layer_depth))
