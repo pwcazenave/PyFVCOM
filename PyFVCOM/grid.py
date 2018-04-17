@@ -21,7 +21,7 @@ from matplotlib.dates import date2num as mtime
 from matplotlib.tri import CubicTriInterpolator
 from matplotlib.tri.triangulation import Triangulation
 from netCDF4 import Dataset, date2num
-from scipy.interpolate import RegularGridInterpolator
+from scipy.interpolate import RegularGridInterpolator, LinearNDInterpolator
 from scipy.spatial import Delaunay
 from utide import reconstruct, ut_constants
 from utide.utilities import Bunch
@@ -424,6 +424,7 @@ class OpenBoundary(object):
         add_sponge_layer : add a sponge layer to the open boundary.
         add_type : give the open boundary a type (see mod_obcs.F and Table 6.1 in the FVCOM manual)
         add_tpxo_tides : predict tidal elevations/currents along the open boundary from TPXO harmonics.
+        add_fvcom_tides : predict tidal elevations/currents along the open boundary from FVCOM harmonics.
         add_nested_forcing : interpolate some regularly gridded data onto the open boundary.
 
         """
@@ -522,16 +523,103 @@ class OpenBoundary(object):
             raise AttributeError('No time data have been added to this OpenBoundary object, so we cannot predict tides.')
         self.tide.time = date_range(self.time.start - relativedelta(days=1), self.time.end + relativedelta(days=1), inc=interval)
 
-        amplitudes, phases, tpxo_constituents, latitudes = self._load_tpxo_harmonics(tpxo_harmonics, constituents, predict)
-        self.tide.constituents = tpxo_constituents
+        constituent_name = 'con'
+        if predict == 'zeta':
+            amplitude_name, phase_name = 'ha', 'hp'
+            x, y = copy.copy(self.grid.lon), self.grid.lat
+            lon_name, lat_name = 'lon_z', 'lat_z'
+        elif predict == 'u':
+            amplitude_name, phase_name = 'ua', 'up'
+            x, y = copy.copy(self.grid.lonc), self.grid.latc
+            lon_name, lat_name = 'lon_u', 'lat_u'
+        elif predict == 'v':
+            amplitude_name, phase_name = 'va', 'vp'
+            x, y = copy.copy(self.grid.lonc), self.grid.latc
+            lon_name, lat_name = 'lon_v', 'lat_v'
+
+        names = {'amplitude_name': amplitude_name,
+                 'phase_name': phase_name,
+                 'lon_name': lon_name,
+                 'lat_name': lat_name,
+                 'constituent_name': constituent_name}
+        harmonics_lon, harmonics_lat, amplitudes, phases, available_constituents = self._load_harmonics(tpxo_harmonics, constituents, names)
+
+        interpolated_amplitudes, interpolated_phases = self._interpolate_tpxo_harmonics(x, y,
+                                                                                        amplitudes, phases,
+                                                                                        harmonics_lon, harmonics_lat)
+
+        self.tide.constituents = available_constituents
 
         # Predict the tides
-        results = self._prepare_tides(amplitudes, phases, latitudes, serial, pool_size)
+        results = self._prepare_tides(interpolated_amplitudes, interpolated_phases, y, serial, pool_size)
 
         # Dump the results into the object.
         setattr(self.tide, predict, np.asarray(results).T)  # put the time dimension first, space last.
 
+    def add_fvcom_tides(self, fvcom_harmonics, predict='zeta', interval=1 / 24, constituents=['M2'], serial=False, pool_size=None, noisy=False):
+        """
+        Add FVCOM-derived tides at the open boundary nodes.
 
+        Parameters
+        ----------
+        fvcom_harmonics : str, pathlib.Path
+            Path to the FVCOM harmonics netCDF file to use.
+        predict : str, optional
+            Type of data to predict. Select 'zeta' (default), 'u' or 'v'.
+        interval : str, optional
+            Time sampling interval in days. Defaults to 1 hour.
+        constituents : list, optional
+            List of constituent names to use in UTide.reconstruct. Defaults to ['M2'].
+        serial : bool, optional
+            Run in serial rather than parallel. Defaults to parallel.
+        pool_size : int, optional
+            Specify number of processes for parallel run. By default it uses all available.
+        noisy : bool, optional
+            Set to True to enable some sort of progress output. Defaults to False.
+
+        """
+
+        if not hasattr(self.time, 'start'):
+            raise AttributeError('No time data have been added to this OpenBoundary object, so we cannot predict tides.')
+        self.tide.time = date_range(self.time.start - relativedelta(days=1),
+                                    self.time.end + relativedelta(days=1),
+                                    inc=interval)
+
+        constituent_name = 'z_const_names'
+
+        if predict == 'zeta':
+            amplitude_name, phase_name = 'z_amp', 'z_phase'
+            lon_name, lat_name = 'lon', 'lat'
+            x, y = copy.copy(self.grid.lon), self.grid.lat
+        elif predict == 'u':
+            amplitude_name, phase_name = 'u_amp', 'u_phase'
+            lon_name, lat_name = 'lonc', 'latc'
+            x, y = copy.copy(self.grid.lonc), self.grid.latc
+        elif predict == 'v':
+            amplitude_name, phase_name = 'v_amp', 'v_phase'
+            lon_name, lat_name = 'lonc', 'latc'
+            x, y = copy.copy(self.grid.lonc), self.grid.latc
+
+        names = {'amplitude_name': amplitude_name,
+                 'phase_name': phase_name,
+                 'lon_name': lon_name,
+                 'lat_name': lat_name,
+                 'constituent_name': constituent_name}
+        harmonics_lon, harmonics_lat, amplitudes, phases, available_constituents = self._load_harmonics(fvcom_harmonics,
+                                                                                                        constituents,
+                                                                                                        names)
+
+        interpolated_amplitudes, interpolated_phases = self._interpolate_fvcom_harmonics(x, y,
+                                                                                         amplitudes, phases,
+                                                                                         harmonics_lon, harmonics_lat)
+
+        self.tide.constituents = available_constituents
+
+        # Predict the tides
+        results = self._prepare_tides(interpolated_amplitudes, interpolated_phases, y, serial, pool_size, noisy)
+
+        # Dump the results into the object.
+        setattr(self.tide, predict, np.asarray(results).T)  # put the time dimension first, space last.
 
     def _prepare_tides(self, amplitudes, phases, latitudes, serial=False, pool_size=None, noisy=False):
         # Prepare the UTide inputs for the constituents we've loaded.
@@ -560,75 +648,149 @@ class OpenBoundary(object):
 
         return results
 
-    def _load_tpxo_harmonics(self, tpxo_harmonics, constituents, predict):
+    @staticmethod
+    def _load_harmonics(harmonics, constituents, names):
         """
-        Load the TPXO harmonics data from the given file for the given variables.
+        Load the given variables from the given file.
 
         Parameters
         ----------
-        tpxo_harmonics : str, pathlib.Path
-            Path to the TPXO netCDF file.
+        harmonics : str
+            The file to load.
         constituents : list
-            List of constituent names to use in UTide.reconstruct.
-        predict : str, optional
-            Type of data to predict. Select 'zeta', 'u' or 'v'.
+            The list of tidal constituents to load.
+        names : dict
+            Dictionary with the variables names:
+                amplitude_name - amplitude data
+                phase_name - phase data
+                lon_name - longitude data
+                lat_name - latitude data
+                constituent_name - constituent names
 
-        Return
-        ------
+        Returns
+        -------
         amplitudes : np.ndarray
             The amplitudes for the given constituents.
         phases : np.darray
             The amplitudes for the given constituents.
-        tpxo_constituents : list
-            The constituents which have been requested that actually exist in the TPXO netCDF file.
+        fvcom_constituents : list
+            The constituents which have been requested that actually exist in the harmonics netCDF file.
 
         """
 
-        if predict == 'zeta':
-            amplitude_var, phase_var = 'ha', 'hp'
-            x, y = copy.copy(self.grid.lon), self.grid.lat
-        elif predict == 'u':
-            amplitude_var, phase_var = 'ua', 'up'
-            x, y = copy.copy(self.grid.lonc), self.grid.latc
-        elif predict == 'v':
-            amplitude_var, phase_var = 'va', 'vp'
-            x, y = copy.copy(self.grid.lonc), self.grid.latc
-
-        with Dataset(str(tpxo_harmonics), 'r') as tides:
-            tpxo_const = [''.join(i).upper().strip() for i in tides.variables['con'][:].astype(str)]
-            # If we've been given constituents that aren't in the TPXO data, just find the indices we do have.
-            cidx = [tpxo_const.index(i) for i in constituents if i in tpxo_const]
+        with Dataset(str(harmonics), 'r') as tides:
+            const = [''.join(i).upper().strip() for i in tides.variables[names['constituent_name']][:].astype(str)]
+            # If we've been given constituents that aren't in the harmonics data, just find the indices we do have.
+            cidx = [const.index(i) for i in constituents if i in const]
             # Save the names of the constituents we've actually used.
-            tpxo_constituents = [constituents[i] for i in cidx]
+            available_constituents = [constituents[i] for i in cidx]
 
-            tpxo_lon = tides.variables['lon_z'][:, 0]
-            tpxo_lat = tides.variables['lat_z'][0, :]
+            harmonics_lon = tides.variables[names['lon_name']][:]
+            harmonics_lat = tides.variables[names['lat_name']][:]
 
-            # Fix our input position longitudes to be in the 0-360 range to match the TPXO data range, if necessary.
-            if tpxo_lon.min() >= 0:
-                x[x < 0] += 360
+            amplitudes = tides.variables[names['amplitude_name']][cidx, ...]
+            phases = tides.variables[names['phase_name']][cidx, ...]
 
-            # Since everything should be in the 0-360 range, stuff which is between the Greenwich meridian and the
-            # first TPXO data point is now outside the interpolation domain, which yields an error since
-            # RegularGridInterpolator won't tolerate data outside the defined bounding box. As such, we need to
-            # squeeze the interpolation locations to the range of the open boundary positions.
-            if x.min() < tpxo_lon.min():
-                tpxo_lon[tpxo_lon == tpxo_lon.min()] = x.min()
+        return harmonics_lon, harmonics_lat, amplitudes, phases, available_constituents
 
-            # Interpolate from the TPXO data onto the current open boundary positions.
-            tpxo_amp_data = tides.variables[amplitude_var][np.arange(len(cidx)), :, :]
-            tpxo_phase_data = tides.variables[phase_var][np.arange(len(cidx)), :, :]
-            amplitude_interp = RegularGridInterpolator((np.arange(len(cidx)), tpxo_lon, tpxo_lat), tpxo_amp_data, method='linear', fill_value=None)
-            phase_interp = RegularGridInterpolator((np.arange(len(cidx)), tpxo_lon, tpxo_lat), tpxo_phase_data, method='linear', fill_value=None)
+    @staticmethod
+    def _interpolate_tpxo_harmonics(x, y, amp_data, phase_data, harmonics_lon, harmonics_lat):
+        """
+        Interpolate from the harmonics data onto the current open boundary positions.
 
-            # Make our boundary positions suitable for interpolation with a RegularGridInterpolator.
-            xx = np.tile(x, [len(cidx), 1])
-            yy = np.tile(y, [len(cidx), 1])
-            ccidx = np.tile(np.arange(len(cidx)), [len(x), 1]).T
-            amplitudes = amplitude_interp((ccidx, xx, yy)).T
-            phases = phase_interp((ccidx, xx, yy)).T
+        Parameters
+        ----------
+        x, y : np.ndarray
+            The positions at which to interpolate the harmonics data.
+        amp_data, phase_data : np.ndarray
+            The tidal constituent amplitude and phase data.
+        harmonics_lon, harmonics_lat : np.ndarray
+            The positions of the harmonics data.
 
-        return amplitudes, phases, tpxo_constituents, y
+        Returns
+        -------
+        interpolated_amplitude, interpolated_phase : np.ndarray
+            The interpolated data.
+
+        """
+
+        # Make a dummy first dimension since we need it for the RegularGridInterpolator but don't actually
+        # interpolated along it.
+        c_data = np.arange(amp_data.shape[0])
+        amplitude_interp = RegularGridInterpolator((c_data, harmonics_lon, harmonics_lat), amp_data, method='linear', fill_value=None)
+        phase_interp = RegularGridInterpolator((c_data, harmonics_lon, harmonics_lat), phase_data, method='linear', fill_value=None)
+
+        # Fix our input position longitudes to be in the 0-360 range to match the harmonics data range,
+        # if necessary.
+        if harmonics_lon.min() >= 0:
+            x[x < 0] += 360
+
+        # Since everything should be in the 0-360 range, stuff which is between the Greenwich meridian and the
+        # first harmonics data point is now outside the interpolation domain, which yields an error since
+        # RegularGridInterpolator won't tolerate data outside the defined bounding box. As such, we need to
+        # squeeze the interpolation locations to the range of the open boundary positions.
+        if x.min() < harmonics_lon.min():
+            harmonics_lon[harmonics_lon == harmonics_lon.min()] = x.min()
+
+        # Make our boundary positions suitable for interpolation with a RegularGridInterpolator.
+        xx = np.tile(x, [amp_data.shape[0], 1])
+        yy = np.tile(y, [amp_data.shape[0], 1])
+        ccidx = np.tile(c_data, [len(x), 1]).T
+        amplitudes = amplitude_interp((ccidx, xx, yy)).T
+        phases = phase_interp((ccidx, xx, yy)).T
+
+        return amplitudes, phases
+
+    def _interpolate_fvcom_harmonics(self, x, y, amp_data, phase_data, harmonics_lon, harmonics_lat):
+        """
+        Interpolate from the harmonics data onto the current open boundary positions.
+
+        Parameters
+        ----------
+        x, y : np.ndarray
+            The positions at which to interpolate the harmonics data.
+        amp_data, phase_data : np.ndarray
+            The tidal constituent amplitude and phase data.
+        harmonics_lon, harmonics_lat : np.ndarray
+            The positions of the harmonics data.
+
+        Returns
+        -------
+        interpolated_amplitude, interpolated_phase : np.ndarray
+            The interpolated data.
+
+        """
+
+        # Fix our input position longitudes to be in the 0-360 range to match the harmonics data range,
+        # if necessary.
+        if harmonics_lon.min() >= 0:
+            x[x < 0] += 360
+
+        # Since everything should be in the 0-360 range, stuff which is between the Greenwich meridian and the
+        # first harmonics data point is now outside the interpolation domain, which yields an error since
+        # RegularGridInterpolator won't tolerate data outside the defined bounding box. As such, we need to
+        # squeeze the interpolation locations to the range of the open boundary positions.
+        if x.min() < harmonics_lon.min():
+            harmonics_lon[harmonics_lon == harmonics_lon.min()] = x.min()
+
+        # I can't wrap my head around the n-dimensional unstructured interpolation tools (Rdf, griddata etc.), so just
+        # loop through each constituent and do a 2D interpolation.
+        pool = multiprocessing.Pool()
+        inputs = [(harmonics_lon, harmonics_lat, amp_data[i], x, y) for i in range(amp_data.shape[0])]
+        amplitudes = np.asarray(pool.map(self._interpolater_function, inputs))
+        inputs = [(harmonics_lon, harmonics_lat, phase_data[i], x, y) for i in range(phase_data.shape[0])]
+        phases = np.asarray(pool.map(self._interpolater_function, inputs))
+
+        # Transpose so space is first, constituents second (expected by self._predict_tide).
+        return amplitudes.T, phases.T
+
+    @staticmethod
+    def _interpolater_function(input):
+        """ Pass me to a multiprocessing.Pool().map() to quickly interpolate data with LinearNDInterpolator. """
+        lon, lat, data, x, y = input
+        interp = LinearNDInterpolator((lon, lat), data)
+
+        return interp((x, y))
 
     @staticmethod
     def _predict_tide(args):
