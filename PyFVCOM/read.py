@@ -18,7 +18,7 @@ from PyFVCOM.grid import unstructured_grid_volume, nodes2elems, Domain
 from PyFVCOM.utilities.general import fix_range
 
 
-class _passive_data_store():
+class _passive_data_store(object):
     def __init__(self):
         pass
 

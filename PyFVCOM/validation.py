@@ -23,7 +23,7 @@ This also includes the code to build the databases of time series data sets.
 
 """
 
-class validation_db():
+class validation_db(object):
     """ Work with an SQLite database. """
 
     def __init__(self, db_name):
@@ -524,7 +524,7 @@ class db_tide(validation_db):
                        'error_flags': ['flag_id integer NOT NULL', 'flag_code text', 'flag_description text']}
 
 
-class bodc_annual_tide_file():
+class bodc_annual_tide_file(object):
     def __init__(self, file_name, header_length=11):
         """
         Assumptions: file name of the form yearTLA.txt
@@ -715,7 +715,7 @@ class db_wco(validation_db):
         return dates, data
 
 
-class WCO_obs_file():
+class WCO_obs_file(object):
     def __init__(self, filename, depth=None):
         self._setup_possible_vars()
         self.observation_dict = self._add_file(filename)
@@ -826,7 +826,7 @@ class CTD_dir(WCO_obs_file):
         self.observation_dict['dt_time'] = np.hstack(dt_list)
 
 
-class csv_formatted():
+class csv_formatted(object):
     def __init__(self, filename):
         pass
 
@@ -836,7 +836,7 @@ Do the comparison
 
 """
 
-class comp_data():
+class comp_data(object):
     def __init__(self, buoy_list, model_ident, wco_database, max_time_threshold=dt.timedelta(hours=1), max_depth_threshold = 100, probe_depths=None):
         self.model_ident = model_ident
         self.database_obj = wco_database
@@ -955,7 +955,7 @@ class comp_data_probe(comp_data):
 Validation against ICES bottle data
 """
 
-class ICES_comp():
+class ICES_comp(object):
     """
     A class for comparing FVCOM(-ERSEM) models to ICES bottle data. It is a fvcom-ised and class-ised version of code written 
     by Momme Butenschon for NEMO output.
