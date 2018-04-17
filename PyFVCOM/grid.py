@@ -593,9 +593,6 @@ class OpenBoundary(object):
             amplitude_var, phase_var = 'va', 'vp'
             x, y = copy.copy(self.grid.lonc), self.grid.latc
 
-        # Fix our input position longitudes to be in the 0-360 range to match the TPXO data range.
-        x[x < 0] += 360
-
         with Dataset(str(tpxo_harmonics), 'r') as tides:
             tpxo_const = [''.join(i).upper().strip() for i in tides.variables['con'][:].astype(str)]
             # If we've been given constituents that aren't in the TPXO data, just find the indices we do have.
@@ -605,6 +602,11 @@ class OpenBoundary(object):
 
             tpxo_lon = tides.variables['lon_z'][:, 0]
             tpxo_lat = tides.variables['lat_z'][0, :]
+
+            # Fix our input position longitudes to be in the 0-360 range to match the TPXO data range, if necessary.
+            if tpxo_lon.min() >= 0:
+                x[x < 0] += 360
+
             # Interpolate from the TPXO data onto the current open boundary positions.
             tpxo_amp_data = tides.variables[amplitude_var][cidx, :, :]
             tpxo_phase_data = tides.variables[phase_var][cidx, :, :]
