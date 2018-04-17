@@ -616,15 +616,15 @@ class OpenBoundary(object):
                 tpxo_lon[tpxo_lon == tpxo_lon.min()] = x.min()
 
             # Interpolate from the TPXO data onto the current open boundary positions.
-            tpxo_amp_data = tides.variables[amplitude_var][cidx, :, :]
-            tpxo_phase_data = tides.variables[phase_var][cidx, :, :]
-            amplitude_interp = RegularGridInterpolator((np.asarray(cidx), tpxo_lon, tpxo_lat), tpxo_amp_data, method='linear', fill_value=None)
-            phase_interp = RegularGridInterpolator((cidx, tpxo_lon, tpxo_lat), tpxo_phase_data, method='linear', fill_value=None)
+            tpxo_amp_data = tides.variables[amplitude_var][np.arange(len(cidx)), :, :]
+            tpxo_phase_data = tides.variables[phase_var][np.arange(len(cidx)), :, :]
+            amplitude_interp = RegularGridInterpolator((np.arange(len(cidx)), tpxo_lon, tpxo_lat), tpxo_amp_data, method='linear', fill_value=None)
+            phase_interp = RegularGridInterpolator((np.arange(len(cidx)), tpxo_lon, tpxo_lat), tpxo_phase_data, method='linear', fill_value=None)
 
             # Make our boundary positions suitable for interpolation with a RegularGridInterpolator.
             xx = np.tile(x, [len(cidx), 1])
             yy = np.tile(y, [len(cidx), 1])
-            ccidx = np.tile(cidx, [len(x), 1]).T
+            ccidx = np.tile(np.arange(len(cidx)), [len(x), 1]).T
             amplitudes = amplitude_interp((ccidx, xx, yy)).T
             phases = phase_interp((ccidx, xx, yy)).T
 
