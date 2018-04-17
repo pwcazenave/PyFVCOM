@@ -131,31 +131,31 @@ class Domain(object):
 
         if extension == '.2dm':
             if self._noisy:
-                print('Loading SMS grid {}'.format(self.grid.filename))
+                print('Loading SMS grid: {}'.format(self.grid.filename))
             triangle, nodes, x, y, z, types, nodestrings = read_sms_mesh(self.grid.filename, nodestrings=True)
         elif extension == '.dat':
             if self._noisy:
-                print('Loading FVCOM grid {}'.format(self.grid.filename))
+                print('Loading FVCOM grid: {}'.format(self.grid.filename))
             triangle, nodes, x, y, z = read_fvcom_mesh(self.grid.filename)
             try:
                 obcname = basename.replace('_grd', '_obc')
                 obcfile = os.path.join(basedir, '{}.dat'.format(obcname))
                 nodestrings, types, count = read_fvcom_obc(obcfile)
                 if self._noisy:
-                    print('Found and parsed open boundary file {}'.format(obcfile))
+                    print('Found and parsed open boundary file: {}'.format(obcfile))
             except OSError:
                 # File probably doesn't exist, so just carry on.
                 pass
         elif extension == '.gmsh':
             if self._noisy:
-                print('Loading GMSH grid {}'.format(self.grid.filename))
+                print('Loading GMSH grid: {}'.format(self.grid.filename))
             triangle, nodes, x, y, z = read_gmsh_mesh(self.grid.filename)
         elif extension == '.m21fm':
             if self._noisy:
-                print('Loading MIKE21 grid {}'.format(self.grid.filename))
+                print('Loading MIKE21 grid: {}'.format(self.grid.filename))
             triangle, nodes, x, y, z = read_mike_mesh(self.grid.filename)
         else:
-            raise ValueError('Unknown file format ({}) for file {}.'.format(extension, self.grid.filename))
+            raise ValueError('Unknown file format ({}) for file: {}'.format(extension, self.grid.filename))
 
         # Make open boundary objects from the nodestrings.
         self.grid.open_boundary = []
