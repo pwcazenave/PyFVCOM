@@ -607,6 +607,13 @@ class OpenBoundary(object):
             if tpxo_lon.min() >= 0:
                 x[x < 0] += 360
 
+            # Since everything should be in the 0-360 range, stuff which is between the Greenwich meridian and the
+            # first TPXO data point is now outside the interpolation domain, which yields an error since
+            # RegularGridInterpolator won't tolerate data outside the defined bounding box. As such, we need to
+            # squeeze the interpolation locations to the range of the open boundary positions.
+            if x.min() < tpxo_lon.min():
+                tpxo_lon[tpxo_lon == tpxo_lon.min()] = x.min()
+
             # Interpolate from the TPXO data onto the current open boundary positions.
             tpxo_amp_data = tides.variables[amplitude_var][cidx, :, :]
             tpxo_phase_data = tides.variables[phase_var][cidx, :, :]
