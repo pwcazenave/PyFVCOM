@@ -742,7 +742,18 @@ class FileReader(Domain):
                 warn('{} does not contain a time dimension.'.format(v))
 
             try:
-                setattr(self.data, v, self.ds.variables[v][variable_indices])
+                if not hasattr(self, '_get_data_pattern'):
+                    setattr(self.data, v, self.ds.variables[v][variable_indices])
+                elif self._get_data_pattern == 'All':
+                    data_raw = self.ds.variables[v][:]
+                    
+                    for i in np.arange(0, data_raw.ndim):
+                        if len(variable_indices[i]) < data_raw.shape[i]:
+                            data_raw = data_raw.take(variable_indices[i], axis=i)
+
+                    setattr(self.data, v, data_raw)
+                    del data_raw
+
             except MemoryError:
                 raise MemoryError("Variable {} too large for RAM. Use `dims' to load subsets in space or time or "
                                   "`variables' to request only certain variables.".format(v))
