@@ -432,8 +432,6 @@ class FileReader(Domain):
             try:
                 if metric == 'nbe':
                     setattr(self.grid, metric, getattr(self.grid, metric).T - 1)
-                else:
-                    setattr(self.grid, metric, getattr(self.grid, metric))
             except AttributeError:
                 # We don't have this variable, so just pass by silently.
                 pass
