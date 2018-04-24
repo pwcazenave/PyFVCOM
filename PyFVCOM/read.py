@@ -88,7 +88,8 @@ class FileReader(Domain):
         self._noisy = verbose
         self._fvcom = str(fvcom)
         self._zone = zone
-        self._bounding_box = False
+        if not hasattr(self, '_bounding_box'):
+            self._bounding_box = False
         # We may modify the dimensions, so make a deepcopy (copy isn't sufficient) so successive calls to FileReader
         # from MFileReader work properly.
         self._dims = copy.deepcopy(dims)
@@ -532,15 +533,7 @@ class FileReader(Domain):
 
         # Convert the given W/E/S/N coordinates into node and element IDs to subset.
         if self._bounding_box:
-            self._dims['node'] = np.argwhere((self.grid.lon > self._dims['wesn'][0]) &
-                                             (self.grid.lon < self._dims['wesn'][1]) &
-                                             (self.grid.lat > self._dims['wesn'][2]) &
-                                             (self.grid.lat < self._dims['wesn'][3])).flatten()
-            self._dims['nele'] = np.argwhere((self.grid.lonc > self._dims['wesn'][0]) &
-                                             (self.grid.lonc < self._dims['wesn'][1]) &
-                                             (self.grid.latc > self._dims['wesn'][2]) &
-                                             (self.grid.latc < self._dims['wesn'][3])).flatten()
-
+            self._make_subset_dimensions()
         # If we've been given dimensions to subset in, do that now. Loading the data first and then subsetting
         # shouldn't be a problem from a memory perspective because if you don't have enough memory for the grid data,
         # you probably won't have enough for actually working with the outputs. Also update dimensions to match the
@@ -676,6 +669,16 @@ class FileReader(Domain):
         # Make a bounding box variable too (spherical coordinates): W/E/S/N
         self.grid.bounding_box = (np.min(self.grid.lon), np.max(self.grid.lon),
                                   np.min(self.grid.lat), np.max(self.grid.lat))
+
+    def _make_subset_dimensions(self):
+        self._dims['node'] = np.argwhere((self.grid.lon > self._dims['wesn'][0]) &                                                                        
+                                             (self.grid.lon < self._dims['wesn'][1]) &                                                                        
+                                             (self.grid.lat > self._dims['wesn'][2]) &                                                                        
+                                             (self.grid.lat < self._dims['wesn'][3])).flatten()                                                               
+        self._dims['nele'] = np.argwhere((self.grid.lonc > self._dims['wesn'][0]) &                                                                       
+                                             (self.grid.lonc < self._dims['wesn'][1]) &                                                                       
+                                             (self.grid.latc > self._dims['wesn'][2]) &                                                                       
+                                             (self.grid.latc < self._dims['wesn'][3])).flatten() 
 
     def _update_dimensions(self, variables):
         # Update the dimensions based on variables we've been given. Construct a list of the unique dimensions in all
