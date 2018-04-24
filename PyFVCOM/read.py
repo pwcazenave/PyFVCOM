@@ -428,9 +428,9 @@ class FileReader(Domain):
                     setattr(attributes, attribute, getattr(self.ds.variables[metric], attribute))
                 setattr(self.atts, metric, attributes)
 
-            # Fix the indexing and shapes of the grid metrics variables. Only transpose and offset indexing for nbe.
-            if metric == 'nbe':
-                setattr(self.grid, metric, getattr(self.grid, metric).T - 1)
+                # Fix the indexing and shapes of the grid metrics variables. Only transpose and offset indexing for nbe.
+                if metric == 'nbe':
+                    setattr(self.grid, metric, getattr(self.grid, metric).T - 1)
 
         try:
             self.grid.nv = self.ds.variables['nv'][:].astype(int)  # force integers even though they should already be so
