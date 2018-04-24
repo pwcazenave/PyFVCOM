@@ -38,7 +38,7 @@ class FileReader(Domain):
 
     """
 
-    def __init__(self, fvcom, variables=[], dims=[], zone='30N', debug=False, verbose=False):
+    def __init__(self, fvcom, variables=[], dims={}, zone='30N', debug=False, verbose=False):
         """
         Parameters
         ----------
