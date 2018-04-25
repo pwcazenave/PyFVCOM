@@ -394,7 +394,8 @@ class FileReader(Domain):
 
         """
 
-        grid_metrics = ['nbe', 'ntsn', 'nbsn', 'ntve', 'nbve', 'art1', 'art2', 'a1u', 'a2u']
+        grid_metrics = {'ntsn':'node', 'nbsn':'node', 'ntve':'node', 'nbve':'node', 'art1':'node', 'art2':'node', 
+                                                                                'a1u':'nele', 'a2u':'nele', 'nbe':'nele'}
         grid_variables = ['lon', 'lat', 'x', 'y', 'lonc', 'latc', 'xc', 'yc',
                           'h', 'siglay', 'siglev']
 
@@ -418,20 +419,7 @@ class FileReader(Domain):
                 print(value_error_message)
                 setattr(self.grid, grid, np.zeros(self.ds.variables[grid].shape))
 
-        # Load the grid metrics data separately as we don't want to set a bunch of zeros for missing data.
-        for metric in grid_metrics:
-            if metric in self.ds.variables:
-                setattr(self.grid, metric, self.ds.variables[metric][:])
-                # Save the attributes.
-                attributes = _passive_data_store()
-                for attribute in self.ds.variables[metric].ncattrs():
-                    setattr(attributes, attribute, getattr(self.ds.variables[metric], attribute))
-                setattr(self.atts, metric, attributes)
-
-                # Fix the indexing and shapes of the grid metrics variables. Only transpose and offset indexing for nbe.
-                if metric == 'nbe':
-                    setattr(self.grid, metric, getattr(self.grid, metric).T - 1)
-
+        # And the triangulation
         try:
             self.grid.nv = self.ds.variables['nv'][:].astype(int)  # force integers even though they should already be so
             self.grid.triangles = copy.copy(self.grid.nv.T - 1)  # zero-indexed for python
@@ -465,6 +453,105 @@ class FileReader(Domain):
                 new_nv[new_nv == new] = i
             self.grid.nv = new_nv + 1
             self.grid.triangles = new_nv.T
+
+        # Convert the given W/E/S/N coordinates into node and element IDs to subset.
+        if self._bounding_box:
+            self._make_subset_dimensions()
+
+        if 'node' in self._dims:
+            self.dims.node = len(self._dims['node'])
+            for var in 'x', 'y', 'lon', 'lat', 'h', 'siglay', 'siglev':
+                try:
+                    node_index = self.ds.variables[var].dimensions.index('node')
+                    var_shape = [i for i in np.shape(self.ds.variables[var])]
+                    var_shape[node_index] = self.dims.node
+
+                    if 'siglay' in self._dims and 'siglay' in self.ds.variables[var].dimensions:
+                        var_shape[self.ds.variables[var].dimensions.index('siglay')] = self.dims.siglay
+                    elif 'siglev' in self._dims and 'siglev' in self.ds.variables[var].dimensions:
+                        var_shape[self.ds.variables[var].dimensions.index('siglev')] = self.dims.siglev
+                    _temp = np.empty(var_shape)
+                    if 'siglay' in self.ds.variables[var].dimensions:
+                        for ni, node in enumerate(self._dims['node']):
+                            if 'siglay' in self._dims:
+                                _temp[..., ni] = self.ds.variables[var][self._dims['siglay'], node]
+                            else:
+                                _temp[..., ni] = self.ds.variables[var][:, node]
+                    elif 'siglev' in self.ds.variables[var].dimensions:
+                        for ni, node in enumerate(self._dims['node']):
+                            if 'siglev' in self._dims:
+                                _temp[..., ni] = self.ds.variables[var][self._dims['siglev'], node]
+                            else:
+                                _temp[..., ni] = self.ds.variables[var][:, node]
+                    else:
+                        for ni, node in enumerate(self._dims['node']):
+                            _temp[..., ni] = self.ds.variables[var][..., node]
+                except KeyError:
+                    if 'siglay' in var:
+                        _temp = np.empty((self.dims.siglay, self.dims.node))
+                    elif 'siglev' in var:
+                        _temp = np.empty((self.dims.siglev, self.dims.node))
+                    else:
+                        _temp = np.empty(self.dims.node)
+                setattr(self.grid, var, _temp)
+
+        if 'nele' in self._dims:
+            self.dims.nele = len(self._dims['nele'])
+            for var in 'xc', 'yc', 'lonc', 'latc', 'h_center', 'siglay_center', 'siglev_center':
+                try:
+                    nele_index = self.ds.variables[var].dimensions.index('nele')
+                    var_shape = [i for i in np.shape(self.ds.variables[var])]
+                    var_shape[nele_index] = self.dims.nele
+                    if 'siglay' in self._dims and 'siglay' in self.ds.variables[var].dimensions:
+                        var_shape[self.ds.variables[var].dimensions.index('siglay')] = self.dims.siglay
+                    elif 'siglev' in self._dims and 'siglev' in self.ds.variables[var].dimensions:
+                        var_shape[self.ds.variables[var].dimensions.index('siglev')] = self.dims.siglev
+                    _temp = np.empty(var_shape)
+                    if 'siglay' in self.ds.variables[var].dimensions:
+                        for ni, nele in enumerate(self._dims['nele']):
+                            if 'siglay' in self._dims:
+                                _temp[..., ni] = self.ds.variables[var][self._dims['siglay'], nele]
+                            else:
+                                _temp[..., ni] = self.ds.variables[var][:, nele]
+                    elif 'siglev' in self.ds.variables[var].dimensions:
+                        for ni, nele in enumerate(self._dims['nele']):
+                            if 'siglev' in self._dims:
+                                _temp[..., ni] = self.ds.variables[var][self._dims['siglev'], nele]
+                            else:
+                                _temp[..., ni] = self.ds.variables[var][:, nele]
+                    else:
+                        for ni, nele in enumerate(self._dims['nele']):
+                            _temp[..., ni] = self.ds.variables[var][..., nele]
+                except KeyError:
+                    # FVCOM3 files don't have h_center, siglay_center and siglev_center, so make var_shape manually.
+                    if self._noisy:
+                        print('Adding element-centred {} for compatibility.'.format(var))
+                    if var.startswith('siglev'):
+                        var_shape = [self.dims.siglev, self.dims.nele]
+                    elif var.startswith('siglay'):
+                        var_shape = [self.dims.siglay, self.dims.nele]
+                    else:
+                        var_shape = self.dims.nele
+                    _temp = np.zeros(var_shape)
+                setattr(self.grid, var, _temp)
+
+        # Load the grid metrics data separately as we don't want to set a bunch of zeros for missing data.
+        for metric, grid_pos in grid_metrics.items():
+            if metric in self.ds.variables:
+                if grid_pos in self._dims:
+                    metric_raw = self.ds.variables[metric][:]
+                    setattr(self.grid, metric, metric_raw[...,self._dims[grid_pos]])
+                else:
+                    setattr(self.grid, metric, self.ds.variables[metric][:])
+                # Save the attributes.
+                attributes = _passive_data_store()
+                for attribute in self.ds.variables[metric].ncattrs():
+                    setattr(attributes, attribute, getattr(self.ds.variables[metric], attribute))
+                setattr(self.atts, metric, attributes)
+
+                # Fix the indexing and shapes of the grid metrics variables. Only transpose and offset indexing for nbe.
+                if metric == 'nbe':
+                    setattr(self.grid, metric, getattr(self.grid, metric).T - 1)
 
         # Update dimensions to match those we've been given, if any. Omit time here as we shouldn't be touching that
         # dimension for any variable in use in here.
@@ -524,88 +611,6 @@ class FileReader(Domain):
                     # The arrays might be the wrong shape for broadcasing to work, so transpose and retranspose
                     # accordingly. This is less than ideal.
                     setattr(self.grid, '{}_z'.format(var), (fix_range(getattr(self.grid, var), 0, 1).T * z).T)
-
-        # Convert the given W/E/S/N coordinates into node and element IDs to subset.
-        if self._bounding_box:
-            self._make_subset_dimensions()
-        # If we've been given dimensions to subset in, do that now. Loading the data first and then subsetting
-        # shouldn't be a problem from a memory perspective because if you don't have enough memory for the grid data,
-        # you probably won't have enough for actually working with the outputs. Also update dimensions to match the
-        # given dimensions.
-        if 'node' in self._dims:
-            self.dims.node = len(self._dims['node'])
-            for var in 'x', 'y', 'lon', 'lat', 'h', 'siglay', 'siglev':
-                try:
-                    node_index = self.ds.variables[var].dimensions.index('node')
-                    var_shape = [i for i in np.shape(self.ds.variables[var])]
-                    var_shape[node_index] = self.dims.node
-                    if 'siglay' in self._dims and 'siglay' in self.ds.variables[var].dimensions:
-                        var_shape[self.ds.variables[var].dimensions.index('siglay')] = self.dims.siglay
-                    elif 'siglev' in self._dims and 'siglev' in self.ds.variables[var].dimensions:
-                        var_shape[self.ds.variables[var].dimensions.index('siglev')] = self.dims.siglev
-                    _temp = np.empty(var_shape)
-                    if 'siglay' in self.ds.variables[var].dimensions:
-                        for ni, node in enumerate(self._dims['node']):
-                            if 'siglay' in self._dims:
-                                _temp[..., ni] = self.ds.variables[var][self._dims['siglay'], node]
-                            else:
-                                _temp[..., ni] = self.ds.variables[var][:, node]
-                    elif 'siglev' in self.ds.variables[var].dimensions:
-                        for ni, node in enumerate(self._dims['node']):
-                            if 'siglev' in self._dims:
-                                _temp[..., ni] = self.ds.variables[var][self._dims['siglev'], node]
-                            else:
-                                _temp[..., ni] = self.ds.variables[var][:, node]
-                    else:
-                        for ni, node in enumerate(self._dims['node']):
-                            _temp[..., ni] = self.ds.variables[var][..., node]
-                except KeyError:
-                    if 'siglay' in var:
-                        _temp = np.empty((self.dims.siglay, self.dims.node))
-                    elif 'siglev' in var:
-                        _temp = np.empty((self.dims.siglev, self.dims.node))
-                    else:
-                        _temp = np.empty(self.dims.node)
-                setattr(self.grid, var, _temp)
-        if 'nele' in self._dims:
-            self.dims.nele = len(self._dims['nele'])
-            for var in 'xc', 'yc', 'lonc', 'latc', 'h_center', 'siglay_center', 'siglev_center':
-                try:
-                    nele_index = self.ds.variables[var].dimensions.index('nele')
-                    var_shape = [i for i in np.shape(self.ds.variables[var])]
-                    var_shape[nele_index] = self.dims.nele
-                    if 'siglay' in self._dims and 'siglay' in self.ds.variables[var].dimensions:
-                        var_shape[self.ds.variables[var].dimensions.index('siglay')] = self.dims.siglay
-                    elif 'siglev' in self._dims and 'siglev' in self.ds.variables[var].dimensions:
-                        var_shape[self.ds.variables[var].dimensions.index('siglev')] = self.dims.siglev
-                    _temp = np.empty(var_shape)
-                    if 'siglay' in self.ds.variables[var].dimensions:
-                        for ni, nele in enumerate(self._dims['nele']):
-                            if 'siglay' in self._dims:
-                                _temp[..., ni] = self.ds.variables[var][self._dims['siglay'], nele]
-                            else:
-                                _temp[..., ni] = self.ds.variables[var][:, nele]
-                    elif 'siglev' in self.ds.variables[var].dimensions:
-                        for ni, nele in enumerate(self._dims['nele']):
-                            if 'siglev' in self._dims:
-                                _temp[..., ni] = self.ds.variables[var][self._dims['siglev'], nele]
-                            else:
-                                _temp[..., ni] = self.ds.variables[var][:, nele]
-                    else:
-                        for ni, nele in enumerate(self._dims['nele']):
-                            _temp[..., ni] = self.ds.variables[var][..., nele]
-                except KeyError:
-                    # FVCOM3 files don't have h_center, siglay_center and siglev_center, so make var_shape manually.
-                    if self._noisy:
-                        print('Adding element-centred {} for compatibility.'.format(var))
-                    if var.startswith('siglev'):
-                        var_shape = [self.dims.siglev, self.dims.nele]
-                    elif var.startswith('siglay'):
-                        var_shape = [self.dims.siglay, self.dims.nele]
-                    else:
-                        var_shape = self.dims.nele
-                    _temp = np.zeros(var_shape)
-                setattr(self.grid, var, _temp)
 
         # Check if we've been given vertical dimensions to subset in too, and if so, do that. Check we haven't
         # already done this if the 'node' and 'nele' sections above first.
