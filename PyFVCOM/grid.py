@@ -177,7 +177,6 @@ class Domain(object):
         self.grid.nodes = nodes
         self.grid.types = types
         self.grid.open_boundary_nodes = nodestrings
-
         # Make element-centred versions of everything.
         self.grid.xc = nodes2elems(self.grid.x, self.grid.triangles)
         self.grid.yc = nodes2elems(self.grid.y, self.grid.triangles)
@@ -3323,7 +3322,7 @@ def shape_coefficients(xc, yc, nbe, isbce):
     return a1u.T, a2u.T
 
 
-def reduce_triangulation(tri, nodes):
+def reduce_triangulation(tri, nodes, return_elements=False):
     """
     Returns the triangulation for a subset of grid nodes.
 
@@ -3333,11 +3332,14 @@ def reduce_triangulation(tri, nodes):
         Grid triangulation (e.g. triangle as returned from read_fvcom_mesh)
     nodes : np.ndarray M
         Selected subset of nodes for re-triangulating
+    return_elements : bool, optional
+        Return the index (integer array) of cells chosen from the original triangulation
 
     Returns
     -------
-    reduced_tri : np.ndarray Mx3
-        Triangulation for just the nodes listed in nodes
+    reduced_tri : np.ndarray Mx3 or 2 entry list
+        Triangulation for just the nodes listed in nodes. If return_elements is specified then it returns
+        a list with the triangulation array as the first entry and the array of element indexes as the second
 
     Notes
     -----
@@ -3351,6 +3353,10 @@ def reduce_triangulation(tri, nodes):
     new_index = np.arange(0, len(nodes))
     for this_old, this_new in zip(nodes, new_index):
         reduced_tri[reduced_tri == this_old] = this_new
+
+    if return_elements:
+        ele_ind = np.where(np.all(np.isin(tri, nodes), axis=1))[0]
+        reduced_tri = [reduced_tri, ele_ind]
 
     return reduced_tri
 
