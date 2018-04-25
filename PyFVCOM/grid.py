@@ -3337,14 +3337,13 @@ def reduce_triangulation(tri, nodes, return_elements=False):
 
     Returns
     -------
-    reduced_tri : np.ndarray Mx3 or 2 entry list
+    reduced_tri : np.ndarray Mx3, and optionally np.ndarray M
         Triangulation for just the nodes listed in nodes. If return_elements is specified then it returns
-        a list with the triangulation array as the first entry and the array of element indexes as the second
+        additionally an array of element indexes used by the new triangulation
 
     Notes
     -----
-    Assumes the nodes selected are a contiguous part of the grid.
-
+    Assumes the nodes selected are a contiguous part of the grid without any checking
     """
 
     reduced_tri = tri[np.all(np.isin(tri, nodes), axis=1), :]
