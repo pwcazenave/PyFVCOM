@@ -567,7 +567,11 @@ class FileReader(Domain):
         # reason (e.g. testing). We don't add attributes for the data if we've created it as doing so is a pain.
         for var in 'h_center', 'siglay_center', 'siglev_center':
             try:
-                setattr(self.grid, var, self.ds.variables[var][:])
+                if 'nele' in self._dims:
+                    var_raw = self.ds.variables[var][:]
+                    setattr(self.grid, var, var_raw[...,self._dims['nele']])
+                else:
+                    setattr(self.grid, var, self.ds.variables[var][:])
                 # Save the attributes.
                 attributes = _passive_data_store()
                 for attribute in self.ds.variables[var].ncattrs():
