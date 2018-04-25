@@ -394,7 +394,7 @@ class FileReader(Domain):
 
         """
 
-        grid_metrics = {'ntsn':'node', 'nbsn':'node', 'ntve':'node', 'nbve':'node', 'art1':'node', 'art2':'node', 
+        grid_metrics = {'ntsn':'node', 'nbsn':'node', 'ntve':'node', 'nbve':'node', 'art1':'node', 'art2':'node',
                                                                                 'a1u':'nele', 'a2u':'nele', 'nbe':'nele'}
         grid_variables = ['lon', 'lat', 'x', 'y', 'lonc', 'latc', 'xc', 'yc',
                           'h', 'siglay', 'siglev']
@@ -674,14 +674,14 @@ class FileReader(Domain):
                                   np.min(self.grid.lat), np.max(self.grid.lat))
 
     def _make_subset_dimensions(self):
-        self._dims['node'] = np.argwhere((self.grid.lon > self._dims['wesn'][0]) &                                                                        
-                                             (self.grid.lon < self._dims['wesn'][1]) &                                                                        
-                                             (self.grid.lat > self._dims['wesn'][2]) &                                                                        
-                                             (self.grid.lat < self._dims['wesn'][3])).flatten()                                                               
-        self._dims['nele'] = np.argwhere((self.grid.lonc > self._dims['wesn'][0]) &                                                                       
-                                             (self.grid.lonc < self._dims['wesn'][1]) &                                                                       
-                                             (self.grid.latc > self._dims['wesn'][2]) &                                                                       
-                                             (self.grid.latc < self._dims['wesn'][3])).flatten() 
+        self._dims['node'] = np.argwhere((self.grid.lon > self._dims['wesn'][0]) &
+                                             (self.grid.lon < self._dims['wesn'][1]) &
+                                             (self.grid.lat > self._dims['wesn'][2]) &
+                                             (self.grid.lat < self._dims['wesn'][3])).flatten()
+        self._dims['nele'] = np.argwhere((self.grid.lonc > self._dims['wesn'][0]) &
+                                             (self.grid.lonc < self._dims['wesn'][1]) &
+                                             (self.grid.latc > self._dims['wesn'][2]) &
+                                             (self.grid.latc < self._dims['wesn'][3])).flatten()
 
     def _update_dimensions(self, variables):
         # Update the dimensions based on variables we've been given. Construct a list of the unique dimensions in all
@@ -752,7 +752,7 @@ class FileReader(Domain):
                     setattr(self.data, v, self.ds.variables[v][variable_indices])
                 elif self._get_data_pattern == 'All':
                     data_raw = self.ds.variables[v][:]
-                    
+
                     for i in np.arange(0, data_raw.ndim):
                         if len(variable_indices[i]) < data_raw.shape[i]:
                             data_raw = data_raw.take(variable_indices[i], axis=i)
