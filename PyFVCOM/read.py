@@ -14,7 +14,7 @@ from datetime import datetime, timedelta
 from netCDF4 import Dataset, MFDataset, num2date, date2num
 
 from PyFVCOM.coordinate import lonlat_from_utm, utm_from_lonlat
-from PyFVCOM.grid import unstructured_grid_volume, nodes2elems, Domain, reduce_triangulation
+from PyFVCOM.grid import unstructured_grid_volume, nodes2elems, Domain, reduce_triangulation, control_volumes
 from PyFVCOM.utilities.general import fix_range
 
 
@@ -812,6 +812,38 @@ class FileReader(Domain):
             surface_elevation = self.data.zeta
 
         self.depth_volume, self.volume = unstructured_grid_volume(self.grid.art1, self.grid.h, surface_elevation, self.grid.siglev, depth_integrated=True)
+
+    def _get_cv_volumes(self, poolsize=None):
+        """
+        Calculate the control volume volumes in the grid volume. I might have overused that word.
+        """
+        self.grid.cv_area = np.asarray(control_volumes(self.grid.x, self.grid.y, self.grid.triangles, element_control=False, poolsize=poolsize))
+
+        if not hasattr(self.data, 'zeta'):
+            self.load_data(['zeta'])
+        self.grid.dz = np.abs(np.diff(self.grid.siglev, axis=0))
+        self.grid.depth = self.data.zeta + self.grid.h
+        self.grid.integrated_volume = (self.grid.cv_area * self.grid.depth)
+        self.grid.volume = self.grid.integrated_volume[:, np.newaxis, :] * self.grid.dz[np.newaxis, ...]
+
+    def total_volume_var(self, var, poolsize=None):
+        if not hasattr(self.grid, 'volume'):
+            self._get_cv_volumes(poolsize=poolsize)
+
+        if not hasattr(self.data, var):
+            self.load_data([var])
+
+        setattr(self.data, var + '_total', np.sum(np.sum(getattr(self.data, var) * self.grid.volume, axis=2), axis=1))
+
+    def avg_volume_var(self, var):
+        if not hasattr(self, 'volume'):
+            self._get_cv_volumes()
+
+        if not hasattr(self.data, var):
+            self.load_data([var])
+
+        setattr(self.data, var + '_average', np.average(np.average(getattr(self.data, var), weights=self.grid.volume, axis=1),
+                                                                        weights=self.grid.integrated_volume,axis=1))
 
     def time_to_index(self, target_time, tolerance=False):
         """
