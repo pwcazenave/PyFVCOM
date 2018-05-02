@@ -2823,7 +2823,7 @@ def grid_metrics(tri, noisy=False):
     return ntve, nbve, nbe, isbce, isonb
 
 
-def control_volumes(x, y, tri, node_control=True, element_control=True, noisy=False):
+def control_volumes(x, y, tri, node_control=True, element_control=True, noisy=False, poolsize=None):
     """
     This calculates the surface area of individual control volumes consisted of triangles with a common node point.
 
@@ -2858,7 +2858,12 @@ def control_volumes(x, y, tri, node_control=True, element_control=True, noisy=Fa
     if not node_control and not element_control:
         raise ValueError("Set either `node_control' or `element_control' to `True'")
 
-    pool = multiprocessing.Pool()
+    if poolsize is None:
+        pool = multiprocessing.Pool()
+    elif poolsize == 'serial':
+        pool = False
+    else:
+        pool = multiprocessing.Pool(poolsize)
 
     m = len(x)  # number of nodes
 
@@ -2875,16 +2880,30 @@ def control_volumes(x, y, tri, node_control=True, element_control=True, noisy=Fa
             print('Compute control volume for fluxes at nodes (art1)')
         xc = nodes2elems(x, tri)
         yc = nodes2elems(y, tri)
-        art1 = pool.map(partial(node_control_area, x=x, y=y, xc=xc, yc=yc, tri=tri), range(m))
+
+        if not pool:
+            art1 = []
+            for this_node in range(m):
+                art1.append(node_control_area(this_node, x, y, xc, yc, tri))
+            art1 = np.asarray(art1)
+        else:
+            art1 = pool.map(partial(node_control_area, x=x, y=y, xc=xc, yc=yc, tri=tri), range(m))
 
     # Compute area of control volume art2(i) = sum(all tris surrounding node i)
     if element_control:
         if noisy:
             print('Compute control volume for fluxes over elements (art2)')
         art = get_area(np.asarray((x[tri[:, 0]], y[tri[:, 0]])).T, np.asarray((x[tri[:, 1]], y[tri[:, 1]])).T, np.asarray((x[tri[:, 2]], y[tri[:, 2]])).T)
-        art2 = pool.map(partial(element_control_area, triangles=tri, art=art), range(m))
+        if not pool:
+            art2 = []
+            for this_node in range(m):
+                art2.append(element_control_area(this_node, triangles=tri, art=art))
+            art2 = np.asarray(art2)
+        else:
+            art2 = pool.map(partial(element_control_area, triangles=tri, art=art), range(m))
 
-    pool.close()
+    if pool:
+        pool.close()
 
     if node_control and element_control:
         return art1, art2
