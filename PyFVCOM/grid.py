@@ -915,8 +915,7 @@ class OpenBoundary(object):
                 lat_index = np.argmin(np.abs(coarse.grid.lat - node[1]))
                 if coarse_depths[lat_index, lon_index] < node[2].max():
                     # Squash the FVCOM water column into the coarse water column.
-                    # TODO: Is the sign of the offset right here?
-                    z[idx, :] = (node[2] / node[2].max()) * coarse_depths[lat_index, lon_index] - 1  # offset by a bit
+                    z[idx, :] = (node[2] / node[2].max()) * coarse_depths[lat_index, lon_index]
             # Fix all depths which are shallower than the shallowest coarse depth. This is more straightforward as
             # it's a single minimum across all the open boundary positions.
             z[z < coarse.grid.depth.min()] = coarse.grid.depth.min()
