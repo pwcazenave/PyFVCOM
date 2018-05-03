@@ -1649,11 +1649,11 @@ def write_fvcom_mesh(triangles, nodes, x, y, z, mesh, extra_depth=None):
                 f.write('{:.6f} {:.6f} {:.6f}\n'.format(*node))
 
 
-def find_nearest_point(grid_x, grid_y, x, y, maxDistance=np.inf, noisy=False):
+def find_nearest_point(grid_x, grid_y, x, y, maxDistance=np.inf):
     """
     Given some point(s) `x' and `y', find the nearest grid node in `grid_x' and `grid_y'.
 
-    Returns the nearest coordinate(s), distance(s) from the point(s) and the index in the respective array(s).
+    Returns the nearest coordinate(s), distance(s) from the point(s) and the index(ices) in the respective array.
 
     Optionally specify a maximum distance (in the same units as the input) to only return grid positions which are
     within that distance. This means if your point lies outside the grid, for example, you can use maxDistance to
@@ -1665,13 +1665,11 @@ def find_nearest_point(grid_x, grid_y, x, y, maxDistance=np.inf, noisy=False):
     grid_x, grid_y : np.ndarray
         Coordinates within which to search for the nearest point given in `x' and `y'.
     x, y : np.ndarray
-        List of coordinates to find the closest value in FX and FY. Upper threshold of distance is given by
-        maxDistance (see below).
+        List of coordinates to find the closest value in `grid_x' and `grid_y'. Upper threshold of distance is given
+        by maxDistance (see below).
     maxDistance : float, optional
         Unless given, there is no upper limit on the distance away from the source for which a result is deemed
         valid. Any other value specified here limits the upper threshold.
-    noisy : bool or int, optional
-        Set to True to enable verbose output. If int, outputs every nth iteration.
 
     Returns
     -------
