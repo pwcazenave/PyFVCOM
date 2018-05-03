@@ -911,8 +911,8 @@ class OpenBoundary(object):
             # Go through each open boundary position and if its depth is deeper than the closest coarse data,
             # squash the open boundary water column into the coarse water column.
             for idx, node in enumerate(zip(x, y, z)):
-                lon_index = np.argmin(np.abs(self.grid.lon - node[0]))
-                lat_index = np.argmin(np.abs(self.grid.lat - node[1]))
+                lon_index = np.argmin(np.abs(coarse.grid.lon - node[0]))
+                lat_index = np.argmin(np.abs(coarse.grid.lat - node[1]))
                 if coarse_depths[lat_index, lon_index] < node[2].max():
                     # Squash the FVCOM water column into the coarse water column.
                     # TODO: Is the sign of the offset right here?
