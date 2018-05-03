@@ -471,7 +471,7 @@ class Model(Domain):
         self.sigma.layers_z = self.grid.h[:, np.newaxis] * self.sigma.layers
         self.sigma.layers_center_z = self.grid.h_center[:, np.newaxis] * self.sigma.layers_center
         self.sigma.levels_z = self.grid.h [:, np.newaxis] * self.sigma.levels
-        self.sigma.levels_center_z = self.grid.h_center[:, np.newaxis]  * self.sigma.levels_center
+        self.sigma.levels_center_z = self.grid.h_center[:, np.newaxis] * self.sigma.levels_center
 
         # Make some dimensions
         self.dims.levels = nlev
