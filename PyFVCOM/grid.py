@@ -2508,6 +2508,33 @@ def get_area(v1, v2, v3):
 
     return abs(area)
 
+def get_area_heron(s1, s2, s3):
+    """
+    Calculate the area of a triangle/set of triangles based on side length (Herons formula). Could tidy by combining with get_area
+
+    Parameters
+    ----------
+    s1, s2, s3 : tuple, list (float, float)
+        Side lengths of the three sides of a triangle. Can be 1D
+        arrays of lengths or lists of lengths.
+
+    Returns
+    -------
+    area : tuple, ndarray
+        Area of the triangle(s). Units of v0, v1 and v2.
+
+
+    """
+
+    s1 = np.asarray(s1)
+    s2 = np.asarray(s2)
+    s3 = np.asarray(s3)
+
+    p = 0.5 * (s1 + s2 + s3)
+
+    area = np.sqrt(p * (p -s1) * (p - s2) * (p - s3)) 
+
+    return abs(area)
 
 def find_bad_node(nv, node_id):
     """
