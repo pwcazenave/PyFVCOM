@@ -2806,7 +2806,7 @@ def grid_metrics(tri, noisy=False):
     if noisy:
         print('Getting boundary node IDs')
 
-    # Get the boundary node IDs. Holy nested list comprehensions, Batman!
+    # Get the boundary node IDs.
     boundary_element_node_ids = np.unique(tri[isbce, :]).ravel()
     boundary_nodes = []
     for i in boundary_element_node_ids:
