@@ -629,13 +629,15 @@ class Plotter:
         self.axes.cla()
         self._init_figure()
 
-    def plot_field(self, field):
+    def plot_field(self, field, *args, **kwargs):
         """ Map the given field.
 
         Parameters:
         -----------
         field : 1D array TOCHECK
             Field to plot.
+
+        Additional arguments and keyword arguments are passed to matplotlib.pyplot.tripcolor.
 
         """
 
@@ -661,8 +663,10 @@ class Plotter:
         # self.tripcolor_plot = self.axes.tripcolor(self.tri, field,
         #                                           vmin=self.vmin, vmax=self.vmax, cmap=self.cmap,
         #                                           edgecolors=self.edgecolors, zorder=1, norm=self.norm)
-        self.tripcolor_plot = self.axes.tripcolor(x, y, self.triangles, np.squeeze(field), vmin=self.vmin, vmax=self.vmax,
-                                                  cmap=self.cmap, edgecolors=self.edgecolors, zorder=1, norm=self.norm)
+        self.tripcolor_plot = self.axes.tripcolor(x, y, self.triangles, np.squeeze(field), *args,
+                                                  vmin=self.vmin, vmax=self.vmax,
+                                                  cmap=self.cmap, edgecolors=self.edgecolors,
+                                                  zorder=1, norm=self.norm, **kwargs)
 
         # Overlay the grid
         # self.axes.triplot(self.tri, zorder=2)
