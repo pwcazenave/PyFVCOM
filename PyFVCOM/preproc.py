@@ -3008,6 +3008,8 @@ class Restart(FileReader):
         """
         Replace the values in `variable' with the given `data'.
 
+        This appends `variable' to the list of variables we've amended (self.replaced).
+
         Parameters
         ----------
         variable : str
