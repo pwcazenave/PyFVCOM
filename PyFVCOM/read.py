@@ -807,7 +807,7 @@ class FileReader(Domain):
         """
 
         if not hasattr(self.data, 'zeta'):
-            surface_elevation = np.zeros((self.dims.node, self.dims.time))
+            surface_elevation = np.zeros((self.dims.time, self.dims.node))
         else:
             surface_elevation = self.data.zeta
 
