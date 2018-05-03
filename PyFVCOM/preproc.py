@@ -3056,3 +3056,26 @@ class Restart(FileReader):
                         print('existing data')
                     ds[name][:] = self.ds[name][:]
 
+    def read_regular(self, *args, **kwargs):
+        """
+        Read regularly gridded model data and provides a RegularReader object which mimics a FileReader object.
+
+        Parameters
+        ----------
+        regular : str, pathlib.Path
+            Files to read.
+        variables : list
+            Variables to extract. Variables missing in the files raise an error.
+        noisy : bool, optional
+            Set to True to enable verbose output. Defaults to False.
+        Remaining keyword arguments are passed to RegularReader.
+
+        Returns
+        -------
+        regular_model : PyFVCOM.preproc.RegularReader
+            A RegularReader object with the requested variables loaded.
+
+        """
+
+        self.regular = read_regular(*args, noisy=self._noisy, **kwargs)
+
