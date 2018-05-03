@@ -3020,6 +3020,102 @@ class Restart(FileReader):
         setattr(self.data, variable, data)
         self.replaced.append(variable)
 
+    def replace_variable_with_regular(self, variable, coarse_name, coarse, constrain_coordinates=False, mode='nodes'):
+        """
+        Interpolate the given regularly gridded data onto the grid nodes.
+
+        Parameters
+        ----------
+        variable : str
+            The variable in the restart file to replace.
+        coarse_name : str
+            The data field name to use from the coarse object.
+        coarse : PyFVCOM.preproc.RegularReader
+            The regularly gridded data to interpolate onto the grid nodes. This must include time (coarse.time), lon,
+            lat and depth data (in coarse.grid) as well as the time series to interpolate (4D volume [time, depth,
+            lat, lon]) in coarse.data.
+        constrain_coordinates : bool, optional
+            Set to True to constrain the grid coordinates (lon, lat, depth) to the supplied coarse data.
+            This essentially squashes the ogrid to fit inside the coarse data and is, therefore, a bit of a
+            fudge! Defaults to False.
+        mode : bool, optional
+            Set to 'nodes' to interpolate onto the grid node positions or 'elements' for the elements. Defaults to
+            'nodes'.
+
+        """
+
+        # This is more or less a copy-paste of PyFVCOM.grid.add_nested_forcing except we use the full grid
+        # coordinates instead of those on the open boundary only. Feels like unnecessary duplication of code.
+
+        # We need the vertical grid data for the interpolation, so load it now.
+        self.load_data(['siglay'])
+        self.data.siglay_center = nodes2elems(self.data.siglay, self.grid.triangles)
+        if mode == 'elements':
+            x = self.grid.lonc
+            y = self.grid.latc
+            # Keep depths positive down.
+            z = self.grid.h_center * -self.data.siglay_center
+        else:
+            x = self.grid.lon
+            y = self.grid.lat
+            # Keep depths positive down.
+            z = self.grid.h * -self.data.siglay
+
+        if constrain_coordinates:
+            x[x < coarse.grid.lon.min()] = coarse.grid.lon.min()
+            x[x > coarse.grid.lon.max()] = coarse.grid.lon.max()
+            y[y < coarse.grid.lat.min()] = coarse.grid.lat.min()
+            y[y > coarse.grid.lat.max()] = coarse.grid.lat.max()
+
+            # The depth data work differently as we need to squeeze each FVCOM water column into the available coarse
+            # data. The only way to do this is to adjust each FVCOM water column in turn by comparing with the
+            # closest coarse depth.
+            coarse.grid.coarse_depths = np.tile(coarse.grid.depth, [coarse.dims.lat, coarse.dims.lon, 1]).transpose(2, 0, 1)
+            coarse.grid.coarse_depths = np.ma.masked_array(coarse.grid.coarse_depths,
+                                                           mask=getattr(coarse.data, coarse_name)[0, ...].mask)
+            # Where we only have a single depth value, we need to make sure we still have a "water column" into which
+            #  we squeeze the FVCOM layers.
+            coarse_depths = np.max(coarse.grid.coarse_depths, axis=0)
+            # Go through each grid position and if its depth is deeper than the closest coarse data, squash the FVCOM
+            # water column into the coarse water column.
+            for idx, node in enumerate(zip(x, y, z)):
+                lon_index = np.argmin(np.abs(coarse.grid.lon - node[0]))
+                lat_index = np.argmin(np.abs(coarse.grid.lat - node[1]))
+                if coarse_depths[lat_index, lon_index] < node[2].max():
+                    z[idx, :] = (node[2] / node[2].max()) * coarse_depths[lat_index, lon_index]
+                    # Remove some percentage of the depth to make sure the FVCOM column definitely fits inside the
+                    # coarse one.
+                    z[idx, :] = z[idx, :] - (z[idx, :] * 0.005)
+            # Fix all depths which are shallower than the shallowest coarse depth. This is more straightforward as
+            # it's a single minimum across all the grid positions.
+            z[z < coarse.grid.depth.min()] = coarse.grid.depth.min()
+
+        # Make arrays of lon, lat, depth and time. Need to make the coordinates match the coarse data shape and then
+        # flatten the lot. We should be able to do the interpolation in one shot this way, but we have to be
+        # careful our coarse data covers our model domain (space and time).
+        nt = len(self.time.time)
+        nx = len(x)
+        nz = z.shape[0]
+        boundary_grid = np.array((np.tile(self.time.time, [nx, nz, 1]).T.ravel(),
+                                  np.tile(z, [nt, 1, 1]).ravel(),
+                                  np.tile(y, [nz, nt, 1]).transpose(1, 0, 2).ravel(),
+                                  np.tile(x, [nz, nt, 1]).transpose(1, 0, 2).ravel())).T
+
+        # Set the land values in the coarse data to NaN.
+        # to_mask = getattr(coarse.data, coarse_name)
+        # mask = to_mask.mask
+        # to_mask = np.array(to_mask)
+        # to_mask[mask] = np.nan
+        # setattr(coarse.data, coarse_name, to_mask)
+        # del to_mask, mask
+
+        ft = RegularGridInterpolator((coarse.time.time, coarse.grid.depth, coarse.grid.lat, coarse.grid.lon),
+                                     getattr(coarse.data, coarse_name), method='linear')
+        # Reshape the results to match the un-ravelled boundary_grid array.
+        interpolated_coarse_data = ft(boundary_grid).reshape([nt, nz, -1])
+
+        self.replace_variable(variable, interpolated_coarse_data)
+
     def write_restart(self, restart_file, **ncopts):
         """
         Write out an FVCOM-formatted netCDF file based.
