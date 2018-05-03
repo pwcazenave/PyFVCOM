@@ -22,6 +22,7 @@ class _passive_data_store(object):
     def __init__(self):
         pass
 
+
 class FileReader(Domain):
     """ Load FVCOM model output.
 
