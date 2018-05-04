@@ -17,9 +17,10 @@ from datetime import datetime, timedelta
 from netCDF4 import Dataset, MFDataset, num2date, date2num
 
 from PyFVCOM.coordinate import lonlat_from_utm, utm_from_lonlat
-from PyFVCOM.grid import unstructured_grid_volume, nodes2elems, Domain, reduce_triangulation, control_volumes, get_area_heron
+from PyFVCOM.grid import unstructured_grid_volume, nodes2elems, elems2nodes
+from PyFVCOM.grid import Domain, reduce_triangulation, control_volumes, get_area_heron
 from PyFVCOM.utilities.general import fix_range
-from PyFVCOM.ocean import depth2pressure, sw_dens
+
 
 class _passive_data_store(object):
     def __init__(self):
