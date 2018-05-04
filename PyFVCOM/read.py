@@ -1043,6 +1043,7 @@ class SubDomainReader(FileReader):
         plt.close()
 
         poly_path = mplPath.Path(bounding_poly)
+        # Shouldn't need the np.asarray here, I think, but leaving it in as I'm not 100% sure.
         self._dims['node'] = np.squeeze(np.argwhere(np.asarray(poly_path.contains_points(np.asarray([self.grid.lon, self.grid.lat]).T))))
         self._dims['nele'] = np.squeeze(np.argwhere(np.all(np.isin(self.grid.triangles, self._dims['node']), axis=1)))
 
@@ -1101,7 +1102,7 @@ class SubDomainReader(FileReader):
                 print('Open faces not identified yet, running _find_open_faces()')
             self._find_open_faces()
         open_face_cells = np.asarray(list(self.open_side_dict.keys()))
-        open_face_vel = {}
+        open_face_vel = {}  # currently unused
 
         if not hasattr(self.grid, 'depth'):
             if noisy:
