@@ -1216,6 +1216,11 @@ class SubDomainReader(FileReader):
         return var_to_int
 
     def volume_integral(self, var):
+        """
+        TODO: docstring.
+        TODO: finish.
+
+        """
         pass
 
     def surface_integral(self, var):
