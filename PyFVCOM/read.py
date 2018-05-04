@@ -1034,7 +1034,7 @@ class SubDomainReader(FileReader):
                                 c='r', linewidth=2)
 
             happy = input('Is that polygon ok Y/N?')
-            if happy == 'Y':
+            if happy.lower() == 'y':
                 keep_picking = False
 
             for this_l in poly_lin:
