@@ -1001,6 +1001,7 @@ class FileReaderFromDict(FileReader):
             elif obj in ('time', 'Itime', 'Itime2', 'datetime'):
                 self.dims.time = getattr(self.time, obj).shape
 
+
 class SubDomainReader(FileReader):
     """
     TODO: Add missing docstrings, including one for the class overall.
@@ -1028,7 +1029,9 @@ class SubDomainReader(FileReader):
         while keep_picking == True:
             n_pts = int(input('How many polgon points?'))
             bounding_poly = np.asarray(plt.ginput(n_pts))
-            poly_lin = plt.plot(np.hstack([bounding_poly[:,0], bounding_poly[0,0]]), np.hstack([bounding_poly[:,1], bounding_poly[0,1]]), c='r', linewidth=2)
+            poly_lin = plt.plot(np.hstack([bounding_poly[:, 0], bounding_poly[0, 0]]),
+                                np.hstack([bounding_poly[:, 1], bounding_poly[0,1]]),
+                                c='r', linewidth=2)
 
             happy = input('Is that polygon ok Y/N?')
             if happy == 'Y':
@@ -1040,7 +1043,7 @@ class SubDomainReader(FileReader):
         plt.close()
 
         poly_path = mplPath.Path(bounding_poly)
-        self._dims['node'] = np.squeeze(np.argwhere(np.asarray(poly_path.contains_points(np.asarray([self.grid.lon,self.grid.lat]).T))))
+        self._dims['node'] = np.squeeze(np.argwhere(np.asarray(poly_path.contains_points(np.asarray([self.grid.lon, self.grid.lat]).T))))
         self._dims['nele'] = np.squeeze(np.argwhere(np.all(np.isin(self.grid.triangles, self._dims['node']), axis=1)))
 
     def _find_open_faces(self):
@@ -1054,7 +1057,7 @@ class SubDomainReader(FileReader):
 
         open_side_rows = self.grid.triangles[open_side_cells,:]
         open_side_nodes = []
-        row_choose = np.asarray([0,1,2])
+        row_choose = np.asarray([0, 1, 2])
         for this_row, this_not in zip(open_side_rows, open_sides[1]):
             this_row_choose = row_choose[~np.isin(row_choose, this_not)]
             open_side_nodes.append(this_row[this_row_choose])
@@ -1063,22 +1066,23 @@ class SubDomainReader(FileReader):
         open_side_dict = {}
 
         for this_cell in open_side_cells:
-            this_cell_all_nodes = self.grid.triangles[this_cell,:]
+            this_cell_all_nodes = self.grid.triangles[this_cell, :]
             this_cell_nodes = this_cell_all_nodes[np.isin(this_cell_all_nodes, open_side_nodes)]
 
-            vector_pll = [self.grid.x[this_cell_nodes[0]] - self.grid.x[this_cell_nodes[1]], self.grid.y[this_cell_nodes[0]] - self.grid.y[this_cell_nodes[1]]]
+            vector_pll = [self.grid.x[this_cell_nodes[0]] - self.grid.x[this_cell_nodes[1]],
+                          self.grid.y[this_cell_nodes[0]] - self.grid.y[this_cell_nodes[1]]]
             vector_nml = np.asarray([vector_pll[1], -vector_pll[0]]) / np.sqrt(vector_pll[0]**2 + vector_pll[1]**2)
             epsilon = 0.0001
             mid_point = np.asarray([self.grid.x[this_cell_nodes[0]] + 0.5 * (self.grid.x[this_cell_nodes[1]] - self.grid.x[this_cell_nodes[0]]),
-                            self.grid.y[this_cell_nodes[0]] + 0.5 * (self.grid.y[this_cell_nodes[1]] - self.grid.y[this_cell_nodes[0]])])
+                                    self.grid.y[this_cell_nodes[0]] + 0.5 * (self.grid.y[this_cell_nodes[1]] - self.grid.y[this_cell_nodes[0]])])
 
             cell_path = mplPath.Path(np.asarray([self.grid.x[this_cell_all_nodes], self.grid.y[this_cell_all_nodes]]).T)
 
-            if cell_path.contains_point(mid_point + epsilon * vector_nml): # want outward pointing normal
-                vector_nml = -1*vector_nml
+            if cell_path.contains_point(mid_point + epsilon * vector_nml):  # want outward pointing normal
+                vector_nml = -1 * vector_nml
 
             side_length = np.sqrt((self.grid.x[this_cell_nodes[0]] - self.grid.x[this_cell_nodes[1]])**2 +
-                                        (self.grid.y[this_cell_nodes[0]] - self.grid.y[this_cell_nodes[1]])**2)
+                                  (self.grid.y[this_cell_nodes[0]] - self.grid.y[this_cell_nodes[1]])**2)
 
             open_side_dict[this_cell] = [vector_nml, this_cell_nodes, side_length]
 
@@ -1108,20 +1112,19 @@ class SubDomainReader(FileReader):
             if noisy:
                 print('U data not preloaded, fetching')
             self.load_data(['u'])
-            u_openface = self.data.u[...,open_face_cells]
+            u_openface = self.data.u[..., open_face_cells]
             delattr(self.data, 'u')
         else:
-            u_openface = self.data.u[...,open_face_cells]
+            u_openface = self.data.u[..., open_face_cells]
 
         if not hasattr(self.data, 'v'):
             if noisy:
                 print('V data not preloaded, fetching')
             self.load_data(['v'])
-            v_openface = self.data.v[...,open_face_cells]
+            v_openface = self.data.v[..., open_face_cells]
             delattr(self.data, 'v')
         else:
-            v_openface = self.data.v[...,open_face_cells]
-
+            v_openface = self.data.v[..., open_face_cells]
 
         # Loop through each open boundary cell, get the normal component of the velocity, 
         # calculate the (time-varying) area of the open face at each sigma layer, then add this to the flux dictionary
@@ -1133,36 +1136,36 @@ class SubDomainReader(FileReader):
             if noisy:
                 print('Adding flux for open cell {}'.format(this_open_cell))
             this_cell_ind = open_face_cells == this_open_cell
-            this_cell_vel = [np.squeeze(u_openface[...,this_cell_ind]), np.squeeze(v_openface[...,this_cell_ind])]
+            this_cell_vel = [np.squeeze(u_openface[..., this_cell_ind]), np.squeeze(v_openface[..., this_cell_ind])]
 
             this_normal_vec = this_open_data[0]
             this_dot = np.squeeze(np.asarray(this_cell_vel[0] * this_normal_vec[0] + this_cell_vel[1] * this_normal_vec[1]))
 
             this_cell_nodes = this_open_data[1]
-            this_cell_deps = self.grid.depth[:,this_cell_nodes]
+            this_cell_deps = self.grid.depth[:, this_cell_nodes]
             this_cell_siglev = self.grid.siglev[:, this_cell_nodes]
 
-            this_cell_deps_siglev = -np.tile(this_cell_siglev, [this_cell_deps.shape[0],1,1])*np.transpose(np.tile(this_cell_deps, [this_cell_siglev.shape[0] ,1,1]), (1,0,2))
-            this_cell_deps_siglev_abs = np.tile(self.data.zeta[:, np.newaxis, this_cell_nodes], [1,this_cell_deps_siglev.shape[1],1]) - this_cell_deps_siglev
+            this_cell_deps_siglev = -np.tile(this_cell_siglev, [this_cell_deps.shape[0], 1, 1]) * np.transpose(np.tile(this_cell_deps, [this_cell_siglev.shape[0], 1, 1]), (1, 0, 2))
+            this_cell_deps_siglev_abs = np.tile(self.data.zeta[:, np.newaxis, this_cell_nodes], [1, this_cell_deps_siglev.shape[1], 1]) - this_cell_deps_siglev
 
+            this_cell_dz = this_cell_deps_siglev[:, :-1, :] - this_cell_deps_siglev[:, 1:, :]
 
-            this_cell_dz = this_cell_deps_siglev[:,0:-1,:] - this_cell_deps_siglev[:,1:, :]
+            this_node1_xyz = [np.tile(self.grid.x[this_cell_nodes[0]], this_cell_deps_siglev.shape[:2]),
+                              np.tile(self.grid.y[this_cell_nodes[0]], this_cell_deps_siglev.shape[:2]),
+                              this_cell_deps_siglev_abs[:, :, 1]]
+            this_node2_xyz = [np.tile(self.grid.x[this_cell_nodes[1]], this_cell_deps_siglev.shape[:2]),
+                              np.tile(self.grid.y[this_cell_nodes[1]], this_cell_deps_siglev.shape[:2]),
+                              this_cell_deps_siglev_abs[:, :, 1]]
 
-            this_node1_xyz = [np.tile(self.grid.x[this_cell_nodes[0]], this_cell_deps_siglev.shape[0:2]),
-                        np.tile(self.grid.y[this_cell_nodes[0]], this_cell_deps_siglev.shape[0:2]), this_cell_deps_siglev_abs[:,:,1]]
-            this_node2_xyz = [np.tile(self.grid.x[this_cell_nodes[1]], this_cell_deps_siglev.shape[0:2]),
-                        np.tile(self.grid.y[this_cell_nodes[1]], this_cell_deps_siglev.shape[0:2]), this_cell_deps_siglev_abs[:,:,1]]
+            this_cell_cross = np.sqrt((this_node1_xyz[0] - this_node2_xyz[0])**2 +
+                                      (this_node1_xyz[1] - this_node2_xyz[1])**2 +
+                                      (this_node1_xyz[2] - this_node2_xyz[2])**2)
+            this_cell_hyps = np.sqrt((this_node1_xyz[0][:, 1:] - this_node2_xyz[0][:, :-1])**2 +
+                                     (this_node1_xyz[1][:, 1:] - this_node2_xyz[1][:, :-1])**2 +
+                                     (this_node1_xyz[2][:, 1:] - this_node2_xyz[2][:, :-1])**2)
 
-
-
-
-            this_cell_cross = np.sqrt((this_node1_xyz[0] - this_node2_xyz[0])**2 + (this_node1_xyz[1] - this_node2_xyz[1])**2 +\
-                                            (this_node1_xyz[2] - this_node2_xyz[2])**2)
-            this_cell_hyps = np.sqrt((this_node1_xyz[0][:,1:] - this_node2_xyz[0][:,0:-1])**2 + (this_node1_xyz[1][:,1:] - this_node2_xyz[1][:,0:-1])**2 +\
-                                            (this_node1_xyz[2][:,1:] - this_node2_xyz[2][:,0:-1])**2)
-
-            area_tri_1 = get_area_heron(np.abs(this_cell_dz[:,:,0]), this_cell_cross[:,0:-1], this_cell_hyps)
-            area_tri_2 = get_area_heron(np.abs(this_cell_dz[:,:,1]), this_cell_cross[:,1:], this_cell_hyps)
+            area_tri_1 = get_area_heron(np.abs(this_cell_dz[:, :, 0]), this_cell_cross[:, :-1], this_cell_hyps)
+            area_tri_2 = get_area_heron(np.abs(this_cell_dz[:, :, 1]), this_cell_cross[:, 1:], this_cell_hyps)
 
             this_area = area_tri_1 + area_tri_2
             this_vol_flux = this_area * this_dot
