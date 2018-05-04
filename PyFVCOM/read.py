@@ -1002,12 +1002,24 @@ class FileReaderFromDict(FileReader):
                 self.dims.time = getattr(self.time, obj).shape
 
 class SubDomainReader(FileReader):
+    """
+    TODO: Add missing docstrings, including one for the class overall.
+
+    """
     def __init__(self, *args, **kwargs):
+        """
+        TODO: docstring.
+
+        """
         self._bounding_box = True
         self._get_data_pattern = 'All'
         super().__init__(*args, **kwargs)
 
     def _make_subset_dimensions(self):
+        """
+        TODO: docstring.
+
+        """
         plt.figure()
         plt.scatter(self.grid.lon, self.grid.lat, c='lightgray')
         plt.show()
@@ -1032,6 +1044,10 @@ class SubDomainReader(FileReader):
         self._dims['nele'] = np.squeeze(np.argwhere(np.all(np.isin(self.grid.triangles, self._dims['node']), axis=1)))
 
     def _find_open_faces(self):
+        """
+        TODO: docstring.
+
+        """
         vol_cells_ext = np.hstack([self._dims['nele'], -1]) # closed boundaries are given a -1 in the nbe matrix
         open_sides = np.where(~np.isin(self.grid.nbe, vol_cells_ext))
         open_side_cells = open_sides[0]
@@ -1070,8 +1086,7 @@ class SubDomainReader(FileReader):
 
     def _generate_open_vol_flux(self, noisy=False):
         """
-        
-
+        TODO: docstring.
 
         """
 
@@ -1157,6 +1172,10 @@ class SubDomainReader(FileReader):
         self.open_side_flux = open_side_flux_dict
 
     def add_river_flow(self, river_nc_file, river_nml_file):
+        """
+        TODO: docstring.
+
+        """
 
         nml_dict = get_river_config(river_nml_file)
         river_node_raw = np.asarray(nml_dict['RIVER_GRID_LOCATION'], dtype=int) - 1
@@ -1186,6 +1205,11 @@ class SubDomainReader(FileReader):
         self.river.river_salt = np.asarray([np.interp(mod_time_sec, river_time_sec, this_col) for this_col in river_salt_raw.T]).T
 
     def aopen_integral(var):
+        """
+        TODO: docstring.
+        TODO: finish.
+
+        """
         var_to_int = getattr(self.data, var)
         if len(var_to_int) == len(self.grid.xc):
             var_to_int = elem2node(var)
@@ -1195,6 +1219,11 @@ class SubDomainReader(FileReader):
         pass
 
     def surface_integral(var):
+        """
+        TODO: docstring.
+        TODO: finish.
+
+        """
         pass
 
 
