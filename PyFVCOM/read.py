@@ -1027,7 +1027,7 @@ class SubDomainReader(FileReader):
 
         keep_picking = True
         while keep_picking == True:
-            n_pts = int(input('How many polgon points?'))
+            n_pts = int(input('How many polygon points?'))
             bounding_poly = np.asarray(plt.ginput(n_pts))
             poly_lin = plt.plot(np.hstack([bounding_poly[:, 0], bounding_poly[0, 0]]),
                                 np.hstack([bounding_poly[:, 1], bounding_poly[0,1]]),
