@@ -1215,10 +1215,10 @@ class SubDomainReader(FileReader):
             var_to_int = elems2nodes(var, self.grid.triangles)
         return var_to_int
 
-    def volume_integral(var):
+    def volume_integral(self, var):
         pass
 
-    def surface_integral(var):
+    def surface_integral(self, var):
         """
         TODO: docstring.
         TODO: finish.
