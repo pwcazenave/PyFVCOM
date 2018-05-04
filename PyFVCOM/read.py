@@ -7,16 +7,19 @@ import copy
 import inspect
 
 import numpy as np
+import netCDF4 as nc
 import matplotlib.tri as tri
+import matplotlib.pyplot as plt
+import matplotlib.path as mplPath
 
 from warnings import warn
 from datetime import datetime, timedelta
 from netCDF4 import Dataset, MFDataset, num2date, date2num
 
 from PyFVCOM.coordinate import lonlat_from_utm, utm_from_lonlat
-from PyFVCOM.grid import unstructured_grid_volume, nodes2elems, Domain, reduce_triangulation
+from PyFVCOM.grid import unstructured_grid_volume, nodes2elems, Domain, reduce_triangulation, control_volumes, get_area_heron
 from PyFVCOM.utilities.general import fix_range
-
+from PyFVCOM.ocean import depth2pressure, sw_dens
 
 class _passive_data_store(object):
     def __init__(self):
@@ -813,6 +816,44 @@ class FileReader(Domain):
 
         self.depth_volume, self.volume = unstructured_grid_volume(self.grid.art1, self.grid.h, surface_elevation, self.grid.siglev, depth_integrated=True)
 
+    def _get_cv_volumes(self, poolsize=None):
+        """
+        Calculate the control volume volumes in the grid volume. I might have overused that word.
+        """
+        self.grid.cv_area = np.asarray(control_volumes(self.grid.x, self.grid.y, self.grid.triangles, element_control=False, poolsize=poolsize))
+
+        if not hasattr(self.data, 'zeta'):
+            self.load_data(['zeta'])
+        self.grid.dz = np.abs(np.diff(self.grid.siglev, axis=0))
+        self.grid.depth = self.data.zeta + self.grid.h
+        self.grid.integrated_volume = (self.grid.cv_area * self.grid.depth)
+
+    def total_volume_var(self, var, poolsize=None):
+        if not hasattr(self.grid, 'volume'):
+            self._get_cv_volumes(poolsize=poolsize)
+
+        if not hasattr(self.data, var):
+            self.load_data([var])
+
+        # Do as a loop because it nukes the memory otherwise
+        int_vol = 0
+        for i in np.arange(0, len(self.grid.x)):
+            int_vol += np.sum(getattr(self.data, var)[:,:,i] * self.grid.integrated_volume[:, np.newaxis, i] * self.grid.dz[np.newaxis, :, i], axis=1)
+        setattr(self.data, var + '_total', int_vol)
+
+    def avg_volume_var(self, var):
+        if not hasattr(self, 'volume'):
+            self._get_cv_volumes()
+
+        if not hasattr(self.data, var):
+            self.load_data([var])
+
+        int_vol = 0
+        for i in np.arange(0, len(self.grid.x)):
+            int_vol += np.average(getattr(self.data, var)[:,:,i], 
+                    weights=self.grid.integrated_volume[:, np.newaxis, i] * self.grid.dz[np.newaxis, :, i], axis=1)
+        setattr(self.data, var + '_average', int_vol)
+
     def time_to_index(self, target_time, tolerance=False):
         """
         Find the time index for the given time string (%Y-%m-%d %H:%M:%S.%f) or datetime object.
@@ -957,6 +998,202 @@ class FileReaderFromDict(FileReader):
                 self.dims.time, self.dims.DateStrLen = getattr(self.time, obj).shape
             elif obj in ('time', 'Itime', 'Itime2', 'datetime'):
                 self.dims.time = getattr(self.time, obj).shape
+
+class SubDomainReader(FileReader):
+    def __init__(self, *args, **kwargs):
+        self._bounding_box = True
+        self._get_data_pattern = 'All'
+        super().__init__(*args, **kwargs)
+
+    def _make_subset_dimensions(self):
+        plt.figure()
+        plt.scatter(self.grid.lon, self.grid.lat, c='lightgray')
+        plt.show()
+
+        keep_picking = True
+        while keep_picking == True:
+            n_pts = int(input('How many polgon points?'))
+            bounding_poly = np.asarray(plt.ginput(n_pts))
+            poly_lin = plt.plot(np.hstack([bounding_poly[:,0], bounding_poly[0,0]]), np.hstack([bounding_poly[:,1], bounding_poly[0,1]]), c='r', linewidth=2)
+
+            happy = input('Is that polygon ok Y/N?')
+            if happy == 'Y':
+                keep_picking = False
+
+            for this_l in poly_lin:
+                this_l.remove()
+
+        plt.close()
+
+        poly_path = mplPath.Path(bounding_poly)
+        self._dims['node'] = np.squeeze(np.argwhere(np.asarray(poly_path.contains_points(np.asarray([self.grid.lon,self.grid.lat]).T))))
+        self._dims['nele'] = np.squeeze(np.argwhere(np.all(np.isin(self.grid.triangles, self._dims['node']), axis=1)))
+
+    def _find_open_faces(self):
+        vol_cells_ext = np.hstack([self._dims['nele'], -1]) # closed boundaries are given a -1 in the nbe matrix
+        open_sides = np.where(~np.isin(self.grid.nbe, vol_cells_ext))
+        open_side_cells = open_sides[0]
+
+        open_side_rows = self.grid.triangles[open_side_cells,:]
+        open_side_nodes = []
+        row_choose = np.asarray([0,1,2])
+        for this_row, this_not in zip(open_side_rows, open_sides[1]):
+            this_row_choose = row_choose[~np.isin(row_choose, this_not)]
+            open_side_nodes.append(this_row[this_row_choose])
+        open_side_nodes = np.asarray(open_side_nodes)
+
+        open_side_dict = {}
+
+        for this_cell in open_side_cells:
+            this_cell_all_nodes = self.grid.triangles[this_cell,:]
+            this_cell_nodes = this_cell_all_nodes[np.isin(this_cell_all_nodes, open_side_nodes)]
+
+            vector_pll = [self.grid.x[this_cell_nodes[0]] - self.grid.x[this_cell_nodes[1]], self.grid.y[this_cell_nodes[0]] - self.grid.y[this_cell_nodes[1]]]
+            vector_nml = np.asarray([vector_pll[1], -vector_pll[0]]) / np.sqrt(vector_pll[0]**2 + vector_pll[1]**2)
+            epsilon = 0.0001
+            mid_point = np.asarray([self.grid.x[this_cell_nodes[0]] + 0.5 * (self.grid.x[this_cell_nodes[1]] - self.grid.x[this_cell_nodes[0]]),
+                            self.grid.y[this_cell_nodes[0]] + 0.5 * (self.grid.y[this_cell_nodes[1]] - self.grid.y[this_cell_nodes[0]])])
+
+            cell_path = mplPath.Path(np.asarray([self.grid.x[this_cell_all_nodes], self.grid.y[this_cell_all_nodes]]).T)
+
+            if cell_path.contains_point(mid_point + epsilon * vector_nml): # want outward pointing normal
+                vector_nml = -1*vector_nml
+
+            side_length = np.sqrt((self.grid.x[this_cell_nodes[0]] - self.grid.x[this_cell_nodes[1]])**2 +
+                                        (self.grid.y[this_cell_nodes[0]] - self.grid.y[this_cell_nodes[1]])**2)
+
+            open_side_dict[this_cell] = [vector_nml, this_cell_nodes, side_length]
+
+        self.open_side_dict = open_side_dict
+
+    def _generate_open_vol_flux(self, noisy=False):
+        """
+        
+
+
+        """
+
+        # Get a bunch of stuff if not already calculated
+
+        if not hasattr(self, 'open_side_dict'):
+            if noisy:
+                print('Open faces not identified yet, running _find_open_faces()')
+            self._find_open_faces()
+        open_face_cells = np.asarray(list(self.open_side_dict.keys()))
+        open_face_vel = {}
+
+        if not hasattr(self.grid, 'depth'):
+            if noisy:
+                print('Time varying depth not preloaded, fetching')
+            self._get_cv_volumes()
+
+        if not hasattr(self.data, 'u'):
+            if noisy:
+                print('U data not preloaded, fetching')
+            self.load_data(['u'])
+            u_openface = self.data.u[...,open_face_cells]
+            delattr(self.data, 'u')
+        else:
+            u_openface = self.data.u[...,open_face_cells]
+
+        if not hasattr(self.data, 'v'):
+            if noisy:
+                print('V data not preloaded, fetching')
+            self.load_data(['v'])
+            v_openface = self.data.v[...,open_face_cells]
+            delattr(self.data, 'v')
+        else:
+            v_openface = self.data.v[...,open_face_cells]
+
+
+        # Loop through each open boundary cell, get the normal component of the velocity, 
+        # calculate the (time-varying) area of the open face at each sigma layer, then add this to the flux dictionary
+        if noisy:
+            print('{} open boundary cells'.format(len(open_face_cells)))
+
+        open_side_flux_dict = {}
+        for this_open_cell, this_open_data in self.open_side_dict.items():
+            if noisy:
+                print('Adding flux for open cell {}'.format(this_open_cell))
+            this_cell_ind = open_face_cells == this_open_cell
+            this_cell_vel = [np.squeeze(u_openface[...,this_cell_ind]), np.squeeze(v_openface[...,this_cell_ind])]
+
+            this_normal_vec = this_open_data[0]
+            this_dot = np.squeeze(np.asarray(this_cell_vel[0] * this_normal_vec[0] + this_cell_vel[1] * this_normal_vec[1]))
+
+            this_cell_nodes = this_open_data[1]
+            this_cell_deps = self.grid.depth[:,this_cell_nodes]
+            this_cell_siglev = self.grid.siglev[:, this_cell_nodes]
+
+            this_cell_deps_siglev = -np.tile(this_cell_siglev, [this_cell_deps.shape[0],1,1])*np.transpose(np.tile(this_cell_deps, [this_cell_siglev.shape[0] ,1,1]), (1,0,2))
+            this_cell_deps_siglev_abs = np.tile(self.data.zeta[:, np.newaxis, this_cell_nodes], [1,this_cell_deps_siglev.shape[1],1]) - this_cell_deps_siglev
+
+
+            this_cell_dz = this_cell_deps_siglev[:,0:-1,:] - this_cell_deps_siglev[:,1:, :]
+
+            this_node1_xyz = [np.tile(self.grid.x[this_cell_nodes[0]], this_cell_deps_siglev.shape[0:2]),
+                        np.tile(self.grid.y[this_cell_nodes[0]], this_cell_deps_siglev.shape[0:2]), this_cell_deps_siglev_abs[:,:,1]]
+            this_node2_xyz = [np.tile(self.grid.x[this_cell_nodes[1]], this_cell_deps_siglev.shape[0:2]),
+                        np.tile(self.grid.y[this_cell_nodes[1]], this_cell_deps_siglev.shape[0:2]), this_cell_deps_siglev_abs[:,:,1]]
+
+
+
+
+            this_cell_cross = np.sqrt((this_node1_xyz[0] - this_node2_xyz[0])**2 + (this_node1_xyz[1] - this_node2_xyz[1])**2 +\
+                                            (this_node1_xyz[2] - this_node2_xyz[2])**2)
+            this_cell_hyps = np.sqrt((this_node1_xyz[0][:,1:] - this_node2_xyz[0][:,0:-1])**2 + (this_node1_xyz[1][:,1:] - this_node2_xyz[1][:,0:-1])**2 +\
+                                            (this_node1_xyz[2][:,1:] - this_node2_xyz[2][:,0:-1])**2)
+
+            area_tri_1 = get_area_heron(np.abs(this_cell_dz[:,:,0]), this_cell_cross[:,0:-1], this_cell_hyps)
+            area_tri_2 = get_area_heron(np.abs(this_cell_dz[:,:,1]), this_cell_cross[:,1:], this_cell_hyps)
+
+            this_area = area_tri_1 + area_tri_2
+            this_vol_flux = this_area * this_dot
+
+            open_side_flux_dict[this_open_cell] = [this_dot, this_area, this_vol_flux]
+
+        self.open_side_flux = open_side_flux_dict
+
+    def add_river_flow(self, river_nc_file, river_nml_file):
+
+        nml_dict = get_river_config(river_nml_file)
+        river_node_raw = np.asarray(nml_dict['RIVER_GRID_LOCATION'], dtype=int) - 1
+
+        # Get only rivers which feature in the subdomain
+        rivers_in_grid = np.isin(river_node_raw, self._dims['node'])
+
+        river_nc = nc.Dataset(river_nc_file, 'r')
+        time_raw = river_nc.variables['Times'][:]
+        time_dt = [datetime.strptime(b''.join(this_time).decode('utf-8'), '%Y-%m-%d %H:%M:%S') for this_time in time_raw]
+
+        ref_date = datetime(1900,1,1)
+        mod_time_sec = [(this_dt - ref_date).total_seconds() for this_dt in self.time.datetime]
+        river_time_sec = [(this_dt - ref_date).total_seconds() for this_dt in time_dt]
+
+        self.river = _passive_data_store()
+        self.river.river_nodes = np.argwhere(np.isin(self._dims['node'], river_node_raw))
+
+        river_flux_raw = river_nc.variables['river_flux'][:,rivers_in_grid]
+        self.river.river_fluxes = np.asarray([np.interp(mod_time_sec, river_time_sec, this_col) for this_col in river_flux_raw.T]).T
+        self.river.total_flux = np.sum(self.river.river_fluxes, axis=1)
+
+        river_temp_raw = river_nc.variables['river_temp'][:,rivers_in_grid]
+        self.river.river_temp = np.asarray([np.interp(mod_time_sec, river_time_sec, this_col) for this_col in river_temp_raw.T]).T
+
+        river_salt_raw = river_nc.variables['river_salt'][:,rivers_in_grid]
+        self.river.river_salt = np.asarray([np.interp(mod_time_sec, river_time_sec, this_col) for this_col in river_salt_raw.T]).T
+
+    def aopen_integral(var):
+        var_to_int = getattr(self.data, var)
+        if len(var_to_int) == len(self.grid.xc):
+            var_to_int = elem2node(var)
+        return
+
+    def volume_integral(var):
+        pass
+
+    def surface_integral(var):
+        pass
 
 
 class ncwrite(object):
