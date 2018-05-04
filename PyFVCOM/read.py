@@ -1204,7 +1204,7 @@ class SubDomainReader(FileReader):
         river_salt_raw = river_nc.variables['river_salt'][:,rivers_in_grid]
         self.river.river_salt = np.asarray([np.interp(mod_time_sec, river_time_sec, this_col) for this_col in river_salt_raw.T]).T
 
-    def aopen_integral(var):
+    def aopen_integral(self, var):
         """
         TODO: docstring.
         TODO: finish.
@@ -1212,8 +1212,8 @@ class SubDomainReader(FileReader):
         """
         var_to_int = getattr(self.data, var)
         if len(var_to_int) == len(self.grid.xc):
-            var_to_int = elem2node(var)
-        return
+            var_to_int = elems2nodes(var, self.grid.triangles)
+        return var_to_int
 
     def volume_integral(var):
         pass
