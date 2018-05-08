@@ -1344,6 +1344,47 @@ def read_fvcom_obc(obc):
 
     return nodes, types, count
 
+def parse_obc_sections(obc_node_array, triangle):
+    """
+    Seperates the open boundary nodes of a mesh into the seperate contiguous open boundary segments
+
+    Parameters
+    ----------
+    obc_node_array : array
+        Array of the nodes which are open boundary nodes, as nodes returned by read_fvcom_obc
+    triangle : 3xn array
+        Triangulation array of nodes, as triangle returned by read_fvcom_mesh
+
+    Returns
+    -------
+    nodestrings : list of arrays
+        A list of arrays, each of which is one contiguous section of open boundary
+
+    """
+
+    all_edges = np.vstack([triangle[:,0:2], triangle[:,1:], triangle[:,[0,2]]])
+    boundary_edges = all_edges[np.all(np.isin(all_edges, obc_node_array), axis=1), :]
+    u_nodes, bdry_counts = np.unique(boundary_edges, return_counts=True)
+    start_end_nodes = list(u_nodes[bdry_counts == 1])
+
+    nodestrings = []
+
+    while len(start_end_nodes) > 0:
+        this_obc_section_nodes = [start_end_nodes[0]]
+        start_end_nodes.remove(start_end_nodes[0])
+
+        nodes_to_add = True
+
+        while nodes_to_add:
+            possible_nodes = np.unique(boundary_edges[np.any(np.isin(boundary_edges, this_obc_section_nodes), axis=1),:])
+            nodes_to_add = list(possible_nodes[~np.isin(possible_nodes, this_obc_section_nodes)])
+            if nodes_to_add:
+                this_obc_section_nodes.append(nodes_to_add[0])
+
+        nodestrings.append(np.asarray(this_obc_section_nodes))
+        start_end_nodes.remove(list(set(start_end_nodes).intersection(this_obc_section_nodes)))
+
+    return nodestrings
 
 def write_sms_mesh(triangles, nodes, x, y, z, types, mesh):
     """
