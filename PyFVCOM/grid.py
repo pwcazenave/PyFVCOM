@@ -140,7 +140,8 @@ class Domain(object):
             try:
                 obcname = basename.replace('_grd', '_obc')
                 obcfile = os.path.join(basedir, '{}.dat'.format(obcname))
-                nodestrings, types, count = read_fvcom_obc(obcfile)
+                obc_node_array, types, count = read_fvcom_obc(obcfile)
+                nodestrings = parse_obc_sections(obc_node_array, triangle)
                 if self._noisy:
                     print('Found and parsed open boundary file: {}'.format(obcfile))
             except OSError:
