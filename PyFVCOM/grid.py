@@ -128,6 +128,7 @@ class Domain(object):
         except AttributeError:
             extension = os.path.splitext(self.grid.filename)[-1]
             basedir, basename = os.path.split(self.grid.filename)
+            basename = basename.replace(extension, '')
 
         if extension == '.2dm':
             if self._noisy:
