@@ -66,6 +66,7 @@ class Model(Domain):
         self.sigma = type('sigma', (), {})()
         self.sst = type('sst', (), {})()
         self.nest = type('nest', (), {})()
+        self.probes = type('probes', (), {})()
         self.regular = None
 
         # Make some potentially useful time representations.
