@@ -30,7 +30,7 @@ except ImportError:
     use_sqlite = False
 
 
-class HarmonicOutput:
+class HarmonicOutput(object):
     """
     Class to create a harmonic output file which creates variables for surface elevation and currents (both
     depth-averaged and depth-resolved). Will optionally save raw data and predicted time series too.
@@ -1158,7 +1158,7 @@ def make_water_column(zeta, h, siglay, **kwargs):
     return z.transpose(1, 0, 2)
 
 
-class Lanczos:
+class Lanczos(object):
     """
     Create a Lanczos filter object with specific parameters. Pass a time series to filter() to apply that filter to
     the time series.

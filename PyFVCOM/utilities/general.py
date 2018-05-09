@@ -100,7 +100,7 @@ def split_string(x, separator=' '):
     return [i.strip() for i in x.split(separator) if i.strip()]
 
 
-class ObjectFromDict:
+class ObjectFromDict(object):
     """ Convert a dictionary into an object with attributes named from the dictionary keys. """
     def __init__(self, *initial_data, keys=[], **kwargs):
         """

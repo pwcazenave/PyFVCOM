@@ -8,7 +8,7 @@ from PyFVCOM.grid import nodes2elems
 from PyFVCOM.utilities.time import date_range
 
 
-class StubFile:
+class StubFile(object):
     """ Create an FVCOM-formatted netCDF Dataset object. """
 
     def __init__(self, start, end, interval, lon, lat, triangles, zone='30N'):
