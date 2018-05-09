@@ -236,8 +236,6 @@ class FileReader(Domain):
         ----------
         x : object
             Object from which to identify attributes which are useful for us.
-        attributes : list
-            The attributes of interest.
         """
 
         return [a for a in dir(x) if not a.startswith('__')]
