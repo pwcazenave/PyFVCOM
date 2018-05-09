@@ -2294,7 +2294,7 @@ def read_regular(regular, variables, noisy=False, **kwargs):
     return regular_model
 
 
-class WriteForcing:
+class WriteForcing(object):
     """ Create an FVCOM netCDF input file. """
 
     def __init__(self, filename, dimensions, global_attributes=None, **kwargs):
