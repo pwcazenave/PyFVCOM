@@ -2675,9 +2675,9 @@ def trigradient(x, y, z, t=None):
     """
 
     if np.any(t):
-        tt = Triangulation(x.ravel(), y.ravel())
-    else:
         tt = Triangulation(x.ravel(), y.ravel(), t)
+    else:
+        tt = Triangulation(x.ravel(), y.ravel())
 
     tci = CubicTriInterpolator(tt, z.ravel())
     # Gradient requested here at the mesh nodes but could be anywhere else:
