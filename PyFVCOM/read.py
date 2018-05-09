@@ -829,6 +829,14 @@ class FileReader(Domain):
         self.grid.integrated_volume = (self.grid.cv_area * self.grid.depth)
 
     def total_volume_var(self, var, poolsize=None):
+        """
+        TODO: Add docstring.
+
+        :param var:
+        :param poolsize:
+        :return:
+
+        """
         if not hasattr(self.grid, 'volume'):
             self._get_cv_volumes(poolsize=poolsize)
 
@@ -842,6 +850,13 @@ class FileReader(Domain):
         setattr(self.data, var + '_total', int_vol)
 
     def avg_volume_var(self, var):
+        """
+        TODO: Add docstring.
+
+        :param var:
+        :return:
+
+        """
         if not hasattr(self, 'volume'):
             self._get_cv_volumes()
 
