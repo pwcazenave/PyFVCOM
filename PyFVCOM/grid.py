@@ -689,8 +689,13 @@ class OpenBoundary(object):
             harmonics_lon = tides.variables[names['lon_name']][:]
             harmonics_lat = tides.variables[names['lat_name']][:]
 
-            amplitudes = tides.variables[names['amplitude_name']][cidx, ...]
-            phases = tides.variables[names['phase_name']][cidx, ...]
+            amplitude_shape = tides.variables[names['amplitude_name']][:].shape
+            if amplitude_shape[0] == len(const):
+                amplitudes = tides.variables[names['amplitude_name']][cidx, ...]
+                phases = tides.variables[names['phase_name']][cidx, ...]
+            elif amplitude_shape[-1] == len(const):
+                amplitudes = tides.variables[names['amplitude_name']][..., cidx].T
+                phases = tides.variables[names['phase_name']][..., cidx].T
 
         return harmonics_lon, harmonics_lat, amplitudes, phases, available_constituents
 
