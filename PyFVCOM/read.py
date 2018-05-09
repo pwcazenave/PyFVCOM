@@ -847,7 +847,7 @@ class FileReader(Domain):
         int_vol = 0
         for i in np.arange(0, len(self.grid.x)):
             int_vol += np.sum(getattr(self.data, var)[:,:,i] * self.grid.integrated_volume[:, np.newaxis, i] * self.grid.dz[np.newaxis, :, i], axis=1)
-        setattr(self.data, var + '_total', int_vol)
+        setattr(self.data, '{}_total'.format(var), int_vol)
 
     def avg_volume_var(self, var):
         """
@@ -867,7 +867,7 @@ class FileReader(Domain):
         for i in np.arange(0, len(self.grid.x)):
             int_vol += np.average(getattr(self.data, var)[:,:,i], 
                     weights=self.grid.integrated_volume[:, np.newaxis, i] * self.grid.dz[np.newaxis, :, i], axis=1)
-        setattr(self.data, var + '_average', int_vol)
+        setattr(self.data, '{}_average'.format(var), int_vol)
 
     def time_to_index(self, target_time, tolerance=False):
         """
