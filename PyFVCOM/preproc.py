@@ -1622,7 +1622,7 @@ class Model(Domain):
                 for loc, site, sigma, desc, long_name, variable in list(map(list, zip(*probes))):
                     # Skip positions with grid IDs as None. These are sites which were too far from the nearest grid
                     # point.
-                    if not grid:
+                    if grid is None:
                         continue
 
                     f.write('&NML_PROBE\n')
