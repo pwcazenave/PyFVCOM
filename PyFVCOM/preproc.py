@@ -66,6 +66,7 @@ class Model(Domain):
         self.sigma = type('sigma', (), {})()
         self.sst = type('sst', (), {})()
         self.nest = type('nest', (), {})()
+        self.stations = type('stations', (), {})()
         self.probes = type('probes', (), {})()
         self.regular = None
 
@@ -1636,6 +1637,87 @@ class Model(Domain):
                     f.write(' PROBE_VARIABLE = "{}",\n'.format(variable))
                     f.write(' PROBE_VAR_NAME = "{}"\n'.format(long_name))
                     f.write('/\n')
+
+    def add_stations(self, positions, names, max_distance=np.inf):
+        """
+        Generate probe locations closest to the given locations.
+
+        Parameters
+        ----------
+        positions : np.ndarray
+            Positions (in longitude/latitude).
+        names : np.ndarray, list
+            Names of the stations defined by `positions'.
+        max_distance : float, optional
+            Give a maximum distance (in kilometres) beyond which the closest model grid position is considered too
+            far away and thus that probe is skipped. By default, no distance filtering is applied.
+
+        Provides
+        --------
+        A `stations' object is created in `self' which contains the following objects:
+
+        name : list
+            The probe station names.
+        grid_node : list
+            The closest node IDs in the grid to each position in `positions'. If `max_distance' is given,
+            positions which fall further away are given values of None.
+        grid_element : list
+            The closest element IDs in the grid to each position in `positions'. If `max_distance' is given,
+            positions which fall further away are given values of None.
+
+        """
+
+        # Store everything in an object to make it cleaner passing stuff around.
+        self.stations = type('stations', (object,), {})()
+        self.stations.name = []
+        self.stations.grid_node = []
+        self.stations.grid_element = []
+
+        for (position, site) in zip(positions, names):
+            self.stations.grid_node.append(self.closest_node(position, threshold=max_distance, vincenty=True))
+            self.stations.grid_element.append(self.closest_element(position, threshold=max_distance, vincenty=True))
+            self.stations.name.append(site)
+
+    def write_stations(self, output_file, location='node'):
+        """
+        Take the output of add_stations and write it to FVCOM-formatted ASCII.
+
+        Parameters
+        ----------
+        output_file : str
+            Path to the output file name list to create.
+        location : str
+            Select either 'node' or 'element' for the positions to use in `output_file'.
+
+        """
+
+        if not hasattr(self, 'stations'):
+            raise AttributeError('No stations object found. Please run PyFVCOM.preproc.add_stations() first.')
+
+        with open(output_file, 'w') as f:
+            if location == 'node':
+                grid = self.stations.grid_node
+                x, y = self.grid.lon, self.grid.lat
+                z = self.grid.h
+            elif location == 'element':
+                grid = self.stations.grid_element
+                x, y = self.grid.lonc, self.grid.latc
+                z = self.grid.h_center
+            else:
+                raise ValueError("Invalid location for the stations output. Select `node' or `element'.")
+            name = self.stations.name
+
+            # Add a header.
+            f.write('No,X,Y,Cell,Depth,Station_Name\n')
+            # First level of iteration is the site. Transpose with map.
+            number = 0
+            for index, station in zip(grid, name):
+                # Skip positions with grid IDs as None. These are sites which were too far from the nearest grid
+                # point.
+                if grid is None:
+                    continue
+                number += 1
+                f.write('{}, {}, {}, {}, {}, {}\n'.format(number, x[index], y[index], index, z[grid], station))
 
     def add_nests(self, nest_levels, nesting_type=3):
         """
