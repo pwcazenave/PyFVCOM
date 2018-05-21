@@ -800,8 +800,8 @@ class FileReader(Domain):
         If the surface elevation data have been loaded (`zeta'), the volume varies with time, otherwise, the volume
         is for the mean water depth (`h').
 
-        Returns
-        -------
+        Provides
+        --------
         self.depth_volume : ndarray
             Depth-resolved volume.
         self.volume : ndarray
