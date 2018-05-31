@@ -1080,10 +1080,10 @@ class ICES_comp(object):
         model_data = model_data[~remove_data]
 
         if return_locs_depths_dates:
-            ices_dates = np.asarray(ices_data['time_dt'])[~remove_data]    
-            ices_depths = np.asarray(ices_data['z'])[~remove_data]
-            ices_lon = np.asarray(ices_data['lon'])[~remove_data]
-            ices_lat = np.asarray(ices_data['lat'])[~remove_data]
+            ices_dates = np.asarray(self.ices_data['time_dt'])[~remove_data]    
+            ices_depths = np.asarray(self.ices_data['z'])[~remove_data]
+            ices_lon = np.asarray(self.ices_data['lon'])[~remove_data]
+            ices_lat = np.asarray(self.ices_data['lat'])[~remove_data]
 
             ices_data = {var:ices_data, 'depths':ices_depths, 'dates':ices_dates, 'lon':ices_lon, 'lat':ices_lat}    
         
