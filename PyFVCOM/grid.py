@@ -2553,6 +2553,7 @@ def get_area(v1, v2, v3):
 
     return abs(area)
 
+
 def get_area_heron(s1, s2, s3):
     """
     Calculate the area of a triangle/set of triangles based on side length (Herons formula). Could tidy by combining with get_area
@@ -2560,14 +2561,12 @@ def get_area_heron(s1, s2, s3):
     Parameters
     ----------
     s1, s2, s3 : tuple, list (float, float)
-        Side lengths of the three sides of a triangle. Can be 1D
-        arrays of lengths or lists of lengths.
+        Side lengths of the three sides of a triangle. Can be 1D arrays of lengths or lists of lengths.
 
     Returns
     -------
     area : tuple, ndarray
         Area of the triangle(s). Units of v0, v1 and v2.
-
 
     """
 
@@ -2580,6 +2579,7 @@ def get_area_heron(s1, s2, s3):
     area = np.sqrt(p * (p -s1) * (p - s2) * (p - s3)) 
 
     return abs(area)
+
 
 def find_bad_node(nv, node_id):
     """
@@ -2675,9 +2675,9 @@ def trigradient(x, y, z, t=None):
     """
 
     if np.any(t):
-        tt = Triangulation(x.ravel(), y.ravel())
-    else:
         tt = Triangulation(x.ravel(), y.ravel(), t)
+    else:
+        tt = Triangulation(x.ravel(), y.ravel())
 
     tci = CubicTriInterpolator(tt, z.ravel())
     # Gradient requested here at the mesh nodes but could be anywhere else:

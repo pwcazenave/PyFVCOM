@@ -236,8 +236,6 @@ class FileReader(Domain):
         ----------
         x : object
             Object from which to identify attributes which are useful for us.
-        attributes : list
-            The attributes of interest.
         """
 
         return [a for a in dir(x) if not a.startswith('__')]
@@ -802,8 +800,8 @@ class FileReader(Domain):
         If the surface elevation data have been loaded (`zeta'), the volume varies with time, otherwise, the volume
         is for the mean water depth (`h').
 
-        Returns
-        -------
+        Provides
+        --------
         self.depth_volume : ndarray
             Depth-resolved volume.
         self.volume : ndarray
@@ -831,6 +829,14 @@ class FileReader(Domain):
         self.grid.integrated_volume = (self.grid.cv_area * self.grid.depth)
 
     def total_volume_var(self, var, poolsize=None):
+        """
+        TODO: Add docstring.
+
+        :param var:
+        :param poolsize:
+        :return:
+
+        """
         if not hasattr(self.grid, 'volume'):
             self._get_cv_volumes(poolsize=poolsize)
 
@@ -841,9 +847,16 @@ class FileReader(Domain):
         int_vol = 0
         for i in np.arange(0, len(self.grid.x)):
             int_vol += np.sum(getattr(self.data, var)[:,:,i] * self.grid.integrated_volume[:, np.newaxis, i] * self.grid.dz[np.newaxis, :, i], axis=1)
-        setattr(self.data, var + '_total', int_vol)
+        setattr(self.data, '{}_total'.format(var), int_vol)
 
     def avg_volume_var(self, var):
+        """
+        TODO: Add docstring.
+
+        :param var:
+        :return:
+
+        """
         if not hasattr(self, 'volume'):
             self._get_cv_volumes()
 
@@ -854,7 +867,7 @@ class FileReader(Domain):
         for i in np.arange(0, len(self.grid.x)):
             int_vol += np.average(getattr(self.data, var)[:,:,i], 
                     weights=self.grid.integrated_volume[:, np.newaxis, i] * self.grid.dz[np.newaxis, :, i], axis=1)
-        setattr(self.data, var + '_average', int_vol)
+        setattr(self.data, '{}_average'.format(var), int_vol)
 
     def time_to_index(self, target_time, tolerance=False):
         """
@@ -893,6 +906,84 @@ class FileReader(Domain):
                 time_idx = None
 
         return time_idx
+
+    def time_average(self, variable, period, return_times=False):
+        """
+        Average the requested variable in time at the specified frequency. If the data for variable are not loaded,
+        they will be before averaging. Averaging starts at the first midnight in the time series and ends at the last
+        midnight in the time series (values outside those times are ignored).
+
+        The result is added to self.data as an attribute named '{}_{}'.format(variable, period).
+
+        Parameters
+        ----------
+        variable : str
+            A variable to average in time.
+        period : str
+            The period over which to average. Select from `daily', `weekly', `monthly' or `yearly' (`annual' is a
+            synonym). `Monthly' is actually 4-weekly rather than per calendar month.
+        return_times : bool, optional
+            Set to True to return the times of the averages as datetimes. Defaults to False.
+
+        Returns
+        -------
+        times : np.ndarray
+            If return_times is set to True, return an array of the datetimes which correspond to each average.
+
+        """
+
+        # TODO: the monthly and yearly averaging could be more robust by finding the unique complete months/years and
+        # TODO: averaging those rather than assuming 4 weekly months and 365 day years.
+        interval_seconds = np.unique([i.total_seconds() for i in np.diff(self.time.datetime)])
+        if len(interval_seconds) > 1:
+            raise ValueError('Cannot compute time average on irregularly sampled data.')
+        seconds_per_day = 60 * 60 * 24
+        if period == 'daily':
+            step = int(seconds_per_day / interval_seconds)
+        elif period == 'weekly':
+            step = int(seconds_per_day * 7 / interval_seconds)
+        elif period == 'monthly':
+            step = int(seconds_per_day * 7 * 4 / interval_seconds)
+        elif period == 'yearly' or period == 'annual':
+            step = int(seconds_per_day * 365 / interval_seconds)
+
+        if not hasattr(self.data, variable):
+            if self._noisy:
+                print('Loading {} for time-averaging.'.format(variable))
+            self.load_data(variable)
+
+        # We're assuming time is the first dimension here since we're working with FVCOM data by and large. If that
+        # changes, we'll have to find the index of the time dimension and then do the reshape with that dimension
+        # first before reshaping back to the original order. You might be able to understand why I'm not bothering
+        # with all that right now.
+
+        # First, find the first midnight values as all periods average from midnight on the first day.
+        first_midnight = np.argwhere([_.hour == 0 for _ in self.time.datetime])[0][0]
+        last_midnight = np.argwhere([_.hour == 0 for _ in self.time.datetime])[-1][0]
+
+        if first_midnight == last_midnight:
+            raise IndexError('Too few data to average at {} frequency.'.format(period))
+
+        # For the averaging, reshape the time dimension into chunks which match the periods and then average along
+        # that reshaped dimension. Getting the new shape is a bit fiddly. We should always have at least two
+        # dimensions here (time, space) so this should always work.
+        other_dimensions = [_ for _ in getattr(self.data, variable).shape[1:]]
+
+        # Check that the maximum difference of the first day's data and the first averaged data is zero:
+        # (averaged[0] - getattr(self.data, variable)[first_midnight:first_midnight + step].mean(axis=0)).max() == 0
+        averaged = getattr(self.data, variable)[first_midnight:last_midnight, ...]
+        averaged = np.mean(averaged.reshape([-1, step] + other_dimensions), axis=1)
+
+        setattr(self.data, '{}_{}'.format(variable, period), averaged)
+
+        if return_times:
+            # For the arithmetic to be simple, we'll do this on `time'. This is possibly an issue as `time' is
+            # sometimes not sufficiently precise to resolve the actual times accurately. It would be better to do
+            # this on `datetime' instead, but then we have to fiddle around making things relative and it all gets a
+            # bit tiresome.
+            new_times = num2date(self.time.time[first_midnight:last_midnight].reshape(-1, step).mean(axis=1),
+                                 units=self.atts.time.units)
+            return new_times
 
 
 def MFileReader(fvcom, noisy=False, *args, **kwargs):

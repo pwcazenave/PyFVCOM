@@ -38,6 +38,7 @@ Provides
 --------
 
 * `buoy` - read data from an SQLite3 database of BODC buoy data.
+    - `Buoy` - class to hold a range of time series data from buoys.
     - `get_buoy_metadata`
     - `get_buoy_data`
 
@@ -53,6 +54,7 @@ Provides
     - `british_national_grid_to_lonlat`
 
 * `ctd` - interrogate an SQLite data base of CTD casts.
+    - `CTD` - class to hold a range of time series data from many different CTD formats we (PML) encounter.
     - `get_CTD_metadata`
     - `get_CTD_data`
     - `get_ferrybox_data`
@@ -63,6 +65,8 @@ Provides
     - `vector2scalar`
     - `residual_flow`
     - `vorticity`
+    - `ebb_flood`
+    - `principal_axis`
 
 * `grid` - tools to parse SMS, DHI MIKE, GMSH and FVCOM unstructured grids. Also provides functionality to add coasts and clip triangulations to a given domain. Functions to parse FVCOM river files are also included, as is a function to resample an unstructured grid onto a regular grid (without interpolation, simply finding the nearest point within a threshold distance). This module contains a number of generally useful tools related to unstructured grids (node and element lookups, grid connectivity, grid metrics, area tools).
     - `Domain` - class to abstract loading different grid types away. The `read_*_mesh` methods below are now slighly redundant.

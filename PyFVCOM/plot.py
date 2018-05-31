@@ -27,7 +27,7 @@ except ImportError:
 rcParams['mathtext.default'] = 'regular'  # use non-LaTeX fonts
 
 
-class Depth:
+class Depth(object):
     """ Create depth-resolved plots based on output from FVCOM.
 
     Provides
@@ -148,7 +148,7 @@ class Depth:
             self.colorbar.set_label(self.cb_label)
 
 
-class Time:
+class Time(object):
     """ Create time series plots based on output from FVCOM.
 
     Provides
@@ -422,7 +422,7 @@ class Time:
             self.surface_plot
 
 
-class Plotter:
+class Plotter(object):
     """ Create plot objects based on output from the FVCOM.
 
     Class to assist in the creation of plots and animations based on output

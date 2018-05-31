@@ -454,7 +454,8 @@ class CTD(object):
 
         def __init__(self, filename, noisy=False):
             """
-            Based on file extension, call one of the header parsers below. For now, that's only BODC LST-formatted files.
+            Based on file extension, call one of the header parsers below. For now, that's only BODC LST and QXF
+            (netCDF4) formats as well as the WCO time series data.
 
             Parameters
             ----------
