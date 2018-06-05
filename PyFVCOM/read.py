@@ -742,7 +742,7 @@ class FileReader(Domain):
                 print('Loading: {}'.format(v))
 
             if v not in self.ds.variables:
-                raise KeyError("Variable '{}' not present in {}.".format(v, self._fvcom))
+                raise KeyError("Variable '{}' not present in {}".format(v, self._fvcom))
 
             # Get this variable's dimensions and shape
             var_dim = self.ds.variables[v].dimensions

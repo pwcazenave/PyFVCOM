@@ -2978,7 +2978,7 @@ class HYCOMReader(RegularReader):
 
         for v in var:
             if v not in self.ds.variables:
-                raise KeyError("Variable '{}' not present in {}.".format(v, self._fvcom))
+                raise KeyError("Variable '{}' not present in {}".format(v, self._fvcom))
 
             # Get this variable's dimensions
             var_dim = self.ds.variables[v].dimensions
