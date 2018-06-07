@@ -2,23 +2,22 @@
 
 from __future__ import print_function, division
 
-import sys
 import copy
 import inspect
-
-import numpy as np
-import netCDF4 as nc
-import matplotlib.tri as tri
-import matplotlib.pyplot as plt
-import matplotlib.path as mplPath
-
-from warnings import warn
+import sys
 from datetime import datetime, timedelta
+from warnings import warn
+
+import matplotlib.path as mplPath
+import matplotlib.pyplot as plt
+import matplotlib.tri as tri
+import netCDF4 as nc
+import numpy as np
 from netCDF4 import Dataset, MFDataset, num2date, date2num
 
 from PyFVCOM.coordinate import lonlat_from_utm, utm_from_lonlat
-from PyFVCOM.grid import unstructured_grid_volume, nodes2elems, elems2nodes
 from PyFVCOM.grid import Domain, reduce_triangulation, control_volumes, get_area_heron
+from PyFVCOM.grid import unstructured_grid_volume, nodes2elems, elems2nodes
 from PyFVCOM.utilities.general import fix_range
 
 
