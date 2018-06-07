@@ -6,6 +6,7 @@ from re import sub
 from sys import stderr
 from traceback import print_exc
 
+
 def fix_range(a, nmin, nmax):
     """
     Given an array of values `a', scale the values within in to the range
