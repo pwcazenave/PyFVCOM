@@ -2422,9 +2422,45 @@ class RegularReader(FileReader):
         """
 
         # Check we've already got all the same data objects before we start.
-        lon_compare = self.dims.lon == other.dims.lon
-        lat_compare = self.dims.lat == other.dims.lat
-        depth_compare = self.dims.depth == other.dims.depth
+        if hasattr(self.dims, 'lon'):
+            xname = 'lon'
+            xdim = self.dims.lon
+        elif hasattr(self.dims, 'x'):
+            xname = 'x'
+            xdim = self.dims.x
+        else:
+            raise AttributeError('Unrecognised longitude dimension name')
+
+        if hasattr(self.dims, 'lat'):
+            yname = 'lat'
+            ydim = self.dims.lat
+        elif hasattr(self.dims, 'x'):
+            yname = 'y'
+            ydim = self.dims.y
+        else:
+            raise AttributeError('Unrecognised latitude dimension name')
+
+        if hasattr(self.dims, 'depth'):
+            depthname = 'depth'
+            depthdim = self.dims.depth
+        elif hasattr(self.dims, 'deptht'):
+            depthname = 'deptht'
+            depthdim = self.dims.deptht
+        elif hasattr(self.dims, 'depthu'):
+            depthname = 'depthu'
+            depthdim = self.dims.depthu
+        elif hasattr(self.dims, 'depthv'):
+            depthname = 'depthv'
+            depthdim = self.dims.depthv
+        elif hasattr(self.dims, 'depthw'):
+            depthname = 'depthw'
+            depthdim = self.dims.depthw
+        else:
+            raise AttributeError('Unrecognised depth dimension name')
+
+        lon_compare = xdim == getattr(other.dims, xname)
+        lat_compare = ydim == getattr(other.dims, yname)
+        depth_compare = depthdim == getattr(other.dims, depthname)
         time_compare = self.time.datetime[-1] <= other.time.datetime[0]
         data_compare = self.obj_iter(self.data) == self.obj_iter(other.data)
         old_data = self.obj_iter(self.data)
@@ -2485,10 +2521,16 @@ class RegularReader(FileReader):
         Populate a time object with additional useful time representations from the netCDF time data.
         """
 
-        time = self.ds.variables['time'][:]
+        if 'time' in self.ds.variables:
+            time_var = 'time'
+        elif 'time_counter' in self.ds.variables:
+            time_var = 'time_counter'
+        else:
+            raise ValueError('Missing a known time variable.')
+        time = self.ds.variables[time_var][:]
 
         # Make other time representations.
-        self.time.datetime = num2date(time, units=getattr(self.ds.variables['time'], 'units'))
+        self.time.datetime = num2date(time, units=getattr(self.ds.variables[time_var], 'units'))
         if isinstance(self.time.datetime, (list, tuple, np.ndarray)):
             setattr(self.time, 'Times', np.array([datetime.strftime(d, '%Y-%m-%dT%H:%M:%S.%f') for d in self.time.datetime]))
         else:
@@ -2507,11 +2549,10 @@ class RegularReader(FileReader):
 
         """
 
-        grid_variables = ['lon', 'lat', 'x', 'y', 'depth']
+        grid_variables = ['lon', 'lat', 'x', 'y', 'depth', 'Longitude', 'Latitude']
 
         # Get the grid data.
         for grid in grid_variables:
-
             try:
                 setattr(self.grid, grid, self.ds.variables[grid][:])
                 # Save the attributes.
@@ -2521,7 +2562,12 @@ class RegularReader(FileReader):
                 setattr(self.atts, grid, attributes)
             except KeyError:
                 # Make zeros for this missing variable so we can convert from the non-missing data below.
-                setattr(self.grid, grid, np.zeros((self.dims.lon, self.dims.lat)))
+                if hasattr(self.dims, 'lon') and hasattr(self.dims, 'lat'):
+                    setattr(self.grid, grid, np.zeros((self.dims.lon, self.dims.lat)))
+                elif hasattr(self.dims, 'x') and hasattr(self.dims, 'y'):
+                    setattr(self.grid, grid, np.zeros((self.dims.x, self.dims.y)))
+                else:
+                    raise AttributeError('Unknown grid dimension names.')
             except ValueError as value_error_message:
                 warn('Variable {} has a problem with the data. Setting value as all zeros.'.format(grid))
                 print(value_error_message)
@@ -2600,15 +2646,18 @@ class RegularReader(FileReader):
 
         # Only do the conversions when we have more than a single point since the relevant ranges will be zero with
         # only one position.
-        if self.dims.lon > 1 and self.dims.lat > 1:
-            if self.grid.lon_range == 0 and self.grid.lat_range == 0:
-                self.grid.lon, self.grid.lat = lonlat_from_utm(self.grid.x, self.grid.y, zone=self._zone)
-                self.grid.lon_range = np.ptp(self.grid.lon)
-                self.grid.lat_range = np.ptp(self.grid.lat)
-            if self.grid.lon_range == 0 and self.grid.lat_range == 0:
-                self.grid.x, self.grid.y = utm_from_lonlat(self.grid.lon, self.grid.lat)
-                self.grid.x_range = np.ptp(self.grid.x)
-                self.grid.y_range = np.ptp(self.grid.y)
+        if hasattr(self.dims, 'lon') and hasattr(self.dims, 'lat'):
+            if self.dims.lon > 1 and self.dims.lat > 1:
+                if self.grid.lon_range == 0 and self.grid.lat_range == 0:
+                    self.grid.lon, self.grid.lat = lonlat_from_utm(self.grid.x, self.grid.y, zone=self._zone)
+                    self.grid.lon_range = np.ptp(self.grid.lon)
+                    self.grid.lat_range = np.ptp(self.grid.lat)
+                if self.grid.lon_range == 0 and self.grid.lat_range == 0:
+                    self.grid.x, self.grid.y, _ = utm_from_lonlat(self.grid.lon.ravel(), self.grid.lat.ravel())
+                    self.grid.x = np.reshape(self.grid.x, self.grid.lon.shape)
+                    self.grid.y = np.reshape(self.grid.y, self.grid.lat.shape)
+                    self.grid.x_range = np.ptp(self.grid.x)
+                    self.grid.y_range = np.ptp(self.grid.y)
 
         # Make a bounding box variable too (spherical coordinates): W/E/S/N
         self.grid.bounding_box = (np.min(self.grid.lon), np.max(self.grid.lon),
@@ -2646,19 +2695,73 @@ class RegularReader(FileReader):
                     variable_indices[variable_index] = self._dims[dimension]
 
             # Check the data we're loading is the same shape as our existing dimensions.
-            lon_compare = self.ds.dimensions['lon'].size == self.dims.lon
-            lat_compare = self.ds.dimensions['lat'].size == self.dims.lat
-            depth_compare = self.ds.dimensions['depth'].size == self.dims.depth
-            time_compare = self.ds.dimensions['time'].size == self.dims.time
+            if hasattr(self.dims, 'lon'):
+                xname = 'lon'
+                xvar = 'lon'
+                xdim = self.dims.lon
+            elif hasattr(self.dims, 'x'):
+                xname = 'x'
+                xvar = 'Longitude'
+                xdim = self.dims.x
+            else:
+                raise AttributeError('Unrecognised longitude dimension name')
+
+            if hasattr(self.dims, 'lat'):
+                yname = 'lat'
+                yvar = 'lat'
+                ydim = self.dims.lat
+            elif hasattr(self.dims, 'x'):
+                yname = 'y'
+                yvar = 'Latitude'
+                ydim = self.dims.y
+            else:
+                raise AttributeError('Unrecognised latitude dimension name')
+
+            if hasattr(self.dims, 'depth'):
+                depthname = 'depth'
+                depthvar = 'depth'
+                depthdim = self.dims.depth
+            elif hasattr(self.dims, 'deptht'):
+                depthname = 'deptht'
+                depthvar = 'deptht'
+                depthdim = self.dims.deptht
+            elif hasattr(self.dims, 'depthu'):
+                depthname = 'depthu'
+                depthvar = 'depthu'
+                depthdim = self.dims.depthu
+            elif hasattr(self.dims, 'depthv'):
+                depthname = 'depthv'
+                depthvar = 'depthv'
+                depthdim = self.dims.depthv
+            elif hasattr(self.dims, 'depthw'):
+                depthname = 'depthw'
+                depthvar = 'depthw'
+                depthdim = self.dims.depthw
+            else:
+                raise AttributeError('Unrecognised depth dimension name')
+
+            if hasattr(self.dims, 'time'):
+                timename = 'time'
+                timedim = self.dims.time
+            elif hasattr(self.dims, 'time_counter'):
+                timename = 'time_counter'
+                timedim = self.dims.time_counter
+            else:
+                raise AttributeError('Unrecognised time dimension name')
+
+            lon_compare = self.ds.dimensions[xname].size == xdim
+            lat_compare = self.ds.dimensions[yname].size == ydim
+            depth_compare = self.ds.dimensions[depthname].size == depthdim
+            time_compare = self.ds.dimensions[timename].size == timedim
             # Check again if we've been asked to subset in any dimension.
-            if 'lon' in self._dims:
-                lon_compare = len(self.ds.variables['lon'][self._dims['lon']]) == self.dims.lon
-            if 'lat' in self._dims:
-                lat_compare = len(self.ds.variables['lat'][self._dims['lat']]) == self.dims.lat
-            if 'depth' in self._dims:
-                depth_compare = len(self.ds.variables['depth'][self._dims['depth']]) == self.dims.depth
-            if 'time' in self._dims:
-                time_compare = len(self.ds.variables['time'][self._dims['time']]) == self.dims.time
+            if xname in self._dims:
+                lon_compare = len(self.ds.variables[xvar][self._dims[xname]]) == xdim
+            if yname in self._dims:
+                lat_compare = len(self.ds.variables[yvar][self._dims[yname]]) == ydim
+            if depthname in self._dims:
+                depth_compare = len(self.ds.variables[depthvar][self._dims[depthname]]) == depthdim
+            if timename in self._dims:
+                time_compare = len(self.ds.variables['time'][self._dims[timename]]) == timedim
 
             if not lon_compare:
                 raise ValueError('Longitude data are incompatible. You may be trying to load data after having already '
