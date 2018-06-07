@@ -112,10 +112,8 @@ class FileReader(Domain):
 
         for dim in self._dims:
             # Check if we've got iterable dimensions and make them if not.
-            try:
-                _ = (e for e in self._dims[dim])
-            except TypeError:
-                self._dims[dim]= [self._dims[dim]]
+            if not hasattr(self._dims[dim], '__iter__') or isinstance(self._dims[dim], str):
+                self._dims[dim] = [self._dims[dim]]
 
         # If we've been given a region to load (W/E/S/N), set a flag to extract only nodes and elements which
         # fall within that region.
@@ -731,9 +729,7 @@ class FileReader(Domain):
             dims = self._dims
 
         # Check if we've got iterable variables and make one if not.
-        try:
-            _ = (e for e in var)
-        except TypeError:
+        if not hasattr(var, '__iter__') or isinstance(var, str):
             var = [var]
 
         for v in var:
