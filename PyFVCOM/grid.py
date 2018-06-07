@@ -1351,9 +1351,10 @@ def read_fvcom_obc(obc):
 
     return nodes, types, count
 
+
 def parse_obc_sections(obc_node_array, triangle):
     """
-    Seperates the open boundary nodes of a mesh into the seperate contiguous open boundary segments
+    Separates the open boundary nodes of a mesh into the separate contiguous open boundary segments
 
     Parameters
     ----------
@@ -1392,6 +1393,7 @@ def parse_obc_sections(obc_node_array, triangle):
         start_end_nodes.remove(list(set(start_end_nodes).intersection(this_obc_section_nodes)))
 
     return nodestrings
+
 
 def write_sms_mesh(triangles, nodes, x, y, z, types, mesh):
     """
@@ -3104,7 +3106,7 @@ def unstructured_grid_depths(h, zeta, sigma, nan_invalid=False):
     zeta : np.ndarray
         Surface elevation time series
     sigma : np.ndarray
-        Sigma level layer thickness, range 0-1 (`siglev' or `siglay')
+        Sigma vertical distribution, range 0-1 (`siglev' or `siglay' in FVCOM)
     nan_invalid : bool, optional
         Set values shallower than the mean sea level (`h') to NaN. Defaults to not doing that.
 
@@ -3117,7 +3119,7 @@ def unstructured_grid_depths(h, zeta, sigma, nan_invalid=False):
 
     if nan_invalid:
         invalid = -zeta > h
-        zeta[invalid] = np.NAN
+        zeta[invalid] = np.nan
 
     abs_water_depth = zeta + h
     # Add zeta again so the range is surface elevation (`zeta') to mean water depth rather (`h') than zero to water
