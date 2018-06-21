@@ -399,6 +399,12 @@ class Domain(object):
                              np.asarray((x[triangles[:, 2]], y[triangles[:, 2]])).T)
 
 
+def mp_interp_func(input):
+	""" Pass me to a multiprocessing.Pool().map() to quickly interpolate data with LinearNDInterpolator. """
+	lon, lat, data, x, y = input
+	interp = LinearNDInterpolator((lon, lat), data)
+	return interp((x, y))
+
 class OpenBoundary(object):
     """
     FVCOM grid open boundary object. Handles reading, writing and interpolating.
@@ -783,9 +789,9 @@ class OpenBoundary(object):
         # loop through each constituent and do a 2D interpolation.
         pool = multiprocessing.Pool()
         inputs = [(harmonics_lon, harmonics_lat, amp_data[i], x, y) for i in range(amp_data.shape[0])]
-        amplitudes = np.asarray(pool.map(self._interpolater_function, inputs))
+        amplitudes = np.asarray(pool.map(mp_interp_func, inputs))
         inputs = [(harmonics_lon, harmonics_lat, phase_data[i], x, y) for i in range(phase_data.shape[0])]
-        phases = np.asarray(pool.map(self._interpolater_function, inputs))
+        phases = np.asarray(pool.map(mp_interp_func, inputs))
 
         # Transpose so space is first, constituents second (expected by self._predict_tide).
         return amplitudes.T, phases.T
