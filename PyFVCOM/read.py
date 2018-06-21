@@ -2,23 +2,22 @@
 
 from __future__ import print_function, division
 
-import sys
 import copy
 import inspect
-
-import numpy as np
-import netCDF4 as nc
-import matplotlib.tri as tri
-import matplotlib.pyplot as plt
-import matplotlib.path as mplPath
-
-from warnings import warn
+import sys
 from datetime import datetime, timedelta
+from warnings import warn
+
+import matplotlib.path as mplPath
+import matplotlib.pyplot as plt
+import matplotlib.tri as tri
+import netCDF4 as nc
+import numpy as np
 from netCDF4 import Dataset, MFDataset, num2date, date2num
 
 from PyFVCOM.coordinate import lonlat_from_utm, utm_from_lonlat
-from PyFVCOM.grid import unstructured_grid_volume, nodes2elems, elems2nodes
 from PyFVCOM.grid import Domain, reduce_triangulation, control_volumes, get_area_heron
+from PyFVCOM.grid import unstructured_grid_volume, nodes2elems, elems2nodes
 from PyFVCOM.utilities.general import fix_range
 
 
@@ -113,10 +112,8 @@ class FileReader(Domain):
 
         for dim in self._dims:
             # Check if we've got iterable dimensions and make them if not.
-            try:
-                _ = (e for e in self._dims[dim])
-            except TypeError:
-                self._dims[dim]= [self._dims[dim]]
+            if not hasattr(self._dims[dim], '__iter__') or isinstance(self._dims[dim], str):
+                self._dims[dim] = [self._dims[dim]]
 
         # If we've been given a region to load (W/E/S/N), set a flag to extract only nodes and elements which
         # fall within that region.
@@ -732,9 +729,7 @@ class FileReader(Domain):
             dims = self._dims
 
         # Check if we've got iterable variables and make one if not.
-        try:
-            _ = (e for e in var)
-        except TypeError:
+        if not hasattr(var, '__iter__') or isinstance(var, str):
             var = [var]
 
         for v in var:
@@ -742,7 +737,7 @@ class FileReader(Domain):
                 print('Loading: {}'.format(v))
 
             if v not in self.ds.variables:
-                raise KeyError("Variable '{}' not present in {}.".format(v, self._fvcom))
+                raise KeyError("Variable '{}' not present in {}".format(v, self._fvcom))
 
             # Get this variable's dimensions and shape
             var_dim = self.ds.variables[v].dimensions
