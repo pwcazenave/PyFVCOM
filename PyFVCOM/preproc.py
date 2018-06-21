@@ -68,6 +68,7 @@ class Model(Domain):
         self.nest = type('nest', (), {})()
         self.stations = type('stations', (), {})()
         self.probes = type('probes', (), {})()
+        self.ady = type('sst', (), {})()
         self.regular = None
 
         # Make some potentially useful time representations.
@@ -335,7 +336,10 @@ class Model(Domain):
         with Dataset(sst_file, 'r') as sst_file_nc:
             sst_eo = np.squeeze(sst_file_nc.variables[var_name][:]) + var_offset  # Kelvin to Celsius
             mask = sst_file_nc.variables['mask']
-            sst_eo[mask == 1] = np.nan
+            if len(sst_eo.shape) ==3 and len(mask) ==2:
+                sst_eo[np.tile(mask[:][np.newaxis,:],(sst_eo.shape[0],1,1)) == 1] = np.nan                
+            else:
+                sst_eo[mask == 1] = np.nan
             sst_lon = sst_file_nc.variables['lon'][:]
             sst_lat = sst_file_nc.variables['lat'][:]
             time_out_dt = num2date(sst_file_nc.variables['time'][:], units=sst_file_nc.variables['time'].units)
@@ -381,6 +385,130 @@ class Model(Domain):
                     'grid': 'fvcom_grid',
                     'type': 'data'}
             sstgrd.add_variable('sst', self.sst.sst, ['time', 'node'], attributes=atts, ncopts=ncopts)
+
+    def interp_ady(self, ady_dir, serial=False, pool_size=None, noisy=False):
+
+        """
+        Interpolate geblstoff absorption from climatology on AMM grid to FVCOM grid
+
+        Parameters
+        ----------
+        sst_dir : str, pathlib.Path
+            Path to directory containing the absorption data. Assumes there are directories per year within this directory.
+        serial : bool, optional
+            Run in serial rather than parallel. Defaults to parallel.
+        pool_size : int, optional
+            Specify number of processes for parallel run. By default it uses all available.
+        noisy : bool, optional
+            Set to True to enable some sort of progress output. Defaults to False.
+
+        Returns
+        -------
+        Adds a new `ady' object with:
+        ady : np.ndarray
+            Interpolated absorption time series for the supplied domain.
+        time : np.ndarray
+            List of python datetimes for the corresponding SST data.
+
+        Example
+        -------
+        >>> from PyFVCOM.preproc import Model
+        >>> ady_dir = '/home/mbe/Code/fvcom-projects/locate/python/ady_preproc/Data/yr_data/'
+        >>> model = Model('/home/mbe/Models/FVCOM/tamar/tamar_v2_grd.dat',
+        >>>     native_coordinates='cartesian', zone='30N')
+        >>> model.interp_ady(ady_dir, 2006, pool_size=20)
+        >>> # Save to netCDF
+        >>> model.write_adygrd('casename_adygrd.nc')
+
+        Notes
+        -----
+        TODO: Combine interpolation routines (sst, ady, etc) to make more efficient        
+
+        """
+
+        if isinstance(ady_dir, str):
+            ady_dir = Path(ady_dir)
+
+        ady_files = list(ady_dir.glob('*.nc')) 
+
+        if noisy:
+            print('To do:\n{}'.format('|' * len(ady_files)), flush=True)
+
+        # Read ADY data files and interpolate each to the FVCOM mesh
+        lonlat = np.array((self.grid.lon, self.grid.lat))
+
+        if serial:
+            results = []
+            for ady_file in ady_files:
+                results.append(self._inter_sst_worker(lonlat, ady_file, noisy, var_name='gelbstoff_absorption_satellite', var_offset=0))
+        else:
+            if not pool_size:
+                pool = multiprocessing.Pool()
+            else:
+                pool = multiprocessing.Pool(pool_size)
+            part_func = partial(self._inter_sst_worker, lonlat, noisy=noisy, var_name='gelbstoff_absorption_satellite', var_offset=0)
+            results = pool.map(part_func, ady_files)
+            pool.close()
+
+        # Sort data and prepare date lists
+        dates = []
+        ady = []
+
+        for this_result in results:
+            dates.append(this_result[0])
+            ady.append(this_result[1])
+
+        ady = np.vstack(ady).T
+        # FVCOM wants times at midday whilst the data are at midnight
+        dates = np.asarray([this_date + relativedelta(hours=12) for sublist in dates for this_date in sublist])    
+
+        # Sort by time.
+        idx = np.argsort(dates)
+        dates = dates[idx]
+        ady = ady[idx, :]
+
+        # Store everything in an object.
+        self.ady.ady = ady
+        self.ady.time = dates
+
+
+    def write_adygrd(self, output_file, ncopts={'zlib': True, 'complevel': 7}, **kwargs):
+        """
+        Generate a gelbstoff absorption file for the given FVCOM domain from the self.ady data.
+
+        Parameters
+        ----------
+        output_file : str, pathlib.Path
+            File to which to write  data.
+        ncopts : dict
+            Dictionary of options to use when creating the netCDF variables. Defaults to compression on.
+
+        Remaining arguments are passed to WriteForcing.
+        """
+        globals = {'year': str(np.argmax(np.bincount([i.year for i in self.ady.time]))),  # gets the most common year value
+                   'title': 'FVCOM Satellite derived Gelbstoff climatology product File',
+                   'institution': 'Plymouth Marine Laboratory',
+                   'source': 'FVCOM grid (unstructured) surface forcing',
+                   'history': 'File created using {} from PyFVCOM'.format(inspect.stack()[0][3]),
+                   'references': 'http://fvcom.smast.umassd.edu, http://codfish.smast.umassd.edu, http://pml.ac.uk/modelling',
+                   'Conventions': 'CF-1.0',
+                   'CoordinateProjection': 'init=WGS84'}
+        dims = {'nele': self.dims.nele, 'node': self.dims.node, 'time': 0, 'DateStrLen': 26, 'three': 3}
+
+        with WriteForcing(str(output_file), dims, global_attributes=globals, clobber=True, format='NETCDF4', **kwargs) as sstgrd:
+           # Add the variables.
+            atts = {'long_name': 'nodel longitude', 'units': 'degrees_east'}
+            sstgrd.add_variable('lon', self.grid.lon, ['node'], attributes=atts, ncopts=ncopts)
+            atts = {'long_name': 'nodel latitude', 'units': 'degrees_north'}
+            sstgrd.add_variable('lat', self.grid.lat, ['node'], attributes=atts, ncopts=ncopts)
+            sstgrd.write_fvcom_time(self.ady.time)
+            atts = {'long_name': 'gelbstoff_absorption_satellite',
+                    'units': '1/m',
+                    'grid': 'fvcom_grid',
+                    'type': 'data'}
+            sstgrd.add_variable('Kd_ady', self.ady.ady, ['time', 'node'], attributes=atts, ncopts=ncopts)
+
+
 
     def add_sigma_coordinates(self, sigma_file, noisy=False):
         """
