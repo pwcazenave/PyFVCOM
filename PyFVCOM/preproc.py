@@ -327,13 +327,13 @@ class Model(Domain):
         self.sst.time = dates
 
     @staticmethod
-    def _inter_sst_worker(fvcom_lonlat, sst_file, noisy=False):
+    def _inter_sst_worker(fvcom_lonlat, sst_file, noisy=False, var_name='analysed_sst', var_offset=-273.15):
         """ Multiprocessing worker function for the SST interpolation. """
         if noisy:
             print('.', end='', flush=True)
 
         with Dataset(sst_file, 'r') as sst_file_nc:
-            sst_eo = np.squeeze(sst_file_nc.variables['analysed_sst'][:]) - 273.15  # Kelvin to Celsius
+            sst_eo = np.squeeze(sst_file_nc.variables[var_name][:]) + var_offset  # Kelvin to Celsius
             mask = sst_file_nc.variables['mask']
             sst_eo[mask == 1] = np.nan
             sst_lon = sst_file_nc.variables['lon'][:]
