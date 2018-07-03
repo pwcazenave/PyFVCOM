@@ -3138,7 +3138,7 @@ def unstructured_grid_depths(h, zeta, sigma, nan_invalid=False):
 def elems2nodes(elems, tri, nvert=None):
     """
     Calculate a nodal value based on the average value for the elements
-    of which it a part. This necessarily involves an average, so the
+    of which it is a part. This necessarily involves an average, so the
     conversion from nodes2elems and elems2nodes is not reversible.
 
     Parameters
