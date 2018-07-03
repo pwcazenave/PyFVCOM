@@ -743,9 +743,8 @@ class FileReader(Domain):
 
             # Get this variable's dimensions and shape
             var_dim = self.ds.variables[v].dimensions
-            var_shape = self.ds.variables[v].shape
             variable_shape = self.ds.variables[v].shape
-            variable_indices = [np.arange(i) for i in variable_shape]
+            variable_indices = [slice(None) for _ in variable_shape]
             for dimension in var_dim:
                 if dimension in dims:
                     # Replace their size with anything we've been given in dims.
