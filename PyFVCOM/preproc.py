@@ -2968,7 +2968,7 @@ class HYCOMReader(RegularReader):
                              "`fvcom1' has end {} and `fvcom2' has start {}".format(self.time.datetime[-1],
                                                                                     other.time.datetime[0]))
         if not data_compare:
-            raise ValueError('Loaded data sets for each RegularReader class must match.')
+            raise ValueError('Loaded data sets for each HYCOMReader class must match.')
         if not (old_data == new_data) and (old_data or new_data):
             warn('Subsequent attempts to load data for this merged object will only load data from the first object. '
                  'Load data into each object before merging them.')
@@ -3245,16 +3245,16 @@ class HYCOMReader(RegularReader):
 
             if not lon_compare:
                 raise ValueError('Longitude data are incompatible. You may be trying to load data after having already '
-                                 'concatenated a RegularReader object, which is unsupported.')
+                                 'concatenated a HYCOMReader object, which is unsupported.')
             if not lat_compare:
                 raise ValueError('Latitude data are incompatible. You may be trying to load data after having already '
-                                 'concatenated a RegularReader object, which is unsupported.')
+                                 'concatenated a HYCOMReader object, which is unsupported.')
             if not depth_compare:
                 raise ValueError('Vertical depth layers are incompatible. You may be trying to load data after having '
-                                 'already concatenated a RegularReader object, which is unsupported.')
+                                 'already concatenated a HYCOMReader object, which is unsupported.')
             if not time_compare:
                 raise ValueError('Time period is incompatible. You may be trying to load data after having already '
-                                 'concatenated a RegularReader object, which is unsupported.')
+                                 'concatenated a HYCOMReader object, which is unsupported.')
 
             if 'MT' not in var_dim:
                 # Should we error here or carry on having warned?
