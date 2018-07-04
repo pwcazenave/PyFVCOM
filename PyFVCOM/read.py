@@ -427,7 +427,7 @@ class FileReader(Domain):
                         self._dims['time'] = [self.time_to_index(self._dims['time'])]  # make iterable
                 for time in self.obj_iter(self.time):
                     setattr(self.time, time, getattr(self.time, time)[self._dims['time']])
-            self.dims.time = len(self.time.time)
+                self.dims.time = len(self.time.time)
 
     def _load_grid(self):
         """ Load the grid data.
