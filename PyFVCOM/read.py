@@ -883,6 +883,7 @@ class FileReader(Domain):
 
         # Do as a loop because it nukes the memory otherwise
         int_vol = np.zeros(self.dims.time)
+
         for i in np.arange(0, len(self.grid.x)):
             int_vol += np.sum(getattr(self.data, var)[:,:,i] * self.grid.integrated_volume[:, np.newaxis, i] * self.grid.dz[np.newaxis, :, i], axis=1)
         setattr(self.data, '{}_total'.format(var), int_vol)
