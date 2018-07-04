@@ -280,6 +280,42 @@ class FileReader(Domain):
         if len(missing_time) == len(time_variables):
             warn('No time variables found in the netCDF.')
         else:
+
+            # If our file has incomplete dimensions (i.e. no time), add that here.
+            if not hasattr(self.dims, 'time'):
+                # Set an initial number of times to zero. Not sure if this will break something later...
+                self.dims.time = 0
+
+                _Times_shape = None
+                _other_time_shape = None
+                if 'Times' in got_time:
+                    _Times_shape = np.shape(self.time.Times)
+                _other_times = [i for i in got_time if i != 'Times']
+                if _other_times:
+                    if getattr(self.time, _other_times[0]).shape:
+                        _other_time_shape = len(getattr(self.time, _other_times[0]))
+                    else:
+                        # We only have a single value, so len doesn't work.
+                        _other_time_shape = 1
+
+                # If we have an "other" time shape, use that.
+                if _other_time_shape is not None:
+                    self.dims.time = _other_time_shape
+
+                # If we have no time but a Times shape, then use that, but only if we have no "other" time. If
+                # 'Times' is one dimensional, assume a single time, otherwise grab the last dimension (which should
+                # be time).
+                if _other_time_shape is None and _Times_shape is not None:
+                    if np.ndim(self.time.Times) == 1:
+                        self.dims.time = 1
+                    else:
+                        self.dims.time = self.time.Times.shape[-1]
+
+                del _Times_shape, _other_times, _other_time_shape
+
+                if self._noisy:
+                    print('Added time dimension size since it is missing from the input netCDF file.')
+
             if 'Times' in got_time:
                 # Check whether we've got missing values and try and make them from one of the others. This sometimes
                 # happens if you stop a model part way through a run. We check for masked arrays at this point because the netCDF library only returns masked arrays when we have NaNs in the results.
@@ -297,7 +333,10 @@ class FileReader(Domain):
 
                 # Overwrite the existing Times array with a more sensibly shaped one.
                 try:
-                    self.time.Times = np.asarray([''.join(t.astype(str)).strip() for t in self.time.Times])
+                    if self.dims.time == 1:
+                        self.time.Times = ''.join(self.time.Times.astype(str)).strip()
+                    else:
+                        self.time.Times = np.asarray([''.join(t.astype(str)).strip() for t in self.time.Times])
                 except TypeError:
                     # We might have a masked array, so just use the raw data.
                     self.time.Times = np.asarray([''.join(t.astype(str)).strip() for t in self.time.Times.data])
@@ -360,6 +399,8 @@ class FileReader(Domain):
 
             # Additional nice-to-have time representations.
             if 'Times' in got_time:
+                if self.dims.time == 1:
+                    self.time.Times = [''.join(self.time.Times)]
                 try:
                     self.time.datetime = np.array([datetime.strptime(d, '%Y-%m-%dT%H:%M:%S.%f') for d in self.time.Times])
                 except ValueError:
