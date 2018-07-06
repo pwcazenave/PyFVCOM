@@ -361,6 +361,7 @@ class Model(Domain):
             Dictionary of options to use when creating the netCDF variables. Defaults to compression on.
 
         Remaining arguments are passed to WriteForcing.
+
         """
 
         globals = {'year': str(np.argmax(np.bincount([i.year for i in self.sst.time]))),  # gets the most common year value
@@ -2436,12 +2437,8 @@ class WriteForcing(object):
             Dictionary of dimension names and sizes.
         global_attributes : dict, optional
             Global attributes to add to the netCDF file.
-        Remaining arguments are passed to netCDF4.Dataset.
 
-        Returns
-        -------
-        nc : netCDF4.Dataset
-            The netCDF file object.
+        Remaining arguments are passed to netCDF4.Dataset.
 
         """
 
