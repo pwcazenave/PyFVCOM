@@ -46,7 +46,7 @@ class FileReader(Domain):
         """
         Parameters
         ----------
-        fvcom : str, pathlib.Path
+        fvcom : str, pathlib.Path, netCDF4.Dataset
             Path to an FVCOM netCDF.
         variables : list-like, optional
             List of variables to extract. If omitted, no variables are extracted, which means you won't be able to
@@ -90,7 +90,7 @@ class FileReader(Domain):
 
         self._debug = debug
         self._noisy = verbose
-        self._fvcom = str(fvcom)
+        self._fvcom = fvcom
         self._zone = zone
         if not hasattr(self, '_bounding_box'):
             self._bounding_box = False
@@ -105,7 +105,13 @@ class FileReader(Domain):
         # Prepare this object with all the objects we'll need later on (data, dims, time, grid, atts).
         self._prep()
 
-        self.ds = Dataset(self._fvcom, 'r')
+        if isinstance(self._fvcom, Dataset):
+            self.ds = self._fvcom
+            # We use this as a string in some output messages, so get the file name from the object.
+            self._fvcom = self.ds.filepath()
+        else:
+            self._fvcom = str(self._fvcom)  # in case it was a pathlib.Path.
+            self.ds = Dataset(self._fvcom, 'r')
 
         for dim in self.ds.dimensions:
             setattr(self.dims, dim, self.ds.dimensions[dim].size)
