@@ -303,13 +303,13 @@ class FileReader(Domain):
                     self.dims.time = _other_time_shape
 
                 # If we have no time but a Times shape, then use that, but only if we have no "other" time. If
-                # 'Times' is one dimensional, assume a single time, otherwise grab the last dimension (which should
+                # 'Times' is one dimensional, assume a single time, otherwise grab the first dimension (which should
                 # be time).
                 if _other_time_shape is None and _Times_shape is not None:
                     if np.ndim(self.time.Times) == 1:
                         self.dims.time = 1
                     else:
-                        self.dims.time = self.time.Times.shape[-1]
+                        self.dims.time = self.time.Times.shape[0]
 
                 del _Times_shape, _other_times, _other_time_shape
 
