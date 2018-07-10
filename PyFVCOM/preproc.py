@@ -1914,10 +1914,43 @@ class Model(Domain):
         u = np.empty((time_number, self.dims.layers, elements_number)) * np.nan
         v = np.empty((time_number, self.dims.layers, elements_number)) * np.nan
         temperature = np.empty((time_number, self.dims.layers, nodes_number)) * np.nan
-        salinity = np.empty((time_number, self.dims.layers, nodes_number)) * np.nan
+        # salinity = np.empty((time_number, self.dims.layers, nodes_number)) * np.nan
         hyw = np.zeros((time_number, self.dims.layers, nodes_number))  # we never set this to anything other than zeros
         weight_nodes = np.repeat(weight_nodes, time_number, 0).reshape(time_number, -1)
         weight_elements = np.repeat(weight_elements, time_number, 0).reshape(time_number, -1)
+
+        # zeta, ua, va, u, v, temperature, salinity = [], [], [], [], [], [], []
+        salinity = np.empty((0, 0, 0))  # right shape for concatenation.
+        for nest in nests:
+            for boundary in nest.boundaries:
+                for var in self.obj_iter(boundary.nest):
+                    if var == 'zeta':
+                        zeta.append(boundary.nest.zeta)
+                    elif var == 'ua':
+                        ua.append(boundary.nest.ua)
+                    elif var == 'va':
+                        va.append(boundary.nest.va)
+                    elif var == 'u':
+                        u.append(boundary.nest.u)
+                    elif var == 'v':
+                        v.append(boundary.nest.v)
+                    elif var == 'temperature':
+                        temperature.append(boundary.nest.temp)
+                    elif var == 'salinity':
+                        salinity = np.concatenate((salinity, boundary.nest.salinity), axis=0)
+                        # salinity.append(boundary.nest.salinity)
+                    elif var == 'time':
+                        pass
+                    else:
+                        raise ValueError('Unknown nest boundary variable {}'.format(var))
+        # Make things arrays instead of nested lists.
+        zeta = np.asarray(zeta)
+        ua = np.asarray(ua)
+        va = np.asarray(va)
+        u = np.asarray(u)
+        v = np.asarray(v)
+        temperature = np.asarray(temperature)
+        # salinity = np.asarray(salinity)
 
         ncopts = {}
         if 'ncopts' in kwargs:
