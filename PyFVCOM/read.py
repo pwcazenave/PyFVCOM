@@ -2009,22 +2009,3 @@ def get_river_config(file_name, noisy=False, zeroindex=False):
         rivers['RIVER_GRID_LOCATION'] = [int(i) - 1 for i in rivers['RIVER_GRID_LOCATION']]
 
     return rivers
-
-
-# For backwards compatibility.
-def readFVCOM(file, varList=None, clipDims=False, noisy=False, atts=False):
-    warn('{} is deprecated. Use ncread instead.'.format(inspect.stack()[0][3]))
-
-    F = ncread(file, vars=varList, dims=clipDims, noisy=noisy, atts=atts)
-
-    return F
-
-
-def readProbes(*args, **kwargs):
-    warn('{} is deprecated. Use read_probes instead.'.format(inspect.stack()[0][3]))
-    return read_probes(*args, **kwargs)
-
-
-def writeProbes(*args, **kwargs):
-    warn('{} is deprecated. Use write_probes instead.'.format(inspect.stack()[0][3]))
-    return write_probes(*args, **kwargs)
