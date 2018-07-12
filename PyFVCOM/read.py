@@ -8,12 +8,13 @@ import sys
 from datetime import datetime, timedelta
 from warnings import warn
 
-import matplotlib.path as mplPath
+import matplotlib.path as mpath
 import matplotlib.pyplot as plt
 import matplotlib.tri as tri
 import netCDF4 as nc
 import numpy as np
 from netCDF4 import Dataset, MFDataset, num2date, date2num
+from shapely.geometry import Polygon
 
 from PyFVCOM.coordinate import lonlat_from_utm, utm_from_lonlat
 from PyFVCOM.grid import Domain, reduce_triangulation, control_volumes, get_area_heron
@@ -124,7 +125,11 @@ class FileReader(Domain):
             setattr(self.dims, dim, self.ds.dimensions[dim].size)
 
         for dim in self._dims:
-            # Check if we've got iterable dimensions and make them if not.
+            # Check if we've got iterable dimensions and make them if not. Allow an exception for 'wesn' here since
+            # that can also be a shapely.geometry.Polygon.
+            if dim == 'wesn' and isinstance(self._dims['wesn'], Polygon):
+                continue
+
             if not hasattr(self._dims[dim], '__iter__') or isinstance(self._dims[dim], str):
                 self._dims[dim] = [self._dims[dim]]
 
@@ -1191,43 +1196,52 @@ class SubDomainReader(FileReader):
 
     def _make_subset_dimensions(self):
         """
-        If the 'wesn' keyword has been included in the supplied dimensions, interactively select a region (ignoring
-        for now the supplied data in 'wesn').
+        If the 'wesn' keyword has been included in the supplied dimensions, interactively select a region if the
+        value of 'wesn' is not a shapely Polygon. If it is a shapely Polygon, use that for the subsetting.
 
         This mimics the function of PyFVCOM.read.FileReader._make_subset_dimensions but with greater flexibility in
         terms of the region to subset.
 
         """
-        fig = plt.figure()
-        ax = fig.add_subplot(111)
-        ax.scatter(self.grid.lon, self.grid.lat, c='lightgray')
-        plt.show()
 
-        keep_picking = True
-        while keep_picking:
-            n_pts = int(input('How many polygon points? '))
-            bounding_poly = np.full((n_pts, 2), np.nan)
-            poly_lin = []
-            for point in range(n_pts):
-                bounding_poly[point, :] = plt.ginput(1)[0]
-                poly_lin.append(ax.plot(np.hstack([bounding_poly[:, 0], bounding_poly[0, 0]]),
-                                   np.hstack([bounding_poly[:, 1], bounding_poly[0,1]]),
-                                   c='r', linewidth=2)[0])
-                fig.canvas.draw()
+        if 'wesn' in self._dims:
+            if isinstance(self._dims['wesn'], Polygon):
+                bounding_poly = np.asarray(self._dims['wesn'].exterior.coords)
+        else:
+            fig = plt.figure()
+            ax = fig.add_subplot(111)
+            ax.scatter(self.grid.lon, self.grid.lat, c='lightgray')
+            plt.show()
 
-            happy = input('Is that polygon OK? Y/N: ')
-            if happy.lower() == 'y':
-                keep_picking = False
+            keep_picking = True
+            while keep_picking:
+                n_pts = int(input('How many polygon points? '))
+                bounding_poly = np.full((n_pts, 2), np.nan)
+                poly_lin = []
+                for point in range(n_pts):
+                    bounding_poly[point, :] = plt.ginput(1)[0]
+                    poly_lin.append(ax.plot(np.hstack([bounding_poly[:, 0], bounding_poly[0, 0]]),
+                                       np.hstack([bounding_poly[:, 1], bounding_poly[0,1]]),
+                                       c='r', linewidth=2)[0])
+                    fig.canvas.draw()
 
-            for this_l in poly_lin:
-                this_l.remove()
+                happy = input('Is that polygon OK? Y/N: ')
+                if happy.lower() == 'y':
+                    keep_picking = False
 
-        plt.close()
+                for this_l in poly_lin:
+                    this_l.remove()
 
-        poly_path = mplPath.Path(bounding_poly)
+            plt.close()
+
+        poly_path = mpath.Path(bounding_poly)
+
         # Shouldn't need the np.asarray here, I think, but leaving it in as I'm not 100% sure.
         self._dims['node'] = np.squeeze(np.argwhere(np.asarray(poly_path.contains_points(np.asarray([self.grid.lon, self.grid.lat]).T))))
         self._dims['nele'] = np.squeeze(np.argwhere(np.all(np.isin(self.grid.triangles, self._dims['node']), axis=1)))
+
+        # Drop the 'wesn' dimension now as it's not necessary for anything else.
+        self._dims.pop('wesn')
 
     def _find_open_faces(self):
         """
@@ -1259,7 +1273,7 @@ class SubDomainReader(FileReader):
             mid_point = np.asarray([self.grid.x[this_cell_nodes[0]] + 0.5 * (self.grid.x[this_cell_nodes[1]] - self.grid.x[this_cell_nodes[0]]),
                                     self.grid.y[this_cell_nodes[0]] + 0.5 * (self.grid.y[this_cell_nodes[1]] - self.grid.y[this_cell_nodes[0]])])
 
-            cell_path = mplPath.Path(np.asarray([self.grid.x[this_cell_all_nodes], self.grid.y[this_cell_all_nodes]]).T)
+            cell_path = mpath.Path(np.asarray([self.grid.x[this_cell_all_nodes], self.grid.y[this_cell_all_nodes]]).T)
 
             if cell_path.contains_point(mid_point + epsilon * vector_nml):  # want outward pointing normal
                 vector_nml = -1 * vector_nml
