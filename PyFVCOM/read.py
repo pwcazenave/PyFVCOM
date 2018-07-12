@@ -235,7 +235,8 @@ class FileReader(Domain):
 
         return idem
 
-    def obj_iter(self, x):
+    @staticmethod
+    def obj_iter(x):
         """
         Get the things to iterate over for a given object.
 
