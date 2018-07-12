@@ -1203,7 +1203,7 @@ class SubDomainReader(FileReader):
         TODO: docstring.
 
         """
-        vol_cells_ext = np.hstack([self._dims['nele'], -1]) # closed boundaries are given a -1 in the nbe matrix
+        vol_cells_ext = np.hstack([self._dims['nele'], -1])  # closed boundaries are given a -1 in the nbe matrix
         open_sides = np.where(~np.isin(self.grid.nbe, vol_cells_ext))
         open_side_cells = open_sides[0]
 
