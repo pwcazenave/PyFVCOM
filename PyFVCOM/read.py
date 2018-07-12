@@ -816,8 +816,9 @@ class FileReader(Domain):
                     data_raw = self.ds.variables[v][:]
 
                     for i in np.arange(0, data_raw.ndim):
-                        if len(variable_indices[i]) < data_raw.shape[i]:
-                            data_raw = data_raw.take(variable_indices[i], axis=i)
+                        if not isinstance(variable_indices[i], slice):
+                            if len(variable_indices[i]) < data_raw.shape[i]:
+                                data_raw = data_raw.take(variable_indices[i], axis=i)
 
                     setattr(self.data, v, data_raw)
                     del data_raw
