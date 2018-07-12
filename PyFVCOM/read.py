@@ -474,6 +474,8 @@ class FileReader(Domain):
         except KeyError:
             # If we don't have a triangulation, make one. Warn that if we've made one, it might not match the
             # original triangulation used in the model run.
+            if self._debug:
+                print("Creating new triangulation since we're missing one.")
             triangulation = tri.Triangulation(self.grid.lon, self.grid.lat)
             self.grid.triangles = triangulation.triangles
             self.grid.nv = self.grid.triangles.T + 1
