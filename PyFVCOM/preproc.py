@@ -87,7 +87,7 @@ class Model(Domain):
         *_, bnd = connectivity(np.array((self.grid.lon, self.grid.lat)).T, self.grid.triangles)
         self.grid.coastline = np.argwhere(bnd)
         # Remove the open boundaries, if we have them.
-        if np.any(self.grid.open_boundary_nodes):
+        if self.grid.open_boundary_nodes:
             land_only = np.isin(np.squeeze(np.argwhere(bnd)), flatten_list(self.grid.open_boundary_nodes), invert=True)
             self.grid.coastline = np.squeeze(self.grid.coastline[land_only])
 
@@ -117,7 +117,7 @@ class Model(Domain):
 
         self.open_boundaries = []
         self.dims.open_boundary_nodes = 0  # assume no open boundary nodes
-        if np.any(self.grid.open_boundary_nodes):
+        if self.grid.open_boundary_nodes:
             for nodes in self.grid.open_boundary_nodes:
                 self.open_boundaries.append(OpenBoundary(nodes))
                 # Update the dimensions.
