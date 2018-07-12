@@ -507,7 +507,7 @@ class FileReader(Domain):
                 elif 'nele' not in self._dims:
                     print('Elements not specified but reducing to only those within the triangulation of selected nodes')
                     self._dims['nele'] = new_ele
-                elif not np.array_equal(np.sort(new_ele),np.sort(self._dims['nele'])):
+                elif not np.array_equal(np.sort(new_ele), np.sort(self._dims['nele'])):
                     print('Warning - mismatch between given elements and nodes for triangulation, retaining original elements')
                     #print('Mismatch between selected elements and nodes, expanding triangulation to cover both')
                     #self._dims['node'] = np.unique(np.hstack([np.unique(self.grid.triangles[self._dims['nele']]), self._dims['node']]))
