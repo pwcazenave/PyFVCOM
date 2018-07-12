@@ -1182,14 +1182,11 @@ class FileReaderFromDict(FileReader):
 
 class SubDomainReader(FileReader):
     """
-    TODO: Add missing docstrings, including one for the class overall.
+    Create a sub-domain based on either a supplied polygon or an interactively created one.
 
     """
     def __init__(self, *args, **kwargs):
-        """
-        TODO: docstring.
-
-        """
+        # Automatically inherits the FileReader docstring.
         self._bounding_box = True
         self.river = _passive_data_store()
         super().__init__(*args, **kwargs)
