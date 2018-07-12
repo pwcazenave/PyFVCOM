@@ -822,6 +822,8 @@ class FileReader(Domain):
 
                     for i in range(data_raw.ndim):
                         if not isinstance(variable_indices[i], slice):
+                            if self._debug:
+                                print('Extracting indices {} for variable {}'.format(variable_indices[i], v))
                             if len(variable_indices[i]) < data_raw.shape[i]:
                                 data_raw = data_raw.take(variable_indices[i], axis=i)
 
