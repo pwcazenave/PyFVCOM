@@ -1007,8 +1007,9 @@ class FileReader(Domain):
         # with all that right now.
 
         # First, find the first midnight values as all periods average from midnight on the first day.
-        first_midnight = np.argwhere([_.hour == 0 for _ in self.time.datetime])[0][0]
-        last_midnight = np.argwhere([_.hour == 0 for _ in self.time.datetime])[-1][0]
+        midnights = [_.hour == 0 for _ in self.time.datetime]
+        first_midnight = np.argwhere(midnights)[0][0]
+        last_midnight = np.argwhere(midnights)[-1][0]
 
         if first_midnight == last_midnight:
             raise IndexError('Too few data to average at {} frequency.'.format(period))
