@@ -815,7 +815,7 @@ class FileReader(Domain):
                 elif self._get_data_pattern == 'All':
                     data_raw = self.ds.variables[v][:]
 
-                    for i in np.arange(0, data_raw.ndim):
+                    for i in range(data_raw.ndim):
                         if not isinstance(variable_indices[i], slice):
                             if len(variable_indices[i]) < data_raw.shape[i]:
                                 data_raw = data_raw.take(variable_indices[i], axis=i)
@@ -891,7 +891,7 @@ class FileReader(Domain):
         # Do as a loop because it nukes the memory otherwise
         int_vol = np.zeros(self.dims.time)
 
-        for i in np.arange(0, len(self.grid.x)):
+        for i in range(len(self.grid.x)):
             int_vol += np.sum(getattr(self.data, var)[:,:,i] * self.grid.integrated_volume[:, np.newaxis, i] * self.grid.dz[np.newaxis, :, i], axis=1)
         setattr(self.data, '{}_total'.format(var), int_vol)
 
@@ -910,7 +910,7 @@ class FileReader(Domain):
             self.load_data([var])
 
         int_vol = 0
-        for i in np.arange(0, len(self.grid.x)):
+        for i in range(len(self.grid.x)):
             int_vol += np.average(getattr(self.data, var)[:,:,i], 
                     weights=self.grid.integrated_volume[:, np.newaxis, i] * self.grid.dz[np.newaxis, :, i], axis=1)
         setattr(self.data, '{}_average'.format(var), int_vol)
