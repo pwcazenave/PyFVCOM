@@ -1056,7 +1056,8 @@ class FileReader(Domain):
 
 
 def MFileReader(fvcom, noisy=False, *args, **kwargs):
-    """ Wrapper around FileReader for loading multiple files at once.
+    """
+    Wrapper around FileReader for loading multiple files at once.
 
     Parameters
     ----------
