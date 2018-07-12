@@ -42,7 +42,7 @@ class FileReader(Domain):
 
     """
 
-    def __init__(self, fvcom, variables=[], dims={}, zone='30N', debug=False, verbose=False):
+    def __init__(self, fvcom, variables=[], dims={}, zone='30N', debug=False, verbose=False, subset_method='slice'):
         """
         Parameters
         ----------
@@ -66,6 +66,11 @@ class FileReader(Domain):
             Set to True to enable verbose output. Defaults to False.
         debug : bool, optional
             Set to True to enable debug output. Defaults to False.
+        subset_method : str, optional
+            Define the subsetting method to use if `dims' has been given. Choices are 'memory' or 'slice'. With
+            'memory', all the data are loaded from netCDF into memory and then sliced in memory; with 'slice',
+            the data are sliced directly from the netCDF file. The former uses a lot more memory but may be faster,
+            the latter uses much less memory but is more sensitive to the structure of the netCDF.
 
         Example
         -------
@@ -92,6 +97,8 @@ class FileReader(Domain):
         self._noisy = verbose
         self._fvcom = fvcom
         self._zone = zone
+        self._get_data_pattern = subset_method
+
         if not hasattr(self, '_bounding_box'):
             self._bounding_box = False
         # We may modify the dimensions, so make a deepcopy (copy isn't sufficient) so successive calls to FileReader
@@ -815,9 +822,17 @@ class FileReader(Domain):
                 warn('{} does not contain a time dimension.'.format(v))
 
             try:
-                if not hasattr(self, '_get_data_pattern'):
+                # The _get_data_pattern attribute is used in SubDomainReader, although for what, I'm (pica) not
+                # entirely sure.
+                if self._get_data_pattern == 'slice':
+                    if self._debug:
+                        print('Slicing the data directly from netCDF.')
                     setattr(self.data, v, self.ds.variables[v][variable_indices])
-                elif self._get_data_pattern == 'All':
+                elif self._get_data_pattern == 'memory':
+                    # Load all the data up front and then then subset it. This approach uses more memory but does
+                    # the job faster.
+                    if self._debug:
+                        print('Loading all data in memory and then subsetting.')
                     data_raw = self.ds.variables[v][:]
 
                     for i in range(data_raw.ndim):
@@ -1159,7 +1174,6 @@ class SubDomainReader(FileReader):
         """
         self._bounding_box = True
         self.river = _passive_data_store()
-        self._get_data_pattern = 'All'
         super().__init__(*args, **kwargs)
 
     def _make_subset_dimensions(self):
