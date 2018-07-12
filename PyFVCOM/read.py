@@ -763,7 +763,7 @@ class FileReader(Domain):
                     unique_dims[dim] = getattr(self.data, var).shape[dim_index]
         for dim in unique_dims:
             if self._debug:
-                print('{}: {} dimension, old/new: {}/{}'.format(self._fvcom, dim, getattr(self.dims, dim), unique_dims[dim]))
+                print('{} dimension, old/new: {}/{}'.format(dim, getattr(self.dims, dim), unique_dims[dim]))
             setattr(self.dims, dim, unique_dims[dim])
 
     def load_data(self, var, dims=None):
