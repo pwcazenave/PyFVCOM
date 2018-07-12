@@ -1237,7 +1237,7 @@ class SubDomainReader(FileReader):
         open_sides = np.where(~np.isin(self.grid.nbe, vol_cells_ext))
         open_side_cells = open_sides[0]
 
-        open_side_rows = self.grid.triangles[open_side_cells,:]
+        open_side_rows = self.grid.triangles[open_side_cells, :]
         open_side_nodes = []
         row_choose = np.asarray([0, 1, 2])
         for this_row, this_not in zip(open_side_rows, open_sides[1]):
@@ -1378,14 +1378,14 @@ class SubDomainReader(FileReader):
 
         self.river.river_nodes = np.argwhere(np.isin(self._dims['node'], river_node_raw))
 
-        river_flux_raw = river_nc.variables['river_flux'][:,rivers_in_grid]
+        river_flux_raw = river_nc.variables['river_flux'][:, rivers_in_grid]
         self.river.river_fluxes = np.asarray([np.interp(mod_time_sec, river_time_sec, this_col) for this_col in river_flux_raw.T]).T
         self.river.total_flux = np.sum(self.river.river_fluxes, axis=1)
 
-        river_temp_raw = river_nc.variables['river_temp'][:,rivers_in_grid]
+        river_temp_raw = river_nc.variables['river_temp'][:, rivers_in_grid]
         self.river.river_temp = np.asarray([np.interp(mod_time_sec, river_time_sec, this_col) for this_col in river_temp_raw.T]).T
 
-        river_salt_raw = river_nc.variables['river_salt'][:,rivers_in_grid]
+        river_salt_raw = river_nc.variables['river_salt'][:, rivers_in_grid]
         self.river.river_salt = np.asarray([np.interp(mod_time_sec, river_time_sec, this_col) for this_col in river_salt_raw.T]).T
 
     def aopen_integral(self, var):
