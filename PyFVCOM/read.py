@@ -1158,6 +1158,7 @@ class SubDomainReader(FileReader):
 
         """
         self._bounding_box = True
+        self.river = _passive_data_store()
         self._get_data_pattern = 'All'
         super().__init__(*args, **kwargs)
 
@@ -1345,7 +1346,6 @@ class SubDomainReader(FileReader):
         mod_time_sec = [(this_dt - ref_date).total_seconds() for this_dt in self.time.datetime]
         river_time_sec = [(this_dt - ref_date).total_seconds() for this_dt in time_dt]
 
-        self.river = _passive_data_store()
         self.river.river_nodes = np.argwhere(np.isin(self._dims['node'], river_node_raw))
 
         river_flux_raw = river_nc.variables['river_flux'][:,rivers_in_grid]
