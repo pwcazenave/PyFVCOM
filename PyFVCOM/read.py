@@ -500,21 +500,25 @@ class FileReader(Domain):
             if 'node' in self._dims:
                 new_tri, new_ele = reduce_triangulation(self.grid.triangles, self._dims['node'], return_elements=True)
                 if not new_ele.size and 'nele' not in self._dims:
-                    print('Nodes selected cannot produce new triangulation and no elements specified so including all element of which the nodes are members')
+                    if self.noisy:
+                        print('Nodes selected cannot produce new triangulation and no elements specified so including all element of which the nodes are members')
                     self._dims['nele'] = np.squeeze(np.argwhere(np.any(np.isin(self.grid.triangles, self._dims['node']), axis=1)))
                     if self._dims['nele'].size == 1: # Annoying error for the differnce between array(n) and array([n])
                         self._dims['nele'] = np.asarray([self._dims['nele']])
                 elif 'nele' not in self._dims:
-                    print('Elements not specified but reducing to only those within the triangulation of selected nodes')
+                    if self.noisy:
+                        print('Elements not specified but reducing to only those within the triangulation of selected nodes')
                     self._dims['nele'] = new_ele
                 elif not np.array_equal(np.sort(new_ele), np.sort(self._dims['nele'])):
-                    print('Warning - mismatch between given elements and nodes for triangulation, retaining original elements')
+                    if self.noisy:
+                        print('Mismatch between given elements and nodes for triangulation, retaining original elements')
                     #print('Mismatch between selected elements and nodes, expanding triangulation to cover both')
                     #self._dims['node'] = np.unique(np.hstack([np.unique(self.grid.triangles[self._dims['nele']]), self._dims['node']]))
                     #new_tri, self._dims['nele'] = reduce_triangulation(self.grid.triangles, self._dims['node'], return_elements=True)
 
             else:
-                print('Nodes not specified but reducing to only those within the triangulation of selected elements')
+                if self.noisy:
+                    print('Nodes not specified but reducing to only those within the triangulation of selected elements')
                 self._dims['node'] = np.unique(self.grid.triangles[self._dims['nele'],:])
                 new_tri = reduce_triangulation(self.grid.triangles, self._dims['node'])
 
