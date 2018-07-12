@@ -1885,6 +1885,8 @@ def write_probes(file, mjd, timeseries, datatype, site, depth, sigma=(-1, -1), l
 
     Parameters
     ----------
+    file : str
+        File to which to save the probes.
     mjd : ndarray, list, tuple
         Date/time in Modified Julian Day
     timeseries : ndarray
