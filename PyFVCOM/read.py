@@ -1433,7 +1433,7 @@ class ncwrite(object):
         'global_attributes'.
     file : str
         Path to output file name.
-    Quiet : bool
+    quiet : bool
         Set to True for verbose output. Defaults to False.
     format : str
         Pick the netCDF file format. Defaults to 'NETCDF3_CLASSIC'. See
@@ -1486,10 +1486,10 @@ class ncwrite(object):
 
     """
 
-    def __init__(self, input_dict, filename_out, Quiet=False, format='NETCDF3_CLASSIC'):
+    def __init__(self, input_dict, filename_out, quiet=False, format='NETCDF3_CLASSIC'):
         self.filename_out = filename_out
         self.input_dict = input_dict
-        self.Quiet = Quiet
+        self.quiet = quiet
         self.format = format
         self.createNCDF()
 
@@ -1506,7 +1506,7 @@ class ncwrite(object):
             for k, v in self.input_dict['dimensions'].items():
                 rootgrp.createDimension(k, v)
         else:
-            if not self.Quiet:
+            if not self.quiet:
                 print('No netCDF created:')
                 print('  No dimension key found (!! has to be \"dimensions\"!!!)')
             return()
@@ -1516,7 +1516,7 @@ class ncwrite(object):
             for k, v in self.input_dict['global attributes'].items():
                 rootgrp.setncattr(k, v)
         else:
-            if not self.Quiet:
+            if not self.quiet:
                 print('  No global attribute key found (!! has to be \"global attributes\"!!!)')
 
         # Create variables.
@@ -1534,7 +1534,7 @@ class ncwrite(object):
             else:
                 fill_value = None
             # Create ncdf variable
-            if not self.Quiet:
+            if not self.quiet:
                 print('  Creating variable: {} {} {}'.format(k, data_type, dims))
             var = rootgrp.createVariable(k, data_type, dims, fill_value=fill_value)
             if len(dims) > np.ndim(data):
@@ -1550,7 +1550,7 @@ class ncwrite(object):
                         raise(IndexError(('Supplied data shape {} does not match the specified'
                         ' dimensions {}, for variable \'{}\'.'.format(data.shape, var.shape, k))))
                 else:
-                    if not self.Quiet:
+                    if not self.quiet:
                         print('Problem in the number of dimensions')
             else:
                 try:
