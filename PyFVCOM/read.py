@@ -1164,7 +1164,11 @@ class SubDomainReader(FileReader):
 
     def _make_subset_dimensions(self):
         """
-        TODO: docstring.
+        If the 'wesn' keyword has been included in the supplied dimensions, interactively select a region (ignoring
+        for now the supplied data in 'wesn').
+
+        This mimics the function of PyFVCOM.read.FileReader._make_subset_dimensions but with greater flexibility in
+        terms of the region to subset.
 
         """
         fig = plt.figure()
