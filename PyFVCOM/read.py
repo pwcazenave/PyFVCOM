@@ -433,7 +433,7 @@ class FileReader(Domain):
                 setattr(self.atts, 'datetime', attributes)
             else:
                 self.time.datetime = _dates
-            self.time.matlabtime = self.time.time + 678942.0  # convert to MATLAB-indexed times from Modified Julian Date.
+            self.time.matlabtime = self.time.time + 678942.0  # to MATLAB-indexed times from Modified Julian Date.
             attributes = _passive_data_store()
             setattr(attributes, 'long_name', 'MATLAB datenum')
             setattr(self.atts, 'matlabtime', attributes)
@@ -498,7 +498,7 @@ class FileReader(Domain):
             self.dims.nele = self.grid.triangles.shape[0]
             warn('Triangulation created from node positions. This may be inconsistent with the original triangulation.')
 
-        # Fix broken triangulations if necessary.
+        # Fix broken triangulations if necessary.
         if self.grid.nv.min() != 1:
             if self._debug:
                 print('Fixing broken triangulation. Current minimum for nv is {} and for triangles is {} but they '
