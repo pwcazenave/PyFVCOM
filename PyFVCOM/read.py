@@ -478,7 +478,7 @@ class FileReader(Domain):
                 print("Creating new triangulation since we're missing one.")
             triangulation = tri.Triangulation(self.grid.lon, self.grid.lat)
             self.grid.triangles = triangulation.triangles
-            self.grid.nv = self.grid.triangles.T + 1
+            self.grid.nv = copy.copy(self.grid.triangles.T + 1)
             self.dims.nele = self.grid.triangles.shape[0]
             warn('Triangulation created from node positions. This may be inconsistent with the original triangulation.')
 
@@ -524,7 +524,7 @@ class FileReader(Domain):
                 self._dims['node'] = np.unique(self.grid.triangles[self._dims['nele'],:])
                 new_tri = reduce_triangulation(self.grid.triangles, self._dims['node'])
 
-            self.grid.nv = new_tri + 1
+            self.grid.nv = new_tri.T + 1
             self.grid.triangles = new_tri
 
         if 'node' in self._dims:
