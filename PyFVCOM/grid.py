@@ -400,10 +400,26 @@ class Domain(object):
 
 
 def mp_interp_func(input):
-	""" Pass me to a multiprocessing.Pool().map() to quickly interpolate data with LinearNDInterpolator. """
-	lon, lat, data, x, y = input
-	interp = LinearNDInterpolator((lon, lat), data)
-	return interp((x, y))
+    """
+    Pass me to a multiprocessing.Pool().map() to quickly interpolate 2D data with LinearNDInterpolator.
+
+    Parameters
+    ----------
+    input : tuple
+        Input data to interpolate (lon, lat, data, x, y), where (x, y) are the positions onto which you would like to
+        interpolate the regularly gridded data (lon, lat, data).
+
+    Returns
+    -------
+    interp : np.ndarray
+        The input data `input' interpolated onto the positions (x, y).
+
+    """
+
+    lon, lat, data, x, y = input
+    interp = LinearNDInterpolator((lon, lat), data)
+    return interp((x, y))
+
 
 class OpenBoundary(object):
     """
