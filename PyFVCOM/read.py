@@ -362,6 +362,9 @@ class FileReader(Domain):
                     _dates = num2date(self.time.time, units=getattr(self.ds.variables['time'], 'units'))
                 elif 'Itime' in got_time and 'Itime2' in got_time:
                     _dates = num2date(self.time.Itime + self.time.Itime2 / 1000.0 / 60 / 60 / 24, units=getattr(self.ds.variables['Itime'], 'units'))
+                else:
+                    raise ValueError('Missing sufficient time information to make the relevant time data.')
+
                 try:
                     self.time.Times = np.array([datetime.strftime(d, '%Y-%m-%dT%H:%M:%S.%f') for d in _dates])
                 except ValueError:
@@ -379,6 +382,9 @@ class FileReader(Domain):
                         _dates = np.array([datetime.strptime(''.join(t.astype(str)).strip(), '%Y/%m/%d %H:%M:%S.%f') for t in self.time.Times])
                 elif 'Itime' in got_time and 'Itime2' in got_time:
                     _dates = num2date(self.time.Itime + self.time.Itime2 / 1000.0 / 60 / 60 / 24, units=getattr(self.ds.variables['Itime'], 'units'))
+                else:
+                    raise ValueError('Missing sufficient time information to make the relevant time data.')
+
                 # We're making Modified Julian Days here to replicate FVCOM's 'time' variable.
                 self.time.time = date2num(_dates, units='days since 1858-11-17 00:00:00')
                 # Add the relevant attributes for the time variable.
@@ -397,6 +403,9 @@ class FileReader(Domain):
                         _dates = np.array([datetime.strptime(''.join(t.astype(str)).strip(), '%Y/%m/%d %H:%M:%S.%f') for t in self.time.Times])
                 elif 'time' in got_time:
                     _dates = num2date(self.time.time, units=getattr(self.ds.variables['time'], 'units'))
+                else:
+                    raise ValueError('Missing sufficient time information to make the relevant time data.')
+
                 # We're making Modified Julian Days here to replicate FVCOM's 'time' variable.
                 _datenum = date2num(_dates, units='days since 1858-11-17 00:00:00')
                 self.time.Itime = np.floor(_datenum)
@@ -1014,6 +1023,8 @@ class FileReader(Domain):
             step = int(seconds_per_day * 7 * 4 / interval_seconds)
         elif period == 'yearly' or period == 'annual':
             step = int(seconds_per_day * 365 / interval_seconds)
+        else:
+            raise ValueError('Unsupported period {}'.format(period))
 
         if not hasattr(self.data, variable):
             if self._noisy:
