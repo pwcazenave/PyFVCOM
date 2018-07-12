@@ -837,15 +837,11 @@ class FileReader(Domain):
                 warn('{} does not contain a time dimension.'.format(v))
 
             try:
-                # The _get_data_pattern attribute is used in SubDomainReader, although for what, I'm (pica) not
-                # entirely sure.
                 if self._get_data_pattern == 'slice':
                     if self._debug:
                         print('Slicing the data directly from netCDF.')
                     setattr(self.data, v, self.ds.variables[v][variable_indices])
                 elif self._get_data_pattern == 'memory':
-                    # Load all the data up front and then then subset it. This approach uses more memory but does
-                    # the job faster.
                     if self._debug:
                         print('Loading all data in memory and then subsetting.')
                     data_raw = self.ds.variables[v][:]
