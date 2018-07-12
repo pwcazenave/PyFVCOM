@@ -1158,19 +1158,24 @@ class SubDomainReader(FileReader):
         TODO: docstring.
 
         """
-        plt.figure()
-        plt.scatter(self.grid.lon, self.grid.lat, c='lightgray')
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+        ax.scatter(self.grid.lon, self.grid.lat, c='lightgray')
         plt.show()
 
         keep_picking = True
         while keep_picking:
-            n_pts = int(input('How many polygon points?'))
-            bounding_poly = np.asarray(plt.ginput(n_pts))
-            poly_lin = plt.plot(np.hstack([bounding_poly[:, 0], bounding_poly[0, 0]]),
-                                np.hstack([bounding_poly[:, 1], bounding_poly[0,1]]),
-                                c='r', linewidth=2)
+            n_pts = int(input('How many polygon points? '))
+            bounding_poly = np.full((n_pts, 2), np.nan)
+            poly_lin = []
+            for point in range(n_pts):
+                bounding_poly[point, :] = plt.ginput(1)[0]
+                poly_lin.append(ax.plot(np.hstack([bounding_poly[:, 0], bounding_poly[0, 0]]),
+                                   np.hstack([bounding_poly[:, 1], bounding_poly[0,1]]),
+                                   c='r', linewidth=2)[0])
+                fig.canvas.draw()
 
-            happy = input('Is that polygon ok Y/N?')
+            happy = input('Is that polygon OK? Y/N: ')
             if happy.lower() == 'y':
                 keep_picking = False
 
