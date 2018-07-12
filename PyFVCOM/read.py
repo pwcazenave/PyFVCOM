@@ -793,13 +793,12 @@ class FileReader(Domain):
             if v not in self.ds.variables:
                 raise KeyError("Variable '{}' not present in {}".format(v, self._fvcom))
 
-            # Get this variable's dimensions and shape
             var_dim = self.ds.variables[v].dimensions
             variable_shape = self.ds.variables[v].shape
             variable_indices = [slice(None) for _ in variable_shape]
+            # Update indices for dimensions of the variable we've been asked to subset.
             for dimension in var_dim:
                 if dimension in dims:
-                    # Replace their size with anything we've been given in dims.
                     variable_index = var_dim.index(dimension)
                     variable_indices[variable_index] = dims[dimension]
 
