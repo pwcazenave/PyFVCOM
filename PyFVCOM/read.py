@@ -143,14 +143,14 @@ class FileReader(Domain):
         # For easy comparison of classes.
         return self.__dict__ == other.__dict__
 
-    def __add__(self, FVCOM, debug=False):
+    def __add__(self, fvcom, debug=False):
         """
         This special method means we can stack two FileReader objects in time through a simple addition (e.g. fvcom1
         += fvcom2)
 
         Parameters
         ----------
-        FVCOM : PyFVCOM.FileReader
+        fvcom : PyFVCOM.FileReader
             Previous time to which to add ourselves.
 
         Returns
@@ -176,14 +176,14 @@ class FileReader(Domain):
         # Compare our current grid and time with the supplied one to make sure we're dealing with the same model
         # configuration. We also need to make sure we've got the same set of data (if any). We'll warn if we've got
         # no data loaded that we can't do subsequent data loads.
-        node_compare = self.dims.nele == FVCOM.dims.nele
-        nele_compare = self.dims.node == FVCOM.dims.node
-        siglay_compare = self.dims.siglay == FVCOM.dims.siglay
-        siglev_compare = self.dims.siglev == FVCOM.dims.siglev
-        time_compare = self.time.datetime[-1] <= FVCOM.time.datetime[0]
-        data_compare = self.obj_iter(self.data) == self.obj_iter(FVCOM.data)
+        node_compare = self.dims.nele == fvcom.dims.nele
+        nele_compare = self.dims.node == fvcom.dims.node
+        siglay_compare = self.dims.siglay == fvcom.dims.siglay
+        siglev_compare = self.dims.siglev == fvcom.dims.siglev
+        time_compare = self.time.datetime[-1] <= fvcom.time.datetime[0]
+        data_compare = self.obj_iter(self.data) == self.obj_iter(fvcom.data)
         old_data = self.obj_iter(self.data)
-        new_data = self.obj_iter(FVCOM.data)
+        new_data = self.obj_iter(fvcom.data)
         if not node_compare:
             raise ValueError('Horizontal node data are incompatible.')
         if not nele_compare:
@@ -195,7 +195,7 @@ class FileReader(Domain):
         if not time_compare:
             raise ValueError("Time periods are incompatible (`fvcom2' must be greater than or equal to `fvcom1')."
                              "`fvcom1' has end {} and `fvcom2' has start {}".format(self.time.datetime[-1],
-                                                                                    FVCOM.time.datetime[0]))
+                                                                                    fvcom.time.datetime[0]))
         if not data_compare:
             raise ValueError('Loaded data sets for each FileReader class must match.')
         if not (old_data == new_data) and (old_data or new_data):
@@ -208,9 +208,9 @@ class FileReader(Domain):
         # Go through all the parts of the data with a time dependency and concatenate them. Leave the grid alone.
         for var in self.obj_iter(idem.data):
             if 'time' in idem.ds.variables[var].dimensions:
-                setattr(idem.data, var, np.concatenate((getattr(idem.data, var), getattr(FVCOM.data, var))))
+                setattr(idem.data, var, np.concatenate((getattr(idem.data, var), getattr(fvcom.data, var))))
         for time in self.obj_iter(idem.time):
-            setattr(idem.time, time, np.concatenate((getattr(idem.time, time), getattr(FVCOM.time, time))))
+            setattr(idem.time, time, np.concatenate((getattr(idem.time, time), getattr(fvcom.time, time))))
 
         # Remove duplicate times.
         time_indices = np.arange(len(idem.time.time))
