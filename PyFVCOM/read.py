@@ -355,8 +355,8 @@ class FileReader(Domain):
                     # We might have a masked array, so just use the raw data.
                     self.time.Times = np.asarray([''.join(t.astype(str)).strip() for t in self.time.Times.data])
 
-            # Make whatever we got into datetime objects and use those to make everything else. Note: the `time' variable
-            # is often the one with the lowest precision, so use the others preferentially over that.
+            # Make whatever we got into datetime objects and use those to make everything else. Note: the `time'
+            # variable is often the one with the lowest precision, so use the others preferentially over that.
             if 'Times' not in got_time:
                 if 'time' in got_time:
                     _dates = num2date(self.time.time, units=getattr(self.ds.variables['time'], 'units'))
