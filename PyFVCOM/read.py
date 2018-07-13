@@ -1067,6 +1067,41 @@ class FileReader(Domain):
                                  units=self.atts.time.units)
             return new_times
 
+    def add_river_flow(self, river_nc_file, river_nml_file):
+        """
+        TODO: docstring.
+
+        """
+
+        nml_dict = get_river_config(river_nml_file)
+        river_node_raw = np.asarray(nml_dict['RIVER_GRID_LOCATION'], dtype=int) - 1
+        self.river = _passive_data_store()
+
+        river_nc = nc.Dataset(river_nc_file, 'r')
+        time_raw = river_nc.variables['Times'][:]
+        self.river.time_dt = [datetime.strptime(b''.join(this_time).decode('utf-8').rstrip(), '%Y/%m/%d %H:%M:%S') for this_time in time_raw]
+
+        ref_date = datetime(1900,1,1)
+        mod_time_sec = [(this_dt - ref_date).total_seconds() for this_dt in self.time.datetime]
+        self.river.river_time_sec = [(this_dt - ref_date).total_seconds() for this_dt in self.river.time_dt]
+
+        if 'node' in self._dims:
+            self.river.river_nodes = np.argwhere(np.isin(self._dims['node'], river_node_raw))
+            rivers_in_grid = np.isin(river_node_raw, self._dims['node'])
+        else:
+            self.river.river_nodes = river_node_raw    
+            rivers_in_grid = np.ones(river_node_raw.shape, dtype=bool)
+
+        river_flux_raw = river_nc.variables['river_flux'][:,rivers_in_grid]
+        self.river.river_fluxes = np.asarray([np.interp(mod_time_sec, self.river.river_time_sec, this_col) for this_col in river_flux_raw.T]).T
+        self.river.total_flux = np.sum(self.river.river_fluxes, axis=1)
+
+        river_temp_raw = river_nc.variables['river_temp'][:,rivers_in_grid]
+        self.river.river_temp = np.asarray([np.interp(mod_time_sec, self.river.river_time_sec, this_col) for this_col in river_temp_raw.T]).T
+
+        river_salt_raw = river_nc.variables['river_salt'][:,rivers_in_grid]
+        self.river.river_salt = np.asarray([np.interp(mod_time_sec, self.river.river_time_sec, this_col) for this_col in river_salt_raw.T]).T
+
 
 def MFileReader(fvcom, noisy=False, *args, **kwargs):
     """
@@ -1184,7 +1219,6 @@ class SubDomainReader(FileReader):
     def __init__(self, *args, **kwargs):
         # Automatically inherits the FileReader docstring.
         self._bounding_box = True
-        self.river = _passive_data_store()
         super().__init__(*args, **kwargs)
 
     def _make_subset_dimensions(self):
@@ -1364,11 +1398,8 @@ class SubDomainReader(FileReader):
 
         self.open_side_flux = open_side_flux_dict
 
-    def add_river_flow(self, river_nc_file, river_nml_file):
-        """
-        TODO: docstring.
-
-        """
+    def add_evap_precip(self):
+        self.load_data(['precip', 'evap'])
 
         nml_dict = get_river_config(river_nml_file)
         river_node_raw = np.asarray(nml_dict['RIVER_GRID_LOCATION'], dtype=int) - 1
@@ -1405,6 +1436,9 @@ class SubDomainReader(FileReader):
         var_to_int = getattr(self.data, var)
         if len(var_to_int) == len(self.grid.xc):
             var_to_int = elems2nodes(var, self.grid.triangles)
+        
+        
+
         return var_to_int
 
     def volume_integral(self, var):
@@ -1413,7 +1447,18 @@ class SubDomainReader(FileReader):
         TODO: finish.
 
         """
-        pass
+        var_to_int = getattr(self.data, var)
+        if len(var_to_int) == len(self.grid.xc):
+            var_to_int = elems2nodes(var, self.grid.triangles)
+
+        if not hasattr(self, 'volume'):
+            self.get_cv_volumes()
+
+        if not hasattr(self.data, var):
+            self._get_variable(var)
+
+        setattr(self, var + '_total', np.sum(np.sum(getattr(self.data, var) * self.volume, axis=2), axis=1))
+
 
     def surface_integral(self, var):
         """
