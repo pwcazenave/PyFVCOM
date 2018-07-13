@@ -553,18 +553,18 @@ class Model(Domain):
                 elif option == 'min constant depth':
                     min_constant_depth = float(value)
                 elif option == 'ku':
-                    ku = float(value)
+                    ku = int(value)
                 elif option == 'kl':
-                    kl = float(value)
+                    kl = int(value)
                 elif option == 'zku':
-                    s = [float(i) for i in value.split(' ')]
+                    s = [float(i) for i in value.split()]
                     zku = np.zeros(ku)
-                    for i in range(len(ku)):
+                    for i in range(ku):
                         zku[i] = s[i]
                 elif option == 'zkl':
-                    s = [float(i) for i in value.split(' ')]
+                    s = [float(i) for i in value.split()]
                     zkl = np.zeros(kl)
-                    for i in range(len(kl)):
+                    for i in range(kl):
                         zkl[i] = s[i]
 
         # Do some checks if we've got uniform or generalised coordinates to make sure the input is correct.
