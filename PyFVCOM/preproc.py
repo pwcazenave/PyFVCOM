@@ -44,6 +44,9 @@ class Model(Domain):
     be an object which has methods related to rivers and checking depths. Likewise, the model grid object could
     contain methods for interpolating SST, creating restart files etc.
 
+    TODO:
+    Open boundaries end up held in Model.open_boundaries and Model.grid.open_boundaries which seems wrong
+
     """
 
     def __init__(self, start, end, *args, **kwargs):
