@@ -596,7 +596,9 @@ class Model(Domain):
         self.sigma.levels = sigma_levels
         self.sigma.layers_center = nodes2elems(self.sigma.layers.T, self.grid.triangles).T
         self.sigma.levels_center = nodes2elems(self.sigma.levels.T, self.grid.triangles).T
-        self.sigma.power = sigpow
+
+        if sigtype.lower == 'geometric': 
+            self.sigma.power = sigpow
 
         # Make some depth-resolved sigma distributions.
         self.sigma.layers_z = self.grid.h[:, np.newaxis] * self.sigma.layers
