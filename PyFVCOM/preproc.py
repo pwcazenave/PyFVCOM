@@ -2090,6 +2090,107 @@ class Model(Domain):
 
         self.regular = read_regular(*args, noisy=self.noisy, **kwargs)
 
+    def subset_existing_nest(self, nest_file, new_nest_file):
+        """
+        Use the nested boundaries in this model to extract the corresponding data from the source `nest_file'. This
+        is handy if you've already run a model but want fewer levels of nesting in your run.
+
+        Parameters
+        ----------
+        nest_file : str, pathlib.Path
+            The source nest file from which to extract the data.
+        new_nest_file : str, pathlib.Path
+            The new file to create.
+
+        """
+
+        # Aggregate the nested nodes and elements as well as the coordinates. Also check whether we're doing weighted
+        # nesting.
+        nest_nodes = [nest.nodes for i in self.nest for nest in i]
+        nest_elements = [nest.elements for i in self.nest.boundaries for nest in i]
+        # Do we really need spherical here? Or would we be better off assuming everyone's running spherical?
+        nest_x, nest_y = self.grid.x[nest_nodes], self.grid.y[nest_nodes]
+        nest_lon, nest_lat = self.grid.lon[nest_nodes], self.grid.lat[nest_nodes]
+        nest_xc, nest_yc = self.grid.cx[nest_elements], self.grid.yc[nest_elements]
+        nest_lonc, nest_latc = self.grid.lonc[nest_elements], self.grid.latc[nest_elements]
+
+        weighted_nesting = False
+        weighted = [hasattr(i, 'weight_cell') for i in self.nest.boundaries]
+        if np.any(weighted):
+            weighted_nesting = True
+
+        with Dataset(nest_file) as source, Dataset(new_nest_file, 'w') as dest:
+
+            # Find indices in the source nesting file which match the positions we've selected here.
+            source_x, source_y = source['x'][:], source['y'][:]
+            source_xc, source_yc = source['xc'][:], source['yc'][:]
+
+            new_nodes = []
+            new_elements = []
+            for node in nest_nodes:
+                new_nodes.append(np.argmin(np.hypot(source_x - nest_x[node],
+                                                    source_y - nest_y[node])))
+            for elem in nest_elements:
+                new_elements.append(np.argmin(np.hypot(source_xc - nest_xc[elem],
+                                                       source_yc - nest_yc[elem])))
+
+            # Convert to arrays for nicer slicing of the Dataset.variable objects.
+            new_nodes = np.asarray(new_nodes)
+            new_elements = np.asarray(new_elements)
+
+            # Copy global attributes all at once via dictionary
+            dest.setncatts(source.__dict__)
+            # copy dimensions
+            for name, dimension in source.dimensions.items():
+                if self._noisy:
+                    print('Cloning dimension {}...'.format(name), end=' ')
+                if name == 'nele':
+                    dest.createDimension(name, len(weights_elements))
+                elif name == 'node':
+                    dest.createDimension(name, len(weights_nodes))
+                else:
+                    dest.createDimension(name, (len(dimension) if not dimension.isunlimited() else None))
+                if self._noisy:
+                    print('done.')
+
+            # Copy all file data, extracting only the indices we've identified for the subset nest.
+            for name, variable in source.variables.items():
+                if self._noisy:
+                    print('Cloning variable {}...'.format(name), end=' ')
+                x = dest.createVariable(name, variable.datatype, variable.dimensions)
+                # Intercept variables with either a node or element dimension and subset accordingly.
+                if 'nele' in source[name].dimensions:
+                    dest[name][:] = source[name][..., new_elements]
+                elif 'node' in source[name].dimensions:
+                    dest[name][:] = source[name][..., new_nodes]
+                else:
+                    # Just copy everything over.
+                    dest[name][:] = source[name][:]
+                # Copy variable attributes all at once via dictionary
+                dest[name].setncatts(source[name].__dict__)
+                if self._noisy:
+                    print('done.')
+
+            if weighted_nesting:
+                if self._noisy:
+                    print('Adding weighted arrays...', end=' ')
+                # Add the two new variables (weight_cell and weight_node)
+                weight_cell = dest.createVariable('weight_cell', float, ('time', 'nele'))
+                weight_cell[:] = np.tile(weights_elements, [source.dimensions['time'].size, 1])
+                weight_cell.long_name = 'Weights for elements in relaxation zone'
+                weight_cell.units = 'no units'
+                weight_cell.grid = 'fvcom_grid'
+                weight_cell.type = 'data'
+
+                weight_node = dest.createVariable('weight_node', float, ('time', 'node'))
+                weight_node[:] = np.tile(weights_nodes, [source.dimensions['time'].size, 1])
+                weight_node.long_name = 'Weights for nodes in relaxation zone'
+                weight_node.units = 'no units'
+                weight_node.grid = 'fvcom_grid'
+                weight_node.type = 'data'
+                if self._noisy:
+                    print('done.')
+
 
 class Nest(object):
     """
