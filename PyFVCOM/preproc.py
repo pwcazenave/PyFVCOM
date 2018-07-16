@@ -1744,7 +1744,7 @@ class Model(Domain):
             # Add all the nested levels and assign weights as necessary.
             for _ in range(nest_levels):
                 self.nest[-1].add_level()
-            if nesting_type == 3:
+            if nesting_type >= 2:
                 self.nest[-1].add_weights()
 
     def write_nested_forcing(self, ncfile, nests, type=3, **kwargs):
