@@ -68,6 +68,7 @@ class Model(Domain):
         self.nest = type('nest', (), {})()
         self.stations = type('stations', (), {})()
         self.probes = type('probes', (), {})()
+        self.ady = type('sst', (), {})()
         self.regular = None
 
         # Make some potentially useful time representations.
@@ -86,7 +87,7 @@ class Model(Domain):
         *_, bnd = connectivity(np.array((self.grid.lon, self.grid.lat)).T, self.grid.triangles)
         self.grid.coastline = np.argwhere(bnd)
         # Remove the open boundaries, if we have them.
-        if np.any(self.grid.open_boundary_nodes):
+        if self.grid.open_boundary_nodes:
             land_only = np.isin(np.squeeze(np.argwhere(bnd)), flatten_list(self.grid.open_boundary_nodes), invert=True)
             self.grid.coastline = np.squeeze(self.grid.coastline[land_only])
 
@@ -116,7 +117,7 @@ class Model(Domain):
 
         self.open_boundaries = []
         self.dims.open_boundary_nodes = 0  # assume no open boundary nodes
-        if np.any(self.grid.open_boundary_nodes):
+        if self.grid.open_boundary_nodes:
             for nodes in self.grid.open_boundary_nodes:
                 self.open_boundaries.append(OpenBoundary(nodes))
                 # Update the dimensions.
@@ -327,15 +328,18 @@ class Model(Domain):
         self.sst.time = dates
 
     @staticmethod
-    def _inter_sst_worker(fvcom_lonlat, sst_file, noisy=False):
+    def _inter_sst_worker(fvcom_lonlat, sst_file, noisy=False, var_name='analysed_sst', var_offset=-273.15):
         """ Multiprocessing worker function for the SST interpolation. """
         if noisy:
             print('.', end='', flush=True)
 
         with Dataset(sst_file, 'r') as sst_file_nc:
-            sst_eo = np.squeeze(sst_file_nc.variables['analysed_sst'][:]) - 273.15  # Kelvin to Celsius
+            sst_eo = np.squeeze(sst_file_nc.variables[var_name][:]) + var_offset  # Kelvin to Celsius
             mask = sst_file_nc.variables['mask']
-            sst_eo[mask == 1] = np.nan
+            if len(sst_eo.shape) ==3 and len(mask) ==2:
+                sst_eo[np.tile(mask[:][np.newaxis,:],(sst_eo.shape[0],1,1)) == 1] = np.nan                
+            else:
+                sst_eo[mask == 1] = np.nan
             sst_lon = sst_file_nc.variables['lon'][:]
             sst_lat = sst_file_nc.variables['lat'][:]
             time_out_dt = num2date(sst_file_nc.variables['time'][:], units=sst_file_nc.variables['time'].units)
@@ -357,6 +361,7 @@ class Model(Domain):
             Dictionary of options to use when creating the netCDF variables. Defaults to compression on.
 
         Remaining arguments are passed to WriteForcing.
+
         """
 
         globals = {'year': str(np.argmax(np.bincount([i.year for i in self.sst.time]))),  # gets the most common year value
@@ -381,6 +386,130 @@ class Model(Domain):
                     'grid': 'fvcom_grid',
                     'type': 'data'}
             sstgrd.add_variable('sst', self.sst.sst, ['time', 'node'], attributes=atts, ncopts=ncopts)
+
+    def interp_ady(self, ady_dir, serial=False, pool_size=None, noisy=False):
+
+        """
+        Interpolate geblstoff absorption from climatology on AMM grid to FVCOM grid
+
+        Parameters
+        ----------
+        sst_dir : str, pathlib.Path
+            Path to directory containing the absorption data. Assumes there are directories per year within this directory.
+        serial : bool, optional
+            Run in serial rather than parallel. Defaults to parallel.
+        pool_size : int, optional
+            Specify number of processes for parallel run. By default it uses all available.
+        noisy : bool, optional
+            Set to True to enable some sort of progress output. Defaults to False.
+
+        Returns
+        -------
+        Adds a new `ady' object with:
+        ady : np.ndarray
+            Interpolated absorption time series for the supplied domain.
+        time : np.ndarray
+            List of python datetimes for the corresponding SST data.
+
+        Example
+        -------
+        >>> from PyFVCOM.preproc import Model
+        >>> ady_dir = '/home/mbe/Code/fvcom-projects/locate/python/ady_preproc/Data/yr_data/'
+        >>> model = Model('/home/mbe/Models/FVCOM/tamar/tamar_v2_grd.dat',
+        >>>     native_coordinates='cartesian', zone='30N')
+        >>> model.interp_ady(ady_dir, 2006, pool_size=20)
+        >>> # Save to netCDF
+        >>> model.write_adygrd('casename_adygrd.nc')
+
+        Notes
+        -----
+        TODO: Combine interpolation routines (sst, ady, etc) to make more efficient        
+
+        """
+
+        if isinstance(ady_dir, str):
+            ady_dir = Path(ady_dir)
+
+        ady_files = list(ady_dir.glob('*.nc')) 
+
+        if noisy:
+            print('To do:\n{}'.format('|' * len(ady_files)), flush=True)
+
+        # Read ADY data files and interpolate each to the FVCOM mesh
+        lonlat = np.array((self.grid.lon, self.grid.lat))
+
+        if serial:
+            results = []
+            for ady_file in ady_files:
+                results.append(self._inter_sst_worker(lonlat, ady_file, noisy, var_name='gelbstoff_absorption_satellite', var_offset=0))
+        else:
+            if not pool_size:
+                pool = multiprocessing.Pool()
+            else:
+                pool = multiprocessing.Pool(pool_size)
+            part_func = partial(self._inter_sst_worker, lonlat, noisy=noisy, var_name='gelbstoff_absorption_satellite', var_offset=0)
+            results = pool.map(part_func, ady_files)
+            pool.close()
+
+        # Sort data and prepare date lists
+        dates = []
+        ady = []
+
+        for this_result in results:
+            dates.append(this_result[0])
+            ady.append(this_result[1])
+
+        ady = np.vstack(ady).T
+        # FVCOM wants times at midday whilst the data are at midnight
+        dates = np.asarray([this_date + relativedelta(hours=12) for sublist in dates for this_date in sublist])    
+
+        # Sort by time.
+        idx = np.argsort(dates)
+        dates = dates[idx]
+        ady = ady[idx, :]
+
+        # Store everything in an object.
+        self.ady.ady = ady
+        self.ady.time = dates
+
+
+    def write_adygrd(self, output_file, ncopts={'zlib': True, 'complevel': 7}, **kwargs):
+        """
+        Generate a gelbstoff absorption file for the given FVCOM domain from the self.ady data.
+
+        Parameters
+        ----------
+        output_file : str, pathlib.Path
+            File to which to write  data.
+        ncopts : dict
+            Dictionary of options to use when creating the netCDF variables. Defaults to compression on.
+
+        Remaining arguments are passed to WriteForcing.
+        """
+        globals = {'year': str(np.argmax(np.bincount([i.year for i in self.ady.time]))),  # gets the most common year value
+                   'title': 'FVCOM Satellite derived Gelbstoff climatology product File',
+                   'institution': 'Plymouth Marine Laboratory',
+                   'source': 'FVCOM grid (unstructured) surface forcing',
+                   'history': 'File created using {} from PyFVCOM'.format(inspect.stack()[0][3]),
+                   'references': 'http://fvcom.smast.umassd.edu, http://codfish.smast.umassd.edu, http://pml.ac.uk/modelling',
+                   'Conventions': 'CF-1.0',
+                   'CoordinateProjection': 'init=WGS84'}
+        dims = {'nele': self.dims.nele, 'node': self.dims.node, 'time': 0, 'DateStrLen': 26, 'three': 3}
+
+        with WriteForcing(str(output_file), dims, global_attributes=globals, clobber=True, format='NETCDF4', **kwargs) as sstgrd:
+           # Add the variables.
+            atts = {'long_name': 'nodel longitude', 'units': 'degrees_east'}
+            sstgrd.add_variable('lon', self.grid.lon, ['node'], attributes=atts, ncopts=ncopts)
+            atts = {'long_name': 'nodel latitude', 'units': 'degrees_north'}
+            sstgrd.add_variable('lat', self.grid.lat, ['node'], attributes=atts, ncopts=ncopts)
+            sstgrd.write_fvcom_time(self.ady.time)
+            atts = {'long_name': 'gelbstoff_absorption_satellite',
+                    'units': '1/m',
+                    'grid': 'fvcom_grid',
+                    'type': 'data'}
+            sstgrd.add_variable('Kd_ady', self.ady.ady, ['time', 'node'], attributes=atts, ncopts=ncopts)
+
+
 
     def add_sigma_coordinates(self, sigma_file, noisy=False):
         """
@@ -424,18 +553,18 @@ class Model(Domain):
                 elif option == 'min constant depth':
                     min_constant_depth = float(value)
                 elif option == 'ku':
-                    ku = float(value)
+                    ku = int(value)
                 elif option == 'kl':
-                    kl = float(value)
+                    kl = int(value)
                 elif option == 'zku':
-                    s = [float(i) for i in value.split(' ')]
+                    s = [float(i) for i in value.split()]
                     zku = np.zeros(ku)
-                    for i in range(len(ku)):
+                    for i in range(ku):
                         zku[i] = s[i]
                 elif option == 'zkl':
-                    s = [float(i) for i in value.split(' ')]
+                    s = [float(i) for i in value.split()]
                     zkl = np.zeros(kl)
-                    for i in range(len(kl)):
+                    for i in range(kl):
                         zkl[i] = s[i]
 
         # Do some checks if we've got uniform or generalised coordinates to make sure the input is correct.
@@ -467,7 +596,9 @@ class Model(Domain):
         self.sigma.levels = sigma_levels
         self.sigma.layers_center = nodes2elems(self.sigma.layers.T, self.grid.triangles).T
         self.sigma.levels_center = nodes2elems(self.sigma.levels.T, self.grid.triangles).T
-        self.sigma.power = sigpow
+
+        if sigtype.lower == 'geometric': 
+            self.sigma.power = sigpow
 
         # Make some depth-resolved sigma distributions.
         self.sigma.layers_z = self.grid.h[:, np.newaxis] * self.sigma.layers
@@ -1785,10 +1916,43 @@ class Model(Domain):
         u = np.empty((time_number, self.dims.layers, elements_number)) * np.nan
         v = np.empty((time_number, self.dims.layers, elements_number)) * np.nan
         temperature = np.empty((time_number, self.dims.layers, nodes_number)) * np.nan
-        salinity = np.empty((time_number, self.dims.layers, nodes_number)) * np.nan
+        # salinity = np.empty((time_number, self.dims.layers, nodes_number)) * np.nan
         hyw = np.zeros((time_number, self.dims.layers, nodes_number))  # we never set this to anything other than zeros
         weight_nodes = np.repeat(weight_nodes, time_number, 0).reshape(time_number, -1)
         weight_elements = np.repeat(weight_elements, time_number, 0).reshape(time_number, -1)
+
+        # zeta, ua, va, u, v, temperature, salinity = [], [], [], [], [], [], []
+        salinity = np.empty((0, 0, 0))  # right shape for concatenation.
+        for nest in nests:
+            for boundary in nest.boundaries:
+                for var in self.obj_iter(boundary.nest):
+                    if var == 'zeta':
+                        zeta.append(boundary.nest.zeta)
+                    elif var == 'ua':
+                        ua.append(boundary.nest.ua)
+                    elif var == 'va':
+                        va.append(boundary.nest.va)
+                    elif var == 'u':
+                        u.append(boundary.nest.u)
+                    elif var == 'v':
+                        v.append(boundary.nest.v)
+                    elif var == 'temperature':
+                        temperature.append(boundary.nest.temp)
+                    elif var == 'salinity':
+                        salinity = np.concatenate((salinity, boundary.nest.salinity), axis=0)
+                        # salinity.append(boundary.nest.salinity)
+                    elif var == 'time':
+                        pass
+                    else:
+                        raise ValueError('Unknown nest boundary variable {}'.format(var))
+        # Make things arrays instead of nested lists.
+        zeta = np.asarray(zeta)
+        ua = np.asarray(ua)
+        va = np.asarray(va)
+        u = np.asarray(u)
+        v = np.asarray(v)
+        temperature = np.asarray(temperature)
+        # salinity = np.asarray(salinity)
 
         ncopts = {}
         if 'ncopts' in kwargs:
@@ -2294,27 +2458,31 @@ class Nest(object):
         if not np.any(self.boundaries[-1].nodes):
             raise ValueError('No open boundary nodes in the current open boundary. Please add some and try again.')
 
-        level_elements = find_connected_elements(self.boundaries[-1].nodes, self.grid.triangles)
-        # Find the nodes and elements in the existing nests.
-        nest_nodes = flatten_list([i.nodes for i in self.boundaries])
-        nest_elements = flatten_list([i.elements for i in self.boundaries if np.any(i.elements)])
+        new_level_boundaries = []
+        for this_boundary in self.boundaries:
+            level_elements = find_connected_elements(this_boundary.nodes, self.grid.triangles)
+            # Find the nodes and elements in the existing nests.
+            nest_nodes = flatten_list([i.nodes for i in self.boundaries])
+            nest_elements = flatten_list([i.elements for i in self.boundaries if np.any(i.elements)])
 
-        # Get the nodes connected to the elements we've extracted.
-        level_nodes = np.unique(self.grid.triangles[level_elements, :])
-        # Remove ones we already have in the nest.
-        unique_nodes = np.setdiff1d(level_nodes, nest_nodes)
-        # Create a new open boundary from those nodes.
-        new_boundary = OpenBoundary(unique_nodes)
+            # Get the nodes connected to the elements we've extracted.
+            level_nodes = np.unique(self.grid.triangles[level_elements, :])
+            # Remove ones we already have in the nest.
+            unique_nodes = np.setdiff1d(level_nodes, nest_nodes)
+            if len(unique_nodes) > 0:
+                # Create a new open boundary from those nodes.
+                new_boundary = OpenBoundary(unique_nodes)
 
-        # Add the elements unique to the current nest level too.
-        unique_elements = np.setdiff1d(level_elements, nest_elements)
-        new_boundary.elements = unique_elements.tolist()
+                # Add the elements unique to the current nest level too.
+                unique_elements = np.setdiff1d(level_elements, nest_elements)
+                new_boundary.elements = unique_elements.tolist()
 
-        # Grab the time from the previous one.
-        setattr(new_boundary, 'time', self.boundaries[-1].time)
+                # Grab the time from the previous one.
+                setattr(new_boundary, 'time', this_boundary.time)
+                new_level_boundaries.append(new_boundary)
 
-        self.boundaries.append(new_boundary)
-
+        for this_boundary in new_level_boundaries:
+            self.boundaries.append(this_boundary)
         # Populate the grid and sigma objects too.
         self.__update_open_boundaries()
 
@@ -2409,12 +2577,8 @@ class WriteForcing(object):
             Dictionary of dimension names and sizes.
         global_attributes : dict, optional
             Global attributes to add to the netCDF file.
-        Remaining arguments are passed to netCDF4.Dataset.
 
-        Returns
-        -------
-        nc : netCDF4.Dataset
-            The netCDF file object.
+        Remaining arguments are passed to netCDF4.Dataset.
 
         """
 
@@ -2941,7 +3105,7 @@ class HYCOMReader(RegularReader):
                              "`fvcom1' has end {} and `fvcom2' has start {}".format(self.time.datetime[-1],
                                                                                     other.time.datetime[0]))
         if not data_compare:
-            raise ValueError('Loaded data sets for each RegularReader class must match.')
+            raise ValueError('Loaded data sets for each HYCOMReader class must match.')
         if not (old_data == new_data) and (old_data or new_data):
             warn('Subsequent attempts to load data for this merged object will only load data from the first object. '
                  'Load data into each object before merging them.')
@@ -3218,16 +3382,16 @@ class HYCOMReader(RegularReader):
 
             if not lon_compare:
                 raise ValueError('Longitude data are incompatible. You may be trying to load data after having already '
-                                 'concatenated a RegularReader object, which is unsupported.')
+                                 'concatenated a HYCOMReader object, which is unsupported.')
             if not lat_compare:
                 raise ValueError('Latitude data are incompatible. You may be trying to load data after having already '
-                                 'concatenated a RegularReader object, which is unsupported.')
+                                 'concatenated a HYCOMReader object, which is unsupported.')
             if not depth_compare:
                 raise ValueError('Vertical depth layers are incompatible. You may be trying to load data after having '
-                                 'already concatenated a RegularReader object, which is unsupported.')
+                                 'already concatenated a HYCOMReader object, which is unsupported.')
             if not time_compare:
                 raise ValueError('Time period is incompatible. You may be trying to load data after having already '
-                                 'concatenated a RegularReader object, which is unsupported.')
+                                 'concatenated a HYCOMReader object, which is unsupported.')
 
             if 'MT' not in var_dim:
                 # Should we error here or carry on having warned?

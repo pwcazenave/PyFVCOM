@@ -399,6 +399,28 @@ class Domain(object):
                              np.asarray((x[triangles[:, 2]], y[triangles[:, 2]])).T)
 
 
+def mp_interp_func(input):
+    """
+    Pass me to a multiprocessing.Pool().map() to quickly interpolate 2D data with LinearNDInterpolator.
+
+    Parameters
+    ----------
+    input : tuple
+        Input data to interpolate (lon, lat, data, x, y), where (x, y) are the positions onto which you would like to
+        interpolate the regularly gridded data (lon, lat, data).
+
+    Returns
+    -------
+    interp : np.ndarray
+        The input data `input' interpolated onto the positions (x, y).
+
+    """
+
+    lon, lat, data, x, y = input
+    interp = LinearNDInterpolator((lon, lat), data)
+    return interp((x, y))
+
+
 class OpenBoundary(object):
     """
     FVCOM grid open boundary object. Handles reading, writing and interpolating.
@@ -783,9 +805,9 @@ class OpenBoundary(object):
         # loop through each constituent and do a 2D interpolation.
         pool = multiprocessing.Pool()
         inputs = [(harmonics_lon, harmonics_lat, amp_data[i], x, y) for i in range(amp_data.shape[0])]
-        amplitudes = np.asarray(pool.map(self._interpolater_function, inputs))
+        amplitudes = np.asarray(pool.map(mp_interp_func, inputs))
         inputs = [(harmonics_lon, harmonics_lat, phase_data[i], x, y) for i in range(phase_data.shape[0])]
-        phases = np.asarray(pool.map(self._interpolater_function, inputs))
+        phases = np.asarray(pool.map(mp_interp_func, inputs))
 
         # Transpose so space is first, constituents second (expected by self._predict_tide).
         return amplitudes.T, phases.T
@@ -3132,7 +3154,7 @@ def unstructured_grid_depths(h, zeta, sigma, nan_invalid=False):
 def elems2nodes(elems, tri, nvert=None):
     """
     Calculate a nodal value based on the average value for the elements
-    of which it a part. This necessarily involves an average, so the
+    of which it is a part. This necessarily involves an average, so the
     conversion from nodes2elems and elems2nodes is not reversible.
 
     Parameters
