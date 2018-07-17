@@ -2270,18 +2270,39 @@ class Model(Domain):
 
         # Aggregate the nested nodes and elements as well as the coordinates. Also check whether we're doing weighted
         # nesting.
-        nest_nodes = [nest.nodes for i in self.nest for nest in i]
-        nest_elements = [nest.elements for i in self.nest.boundaries for nest in i]
+        all_nests = [nest for i in self.nest for nest in i.boundaries]
+
+        all_nodes = flatten_list([i.nodes for i in all_nests])
+        nest_nodes, _node_idx = np.unique(all_nodes, return_index=True)
+        # Preserve order
+        _node_idx = np.sort(_node_idx)
+        nest_nodes = np.asarray(all_nodes)[_node_idx]
+        # Elements will have a None for the first boundary, so drop that here.
+        all_elements = flatten_list([i.elements for i in all_nests if i.elements is not None])
+        nest_elements, _elem_idx = np.unique(all_elements, return_index=True)
+        # Preserve order
+        _elem_idx = np.sort(_elem_idx)
+        nest_elements = np.asarray(all_elements)[np.sort(_elem_idx)]
+        del all_nodes, all_elements
+
         # Do we really need spherical here? Or would we be better off assuming everyone's running spherical?
         nest_x, nest_y = self.grid.x[nest_nodes], self.grid.y[nest_nodes]
         nest_lon, nest_lat = self.grid.lon[nest_nodes], self.grid.lat[nest_nodes]
-        nest_xc, nest_yc = self.grid.cx[nest_elements], self.grid.yc[nest_elements]
+        nest_xc, nest_yc = self.grid.xc[nest_elements], self.grid.yc[nest_elements]
         nest_lonc, nest_latc = self.grid.lonc[nest_elements], self.grid.latc[nest_elements]
 
         weighted_nesting = False
-        weighted = [hasattr(i, 'weight_cell') for i in self.nest.boundaries]
+        weighted = [hasattr(i, 'weight_node') for i in all_nests]
         if np.any(weighted):
             weighted_nesting = True
+
+            # Get the weights from the boundaries.
+            weights_nodes = np.asarray(flatten_list([i.weight_node for i in all_nests]))
+            weights_elements = np.asarray(flatten_list([i.weight_element for i in all_nests if i.elements is not None]))
+
+            # Drop the duplicated positions.
+            weights_nodes = weights_nodes[_node_idx]
+            weights_elements = weights_elements[_elem_idx]
 
         with Dataset(nest_file) as source, Dataset(new_nest_file, 'w') as dest:
 
@@ -2289,14 +2310,17 @@ class Model(Domain):
             source_x, source_y = source['x'][:], source['y'][:]
             source_xc, source_yc = source['xc'][:], source['yc'][:]
 
+            # Find the nearest node in the supplied nest file. It may be that we extend this to interpolate in the
+            # future as that would mean we can use quite different source nest files (or even any old model output)
+            # as a source for a modified nest.
             new_nodes = []
             new_elements = []
-            for node in nest_nodes:
-                new_nodes.append(np.argmin(np.hypot(source_x - nest_x[node],
-                                                    source_y - nest_y[node])))
-            for elem in nest_elements:
-                new_elements.append(np.argmin(np.hypot(source_xc - nest_xc[elem],
-                                                       source_yc - nest_yc[elem])))
+            for node_x, node_y in zip(nest_x, nest_y):
+                new_nodes.append(np.argmin(np.hypot(source_x - node_x,
+                                                    source_y - node_y)))
+            for elem_x, elem_y in zip(nest_xc, nest_yc):
+                new_elements.append(np.argmin(np.hypot(source_xc - elem_x,
+                                                       source_yc - elem_y)))
 
             # Convert to arrays for nicer slicing of the Dataset.variable objects.
             new_nodes = np.asarray(new_nodes)
@@ -2324,9 +2348,9 @@ class Model(Domain):
                 x = dest.createVariable(name, variable.datatype, variable.dimensions)
                 # Intercept variables with either a node or element dimension and subset accordingly.
                 if 'nele' in source[name].dimensions:
-                    dest[name][:] = source[name][..., new_elements]
+                    dest[name][:] = source[name][:][..., new_elements]
                 elif 'node' in source[name].dimensions:
-                    dest[name][:] = source[name][..., new_nodes]
+                    dest[name][:] = source[name][:][..., new_nodes]
                 else:
                     # Just copy everything over.
                     dest[name][:] = source[name][:]
