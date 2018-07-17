@@ -2528,16 +2528,22 @@ class Nest(object):
 
         for index, boundary in enumerate(self.boundaries):
             if power == 0:
-                weight = 1 / (index + 1)
+                weight_node = 1 / (index + 1)
             else:
-                weight = 1 / ((index + 1)**power)
+                weight_node = 1 / ((index + 1)**power)
 
-            boundary.weight_node = np.repeat(weight, len(boundary.nodes))
+            boundary.weight_node = np.repeat(weight_node, len(boundary.nodes))
             # We will always have one fewer sets of elements as the nodes bound the elements.
             if not np.any(boundary.elements) and index > 0:
                 raise ValueError('No elements defined in this nest. Adding weights requires elements.')
             elif np.any(boundary.elements):
-                boundary.weight_element = np.repeat(weight, len(boundary.elements))
+                # We should only ever get here on the second iteration since the first open boundary has no elements
+                # in a nest (it's just the original open boundary).
+                if power == 0:
+                    weight_element = 1 / index
+                else:
+                    weight_element = 1 / (index**power)
+                boundary.weight_element = np.repeat(weight_element, len(boundary.elements))
 
     def add_tpxo_tides(self, *args, **kwargs):
         OpenBoundary.__doc__
