@@ -1,3 +1,145 @@
+2.1.0
+-----
+
+Added functions for generating input files for running FVCOM.
+
+Also miscellaneous changes across the rest of the toolbox.
+
+All deprecated functions from v2.0.0 have been removed.
+
+Major changes
+-------------
+
+- PyFVCOM.preproc
+    - Provides a new `Model' class which provides methods for generating input
+    files for FVCOM.
+
+    - At the moment, this includes:
+        - casename_grd.dat - model grid.
+        - casename_dep.dat - depth file.
+        - casename_z0.dat - bed roughness file.
+        - casename_obc.dat - model open boundaries.
+        - casename_spg.dat - sponge layer.
+        - casename_cor.dat - Coriolis file.
+        - casename_sigma.dat - Sigma coordinate file.
+        - casename_riv.nc - River forcing (including ERSEM support).
+        - casename_riv.nml - River forcing configuration.
+        - casename_elevtide.nc - Tidal forcing at the boundary.
+        - casename_tsobc.nc - Temperature and salinity at the open boundary.'
+        - casename_nest.nc - Nested forcing from another model (e.g. regularly
+        gridded data interpolated onto the FVCOM grid).
+        - casename_probes.dat - A probe configuration file.
+        - casename_stations.dat - A stations configuration file.
+        - casename_sstgrd.nc - Sea surface temperature data assimilation input.
+        - casename_adygrd.nc - Gelbstoff absorption file for the given FVCOM
+        domain for ERSEM.
+        - casename_restart.nc - A modified FVCOM restart file.
+
+    - There is a corresponding examples/pyfvcom_preprocessing_example.ipynb
+    Jupyter Notebook to illustrate how to use this functionality.
+
+    - Also provides a Nest class for configuring nested inputs.
+    - New WriteForcing class creates netCDF forcing files for FVCOM.
+    - A class for reading regularly gridded data (RegularReader) to mimic the
+    behavious of PyFVCOM.read.FileReader.
+    - A class for reading HYCOM data in the same vein as RegularReader.
+    - A class for handling restart data (Restart) for replacing data with
+    arbitrary data.
+
+
+Minor changes
+-------------
+
+- PyFVCOM.buoy
+    - Added a new class to handle buoy time series data. At the moment, this is
+    mainly focused on using data from the Western Channel Observatory
+    (http://www.westernchannelobservatory.org.uk) and the British Oceanographic
+    Data Centre (http://www.bodc.ac.uk).
+
+- PyFVCOM.coordinate
+    - New function to convert from degrees minutes seconds to decimal degrees.
+
+- PyFVCOM.ctd
+
+    - Added a new CTD class to hold CTD data. Again, this is mainly focused on
+    using data from the Western Channel Observatory and BODC.
+
+- PyFVCOM.current
+    - Mostly minor code tweaks.
+
+- PyFVCOM.grid
+    - Add a new Domain class which forms the basis of the functions which deal
+    with FVCOM grids (e.g. PyFVCOM.read.FileReader). This is also used in the
+    preprocessing tools.
+    - A new class has been added to handle open boundaries, specifically with
+    a view to using them for generating boundary forcing in models.
+    - New function (parse_obc_sections) to split an open boundary file from
+    a list of open boundary nodes.
+    - The function to find the closest node or element in the model grid has
+    been updated to use a KDTree making it much faster for a large number of
+    points.
+    - New function (element_sample) will sampling along a set of positions
+    returning the elements which fall closest to the lines between those
+    positions.
+    - New function get_area_heron will return the area of an element using
+    Heron's formula.
+    - Graph class to work with the model grid using graph theoretic functions.
+    - ReducedFVCOMdist class worked with an FVCOM subdomain
+    - GraphFVCOMdepth sets up a graph of an FVCOM grid weighting the edges by
+    depth. This is useful for finding a channel between two arbitrary points
+    e.g. find the centre of a river channel.
+
+- PyFVCOM.ocean
+    - Minor tweak to the mixed layer depth function (support for higher
+    dimension arrays).
+
+- PyFVCOM.plot
+    - New Depth class for plotting depth-resolved slice plots from FVCOM
+    outputs.
+    - Tweaks to the Time time-series plotting class and the Plotter grid
+    plotting class.
+    - New function to quickly plot a domain (plot_domain).
+
+- PyFVCOM.read
+    - Indexing for dimensions is now the same for all dimensions (including
+    time). Previously only a range could be given for time, but now time works
+    the same as the other dimensions.
+    - FileReader can now receive either a file string or a netCDF4 Dataset
+    object.
+    - Improve the handling of missing data in files being read by FileReader.
+    - FileReader is now a superclass of PyFVCOM.grid.Domain, so a lot of the
+    code has been moved into there.
+    - Add new method to time average a variable.
+    - Add new method to add river flow data to the object.
+    - New class (SubDomainReader) for reading a subdomain of an FVCOM grid, by
+    either interactively selecting a region or specifying one as coordinates.
+    This class includes methods for integrating fields within the subdomain.
+    - New function for reading a river configuration file.
+
+- PyFVCOM.stats
+    - Minor fixes.
+
+- PyFVCOM.tide
+    - New class to write harmonic analysis output to an FVCOM-style netCDF file.
+
+- PyFVCOM.validation
+    - Tweak the database handling code.
+    - New class for comparison with ICES bottle data.
+
+- PyFVCOM.utilities
+    - New function for flattening nested lists (general.flatten_list).
+    - New function (general.split_string) to split a list of strings on a given
+    separators.
+    - general.ObjectFromDict converts an object into a dictionary with
+    attributes named from the dictionary keys.
+    - general.cleanhtml removes markup leaving only text.
+    - grid.cfl calculates the CFL number for a model output file from the
+    velocity fields.
+    - general.fvcom2ugrid adds the necessary metadata to an existing FVCOM
+    output file to make it compatible with the UGRID conventions:
+    https://github.com/ugrid-conventions/ugrid-conventions.
+
+
 2.0.0
 -----
 
