@@ -2741,27 +2741,10 @@ class RegularReader(FileReader):
         else:
             raise AttributeError('Unrecognised latitude dimension name')
 
-        if hasattr(self.dims, 'depth'):
-            depthname = 'depth'
-            depthdim = self.dims.depth
-        elif hasattr(self.dims, 'deptht'):
-            depthname = 'deptht'
-            depthdim = self.dims.deptht
-        elif hasattr(self.dims, 'depthu'):
-            depthname = 'depthu'
-            depthdim = self.dims.depthu
-        elif hasattr(self.dims, 'depthv'):
-            depthname = 'depthv'
-            depthdim = self.dims.depthv
-        elif hasattr(self.dims, 'depthw'):
-            depthname = 'depthw'
-            depthdim = self.dims.depthw
-        else:
-            raise AttributeError('Unrecognised depth dimension name')
+        depthname, depthvar, depthdim, depth_compare = self._get_depth_dim()
 
         lon_compare = xdim == getattr(other.dims, xname)
         lat_compare = ydim == getattr(other.dims, yname)
-        depth_compare = depthdim == getattr(other.dims, depthname)
         time_compare = self.time.datetime[-1] <= other.time.datetime[0]
         data_compare = self.obj_iter(self.data) == self.obj_iter(other.data)
         old_data = self.obj_iter(self.data)
@@ -3018,28 +3001,7 @@ class RegularReader(FileReader):
             else:
                 raise AttributeError('Unrecognised latitude dimension name')
 
-            if hasattr(self.dims, 'depth'):
-                depthname = 'depth'
-                depthvar = 'depth'
-                depthdim = self.dims.depth
-            elif hasattr(self.dims, 'deptht'):
-                depthname = 'deptht'
-                depthvar = 'deptht'
-                depthdim = self.dims.deptht
-            elif hasattr(self.dims, 'depthu'):
-                depthname = 'depthu'
-                depthvar = 'depthu'
-                depthdim = self.dims.depthu
-            elif hasattr(self.dims, 'depthv'):
-                depthname = 'depthv'
-                depthvar = 'depthv'
-                depthdim = self.dims.depthv
-            elif hasattr(self.dims, 'depthw'):
-                depthname = 'depthw'
-                depthvar = 'depthw'
-                depthdim = self.dims.depthw
-            else:
-                raise AttributeError('Unrecognised depth dimension name')
+            depthname, depthvar, depthdim, depth_compare = self._get_depth_dim()
 
             if hasattr(self.dims, 'time'):
                 timename = 'time'
@@ -3052,7 +3014,6 @@ class RegularReader(FileReader):
 
             lon_compare = self.ds.dimensions[xname].size == xdim
             lat_compare = self.ds.dimensions[yname].size == ydim
-            depth_compare = self.ds.dimensions[depthname].size == depthdim
             time_compare = self.ds.dimensions[timename].size == timedim
             # Check again if we've been asked to subset in any dimension.
             if xname in self._dims:
@@ -3089,6 +3050,34 @@ class RegularReader(FileReader):
             data = self.ds.variables[v][variable_indices]  # data are automatically masked
             setattr(self.data, v, data)
 
+    def _get_depth_dim(self):
+        if hasattr(self.dims, 'depth'):
+            depthname = 'depth'
+            depthvar = 'depth'
+            depthdim = self.dims.depth
+        elif hasattr(self.dims, 'deptht'):
+            depthname = 'deptht'
+            depthvar = 'deptht'
+            depthdim = self.dims.deptht
+        elif hasattr(self.dims, 'depthu'):
+            depthname = 'depthu'
+            depthvar = 'depthu'
+            depthdim = self.dims.depthu
+        elif hasattr(self.dims, 'depthv'):
+            depthname = 'depthv'
+            depthvar = 'depthv'
+            depthdim = self.dims.depthv
+        elif hasattr(self.dims, 'depthw'):
+            depthname = 'depthw'
+            depthvar = 'depthw'
+            depthdim = self.dims.depthw
+        else:
+            raise AttributeError('Unrecognised depth dimension name')
+
+        depth_compare = self.ds.dimensions[depthname].size == depthdim
+
+        return depthname, depthvar, depthdim, depth_compare
+
     def closest_element(self, *args, **kwargs):
         """ Compatibility function. """
         return self.closest_node(*args, **kwargs)
@@ -3105,6 +3094,12 @@ class RegularReader(FileReader):
             index = index[0]
         return np.unravel_index(index, (len(self.grid.lon), len(self.grid.lat)))
 
+class Regular2DReader(RegularReader):
+    """
+    As for regular reader but where data has no depth component (i.e. ssh, sst)
+    """
+    def _get_depth_dim(self):
+        return None, None, None, True
 
 class HYCOMReader(RegularReader):
     """

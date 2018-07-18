@@ -887,7 +887,8 @@ class OpenBoundary(object):
             This essentially squashes the open boundary to fit inside the coarse data and is, therefore, a bit of a
             fudge! Defaults to False.
         mode : bool, optional
-            Set to 'nodes' to interpolate onto the open boundary node positions or 'elements' for the elements.
+            Set to 'nodes' to interpolate onto the open boundary node positions or 'elements' for the elements. For 2d data
+            set to 'surface', this is then interpolated to the node positions ignoring depth coordinates.
             Defaults to 'nodes'.
 
         """
@@ -895,7 +896,7 @@ class OpenBoundary(object):
         # Check we have what we need.
         raise_error = False
         if mode == 'nodes':
-            if not np.any(self.nodes):    
+            if not np.any(self.nodes):
                 print('No nodes on which to interpolate on this boundary'.format(mode))
                 return
             if not hasattr(self.sigma, 'layers'):
@@ -903,9 +904,10 @@ class OpenBoundary(object):
         elif mode == 'elements':
             if not hasattr(self.sigma, 'layers_center'):
                 raise_error = True
-            if not np.any(self.elements):     
+            if not np.any(self.elements):
                 print('No elements on which to interpolate on this boundary'.format(mode))
                 return
+
         if raise_error:
             raise AttributeError('Add vertical sigma coordinates in order to interpolate forcing along this boundary.')
 
@@ -919,7 +921,7 @@ class OpenBoundary(object):
         self.nest.time.Times = [t.strftime('%Y-%m-%dT%H:%M:%S.%f') for t in getattr(self.nest.time, 'datetime')]
 
         if mode == 'elements':
-            boundary_points = self.elements    
+            boundary_points = self.elements
             x = self.grid.lonc
             y = self.grid.latc
             # Keep positive down depths.
@@ -940,20 +942,21 @@ class OpenBoundary(object):
             # The depth data work differently as we need to squeeze each FVCOM water column into the available coarse
             # data. The only way to do this is to adjust each FVCOM water column in turn by comparing with the
             # closest coarse depth.
-            coarse_depths = np.tile(coarse.grid.depth, [coarse.dims.lat, coarse.dims.lon, 1]).transpose(2, 0, 1)
-            coarse_depths = np.ma.masked_array(coarse_depths, mask=getattr(coarse.data, coarse_name)[0, ...].mask)
-            coarse_depths = np.max(coarse_depths, axis=0)
-            # Go through each open boundary position and if its depth is deeper than the closest coarse data,
-            # squash the open boundary water column into the coarse water column.
-            for idx, node in enumerate(zip(x, y, z)):
-                lon_index = np.argmin(np.abs(coarse.grid.lon - node[0]))
-                lat_index = np.argmin(np.abs(coarse.grid.lat - node[1]))
-                if coarse_depths[lat_index, lon_index] < node[2].max():
-                    # Squash the FVCOM water column into the coarse water column.
-                    z[idx, :] = (node[2] / node[2].max()) * coarse_depths[lat_index, lon_index]
-            # Fix all depths which are shallower than the shallowest coarse depth. This is more straightforward as
-            # it's a single minimum across all the open boundary positions.
-            z[z < coarse.grid.depth.min()] = coarse.grid.depth.min()
+            if not mode == 'surface':
+                coarse_depths = np.tile(coarse.grid.depth, [coarse.dims.lat, coarse.dims.lon, 1]).transpose(2, 0, 1)
+                coarse_depths = np.ma.masked_array(coarse_depths, mask=getattr(coarse.data, coarse_name)[0, ...].mask)
+                coarse_depths = np.max(coarse_depths, axis=0)
+                # Go through each open boundary position and if its depth is deeper than the closest coarse data,
+                # squash the open boundary water column into the coarse water column.
+                for idx, node in enumerate(zip(x, y, z)):
+                    lon_index = np.argmin(np.abs(coarse.grid.lon - node[0]))
+                    lat_index = np.argmin(np.abs(coarse.grid.lat - node[1]))
+                    if coarse_depths[lat_index, lon_index] < node[2].max():
+                        # Squash the FVCOM water column into the coarse water column.
+                        z[idx, :] = (node[2] / node[2].max()) * coarse_depths[lat_index, lon_index]
+                # Fix all depths which are shallower than the shallowest coarse depth. This is more straightforward as
+                # it's a single minimum across all the open boundary positions.
+                z[z < coarse.grid.depth.min()] = coarse.grid.depth.min()
 
         # Make arrays of lon, lat, depth and time. Need to make the coordinates match the coarse data shape and then
         # flatten the lot. We should be able to do the interpolation in one shot this way, but we have to be
@@ -961,15 +964,27 @@ class OpenBoundary(object):
         nt = len(self.nest.time.time)
         nx = len(boundary_points)
         nz = z.shape[-1]
-        boundary_grid = np.array((np.tile(self.nest.time.time, [nx, nz, 1]).T.ravel(),
-                                  np.tile(z.T, [nt, 1, 1]).ravel(),
-                                  np.tile(y, [nz, nt, 1]).transpose(1, 0, 2).ravel(),
-                                  np.tile(x, [nz, nt, 1]).transpose(1, 0, 2).ravel())).T
-        ft = RegularGridInterpolator((coarse.time.time, coarse.grid.depth, coarse.grid.lat, coarse.grid.lon), 
-                                         getattr(coarse.data, coarse_name), method='linear', fill_value=np.nan)
-        # Reshape the results to match the un-ravelled boundary_grid array.
-        interpolated_coarse_data = ft(boundary_grid).reshape([nt, nz, -1])
-        # Drop the interpolated data into the nest object.
+
+        if mode == 'surface':
+            boundary_grid = np.array((np.tile(self.nest.time.time, [nx, 1]).T.ravel(),
+                                      np.tile(y, [nt, 1]).transpose(0, 1).ravel(),
+                                      np.tile(x, [nt, 1]).transpose(0, 1).ravel())).T
+            ft = RegularGridInterpolator((coarse.time.time, coarse.grid.lat, coarse.grid.lon), 
+                                             getattr(coarse.data, coarse_name), method='linear', fill_value=np.nan)
+            # Reshape the results to match the un-ravelled boundary_grid array.
+            interpolated_coarse_data = ft(boundary_grid).reshape([nt, -1])
+            # Drop the interpolated data into the nest object.
+        else:
+            boundary_grid = np.array((np.tile(self.nest.time.time, [nx, nz, 1]).T.ravel(),
+                                      np.tile(z.T, [nt, 1, 1]).ravel(),
+                                      np.tile(y, [nz, nt, 1]).transpose(1, 0, 2).ravel(),
+                                      np.tile(x, [nz, nt, 1]).transpose(1, 0, 2).ravel())).T
+            ft = RegularGridInterpolator((coarse.time.time, coarse.grid.depth, coarse.grid.lat, coarse.grid.lon),
+                                             getattr(coarse.data, coarse_name), method='linear', fill_value=np.nan)
+            # Reshape the results to match the un-ravelled boundary_grid array.
+            interpolated_coarse_data = ft(boundary_grid).reshape([nt, nz, -1])
+            # Drop the interpolated data into the nest object.
+
         setattr(self.nest, fvcom_name, interpolated_coarse_data)
 
     @staticmethod
