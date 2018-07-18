@@ -901,7 +901,27 @@ class FileReader(Domain):
 
     def _get_cv_volumes(self, poolsize=None):
         """
-        Calculate the control volume volumes in the grid volume. I might have overused that word.
+        Calculate the control area volumes in the model domain.
+
+        Parameters
+        ----------
+        poolsize : int, optional
+            Specify a number of processes to use when calculating the grid control volumes. Defaults to no parallelism.
+
+        Provides
+        --------
+        self.grid.dz : np.ndarray
+            Sigma layer thickness.
+        self.grid.depth : np.ndarray
+            Time varying water depth.
+        self.grid.depth_integrated_volume : np.ndarray
+            The volume of the model domain over time.
+
+        Todo
+        ----
+        This function duplicates some of self.grid_volume, so we should rationalise these two to avoid adding new
+        variables if we can use existing ones instead.
+
         """
         self.grid.cv_area = np.asarray(control_volumes(self.grid.x, self.grid.y, self.grid.triangles, element_control=False, poolsize=poolsize))
 
