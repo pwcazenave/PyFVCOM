@@ -895,11 +895,17 @@ class OpenBoundary(object):
         # Check we have what we need.
         raise_error = False
         if mode == 'nodes':
+            if not np.any(self.nodes):    
+                print('No nodes on which to interpolate on this boundary'.format(mode))
+                return
             if not hasattr(self.sigma, 'layers'):
                 raise_error = True
         elif mode == 'elements':
             if not hasattr(self.sigma, 'layers_center'):
                 raise_error = True
+            if not np.any(self.elements):     
+                print('No elements on which to interpolate on this boundary'.format(mode))
+                return
         if raise_error:
             raise AttributeError('Add vertical sigma coordinates in order to interpolate forcing along this boundary.')
 
@@ -913,7 +919,7 @@ class OpenBoundary(object):
         self.nest.time.Times = [t.strftime('%Y-%m-%dT%H:%M:%S.%f') for t in getattr(self.nest.time, 'datetime')]
 
         if mode == 'elements':
-            boundary_points = self.elements
+            boundary_points = self.elements    
             x = self.grid.lonc
             y = self.grid.latc
             # Keep positive down depths.
@@ -959,11 +965,10 @@ class OpenBoundary(object):
                                   np.tile(z.T, [nt, 1, 1]).ravel(),
                                   np.tile(y, [nz, nt, 1]).transpose(1, 0, 2).ravel(),
                                   np.tile(x, [nz, nt, 1]).transpose(1, 0, 2).ravel())).T
-        ft = RegularGridInterpolator((coarse.time.time, coarse.grid.depth, coarse.grid.lat, coarse.grid.lon),
-                                     getattr(coarse.data, coarse_name), method='linear', fill_value=np.nan)
+        ft = RegularGridInterpolator((coarse.time.time, coarse.grid.depth, coarse.grid.lat, coarse.grid.lon), 
+                                         getattr(coarse.data, coarse_name), method='linear', fill_value=np.nan)
         # Reshape the results to match the un-ravelled boundary_grid array.
         interpolated_coarse_data = ft(boundary_grid).reshape([nt, nz, -1])
-
         # Drop the interpolated data into the nest object.
         setattr(self.nest, fvcom_name, interpolated_coarse_data)
 
