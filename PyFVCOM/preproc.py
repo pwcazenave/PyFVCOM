@@ -1878,7 +1878,7 @@ class Model(Domain):
             # Add all the nested levels and assign weights as necessary.
             for _ in range(nest_levels):
                 self.nest[-1].add_level()
-            if nesting_type == 3:
+            if nesting_type >= 2:
                 self.nest[-1].add_weights()
 
     def write_nested_forcing(self, ncfile, nests, type=3, **kwargs):
@@ -2257,6 +2257,131 @@ class Model(Domain):
 
         self.regular = read_regular(*args, noisy=self.noisy, **kwargs)
 
+    def subset_existing_nest(self, nest_file, new_nest_file):
+        """
+        Use the nested boundaries in this model to extract the corresponding data from the source `nest_file'. This
+        is handy if you've already run a model but want fewer levels of nesting in your run.
+
+        Parameters
+        ----------
+        nest_file : str, pathlib.Path
+            The source nest file from which to extract the data.
+        new_nest_file : str, pathlib.Path
+            The new file to create.
+
+        """
+
+        # Aggregate the nested nodes and elements as well as the coordinates. Also check whether we're doing weighted
+        # nesting.
+        all_nests = [nest for i in self.nest for nest in i.boundaries]
+
+        all_nodes = flatten_list([i.nodes for i in all_nests])
+        nest_nodes, _node_idx = np.unique(all_nodes, return_index=True)
+        # Preserve order
+        _node_idx = np.sort(_node_idx)
+        nest_nodes = np.asarray(all_nodes)[_node_idx]
+        # Elements will have a None for the first boundary, so drop that here.
+        all_elements = flatten_list([i.elements for i in all_nests if i.elements is not None])
+        nest_elements, _elem_idx = np.unique(all_elements, return_index=True)
+        # Preserve order
+        _elem_idx = np.sort(_elem_idx)
+        nest_elements = np.asarray(all_elements)[np.sort(_elem_idx)]
+        del all_nodes, all_elements
+
+        # Do we really need spherical here? Or would we be better off assuming everyone's running spherical?
+        nest_x, nest_y = self.grid.x[nest_nodes], self.grid.y[nest_nodes]
+        nest_lon, nest_lat = self.grid.lon[nest_nodes], self.grid.lat[nest_nodes]
+        nest_xc, nest_yc = self.grid.xc[nest_elements], self.grid.yc[nest_elements]
+        nest_lonc, nest_latc = self.grid.lonc[nest_elements], self.grid.latc[nest_elements]
+
+        weighted_nesting = False
+        weighted = [hasattr(i, 'weight_node') for i in all_nests]
+        if np.any(weighted):
+            weighted_nesting = True
+
+            # Get the weights from the boundaries.
+            weights_nodes = np.asarray(flatten_list([i.weight_node for i in all_nests]))
+            weights_elements = np.asarray(flatten_list([i.weight_element for i in all_nests if i.elements is not None]))
+
+            # Drop the duplicated positions.
+            weights_nodes = weights_nodes[_node_idx]
+            weights_elements = weights_elements[_elem_idx]
+
+        with Dataset(nest_file) as source, Dataset(new_nest_file, 'w') as dest:
+
+            # Find indices in the source nesting file which match the positions we've selected here.
+            source_x, source_y = source['x'][:], source['y'][:]
+            source_xc, source_yc = source['xc'][:], source['yc'][:]
+
+            # Find the nearest node in the supplied nest file. It may be that we extend this to interpolate in the
+            # future as that would mean we can use quite different source nest files (or even any old model output)
+            # as a source for a modified nest.
+            new_nodes = []
+            new_elements = []
+            for node_x, node_y in zip(nest_x, nest_y):
+                new_nodes.append(np.argmin(np.hypot(source_x - node_x,
+                                                    source_y - node_y)))
+            for elem_x, elem_y in zip(nest_xc, nest_yc):
+                new_elements.append(np.argmin(np.hypot(source_xc - elem_x,
+                                                       source_yc - elem_y)))
+
+            # Convert to arrays for nicer slicing of the Dataset.variable objects.
+            new_nodes = np.asarray(new_nodes)
+            new_elements = np.asarray(new_elements)
+
+            # Copy global attributes all at once via dictionary
+            dest.setncatts(source.__dict__)
+            # copy dimensions
+            for name, dimension in source.dimensions.items():
+                if self._noisy:
+                    print('Cloning dimension {}...'.format(name), end=' ')
+                if name == 'nele':
+                    dest.createDimension(name, len(weights_elements))
+                elif name == 'node':
+                    dest.createDimension(name, len(weights_nodes))
+                else:
+                    dest.createDimension(name, (len(dimension) if not dimension.isunlimited() else None))
+                if self._noisy:
+                    print('done.')
+
+            # Copy all file data, extracting only the indices we've identified for the subset nest.
+            for name, variable in source.variables.items():
+                if self._noisy:
+                    print('Cloning variable {}...'.format(name), end=' ')
+                x = dest.createVariable(name, variable.datatype, variable.dimensions)
+                # Intercept variables with either a node or element dimension and subset accordingly.
+                if 'nele' in source[name].dimensions:
+                    dest[name][:] = source[name][:][..., new_elements]
+                elif 'node' in source[name].dimensions:
+                    dest[name][:] = source[name][:][..., new_nodes]
+                else:
+                    # Just copy everything over.
+                    dest[name][:] = source[name][:]
+                # Copy variable attributes all at once via dictionary
+                dest[name].setncatts(source[name].__dict__)
+                if self._noisy:
+                    print('done.')
+
+            if weighted_nesting:
+                if self._noisy:
+                    print('Adding weighted arrays...', end=' ')
+                # Add the two new variables (weight_cell and weight_node)
+                weight_cell = dest.createVariable('weight_cell', float, ('time', 'nele'))
+                weight_cell[:] = np.tile(weights_elements, [source.dimensions['time'].size, 1])
+                weight_cell.long_name = 'Weights for elements in relaxation zone'
+                weight_cell.units = 'no units'
+                weight_cell.grid = 'fvcom_grid'
+                weight_cell.type = 'data'
+
+                weight_node = dest.createVariable('weight_node', float, ('time', 'node'))
+                weight_node[:] = np.tile(weights_nodes, [source.dimensions['time'].size, 1])
+                weight_node.long_name = 'Weights for nodes in relaxation zone'
+                weight_node.units = 'no units'
+                weight_node.grid = 'fvcom_grid'
+                weight_node.type = 'data'
+                if self._noisy:
+                    print('done.')
+
 
 class Nest(object):
     """
@@ -2406,16 +2531,22 @@ class Nest(object):
 
         for index, boundary in enumerate(self.boundaries):
             if power == 0:
-                weight = 1 / (index + 1)
+                weight_node = 1 / (index + 1)
             else:
-                weight = 1 / ((index + 1)**power)
+                weight_node = 1 / ((index + 1)**power)
 
-            boundary.weight_node = np.repeat(weight, len(boundary.nodes))
+            boundary.weight_node = np.repeat(weight_node, len(boundary.nodes))
             # We will always have one fewer sets of elements as the nodes bound the elements.
             if not np.any(boundary.elements) and index > 0:
                 raise ValueError('No elements defined in this nest. Adding weights requires elements.')
             elif np.any(boundary.elements):
-                boundary.weight_element = np.repeat(weight, len(boundary.elements))
+                # We should only ever get here on the second iteration since the first open boundary has no elements
+                # in a nest (it's just the original open boundary).
+                if power == 0:
+                    weight_element = 1 / index
+                else:
+                    weight_element = 1 / (index**power)
+                boundary.weight_element = np.repeat(weight_element, len(boundary.elements))
 
     def add_tpxo_tides(self, *args, **kwargs):
         OpenBoundary.__doc__
