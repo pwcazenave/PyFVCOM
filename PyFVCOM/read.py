@@ -130,7 +130,14 @@ class FileReader(Domain):
             if dim == 'wesn' and isinstance(self._dims['wesn'], Polygon):
                 continue
 
-            if not hasattr(self._dims[dim], '__iter__') or isinstance(self._dims[dim], str):
+            dim_is_iterable = hasattr(self._dims[dim], '__iter__')
+            dim_is_string = isinstance(self._dims[dim], str)  # for date ranges
+            dim_is_slice = isinstance(self._dims[dim], slice)
+            if not dim_is_iterable and not dim_is_slice and not dim_is_string:
+                if self._noisy:
+                    print('Making dimension {} iterable'.format(dim))
+                    print(type(self._dims[dim]))
+
                 self._dims[dim] = [self._dims[dim]]
 
         # If we've been given a region to load (W/E/S/N), set a flag to extract only nodes and elements which
@@ -446,7 +453,10 @@ class FileReader(Domain):
 
             # Clip everything to the time indices if we've been given them. Update the time dimension too.
             if 'time' in self._dims:
-                if all([isinstance(i, (datetime, str)) for i in self._dims['time']]):
+                # TODO: We're converting slices to indices whereas we should be supporting slices natively.
+                if isinstance(self._dims['time'], slice):
+                    self._dims['time'] = np.arange(self.dims.time)[self._dims['time']]
+                elif all([isinstance(i, (datetime, str)) for i in self._dims['time']]):
                     # Convert datetime dimensions to indices in the currently loaded data. Assume we've got a list
                     # and if that fails, we've probably got a single index, so convert it accordingly.
                     try:
