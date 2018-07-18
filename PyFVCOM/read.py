@@ -536,9 +536,8 @@ class FileReader(Domain):
                 elif not np.array_equal(np.sort(new_ele), np.sort(self._dims['nele'])):
                     if self._noisy:
                         print('Mismatch between given elements and nodes for triangulation, retaining original elements')
-
             else:
-                if self.noisy:
+                if self._noisy:
                     print('Nodes not specified but reducing to only those within the triangulation of selected elements')
                 self._dims['node'] = np.unique(self.grid.triangles[self._dims['nele'],:])
                 new_tri = reduce_triangulation(self.grid.triangles, self._dims['node'])
