@@ -1919,31 +1919,34 @@ class Model(Domain):
         u = np.empty((time_number, self.dims.layers, elements_number)) * np.nan
         v = np.empty((time_number, self.dims.layers, elements_number)) * np.nan
         temperature = np.empty((time_number, self.dims.layers, nodes_number)) * np.nan
-        # salinity = np.empty((time_number, self.dims.layers, nodes_number)) * np.nan
+        salinity = np.empty((time_number, self.dims.layers, nodes_number)) * np.nan
+        
         hyw = np.zeros((time_number, self.dims.layers, nodes_number))  # we never set this to anything other than zeros
         weight_nodes = np.repeat(weight_nodes, time_number, 0).reshape(time_number, -1)
         weight_elements = np.repeat(weight_elements, time_number, 0).reshape(time_number, -1)
 
         # zeta, ua, va, u, v, temperature, salinity = [], [], [], [], [], [], []
-        salinity = np.empty((0, 0, 0))  # right shape for concatenation.
+        #salinity = np.empty((0, 0, 0))  # right shape for concatenation.
         for nest in nests:
             for boundary in nest.boundaries:
+                nodes_index = np.isin(nodes, boundary.nodes)
+                elements_index = np.isin(elements, boundary.elements)
+
                 for var in self.obj_iter(boundary.nest):
                     if var == 'zeta':
-                        zeta.append(boundary.nest.zeta)
+                        zeta[:,nodes_index] = boundary.nest.zeta
                     elif var == 'ua':
-                        ua.append(boundary.nest.ua)
+                        ua[:,elements_index] = boundary.nest.ua
                     elif var == 'va':
-                        va.append(boundary.nest.va)
+                        va[:,elements_index] = boundary.nest.va
                     elif var == 'u':
-                        u.append(boundary.nest.u)
+                        u[:,:,elements_index] = boundary.nest.u
                     elif var == 'v':
-                        v.append(boundary.nest.v)
-                    elif var == 'temperature':
-                        temperature.append(boundary.nest.temp)
+                        v[:,:,elements_index] = boundary.nest.v
+                    elif var == 'temp':
+                        temperature[:,:,nodes_index] = boundary.nest.temp
                     elif var == 'salinity':
-                        salinity = np.concatenate((salinity, boundary.nest.salinity), axis=0)
-                        # salinity.append(boundary.nest.salinity)
+                        salinity[:,:,nodes_index] = boundary.nest.salinity
                     elif var == 'time':
                         pass
                     else:
@@ -1955,7 +1958,7 @@ class Model(Domain):
         u = np.asarray(u)
         v = np.asarray(v)
         temperature = np.asarray(temperature)
-        # salinity = np.asarray(salinity)
+        salinity = np.asarray(salinity)
 
         ncopts = {}
         if 'ncopts' in kwargs:
@@ -2439,7 +2442,7 @@ class Nest(object):
                 if self.debug:
                     print('\t{}'.format(attribute))
                 try:
-                    if 'center' not in attribute:
+                    if 'center' not in attribute and attribute not in ['lonc', 'latc', 'xc', 'yc']:
                         setattr(boundary.grid, attribute, getattr(self.grid, attribute)[boundary.nodes, ...])
                     else:
                         if np.any(boundary.elements):
