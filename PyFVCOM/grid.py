@@ -622,6 +622,14 @@ class OpenBoundary(object):
             amplitude_name, phase_name = 'v_amp', 'v_phase'
             lon_name, lat_name = 'lonc', 'latc'
             x, y = copy.copy(self.grid.lonc), self.grid.latc
+        elif predict == 'ua':
+            amplitude_name, phase_name = 'ua_amp', 'ua_phase'
+            lon_name, lat_name = 'lonc', 'latc'
+            x, y = copy.copy(self.grid.lonc), self.grid.latc
+        elif predict == 'va':
+            amplitude_name, phase_name = 'va_amp', 'va_phase'
+            lon_name, lat_name = 'lonc', 'latc'
+            x, y = copy.copy(self.grid.lonc), self.grid.latc
 
         names = {'amplitude_name': amplitude_name,
                  'phase_name': phase_name,
@@ -631,18 +639,23 @@ class OpenBoundary(object):
         harmonics_lon, harmonics_lat, amplitudes, phases, available_constituents = self._load_harmonics(fvcom_harmonics,
                                                                                                         constituents,
                                                                                                         names)
+        if predict in ['zeta', 'ua', 'va']:
+            amplitudes = amplitudes[:,np.newaxis,:]
+            phases = phases[:,np.newaxis,:]
 
-        interpolated_amplitudes, interpolated_phases = self._interpolate_fvcom_harmonics(x, y,
-                                                                                         amplitudes, phases,
-                                                                                         harmonics_lon, harmonics_lat)
+        results = []
+        for i in np.arange(0, amplitudes.shape[1]):
+            interpolated_amplitudes, interpolated_phases = self._interpolate_fvcom_harmonics(x, y,
+                                                                                         amplitudes[:,i,:], phases[:,i,:],
+                                                                                         harmonics_lon, harmonics_lat, pool_size)
 
-        self.tide.constituents = available_constituents
+            self.tide.constituents = available_constituents
 
-        # Predict the tides
-        results = self._prepare_tides(interpolated_amplitudes, interpolated_phases, y, serial, pool_size, noisy)
+            # Predict the tides
+            results.append(np.asarray(self._prepare_tides(interpolated_amplitudes, interpolated_phases, y, serial, pool_size, noisy)).T)
 
         # Dump the results into the object.
-        setattr(self.tide, predict, np.asarray(results).T)  # put the time dimension first, space last.
+        setattr(self.tide, predict, np.squeeze(np.transpose(np.asarray(results), (1,0,2))))  # put the time dimension first, space last.
 
     def _prepare_tides(self, amplitudes, phases, latitudes, serial=False, pool_size=None, noisy=False):
         # Prepare the UTide inputs for the constituents we've loaded.
