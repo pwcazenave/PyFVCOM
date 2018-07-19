@@ -1890,11 +1890,11 @@ def read_probes(files, noisy=False, locations=False, datetimes=False):
 
     Returns
     -------
-    times : ndarray
+    times : np.ndarray
         Modified Julian Day times for the extracted time series.
-    values : ndarray
+    values : np.ndarray
         Array of the extracted time series values.
-    positions : ndarray, optional
+    positions : np.ndarray, optional
         If locations has been set to True, return an array of the positions
         (lon, lat, depth) for each site.
 
@@ -1973,9 +1973,9 @@ def write_probes(file, mjd, timeseries, datatype, site, depth, sigma=(-1, -1), l
     ----------
     file : str
         File to which to save the probes.
-    mjd : ndarray, list, tuple
+    mjd : np.ndarray, list, tuple
         Date/time in Modified Julian Day
-    timeseries : ndarray
+    timeseries : np.ndarray
         Data to write out (vector/array for 1D/2D). Shape should be
         [time, values], where values can be 1D or 2D.
     datatype : tuple, list, tuple
@@ -1985,12 +1985,12 @@ def write_probes(file, mjd, timeseries, datatype, site, depth, sigma=(-1, -1), l
         Name of the output location.
     depth : float
         Depth at the time series location.
-    sigma : ndarray, list, tupel, optional
+    sigma : np.ndarray, list, tupel, optional
         Start and end indices of the sigma layer of time series (if
         depth-resolved, -1 otherwise).
-    lonlat : ndarray, list, optional
+    lonlat : np.ndarray, list, optional
         Coordinates (spherical)
-    xy : ndarray, list, optional
+    xy : np.ndarray, list, optional
         Coordinates (cartesian)
     datestr : str, optional
         Date at which the model was run (contained in the main FVCOM netCDF
