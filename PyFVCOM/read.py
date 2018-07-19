@@ -933,11 +933,19 @@ class FileReader(Domain):
 
     def total_volume_var(self, var, poolsize=None):
         """
-        TODO: Add docstring.
+        Integrate a given variable in space returning a time series of the integrated values.
 
-        :param var:
-        :param poolsize:
-        :return:
+        Parameters
+        ----------
+        var : str
+            The name of the variable to load. Must be a depth-resolved array.
+        poolsize : int, optional
+            Specify a number of processes to use when calculating the grid control volumes. Defaults to no parallelism.
+
+        Provides
+        --------
+        {var}_total : np.ndarray
+            Adds a new array which is a time series of the integrated value of the variable at each model time.
 
         """
         if not hasattr(self.grid, 'volume'):
