@@ -1881,7 +1881,7 @@ class Model(Domain):
             if nesting_type >= 2:
                 self.nest[-1].add_weights()
 
-    def write_nested_forcing(self, ncfile, nests, type=3, **kwargs):
+    def write_nested_forcing(self, ncfile, nests, type=3, adjust_tides=None, **kwargs):
         """
         Write out the given nested forcing into the specified netCDF file.
 
@@ -1893,12 +1893,14 @@ class Model(Domain):
             List of PyFVCOM.grid.Nest objects.
         type : int, optional
             Type of model nesting. Currently only type 3 (indirect) is supported. Defaults to 3.
+        adjust_tides : list, optional
+            Which variables (if any) to adjust by adding the predicted tidal signal from the harmonics. This
+            expects that these variables exist in boundary.tide  
 
         Remaining kwargs are passed to WriteForcing with the exception of ncopts which is passed to
         WriteForcing.add_variable.
 
         """
-
         # Get all the nodes, elements and weights ready for dumping to netCDF.
         nodes = flatten_list([boundary.nodes for nest in nests for boundary in nest.boundaries])
         elements = flatten_list([boundary.elements for nest in nests for boundary in nest.boundaries if np.any(boundary.elements)])
@@ -1919,46 +1921,33 @@ class Model(Domain):
         u = np.empty((time_number, self.dims.layers, elements_number)) * np.nan
         v = np.empty((time_number, self.dims.layers, elements_number)) * np.nan
         temperature = np.empty((time_number, self.dims.layers, nodes_number)) * np.nan
-        salinity = np.empty((time_number, self.dims.layers, nodes_number)) * np.nan
-        
+        salinity = np.empty((time_number, self.dims.layers, nodes_number)) * np.nan 
         hyw = np.zeros((time_number, self.dims.layers, nodes_number))  # we never set this to anything other than zeros
+
         weight_nodes = np.repeat(weight_nodes, time_number, 0).reshape(time_number, -1)
         weight_elements = np.repeat(weight_elements, time_number, 0).reshape(time_number, -1)
 
-        # zeta, ua, va, u, v, temperature, salinity = [], [], [], [], [], [], []
-        #salinity = np.empty((0, 0, 0))  # right shape for concatenation.
+        # Hold in dict to simplify the next for loop
+        out_dict = {'ua':[ua, 'elements'], 'va':[va, 'elements'], 'u':[u, 'elements'], 'v':[v, 'elements'],
+                        'zeta':[zeta, 'nodes'], 'temp':[temperature, 'nodes'], 'salinity':[salinity, 'nodes'], 'hyw':[hyw,'nodes']}
+
         for nest in nests:
             for boundary in nest.boundaries:
-                nodes_index = np.isin(nodes, boundary.nodes)
-                elements_index = np.isin(elements, boundary.elements)
+                boundary.temp_nodes_index = np.isin(nodes, boundary.nodes)
+                boundary.temp_elements_index = np.isin(elements, boundary.elements)
 
                 for var in self.obj_iter(boundary.nest):
-                    if var == 'zeta':
-                        zeta[:,nodes_index] = boundary.nest.zeta
-                    elif var == 'ua':
-                        ua[:,elements_index] = boundary.nest.ua
-                    elif var == 'va':
-                        va[:,elements_index] = boundary.nest.va
-                    elif var == 'u':
-                        u[:,:,elements_index] = boundary.nest.u
-                    elif var == 'v':
-                        v[:,:,elements_index] = boundary.nest.v
-                    elif var == 'temp':
-                        temperature[:,:,nodes_index] = boundary.nest.temp
-                    elif var == 'salinity':
-                        salinity[:,:,nodes_index] = boundary.nest.salinity
-                    elif var == 'time':
+                    if var == 'time':
                         pass
+                    elif var in out_dict.keys():
+                        this_index = getattr(boundary, 'temp_{}_index'.format(out_dict[var][1]))
+                        boundary_data = getattr(boundary.nest, var)
+                        if adjust_tides and var in adjust_tides:
+                            boundary_data = boundary_data + getattr(boundary.tide, var)
+
+                        out_dict[var][0][...,this_index] = boundary_data
                     else:
                         raise ValueError('Unknown nest boundary variable {}'.format(var))
-        # Make things arrays instead of nested lists.
-        zeta = np.asarray(zeta)
-        ua = np.asarray(ua)
-        va = np.asarray(va)
-        u = np.asarray(u)
-        v = np.asarray(v)
-        temperature = np.asarray(temperature)
-        salinity = np.asarray(salinity)
 
         ncopts = {}
         if 'ncopts' in kwargs:
@@ -1978,53 +1967,53 @@ class Model(Domain):
         # Fix the triangulation for the nested region.
         # nv = reduce_triangulation(self.grid.triangles, nodes).T + 1  # offset by one for FORTRAN indexing and transpose
 
-        with WriteForcing(str(ncfile), dims, global_attributes=globals, clobber=True, format='NETCDF4', **kwargs) as nest:
+        with WriteForcing(str(ncfile), dims, global_attributes=globals, clobber=True, format='NETCDF4', **kwargs) as nest_ncfile:
             # Add standard times.
-            nest.write_fvcom_time(self.time.datetime, ncopts=ncopts)
+            nest_ncfile.write_fvcom_time(self.time.datetime, ncopts=ncopts)
 
             # Add space variables.
             if self.debug:
                 print('adding x to netCDF')
             atts = {'units': 'meters', 'long_name': 'nodal x-coordinate'}
-            nest.add_variable('x', self.grid.x[nodes], ['node'], attributes=atts, ncopts=ncopts)
+            nest_ncfile.add_variable('x', self.grid.x[nodes], ['node'], attributes=atts, ncopts=ncopts)
 
             if self.debug:
                 print('adding y to netCDF')
             atts = {'units': 'meters', 'long_name': 'nodal y-coordinate'}
-            nest.add_variable('y', self.grid.y[nodes], ['node'], attributes=atts, ncopts=ncopts)
+            nest_ncfile.add_variable('y', self.grid.y[nodes], ['node'], attributes=atts, ncopts=ncopts)
 
             if self.debug:
                 print('adding lon to netCDF')
             atts = {'units': 'degrees_east', 'standard_name': 'longitude', 'long_name': 'nodal longitude'}
-            nest.add_variable('lon', self.grid.lon[nodes], ['node'], attributes=atts, ncopts=ncopts)
+            nest_ncfile.add_variable('lon', self.grid.lon[nodes], ['node'], attributes=atts, ncopts=ncopts)
 
             if self.debug:
                 print('adding lat to netCDF')
             atts = {'units': 'degrees_north', 'standard_name': 'latitude', 'long_name': 'nodal latitude'}
-            nest.add_variable('lat', self.grid.lat[nodes], ['node'], attributes=atts, ncopts=ncopts)
+            nest_ncfile.add_variable('lat', self.grid.lat[nodes], ['node'], attributes=atts, ncopts=ncopts)
 
             if self.debug:
                 print('adding xc to netCDF')
             atts = {'units': 'meters', 'long_name': 'zonal x-coordinate'}
-            nest.add_variable('xc', self.grid.xc[elements], ['nele'], attributes=atts, ncopts=ncopts)
+            nest_ncfile.add_variable('xc', self.grid.xc[elements], ['nele'], attributes=atts, ncopts=ncopts)
 
             if self.debug:
                 print('adding yc to netCDF')
             atts = {'units': 'meters', 'long_name': 'zonal y-coordinate'}
-            nest.add_variable('yc', self.grid.yc[elements], ['nele'], attributes=atts, ncopts=ncopts)
+            nest_ncfile.add_variable('yc', self.grid.yc[elements], ['nele'], attributes=atts, ncopts=ncopts)
 
             if self.debug:
                 print('adding lonc to netCDF')
             atts = {'units': 'degrees_east', 'standard_name': 'longitude', 'long_name': 'zonal longitude'}
-            nest.add_variable('lonc', self.grid.lonc[elements], ['nele'], attributes=atts, ncopts=ncopts)
+            nest_ncfile.add_variable('lonc', self.grid.lonc[elements], ['nele'], attributes=atts, ncopts=ncopts)
 
             if self.debug:
                 print('adding latc to netCDF')
             atts = {'units': 'degrees_north', 'standard_name': 'latitude', 'long_name': 'zonal latitude'}
-            nest.add_variable('latc', self.grid.latc[elements], ['nele'], attributes=atts, ncopts=ncopts)
+            nest_ncfile.add_variable('latc', self.grid.latc[elements], ['nele'], attributes=atts, ncopts=ncopts)
 
             # No attributes for nv in the existing nest files, so I won't add any here.
-            # nest.add_variable('nv', nv, ['three', 'nele'], attributes=atts, ncopts=ncopts)
+            # nest_ncfile.add_variable('nv', nv, ['three', 'nele'], attributes=atts, ncopts=ncopts)
 
             if self.debug:
                 print('adding siglay to netCDF')
@@ -2034,7 +2023,7 @@ class Model(Domain):
                     'valid_min': -1.,
                     'valid_max': 0.,
                     'formula_terms': 'sigma: siglay eta: zeta depth: h'}
-            nest.add_variable('siglay', self.sigma.layers[nodes, :].T, ['siglay', 'node'], attributes=atts, ncopts=ncopts)
+            nest_ncfile.add_variable('siglay', self.sigma.layers[nodes, :].T, ['siglay', 'node'], attributes=atts, ncopts=ncopts)
 
             if self.debug:
                 print('adding siglev to netCDF')
@@ -2044,7 +2033,7 @@ class Model(Domain):
                     'valid_min': -1.,
                     'valid_max': 0.,
                     'formula_terms': 'sigma:siglev eta: zeta depth: h'}
-            nest.add_variable('siglev', self.sigma.levels[nodes, :].T, ['siglev', 'node'], attributes=atts, ncopts=ncopts)
+            nest_ncfile.add_variable('siglev', self.sigma.levels[nodes, :].T, ['siglev', 'node'], attributes=atts, ncopts=ncopts)
 
             if self.debug:
                 print('adding siglay_center to netCDF')
@@ -2054,7 +2043,7 @@ class Model(Domain):
                     'valid_min': -1.,
                     'valid_max': 0.,
                     'formula_terms': 'sigma: siglay_center eta: zeta_center depth: h_center'}
-            nest.add_variable('siglay_center', self.sigma.layers_center[elements, :].T, ['siglay', 'nele'], attributes=atts, ncopts=ncopts)
+            nest_ncfile.add_variable('siglay_center', self.sigma.layers_center[elements, :].T, ['siglay', 'nele'], attributes=atts, ncopts=ncopts)
 
             if self.debug:
                 print('adding siglev_center to netCDF')
@@ -2064,7 +2053,7 @@ class Model(Domain):
                     'valid_min': -1.,
                     'valid_max': 0.,
                     'formula_terms': 'sigma: siglev_center eta: zeta_center depth: h_center'}
-            nest.add_variable('siglev_center', self.sigma.levels_center[elements, :].T, ['siglev', 'nele'], attributes=atts, ncopts=ncopts)
+            nest_ncfile.add_variable('siglev_center', self.sigma.levels_center[elements, :].T, ['siglev', 'nele'], attributes=atts, ncopts=ncopts)
 
             if self.debug:
                 print('adding h to netCDF')
@@ -2075,7 +2064,7 @@ class Model(Domain):
                     'grid': 'Bathymetry_mesh',
                     'coordinates': 'x y',
                     'type': 'data'}
-            nest.add_variable('h', self.grid.h[nodes], ['node'], attributes=atts, ncopts=ncopts)
+            nest_ncfile.add_variable('h', self.grid.h[nodes], ['node'], attributes=atts, ncopts=ncopts)
 
             if self.debug:
                 print('adding h_center to netCDF')
@@ -2086,7 +2075,7 @@ class Model(Domain):
                     'grid': 'grid1 grid3',
                     'coordinates': 'latc lonc',
                     'grid_location': 'center'}
-            nest.add_variable('h_center', self.grid.h_center[elements], ['nele'], attributes=atts, ncopts=ncopts)
+            nest_ncfile.add_variable('h_center', self.grid.h_center[elements], ['nele'], attributes=atts, ncopts=ncopts)
 
             if type == 3:
                 if self.debug:
@@ -2095,7 +2084,7 @@ class Model(Domain):
                         'units': 'no units',
                         'grid': 'fvcom_grid',
                         'type': 'data'}
-                nest.add_variable('weight_node', weight_nodes, ['time', 'node'], attributes=atts, ncopts=ncopts)
+                nest_ncfile.add_variable('weight_node', weight_nodes, ['time', 'node'], attributes=atts, ncopts=ncopts)
 
                 if self.debug:
                     print('adding weight_cell to netCDF')
@@ -2103,7 +2092,7 @@ class Model(Domain):
                         'units': 'no units',
                         'grid': 'fvcom_grid',
                         'type': 'data'}
-                nest.add_variable('weight_cell', weight_elements, ['time', 'nele'], attributes=atts, ncopts=ncopts)
+                nest_ncfile.add_variable('weight_cell', weight_elements, ['time', 'nele'], attributes=atts, ncopts=ncopts)
 
             # Now all the data.
             if self.debug:
@@ -2116,7 +2105,7 @@ class Model(Domain):
                     'coordinates': 'time lat lon',
                     'type': 'data',
                     'location': 'node'}
-            nest.add_variable('zeta', zeta, ['time','node'], attributes=atts, ncopts=ncopts)
+            nest_ncfile.add_variable('zeta', out_dict['zeta'][0], ['time','node'], attributes=atts, ncopts=ncopts)
 
             if self.debug:
                 print('adding ua to netCDF')
@@ -2124,7 +2113,7 @@ class Model(Domain):
                     'units': 'meters  s-1',
                     'grid': 'fvcom_grid',
                     'type': 'data'}
-            nest.add_variable('ua', ua, ['time', 'nele'], attributes=atts, ncopts=ncopts)
+            nest_ncfile.add_variable('ua', out_dict['ua'][0], ['time', 'nele'], attributes=atts, ncopts=ncopts)
 
             if self.debug:
                 print('adding va to netCDF')
@@ -2132,7 +2121,7 @@ class Model(Domain):
                     'units': 'meters  s-1',
                     'grid': 'fvcom_grid',
                     'type': 'data'}
-            nest.add_variable('va', va, ['time', 'nele'], attributes=atts, ncopts=ncopts)
+            nest_ncfile.add_variable('va', out_dict['va'][0], ['time', 'nele'], attributes=atts, ncopts=ncopts)
 
             if self.debug:
                 print('adding u to netCDF')
@@ -2143,7 +2132,7 @@ class Model(Domain):
                     'coordinates': 'time siglay latc lonc',
                     'type': 'data',
                     'location': 'face'}
-            nest.add_variable('u', u, ['time', 'siglay', 'nele'], attributes=atts, ncopts=ncopts)
+            nest_ncfile.add_variable('u', out_dict['u'][0], ['time', 'siglay', 'nele'], attributes=atts, ncopts=ncopts)
 
             if self.debug:
                 print('adding v to netCDF')
@@ -2154,7 +2143,7 @@ class Model(Domain):
                     'coordinates': 'time siglay latc lonc',
                     'type': 'data',
                     'location': 'face'}
-            nest.add_variable('v', v, ['time', 'siglay', 'nele'], attributes=atts, ncopts=ncopts)
+            nest_ncfile.add_variable('v', out_dict['v'][0], ['time', 'siglay', 'nele'], attributes=atts, ncopts=ncopts)
 
             if self.debug:
                 print('adding temp to netCDF')
@@ -2165,7 +2154,7 @@ class Model(Domain):
                     'coordinates': 'time siglay lat lon',
                     'type': 'data',
                     'location': 'node'}
-            nest.add_variable('temp', temperature, ['time', 'siglay', 'node'], attributes=atts, ncopts=ncopts)
+            nest_ncfile.add_variable('temp', out_dict['temp'][0], ['time', 'siglay', 'node'], attributes=atts, ncopts=ncopts)
 
             if self.debug:
                 print('adding salinity to netCDF')
@@ -2176,7 +2165,7 @@ class Model(Domain):
                     'coordinates': 'time siglay lat lon',
                     'type': 'data',
                     'location': 'node'}
-            nest.add_variable('salinity', salinity, ['time', 'siglay', 'node'], attributes=atts, ncopts=ncopts)
+            nest_ncfile.add_variable('salinity', out_dict['salinity'][0], ['time', 'siglay', 'node'], attributes=atts, ncopts=ncopts)
 
             if self.debug:
                 print('adding hyw to netCDF')
@@ -2185,7 +2174,7 @@ class Model(Domain):
                     'grid': 'fvcom_grid',
                     'type': 'data',
                     'coordinates': 'time siglay lat lon'}
-            nest.add_variable('hyw', hyw, ['time', 'siglay', 'node'], attributes=atts, ncopts=ncopts)
+            nest_ncfile.add_variable('hyw', out_dict['hyw'][0], ['time', 'siglay', 'node'], attributes=atts, ncopts=ncopts)
 
     def add_obc_types(self, types):
         """
@@ -2563,6 +2552,16 @@ class Nest(object):
                 print('adding nested forcing for boundary {} of {}'.format(ii + 1, len(self.boundaries)))
             boundary.add_nested_forcing(*args, **kwargs)
 
+    def add_fvcom_tides(self, *args, predict='zeta', **kwargs):
+        OpenBoundary.__doc__
+        for ii, boundary in enumerate(self.boundaries):
+            if self.debug:
+                print('adding predicted fvcom {} for boundary {} of {}'.format(predict, ii + 1, len(self.boundaries)))
+            # Check if we have elements since outer layer of nest usually doesn't
+            if predict in ['u', 'v', 'ua', 'va'] and not np.any(boundary.elements):
+                print('skipping prediction for {} for boundary {} of {}, no elements defined'.format(predict, ii + 1, len(self.boundaries)))
+            else: 
+                boundary.add_fvcom_tides(*args, **kwargs)
 
 def read_regular(regular, variables, noisy=False, **kwargs):
     """

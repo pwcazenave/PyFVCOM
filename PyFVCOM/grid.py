@@ -885,7 +885,7 @@ class OpenBoundary(object):
 
         return zeta
 
-    def add_nested_forcing(self, fvcom_name, coarse_name, coarse, interval=1, constrain_coordinates=False, mode='nodes'):
+    def add_nested_forcing(self, fvcom_name, coarse_name, coarse, interval=1, constrain_coordinates=False, mode='nodes', tide_adjust=False):
         """
         Interpolate the given data onto the open boundary nodes for the period from `self.time.start' to
         `self.time.end'.
@@ -909,7 +909,10 @@ class OpenBoundary(object):
             Set to 'nodes' to interpolate onto the open boundary node positions or 'elements' for the elements. For 2d data
             set to 'surface', this is then interpolated to the node positions ignoring depth coordinates.
             Defaults to 'nodes'.
-
+        tide_adjust : bool, optional
+            Some nested forcing doesn't include tidal components and these have to be added from predictions using harmonics.
+            With this set to true the interpolated forcing has the tidal component (required to already exist in self.tide) added
+            to the final data. 
         """
 
         # Check we have what we need.
@@ -1003,6 +1006,9 @@ class OpenBoundary(object):
             # Reshape the results to match the un-ravelled boundary_grid array.
             interpolated_coarse_data = ft(boundary_grid).reshape([nt, nz, -1])
             # Drop the interpolated data into the nest object.
+
+        if tide_adjust and fvcom_name in ['u', 'v', 'ua', 'va']:
+            interpolated_coars_data = interpolated_coarse_data + getattr(self.tide, fvcom_name)            
 
         setattr(self.nest, fvcom_name, interpolated_coarse_data)
 
