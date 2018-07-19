@@ -662,7 +662,7 @@ class OpenBoundary(object):
             for arg in args:
                 results.append(self._predict_tide(arg))
         else:
-            if pool_size is not None:
+            if pool_size is None:
                 pool = multiprocessing.Pool()
             else:
                 pool = multiprocessing.Pool(pool_size)
@@ -769,7 +769,7 @@ class OpenBoundary(object):
 
         return amplitudes, phases
 
-    def _interpolate_fvcom_harmonics(self, x, y, amp_data, phase_data, harmonics_lon, harmonics_lat):
+    def _interpolate_fvcom_harmonics(self, x, y, amp_data, phase_data, harmonics_lon, harmonics_lat, pool_size=None):
         """
         Interpolate from the harmonics data onto the current open boundary positions.
 
@@ -803,11 +803,17 @@ class OpenBoundary(object):
 
         # I can't wrap my head around the n-dimensional unstructured interpolation tools (Rdf, griddata etc.), so just
         # loop through each constituent and do a 2D interpolation.
-        pool = multiprocessing.Pool()
+
+        if pool_size is None:
+            pool = multiprocessing.Pool()
+        else:
+            pool = multiprocessing.Pool(pool_size)
+
         inputs = [(harmonics_lon, harmonics_lat, amp_data[i], x, y) for i in range(amp_data.shape[0])]
         amplitudes = np.asarray(pool.map(mp_interp_func, inputs))
         inputs = [(harmonics_lon, harmonics_lat, phase_data[i], x, y) for i in range(phase_data.shape[0])]
         phases = np.asarray(pool.map(mp_interp_func, inputs))
+        pool.close()
 
         # Transpose so space is first, constituents second (expected by self._predict_tide).
         return amplitudes.T, phases.T
