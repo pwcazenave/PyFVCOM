@@ -1881,7 +1881,47 @@ class Model(Domain):
             if nesting_type >= 2:
                 self.nest[-1].add_weights()
 
-    def write_nested_forcing(self, ncfile, nests, type=3, adjust_tides=None, **kwargs):
+    def add_nests_harmonics(self, harmonics_file, harmonics_vars=['u', 'v', 'zeta'], constituents=['M2', 'S2'], pool_size=4):
+        """
+        Adds series of values based on harmonic predictions to the boundaries in the nest object
+
+        Parameters
+        ----------
+        harmonics_file : str
+            Path to the harmonics netcdf
+        harmonics_vars : list, optional
+            The variables to predict
+        constituents : list, optional
+            The tidal constituents to use for predictions
+        pool_size : int, optional
+            The number of multiprocessing tasks to use in the intepolation of the harmonics and doing the predictions. None causes it 
+            to use all available.
+
+        Provides
+        --------
+        self.nests.boundaries[:].tide.* : array
+            Arrays of the predicted series associated with each boundary in the tide sub object
+
+        """
+        for this_nest in self.nest:
+            for this_var in harmonics_vars:
+                this_nest.add_fvcom_tides(harmonics_file, predict=this_var, constituents=constituents, interval=self.sampling, pool_size=pool_size)
+
+    def add_nests_regular(self, fvcom_var, regular_reader, regular_var):
+        """
+        Docstring
+
+        """ 
+        for i, this_nest in enumerate(self.nest):
+            if fvcom_var in ['u', 'v']:
+                mode='elements'
+            elif fvcom_var in ['zeta']:
+                mode='surface'
+            else:
+                mode='nodes'
+            this_nest.add_nested_forcing(fvcom_var, regular_var, regular_reader, interval=self.sampling, mode=mode)
+
+    def write_nested_forcing(self, ncfile, type=3, adjust_tides=None, **kwargs):
         """
         Write out the given nested forcing into the specified netCDF file.
 
@@ -1889,8 +1929,6 @@ class Model(Domain):
         ----------
         ncfile : str, pathlib.Path
             Path to the output netCDF file to created.
-        nests : list
-            List of PyFVCOM.grid.Nest objects.
         type : int, optional
             Type of model nesting. Currently only type 3 (indirect) is supported. Defaults to 3.
         adjust_tides : list, optional
@@ -1901,6 +1939,7 @@ class Model(Domain):
         WriteForcing.add_variable.
 
         """
+        nests = self.nest
         # Get all the nodes, elements and weights ready for dumping to netCDF.
         nodes = flatten_list([boundary.nodes for nest in nests for boundary in nest.boundaries])
         elements = flatten_list([boundary.elements for nest in nests for boundary in nest.boundaries if np.any(boundary.elements)])
@@ -1943,7 +1982,8 @@ class Model(Domain):
                         this_index = getattr(boundary, 'temp_{}_index'.format(out_dict[var][1]))
                         boundary_data = getattr(boundary.nest, var)
                         if adjust_tides and var in adjust_tides:
-                            boundary_data = boundary_data + getattr(boundary.tide, var)
+                            tide_times_choose = np.isin(boundary.tide.time, boundary.nest.time.datetime) # The harmonics are calculated -/+ one day
+                            boundary_data = boundary_data + getattr(boundary.tide, var)[tide_times_choose,:]
 
                         out_dict[var][0][...,this_index] = boundary_data
                     else:
@@ -2552,14 +2592,14 @@ class Nest(object):
                 print('adding nested forcing for boundary {} of {}'.format(ii + 1, len(self.boundaries)))
             boundary.add_nested_forcing(*args, **kwargs)
 
-    def add_fvcom_tides(self, *args, predict='zeta', **kwargs):
+    def add_fvcom_tides(self, *args, **kwargs):
         OpenBoundary.__doc__
         for ii, boundary in enumerate(self.boundaries):
             if self.debug:
                 print('adding predicted fvcom {} for boundary {} of {}'.format(predict, ii + 1, len(self.boundaries)))
             # Check if we have elements since outer layer of nest usually doesn't
-            if predict in ['u', 'v', 'ua', 'va'] and not np.any(boundary.elements):
-                print('skipping prediction for {} for boundary {} of {}, no elements defined'.format(predict, ii + 1, len(self.boundaries)))
+            if kwargs['predict'] in ['u', 'v', 'ua', 'va'] and not np.any(boundary.elements):
+                print('skipping prediction for {} for boundary {} of {}, no elements defined'.format(kwargs['predict'], ii + 1, len(self.boundaries)))
             else: 
                 boundary.add_fvcom_tides(*args, **kwargs)
 
