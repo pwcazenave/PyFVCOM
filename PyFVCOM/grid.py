@@ -645,10 +645,16 @@ class OpenBoundary(object):
 
         results = []
         for i in np.arange(0, amplitudes.shape[1]):
-            interpolated_amplitudes, interpolated_phases = self._interpolate_fvcom_harmonics(x, y,
+            locations_match, match_indices = self._match_coords(np.asarray([x,y]).T, np.asarray([harmonics_lon, harmonics_lat]).T)
+            if locations_match:
+				if noisy:
+                	print('Coords match, skipping interpolation')
+                interpolated_amplitudes = amplitudes[:,i,match_indices].T
+                interpolated_phases = phases[:,i,match_indices].T
+            else:
+                interpolated_amplitudes, interpolated_phases = self._interpolate_fvcom_harmonics(x, y,
                                                                                          amplitudes[:,i,:], phases[:,i,:],
                                                                                          harmonics_lon, harmonics_lat, pool_size)
-
             self.tide.constituents = available_constituents
 
             # Predict the tides
@@ -733,6 +739,39 @@ class OpenBoundary(object):
                 phases = tides.variables[names['phase_name']][..., cidx].T
 
         return harmonics_lon, harmonics_lat, amplitudes, phases, available_constituents
+
+    @staticmethod
+    def _match_coords(pts_1, pts_2, epsilon=10):
+        """
+        Check whether the lat lon points in the array pts_1 all within an epsilon of some point in pts_2
+
+        Parameters
+        ----------
+        pts_1 : Nx2 array
+            The lon/lat of points to check
+        pts_2 : Mx2 array
+            The lon/lat of points to check against
+        epsilon : float, optional
+            The distance within which a point in pts_1 has to be to a point in pts_2 to count as matching.
+            Given that the positions are in lon/lat, the method haversine distance, and the resolution of FVCOM
+            meshes 10m should be reasonable in most cases.
+
+        Returns
+        -------
+        is_matched : bool
+            True if every point in pts_1 lies within an epsilon of some point in pts_2
+        indices : N array
+            The indices of the matching point in pts_2 for each point in pts_1
+        """
+
+        is_matched = np.zeros(len(pts_1), dtype=bool)
+        match_indices = np.ones(len(pts_1))*-1
+        for i, this_pt in enumerate(pts_1):
+            dists_m = haversine_distance(this_pt, pts_2.T) * 1000 
+            if np.min(dists_m) < epsilon:
+                is_matched[i] = True
+                match_indices[i] = np.argmin(dists_m)
+        return np.all(is_matched), np.asarray(match_indices, dtype=int)
 
     @staticmethod
     def _interpolate_tpxo_harmonics(x, y, amp_data, phase_data, harmonics_lon, harmonics_lat):
@@ -3671,7 +3710,6 @@ def isintriangle(tri_x, tri_y, point_x, point_y):
     is_in = 0 <= a <= 1 and 0 <= b <= 1 and 0 <= c <= 1
 
     return is_in
-
 
 class Graph(object):
     """

@@ -1903,7 +1903,8 @@ class Model(Domain):
             Arrays of the predicted series associated with each boundary in the tide sub object
 
         """
-        for this_nest in self.nest:
+        for ii, this_nest in enumerate(self.nest):
+            print('Adding harmonics to nest {} of {}'.format(ii +1, len(self.nest)))
             for this_var in harmonics_vars:
                 this_nest.add_fvcom_tides(harmonics_file, predict=this_var, constituents=constituents, interval=self.sampling, pool_size=pool_size)
 
@@ -2601,6 +2602,7 @@ class Nest(object):
             if kwargs['predict'] in ['u', 'v', 'ua', 'va'] and not np.any(boundary.elements):
                 print('skipping prediction for {} for boundary {} of {}, no elements defined'.format(kwargs['predict'], ii + 1, len(self.boundaries)))
             else: 
+                print('predicting {} for boundary {} of {}'.format(kwargs['predict'], ii + 1, len(self.boundaries)))
                 boundary.add_fvcom_tides(*args, **kwargs)
 
 def read_regular(regular, variables, noisy=False, **kwargs):
