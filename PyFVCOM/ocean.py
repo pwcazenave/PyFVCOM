@@ -933,40 +933,16 @@ def zbar(data, levels):
     databar : ndarray
         Depth-averaged values in data.
 
-    Notes
-    -----
-    This is a naive implementation using a for-loop. A faster version is almost
-    certainly possible.
-
-    Also, the code could probably be cleaned up (possibly at the expense of
-    understanding) by transposing all the arrays to have the vertical (z)
-    dimension first and the others after. This would make summation along an
-    axis always be axis=0, rather than the current situation where I have to
-    check what the number of dimensions is and act accordingly.
-
     """
 
-    nt, nz, nx = data.shape
-    nd = np.ndim(levels)
-    databar = np.zeros((nt, nx))
-    for i in range(nz):
-        if nd == 2:
-            # Depth, space only.
-            databar += data[:, i, :] * levels[i, :]
-        elif nd == 3:
-            # Time, depth, space.
-            databar += data[:, i, :] * levels[:, i, :]
-        else:
-            raise IndexError('Unable to use the number of dimensions provided in the levels data.')
+    data = np.transpose(data, [1,0,2])
 
-    if nd == 2:
-        databar /= np.sum(levels, axis=0)
-    elif nd == 3:
-        databar /= np.sum(levels, axis=1)
+    if len(levels.shape) > 2:
+        levels = np.transpose(levels, [1,0,2])
     else:
-        raise IndexError('Unable to use the number of dimensions provided in the levels data.')
+        levels = np.tile(levels[:,np.newaxis,:], [1,data.shape[1],1])
 
-    return databar
+    return np.average(data, axis=0, weights=levels)
 
 
 def pea(temp, salinity, depth, levels):
