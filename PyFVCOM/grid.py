@@ -28,7 +28,7 @@ from utide.utilities import Bunch
 
 from PyFVCOM.coordinate import utm_from_lonlat, lonlat_from_utm
 from PyFVCOM.utilities.time import date_range
-
+from PyFVCOM.ocean import zbar
 
 class Domain(object):
     """
@@ -647,8 +647,8 @@ class OpenBoundary(object):
         for i in np.arange(0, amplitudes.shape[1]):
             locations_match, match_indices = self._match_coords(np.asarray([x,y]).T, np.asarray([harmonics_lon, harmonics_lat]).T)
             if locations_match:
-				if noisy:
-                	print('Coords match, skipping interpolation')
+                if noisy:
+                    print('Coords match, skipping interpolation')
                 interpolated_amplitudes = amplitudes[:,i,match_indices].T
                 interpolated_phases = phases[:,i,match_indices].T
             else:
@@ -1083,6 +1083,10 @@ class OpenBoundary(object):
 
         return interpolated_data
 
+    def avg_nest_force_vel(self):
+        layer_thickness = self.sigma.levels_center.T[0:-1,:] - self.sigma.levels_center.T[1:,:]
+        self.nest.ua = zbar(self.nest.u, layer_thickness)
+        self.nest.va = zbar(self.nest.v, layer_thickness)
 
 def read_sms_mesh(mesh, nodestrings=False):
     """

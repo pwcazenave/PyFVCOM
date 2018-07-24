@@ -1922,6 +1922,10 @@ class Model(Domain):
                 mode='nodes'
             this_nest.add_nested_forcing(fvcom_var, regular_var, regular_reader, interval=self.sampling, mode=mode)
 
+    def avg_nest_force_vel(self):
+        for this_nest in self.nest:
+            this_nest.avg_nest_force_vel()
+
     def write_nested_forcing(self, ncfile, type=3, adjust_tides=None, **kwargs):
         """
         Write out the given nested forcing into the specified netCDF file.
@@ -2604,6 +2608,13 @@ class Nest(object):
             else: 
                 print('predicting {} for boundary {} of {}'.format(kwargs['predict'], ii + 1, len(self.boundaries)))
                 boundary.add_fvcom_tides(*args, **kwargs)
+
+    def avg_nest_force_vel(self):
+        for ii, boundary in enumerate(self.boundaries):
+            if np.any(boundary.elements):
+                if self.debug:
+                    print('creating ua,va for boundary {} of {}'.format(ii + 1, len(self.boundaries)))
+                boundary.avg_nest_force_vel()
 
 def read_regular(regular, variables, noisy=False, **kwargs):
     """
