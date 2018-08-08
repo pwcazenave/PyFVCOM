@@ -470,10 +470,9 @@ class FileReader(Domain):
 
         """
 
-        grid_metrics = {'ntsn':'node', 'nbsn':'node', 'ntve':'node', 'nbve':'node', 'art1':'node', 'art2':'node',
-                                                                                'a1u':'nele', 'a2u':'nele', 'nbe':'nele'}
-        grid_variables = ['lon', 'lat', 'x', 'y', 'lonc', 'latc', 'xc', 'yc',
-                          'h', 'siglay', 'siglev']
+        grid_metrics = {'ntsn': 'node', 'nbsn': 'node', 'ntve': 'node', 'nbve': 'node', 'art1': 'node', 'art2': 'node',
+                        'a1u': 'nele', 'a2u': 'nele', 'nbe': 'nele'}
+        grid_variables = ['lon', 'lat', 'x', 'y', 'lonc', 'latc', 'xc', 'yc', 'h', 'siglay', 'siglev']
 
         # Get the grid data.
         for grid in grid_variables:
