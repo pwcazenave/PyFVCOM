@@ -452,10 +452,7 @@ class FileReader(Domain):
 
             # Clip everything to the time indices if we've been given them. Update the time dimension too.
             if 'time' in self._dims:
-                # TODO: We're converting slices to indices whereas we should be supporting slices natively.
-                if isinstance(self._dims['time'], slice):
-                    self._dims['time'] = np.arange(self.dims.time)[self._dims['time']]
-                elif all([isinstance(i, (datetime, str)) for i in self._dims['time']]):
+                if not isinstance(self._dims['time'], slice) and all([isinstance(i, (datetime, str)) for i in self._dims['time']]):
                     # Convert datetime dimensions to indices in the currently loaded data. Assume we've got a list
                     # and if that fails, we've probably got a single index, so convert it accordingly.
                     try:
