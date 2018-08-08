@@ -708,7 +708,7 @@ class FileReader(Domain):
                 try:
                     setattr(self.grid, '{}_z'.format(var), fix_range(getattr(self.grid, var), 0, 1) * z)
                 except ValueError:
-                    # The arrays might be the wrong shape for broadcasing to work, so transpose and retranspose
+                    # The arrays might be the wrong shape for broadcasting to work, so transpose and retranspose
                     # accordingly. This is less than ideal.
                     setattr(self.grid, '{}_z'.format(var), (fix_range(getattr(self.grid, var), 0, 1).T * z).T)
 
