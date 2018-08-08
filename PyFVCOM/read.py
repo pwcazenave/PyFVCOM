@@ -306,7 +306,6 @@ class FileReader(Domain):
         if len(missing_time) == len(time_variables):
             warn('No time variables found in the netCDF.')
         else:
-
             # If our file has incomplete dimensions (i.e. no time), add that here.
             if not hasattr(self.dims, 'time'):
                 # Set an initial number of times to zero. Not sure if this will break something later...
@@ -845,11 +844,11 @@ class FileReader(Domain):
             try:
                 if self._get_data_pattern == 'slice':
                     if self._debug:
-                        print('Slicing the data directly from netCDF.')
+                        print('Slicing the data directly from netCDF')
                     setattr(self.data, v, self.ds.variables[v][variable_indices])
                 elif self._get_data_pattern == 'memory':
                     if self._debug:
-                        print('Loading all data in memory and then subsetting.')
+                        print('Loading all data in memory and then subsetting')
                     data_raw = self.ds.variables[v][:]
 
                     for i in range(data_raw.ndim):
