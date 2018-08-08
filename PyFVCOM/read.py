@@ -696,7 +696,9 @@ class FileReader(Domain):
 
         # Make depth-resolved sigma data. This is useful for plotting things.
         for var in self.obj_iter(self.grid):
-            if var.startswith('sig'):
+            # Ignore previously created depth-resolved data (in the case where we're updating the grid with a call to
+            # self._load_data() with dims supplied).
+            if var.startswith('sig') and not var.endswith('_z'):
                 if var.endswith('_center'):
                     z = self.grid.h_center
                 else:
