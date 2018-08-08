@@ -1371,7 +1371,7 @@ def lanczos(x, dt=1, cutoff=None, samples=100, passtype='low'):
 def _lanczos_filter_coef(cutoff, samples):
     # Positive coefficients of Lanczos [low high]-pass.
     hkcs = cutoff * np.array([1] + (np.sin(np.pi * np.linspace(1, samples, samples) * cutoff) / (np.pi * np.linspace(1, samples, samples) * cutoff)).tolist())
-    sigma = sigma = np.array([1] + (np.sin(np.pi * np.linspace(1, samples, samples) / samples) / (np.pi * np.linspace(1, samples, samples) / samples)).tolist())
+    sigma = np.array([1] + (np.sin(np.pi * np.linspace(1, samples, samples) / samples) / (np.pi * np.linspace(1, samples, samples) / samples)).tolist())
     hkB = hkcs * sigma
     hkA = -hkB
     hkA[0] = hkA[0] + 1
