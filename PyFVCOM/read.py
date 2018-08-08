@@ -816,8 +816,16 @@ class FileReader(Domain):
 
         """
 
-        if not dims:
-            dims = self._dims
+        if dims is None:
+            dims = copy.copy(self._dims)
+        else:
+            # Reload the grid and time data with the new dimensions, so everything matches.
+            if self._debug:
+                print('Updating existing data to match supplied dimensions when loading data')
+            # Use the supplied dimensions as the new dimensions array.
+            self._dims = dims
+            self._load_time()
+            self._load_grid()
 
         # Check if we've got iterable variables and make one if not.
         if not hasattr(var, '__iter__') or isinstance(var, str):
