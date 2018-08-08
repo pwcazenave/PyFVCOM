@@ -503,7 +503,7 @@ class FileReader(Domain):
             # If we don't have a triangulation, make one. Warn that if we've made one, it might not match the
             # original triangulation used in the model run.
             if self._debug:
-                print("Creating new triangulation since we're missing one.")
+                print("Creating new triangulation since we're missing one")
             triangulation = tri.Triangulation(self.grid.lon, self.grid.lat)
             self.grid.triangles = triangulation.triangles
             self.grid.nv = copy.copy(self.grid.triangles.T + 1)
@@ -813,7 +813,7 @@ class FileReader(Domain):
             var = [var]
 
         for v in var:
-            if self._debug:
+            if self._debug or self._noisy:
                 print('Loading: {}'.format(v))
 
             if v not in self.ds.variables:
@@ -826,6 +826,8 @@ class FileReader(Domain):
             for dimension in var_dim:
                 if dimension in dims:
                     variable_index = var_dim.index(dimension)
+                    if self._debug:
+                        print('Extracting specific indices for {}'.format(dimension))
                     variable_indices[variable_index] = dims[dimension]
 
             # Save any attributes associated with this variable before trying to load the data.
