@@ -1219,8 +1219,9 @@ class Lanczos(object):
 
     def _lanczos_filter_coef(self):
         # Positive coefficients of Lanczos [low high]-pass.
-        hkcs = self.cutoff * np.array([1] + (np.sin(np.pi * np.linspace(1, self.samples, self.samples) * self.cutoff) / (np.pi * np.linspace(1, self.samples, self.samples) * self.cutoff)).tolist())
-        sigma = sigma = np.array([1] + (np.sin(np.pi * np.linspace(1, self.samples, self.samples) / self.samples) / (np.pi * np.linspace(1, self.samples, self.samples) / self.samples)).tolist())
+        _samples = np.linspace(1, self.samples, self.samples)
+        hkcs = self.cutoff * np.array([1] + (np.sin(np.pi * _samples * self.cutoff) / (np.pi * _samples * self.cutoff)).tolist())
+        sigma = np.array([1] + (np.sin(np.pi * _samples / self.samples) / (np.pi * _samples / self.samples)).tolist())
         hkB = hkcs * sigma
         hkA = -hkB
         hkA[0] = hkA[0] + 1
