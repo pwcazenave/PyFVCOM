@@ -1239,7 +1239,7 @@ class Model(Domain):
                         self._add_river_col(this_var, this_river, no_of_splits -1)
 
                     original_river_node = self.river.node[this_river]
-                    for this_new_riv in np.arange(1, no_of_splits):
+                    for _ in np.arange(1, no_of_splits):
                         self.river.node.append(self._find_near_free_node(original_river_node))
                     print('Flux array shape {} x {}'.format(self.river.flux.shape[0], self.river.flux.shape[1]))
                     print('Node list length {}'.format(len(self.river.node)))
