@@ -2438,7 +2438,7 @@ class Nest(object):
 
     """
 
-    def __init__(self, grid, sigma, boundary):
+    def __init__(self, grid, sigma, boundary, verbose=False):
         """
         Create a nested boundary object.
 
@@ -2450,10 +2450,13 @@ class Nest(object):
             The vertical sigma coordinate configuration for the current grid.
         boundary : PyFVCOM.grid.OpenBoundary, list
             An open boundary or list of open boundaries with which to initialise this nest.
+        verbose : bool, optional
+            Set to True to enable verbose output. Defaults to False.
 
         """
 
         self.debug = False
+        self._noisy = verbose
 
         self.obj_iter = lambda x: [a for a in dir(x) if not a.startswith('__')]
 
@@ -2480,10 +2483,10 @@ class Nest(object):
 
         # Add the grid and sigma data to any open boundaries we've got loaded.
         for ii, boundary in enumerate(self.boundaries):
-            if self.debug:
+            if self._noisy:
                 print('adding grid info to boundary {} of {}'.format(ii + 1, len(self.boundaries)))
             for attribute in self.obj_iter(self.grid):
-                if self.debug:
+                if self._noisy:
                     print('\t{}'.format(attribute))
                 try:
                     if 'center' not in attribute and attribute not in ['lonc', 'latc', 'xc', 'yc']:
@@ -2498,10 +2501,10 @@ class Nest(object):
                         print(e)
                     pass
 
-            if self.debug:
+            if self._noisy:
                 print('adding sigma info to boundary {} of {}'.format(ii + 1, len(self.boundaries)))
             for attribute in self.obj_iter(self.sigma):
-                if self.debug:
+                if self._noisy:
                     print('\t{}'.format(attribute))
                 try:
                     if 'center' not in attribute:
@@ -2603,26 +2606,28 @@ class Nest(object):
     def add_nested_forcing(self, *args, **kwargs):
         OpenBoundary.__doc__
         for ii, boundary in enumerate(self.boundaries):
-            if self.debug:
+            if self._noisy:
                 print('adding nested forcing for boundary {} of {}'.format(ii + 1, len(self.boundaries)))
             boundary.add_nested_forcing(*args, **kwargs)
 
     def add_fvcom_tides(self, *args, **kwargs):
         OpenBoundary.__doc__
         for ii, boundary in enumerate(self.boundaries):
-            if self.debug:
+            if self._noisy:
                 print('adding predicted fvcom {} for boundary {} of {}'.format(predict, ii + 1, len(self.boundaries)))
             # Check if we have elements since outer layer of nest usually doesn't
             if kwargs['predict'] in ['u', 'v', 'ua', 'va'] and not np.any(boundary.elements):
-                print('skipping prediction for {} for boundary {} of {}, no elements defined'.format(kwargs['predict'], ii + 1, len(self.boundaries)))
-            else: 
-                print('predicting {} for boundary {} of {}'.format(kwargs['predict'], ii + 1, len(self.boundaries)))
+                if self._noisy:
+                    print('skipping prediction for {} for boundary {} of {}, no elements defined'.format(kwargs['predict'], ii + 1, len(self.boundaries)))
+            else:
+                if self._noisy:
+                    print('predicting {} for boundary {} of {}'.format(kwargs['predict'], ii + 1, len(self.boundaries)))
                 boundary.add_fvcom_tides(*args, **kwargs)
 
     def avg_nest_force_vel(self):
         for ii, boundary in enumerate(self.boundaries):
             if np.any(boundary.elements):
-                if self.debug:
+                if self._noisy:
                     print('creating ua,va for boundary {} of {}'.format(ii + 1, len(self.boundaries)))
                 boundary.avg_nest_force_vel()
 
@@ -2832,6 +2837,8 @@ class RegularReader(FileReader):
 
         for var in self.obj_iter(idem.data):
             if 'time' in idem.ds.variables[var].dimensions:
+                if self._noisy:
+                    print('Concatenating {} in time'.format(var))
                 setattr(idem.data, var, np.ma.concatenate((getattr(idem.data, var), getattr(other.data, var))))
         for time in self.obj_iter(idem.time):
             setattr(idem.time, time, np.concatenate((getattr(idem.time, time), getattr(other.time, time))))
