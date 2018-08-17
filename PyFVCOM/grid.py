@@ -16,6 +16,7 @@ from functools import partial
 import networkx
 import numpy as np
 import scipy.spatial
+import shapely
 from dateutil.relativedelta import relativedelta
 from matplotlib.dates import date2num as mtime
 from matplotlib.tri import CubicTriInterpolator
