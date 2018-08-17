@@ -1206,23 +1206,25 @@ class Model(Domain):
 
         if max_discharge:
             # Find rivers in excess of the given discharge maximum.
-            big_rivers = np.unique(np.argwhere(self.river.flux > max_discharge)[:,1])
+            big_rivers = np.unique(np.argwhere(self.river.flux > max_discharge)[:, 1])
             if np.any(big_rivers):
                 for this_river in big_rivers:
-                    no_of_splits = np.ceil(np.max(self.river.flux[:,this_river])/max_discharge)
+                    no_of_splits = np.ceil(np.max(self.river.flux[:, this_river]) / max_discharge)
                     print('River {} split into {}'.format(this_river, no_of_splits))
                     original_river_name = self.river.names[this_river]
-                    each_flux = self.river.flux[:,this_river]/no_of_splits # everything else is concentrations so can just be copied
+                    # Everything else is concentrations so can just be copied
+                    each_flux = self.river.flux[:, this_river] / no_of_splits
 
-                    for this_i in np.arange(2,no_of_splits +1):
+                    for this_i in np.arange(2, no_of_splits + 1):
                         self.river.names.append('{}_{:d}'.format(original_river_name, int(this_i)))
 
-                    self.river.flux[:, this_river] = each_flux # everything else is concentrations so can just be copied
+                    # Everything else is concentrations so can just be copied.
+                    self.river.flux[:, this_river] = each_flux
 
-                    # Collect all variables to add columns for
+                    # Collect all variables for which to add columns.
                     all_vars = ['flux', 'temperature', 'salinity']
 
-                    # Ersem variables if they're in there
+                    # ERSEM variables if they're in there
                     N_names = list(filter(lambda x: 'N' in x, list(self.river.__dict__.keys())))
                     Z_names = list(filter(lambda x: 'Z' in x, list(self.river.__dict__.keys())))
                     O_names = list(filter(lambda x: 'O' in x, list(self.river.__dict__.keys())))
@@ -1310,7 +1312,7 @@ class Model(Domain):
         if find_bad_node(self.grid.triangles, start_node) and ~np.any(np.isin(self.river.bad_nodes, start_node)):
             self.river.bad_nodes.append(start_node)
         elif not np.any(np.isin(self.river.node, start_node)):
-            return start_node # start node is already free for use
+            return start_node  # start node is already free for use
 
         possible_nodes = []
         start_nodes = np.asarray([start_node])
@@ -1334,7 +1336,7 @@ class Model(Domain):
             nodes_checked = np.hstack([nodes_checked, start_nodes])
             start_nodes = np.unique(np.asarray(start_next).flatten())
 
-        # if more than one possible node choose the closest
+        # If more than one possible node choose the closest
         if len(possible_nodes) > 1:
             start_node_ll = [self.grid.lon[start_node], self.grid.lat[start_node]]
             possible_nodes_ll = [self.grid.lon[np.asarray(possible_nodes)], self.grid.lat[np.asarray(possible_nodes)]]
