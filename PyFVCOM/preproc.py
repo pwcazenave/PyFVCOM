@@ -1309,6 +1309,14 @@ class Model(Domain):
         setattr(self.river, var_name, np.hstack([old_data, col_to_add]))
 
     def _find_near_free_node(self, start_node):
+        """
+        TODO: Finish docstring.
+
+        :param start_node:
+        :return:
+
+        """
+
         if find_bad_node(self.grid.triangles, start_node) and ~np.any(np.isin(self.river.bad_nodes, start_node)):
             self.river.bad_nodes.append(start_node)
         elif not np.any(np.isin(self.river.node, start_node)):
