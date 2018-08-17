@@ -1244,7 +1244,6 @@ class Model(Domain):
                     print('Flux array shape {} x {}'.format(self.river.flux.shape[0], self.river.flux.shape[1]))
                     print('Node list length {}'.format(len(self.river.node)))
 
-
         # Move rivers in bad nodes
         for i, node in enumerate(self.river.node):
             bad = find_bad_node(self.grid.triangles, node)
@@ -1302,6 +1301,7 @@ class Model(Domain):
             The column (i.e. river) to copy from)
         no_cols_to_add : int
             The number of columns (i.e. extra rivers) to add to the end of the array
+
         """
         old_data = getattr(self.river, var_name)
         col_to_add = old_data[:, col_to_copy][:, np.newaxis]
