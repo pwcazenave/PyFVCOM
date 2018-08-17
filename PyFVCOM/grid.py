@@ -645,7 +645,7 @@ class OpenBoundary(object):
 
         results = []
         for i in np.arange(0, amplitudes.shape[1]):
-            locations_match, match_indices = self._match_coords(np.asarray([x,y]).T, np.asarray([harmonics_lon, harmonics_lat]).T)
+            locations_match, match_indices = self._match_coords(np.asarray([x, y]).T, np.asarray([harmonics_lon, harmonics_lat]).T)
             if locations_match:
                 if noisy:
                     print('Coords match, skipping interpolation')
@@ -653,15 +653,19 @@ class OpenBoundary(object):
                 interpolated_phases = phases[:,i,match_indices].T
             else:
                 interpolated_amplitudes, interpolated_phases = self._interpolate_fvcom_harmonics(x, y,
-                                                                                         amplitudes[:,i,:], phases[:,i,:],
-                                                                                         harmonics_lon, harmonics_lat, pool_size)
+                                                                                                 amplitudes[:, i, :],
+                                                                                                 phases[:, i, :],
+                                                                                                 harmonics_lon,
+                                                                                                 harmonics_lat,
+                                                                                                 pool_size)
             self.tide.constituents = available_constituents
 
             # Predict the tides
-            results.append(np.asarray(self._prepare_tides(interpolated_amplitudes, interpolated_phases, y, serial, pool_size, noisy)).T)
+            results.append(np.asarray(self._prepare_tides(interpolated_amplitudes, interpolated_phases,
+                                                          y, serial, pool_size, noisy)).T)
 
-        # Dump the results into the object.
-        setattr(self.tide, predict, np.squeeze(np.transpose(np.asarray(results), (1,0,2))))  # put the time dimension first, space last.
+        # Dump the results into the object. Put the time dimension first, space last.
+        setattr(self.tide, predict, np.squeeze(np.transpose(np.asarray(results), (1, 0, 2))))
 
     def _prepare_tides(self, amplitudes, phases, latitudes, serial=False, pool_size=None, noisy=False):
         # Prepare the UTide inputs for the constituents we've loaded.
