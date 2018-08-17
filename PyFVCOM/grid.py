@@ -3015,7 +3015,7 @@ def control_volumes(x, y, tri, node_control=True, element_control=True, noisy=Fa
         return art2
 
 
-def node_control_area(n, x, y, xc, yc, tri):
+def node_control_area(n, x, y, xc, yc, tri, return_points=False):
     """
     Worker function to calculate the control volume for fluxes of node-based values for a given node.
 
@@ -3029,11 +3029,16 @@ def node_control_area(n, x, y, xc, yc, tri):
         Element centre positions
     tri : list-like
         Unstructured grid triangulation table.
+    return_points : bool
+        Return the coordinates of the points which form the node control area(s).
 
     Returns
     -------
     node_area : float
         Node control volume area in x or y length units squared.
+    node_points : np.ndarray, optional
+        Array of the (x, y) positions of the points which form the node control area. Only returned if
+        `return_points' is set to True.
 
     """
 
@@ -3041,6 +3046,9 @@ def node_control_area(n, x, y, xc, yc, tri):
     area = 0
     # Create two triangles which are from the mid-point of each vertex with the current node and the element centre.
     # Sum the areas as we go.
+    if return_points:
+        control_area_points_x = []
+        control_area_points_y = []
     for element in connected_elements:
         # Find the nodes in this element.
         connected_nodes = np.unique(tri[element, :])
@@ -3054,8 +3062,38 @@ def node_control_area(n, x, y, xc, yc, tri):
         # Now calculate the area of the triangles formed by [(x[n], y[n]), (centre_x, centre_y), (mid_x, mid_y)].
         for mid_xy in zip(mid_x, mid_y):
             area += get_area((x[n], y[n]), mid_xy, (centre_x, centre_y))
+        if return_points:
+            control_area_points_x += [mid_x[0], centre_x, mid_x[1]]
+            control_area_points_y += [mid_y[0], centre_y, mid_y[1]]
 
-    return area
+    if return_points:
+        if area != 0:
+            centre = (x[n], y[n])
+            # If our current node is on the boundary of the grid, we need to add it to the polygon. Use
+            # get_attached_unique_nodes to find the nodes on the model boundary connected to the current one. If we
+            # get one, we're on the boundary, otherwise, we're in the domain. We could also use `connectivity',
+            # but I think this is quicker since connectivity does a bunch of other stuff too.
+            on_coast = get_attached_unique_nodes(n, tri)
+            if np.any(on_coast):
+                # Add the centre to the list of nodes we're using and also make a new centre for the ordering as it
+                # breaks if you try to order clockwise around a point that's included in the list of points you're
+                # ordering. We need to first sort what we've got then add the centre so we can get a valid Polygon.
+                tmp_control_points = np.column_stack((control_area_points_x, control_area_points_y))
+                control_area_points = clockwise(np.unique(tmp_control_points, axis=0), relative_to=centre)
+                # Use a shapely polygon centroid.
+                centre = np.asarray(shapely.geometry.Polygon(control_area_points).centroid.xy)
+
+                control_area_points_x.append(x[n])
+                control_area_points_y.append(y[n])
+            control_area_points = np.column_stack((control_area_points_x, control_area_points_y))
+            control_area_points = clockwise(np.unique(control_area_points, axis=0), relative_to=centre)
+        else:
+            control_area_points = None
+
+        return area, control_area_points
+    else:
+        return area
+
 
 
 def element_control_area(node, triangles, art):
