@@ -23,7 +23,6 @@ from matplotlib.tri import CubicTriInterpolator
 from matplotlib.tri.triangulation import Triangulation
 from netCDF4 import Dataset, date2num
 from scipy.interpolate import RegularGridInterpolator, LinearNDInterpolator
-from scipy.spatial import Delaunay
 from utide import reconstruct, ut_constants
 from utide.utilities import Bunch
 
@@ -2311,7 +2310,7 @@ def element_sample(xc, yc, positions):
 
     grid = np.array((xc, yc)).T
 
-    triangulation = Delaunay(grid)
+    triangulation = scipy.spatial.Delaunay(grid)
 
     # Create a set for edges that are indices of the points.
     edges = []
