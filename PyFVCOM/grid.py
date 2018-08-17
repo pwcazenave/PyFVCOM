@@ -3095,6 +3095,48 @@ def node_control_area(n, x, y, xc, yc, tri, return_points=False):
         return area
 
 
+def clockwise(points, relative_to=None):
+    """
+    Function to order points clockwise from north.
+
+    Parameters
+    ----------
+    points : np.ndarray
+        Array of positions (n, 2).
+    relative_to : list-like, optional
+        The point relative to which to rotate the points. If omitted, the centre of the convex hull of the points is
+        used.
+
+    Returns
+    -------
+    ordered_points : np.ndarray
+        The points in clockwise order (n, 2).
+
+    Notes
+    -----
+
+    This uses numpy.arctan2 meaning it might be slow for large numbers of points. There are faster algorithms out
+    there (e.g. https://stackoverflow.com/a/6989383), but this is fairly easy to understand.
+
+    """
+
+    if relative_to is None:
+        try:
+            boundary = scipy.spatial.ConvexHull(points)
+            # Use that to create a shapely polygon with lots of useful bits in it. Make sure it's closed by
+            # repeating the first vertex.
+            vertices = np.append(boundary.vertices, boundary.vertices[0, :])
+            coverage_polygon = shapely.geometry.Polygon(points[vertices])
+            relative_to = coverage_polygon.centroid()
+        except (QhullError, IndexError):
+            # We've probably got fewer than three points or we've got points in a straight line, which means
+            # the coverage here is zero.
+            raise ValueError('Valid points in sample are colinear or too few in number for a valid polygon to be created.')
+
+    ordered_points = np.asarray(sorted(points, key=lambda x: np.arctan2(x[1] - relative_to[1], x[0] - relative_to[0])))
+
+    return ordered_points
+
 
 def element_control_area(node, triangles, art):
     """
