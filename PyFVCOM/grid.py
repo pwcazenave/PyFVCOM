@@ -644,7 +644,7 @@ class OpenBoundary(object):
             phases = phases[:,np.newaxis,:]
 
         results = []
-        for i in np.arange(0, amplitudes.shape[1]):
+        for i in np.arange(amplitudes.shape[1]):
             locations_match, match_indices = self._match_coords(np.asarray([x, y]).T, np.asarray([harmonics_lon, harmonics_lat]).T)
             if locations_match:
                 if noisy:
