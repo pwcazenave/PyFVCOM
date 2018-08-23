@@ -2427,6 +2427,618 @@ class Model(Domain):
                     print('done.')
 
 
+class Namelist(object):
+    """
+    Class to handle generating FVCOM namelists.
+
+    """
+
+    def __init__(self):
+        """
+        Create an object with a default FVCOM namelist configuration.
+
+        Mandatory fields are self.case.START_DATE and self.case.END_DATE. Everything else is pre-populated with
+        default options.
+
+        Integer/floating point use should be done with care as the self.write_model_namelist() function uses the
+        assigned type to determine what format to use when writing to ASCII.
+
+        - The no forcing at all (surface or open boundary).
+        - Temperature and salinity are deactivated.
+        - The intial condition is 15 Celsius / 35 PSU across the domain.
+        - The velocity field is zero everywhere.
+        - The startup type is a cold start.
+        - There are no rivers.
+        - Data assimilation is disabled.
+        - Output is instantaneous hourly for for all non-input variables.
+        - A restart file is enabled with daily outputs.
+        - Time-averaged output is off.
+        - There are no probes or stations.
+
+        """
+
+        # TODO: Add a sediments class.
+
+        # It feels like there has to be a better way to do this.
+
+        # The NML sections. Keys are namelist names and the values are the object names in self.
+        self._sections = {'CASE': 'case',
+                          'STARTUP': 'startup',
+                          'IO': 'input_output',
+                          'INTEGRATION': 'integration',
+                          'RESTART': 'restart',
+                          'NETCDF': 'output',
+                          'NETCDF_AV': 'output_average',
+                          'SURFACE_FORCING': 'surface_forcing',
+                          'HEATING_CALCULATED': 'heating_calculated',
+                          'PHYSICS': 'physics',
+                          'RIVER_TYPE': 'river_type',
+                          'OPEN_BOUNDARY_CONTROL': 'open_boundary_control',
+                          'GRID_COORDINATES': 'grid_coordinates',
+                          'GROUNDWATER': 'groundwater',
+                          'LAG': 'lagrangian',
+                          'ADDITIONAL_MODELS': 'additional_models',
+                          'PROBES': 'probes',
+                          'STATION_TIMESERIES': 'station_timeseries',
+                          'FABM': 'fabm',
+                          'NESTING': 'nesting',
+                          'NCNEST': 'netcdf_nest',
+                          'NCNEST_WAVE': 'netcdf_nest_wave',
+                          'BOUNDSCHK': 'boundscheck',
+                          'DYE_RELEASE': 'dye_release',
+                          'PWP': 'mixedlayermodel',
+                          'SST_ASSIMILATION': 'sst_assimilation',
+                          'SSTGRD_ASSIMILATION': 'sst_grid_assimilation',
+                          'SSHGRD_ASSIMILATION': 'ssh_grid_assimilation',
+                          'TSGRD_ASSIMILATION': 'ts_grid_assimilation',
+                          'CUR_NGASSIMILATION': 'currents_nudging_assimilation',
+                          'CUR_OIASSIMILATION': 'currents_optimal_interpolation_assimilation',
+                          'TS_NGASSIMILATION': 'ts_nudging_assimilation',
+                          'TS_OIASSIMILATION': 'ts_optimal_interpolation_assimilation'}
+
+        # Initialise all the namelist sections.
+        self.case = self.Case()
+        self.startup = self.Startup()
+        self.input_output = self.InputOutput()
+        self.integration = self.Integration()
+        self.restart = self.Restart()
+        self.output = self.Output()
+        self.output_average = self.OutputAverage()
+        self.surface_forcing = self.SurfaceForcing()
+        self.heating_calculated = self.HeatingCalculated()
+        self.physics = self.Physics()
+        self.river_type = self.RiverType()
+        self.open_boundary_control = self.OpenBoundaryControl()
+        self.grid_coordinates = self.GridCoordinates()
+        self.groundwater = self.Groundwater()
+        self.lagrangian = self.Lag()
+        self.additional_models = self.AdditionalModels()
+        self.probes = self.Probes()
+        self.station_timeseries = self.StationTimeseries()
+        self.fabm = self.FABM()
+        self.nesting = self.Nesting()
+        self.netcdf_nest = self.NetCDFNest()
+        self.netcdf_nest_wave = self.NetCDFNestWave()
+        self.boundscheck = self.BoundsCheck()
+        self.dye_release = self.DyeRelease()
+        self.mixedlayermodel = self.MixedLayerModel()
+        self.sst_assimilation = self.SeaSurfaceTemperatureAssimilation()
+        self.sst_grid_assimilation = self.SeaSurfaceTemperatureGridAssimilation()
+        self.ssh_grid_assimilation = self.SeaSurfaceHeightGridAssimilation()
+        self.ts_grid_assimilation = self.TemperatureSalinityGridAssimilation()
+        self.currents_nudging_assimilation = self.CurrentsNudgingAssimilation()
+        self.currents_optimal_interpolation_assimilation = self.CurrentsOptimalInterpolationAssimilation()
+        self.ts_nudging_assimilation = self.TemperatureSalinityNudgingAssimilation()
+        self.ts_optimal_interpolation_assimilation = self.TemperatureSalinityOptimalInterpolationAssimilation()
+
+    class Case(object):
+        def __init__(self):
+            """ Prepare the default NML_CASE section. """
+            self.CASE_TITLE = 'PyFVCOM default CASE_TITLE'
+            self.TIMEZONE = 'UTC'
+            self.DATE_FORMAT = 'YMD'
+            self.DATE_REFERENCE = 'default'
+            self.START_DATE = None
+            self.END_DATE = None
+
+    class Startup(object):
+        def __init__(self):
+            """ Prepare the default NML_STARTUP section. """
+            self.STARTUP_TYPE = 'coldstart'
+            self.STARTUP_FILE = 'casename_restart.nc'
+            self.STARTUP_UV_TYPE = 'default'
+            self.STARTUP_TURB_TYPE = 'default'
+            self.STARTUP_TS_TYPE = 'constant'
+            self.STARTUP_T_VALS = 15.0
+            self.STARTUP_S_VALS = 35.0
+            self.STARTUP_U_VALS = 0.0
+            self.STARTUP_V_VALS = 0.0
+            self.STARTUP_DMAX = -3.0
+
+    class InputOutput(object):
+        def __init__(self):
+            """ Prepare the default NML_IO section. """
+            self.INPUT_DIR = './input'
+            self.OUTPUT_DIR = './output'
+            self.IREPORT = 300
+            self.VISIT_ALL_VARS = 'F'
+            self.WAIT_FOR_VISIT = 'F'
+            self.USE_MPI_IO_MODE = 'F'
+
+    class Integration(object):
+        def __init__(self):
+            """ Prepare the default NML_INTEGRATION section. """
+            self.EXTSTEP_SECONDS = 1.0
+            self.ISPLIT = 10
+            self.IRAMP = 0
+            self.MIN_DEPTH = 0.2
+            self.STATIC_SSH_ADJ = 0.0
+
+    class Restart(object):
+        def __init__(self):
+            """ Prepare the default NML_RESTART section. """
+            self.RST_ON = 'T'
+            self.RST_FIRST_OUT = None
+            self.RST_OUT_INTERVAL = 'seconds = 86400.'
+            self.RST_OUTPUT_STACK = 0
+
+    class Output(object):
+        def __init__(self):
+            """ Prepare the default NML_NETCDF section. """
+            self.NC_ON = 'T'
+            self.NC_FIRST_OUT = None
+            self.NC_OUT_INTERVAL = 'seconds=900.'
+            self.NC_OUTPUT_STACK = 0
+            self.NC_SUBDOMAIN_FILES = 'FVCOM'
+            self.NC_GRID_METRICS = 'T'
+            self.NC_FILE_DATE = 'T'
+            self.NC_VELOCITY = 'T'
+            self.NC_SALT_TEMP = 'T'
+            self.NC_TURBULENCE = 'T'
+            self.NC_AVERAGE_VEL = 'T'
+            self.NC_VERTICAL_VEL = 'T'
+            self.NC_WIND_VEL = 'F'
+            self.NC_WIND_STRESS = 'F'
+            self.NC_EVAP_PRECIP = 'F'
+            self.NC_SURFACE_HEAT = 'F'
+            self.NC_GROUNDWATER = 'F'
+            self.NC_BIO = 'F'
+            self.NC_WQM = 'F'
+            self.NC_VORTICITY = 'F'
+            self.NC_FABM = 'F'
+
+    class OutputAverage(object):
+        def __init__(self):
+            """ Prepare the default NML_NCAV section. """
+            self.NCAV_ON = 'F'
+            self.NCAV_FIRST_OUT = None
+            self.NCAV_OUT_INTERVAL = 'seconds=86400.'
+            self.NCAV_OUTPUT_STACK = 0
+            self.NCAV_GRID_METRICS = 'F'
+            self.NCAV_FILE_DATE = 'T'
+            self.NCAV_VELOCITY = 'F'
+            self.NCAV_SALT_TEMP = 'T'
+            self.NCAV_TURBULENCE = 'F'
+            self.NCAV_AVERAGE_VEL = 'F'
+            self.NCAV_VERTICAL_VEL = 'F'
+            self.NCAV_WIND_VEL = 'F'
+            self.NCAV_WIND_STRESS = 'F'
+            self.NCAV_EVAP_PRECIP = 'F'
+            self.NCAV_SURFACE_HEAT = 'F'
+            self.NCAV_GROUNDWATER = 'F'
+            self.NCAV_BIO = 'F'
+            self.NCAV_WQM = 'F'
+            self.NCAV_VORTICITY = 'F'
+            self.NCAV_FABM = 'F'
+
+    class SurfaceForcing(object):
+        def __init__(self):
+            """ Prepare the default NML_SURFACE_FORCING section. """
+            self.WIND_ON = 'F'
+            self.WIND_TYPE = 'speed'
+            self.WIND_FILE = 'casename_wnd.nc'
+            self.WIND_KIND = 'variable'
+            self.WIND_X = 5.0
+            self.WIND_Y = 5.0
+            self.HEATING_ON = 'F'
+            self.HEATING_TYPE = 'flux'
+            self.HEATING_KIND = 'variable'
+            self.HEATING_FILE = 'casename_wnd.nc'
+            self.HEATING_LONGWAVE_LENGTHSCALE = 0.7
+            self.HEATING_LONGWAVE_PERCTAGE = 10
+            self.HEATING_SHORTWAVE_LENGTHSCALE = 1.1
+            self.HEATING_RADIATION = 0.0
+            self.HEATING_NETFLUX = 0.0
+            self.PRECIPITATION_ON = 'F'
+            self.PRECIPITATION_KIND = 'variable'
+            self.PRECIPITATION_FILE = 'casename_wnd.nc'
+            self.PRECIPITATION_PRC = 0.0
+            self.PRECIPITATION_EVP = 0.0
+            self.AIRPRESSURE_ON = 'F'
+            self.AIRPRESSURE_KIND = 'variable'
+            self.AIRPRESSURE_FILE = 'casename_wnd.nc'
+            self.AIRPRESSURE_VALUE = 0.0
+            self.WAVE_ON = 'F'
+            self.WAVE_FILE = 'casename_wav.nc'
+            self.WAVE_KIND = 'constant'
+            self.WAVE_HEIGHT = 0.0
+            self.WAVE_LENGTH = 0.0
+            self.WAVE_DIRECTION = 0.0
+            self.WAVE_PERIOD = 0.0
+            self.WAVE_PER_BOT = 0.0
+            self.WAVE_UB_BOT = 0.0
+
+    class HeatingCalculated(object):
+        def __init__(self):
+            """ Prepare the default NML_HEATING_CALCULATED section. """
+            self.HEATING_CALCULATE_ON = 'F'
+            self.HEATING_CALCULATE_TYPE = 'flux'
+            self.HEATING_CALCULATE_FILE = 'casename_wnd.nc'
+            self.HEATING_CALCULATE_KIND = 'variable'
+            self.ZUU = 10.0
+            self.ZTT = 10.0
+            self.ZQQ = 10.0
+            self.AIR_TEMPERATURE = 0.0
+            self.RELATIVE_HUMIDITY = 0.0
+            self.SURFACE_PRESSURE = 0.0
+            self.LONGWAVE_RADIATION = 0.0
+            self.SHORTWAVE_RADIATION = 0.0
+            self.HEATING_LONGWAVE_PERCTAGE_IN_HEATFLUX = 0.78
+            self.HEATING_LONGWAVE_LENGTHSCALE_IN_HEATFLUX = 1.4
+            self.HEATING_SHORTWAVE_LENGTHSCALE_IN_HEATFLUX = 6.3
+
+    class Physics(object):
+        def __init__(self):
+            """ Prepare the default NML_PHYSICS section. """
+            self.HORIZONTAL_MIXING_TYPE = 'closure'
+            self.HORIZONTAL_MIXING_KIND = 'constant'
+            self.HORIZONTAL_MIXING_COEFFICIENT = 0.1
+            self.HORIZONTAL_PRANDTL_NUMBER = 1.0
+            self.VERTICAL_MIXING_TYPE = 'closure'
+            self.VERTICAL_MIXING_COEFFICIENT = 0.00001
+            self.VERTICAL_PRANDTL_NUMBER = 1.0
+            self.BOTTOM_ROUGHNESS_MINIMUM = 0.0001
+            self.BOTTOM_ROUGHNESS_LENGTHSCALE = -1
+            self.BOTTOM_ROUGHNESS_KIND = 'static'
+            self.BOTTOM_ROUGHNESS_TYPE = 'orig'
+            self.BOTTOM_ROUGHNESS_FILE = 'casename_roughness.nc'
+            self.CONVECTIVE_OVERTURNING = 'F'
+            self.SCALAR_POSITIVITY_CONTROL = 'T'
+            self.BAROTROPIC = 'F'
+            self.BAROCLINIC_PRESSURE_GRADIENT = 'sigma levels'
+            self.SEA_WATER_DENSITY_FUNCTION = 'dens2'
+            self.RECALCULATE_RHO_MEAN = 'F'
+            self.INTERVAL_RHO_MEAN = 'days=1.0'
+            self.TEMPERATURE_ACTIVE = 'F'
+            self.SALINITY_ACTIVE = 'F'
+            self.SURFACE_WAVE_MIXING = 'F'
+            self.WETTING_DRYING_ON = 'T'
+            self.NOFLUX_BOT_CONDITION = 'T'
+            self.ADCOR_ON = 'T'
+            self.EQUATOR_BETA_PLANE = 'F'
+            self.BACKWARD_ADVECTION = 'F'
+            self.BACKWARD_STEP = 1
+
+    class RiverType(object):
+        def __init__(self):
+            """ Prepare the default NML_RIVER_TYPE section. """
+            self.RIVER_NUMBER = 0
+            self.RIVER_KIND = 'variable'
+            self.RIVER_TS_SETTING = 'calculated'
+            self.RIVER_INFLOW_LOCATION = 'node'
+            self.RIVER_INFO_FILE = 'casename_riv_ersem.nml'
+
+    class OpenBoundaryControl(object):
+        def __init__(self):
+            """ Prepare the default NML_OPEN_BOUNDARY_CONTROL section. """
+            self.OBC_ON = 'F'
+            self.OBC_NODE_LIST_FILE = 'casename_obc.dat'
+            self.OBC_ELEVATION_FORCING_ON = 'F'
+            self.OBC_ELEVATION_FILE = 'casename_elevtide.nc'
+            self.OBC_TS_TYPE = 3
+            self.OBC_TEMP_NUDGING = 'F'
+            self.OBC_TEMP_FILE = 'casename_tsobc.nc'
+            self.OBC_TEMP_NUDGING_TIMESCALE = 0.0001736111
+            self.OBC_SALT_NUDGING = 'F'
+            self.OBC_SALT_FILE = 'casename_tsobc.nc'
+            self.OBC_SALT_NUDGING_TIMESCALE = 0.0001736111
+            self.OBC_FABM_NUDGING = 'F'
+            self.OBC_FABM_FILE = 'casename_ERSEMobc.nc'
+            self.OBC_FABM_NUDGING_TIMESCALE = 0.0001736111
+            self.OBC_MEANFLOW = 'F'
+            self.OBC_MEANFLOW_FILE = 'casename_meanflow.nc'
+            self.OBC_TIDEOUT_INITIAL = 1
+            self.OBC_TIDEOUT_INTERVAL = 900
+            self.OBC_LONGSHORE_FLOW_ON = 'F'
+            self.OBC_LONGSHORE_FLOW_FILE = 'casename_lsf.dat'
+
+    class GridCoordinates(object):
+        def __init__(self):
+            """ Prepare the default NML_GRID_COORDINATES section. """
+            self.GRID_FILE = 'casename_grd.dat'
+            self.GRID_FILE_UNITS = 'meters'
+            self.PROJECTION_REFERENCE = 'proj=utm +ellps=WGS84 +zone=30'
+            self.SIGMA_LEVELS_FILE = 'sigma_gen.dat'
+            self.DEPTH_FILE = 'casename_dep.dat'
+            self.CORIOLIS_FILE = 'casename_cor.dat'
+            self.SPONGE_FILE = 'casename_spg.dat'
+
+    class Groundwater(object):
+        def __init__(self):
+            """ Prepare the default NML_GROUNDWATER section. """
+            self.GROUNDWATER_ON = 'F'
+            self.GROUNDWATER_TEMP_ON = 'F'
+            self.GROUNDWATER_SALT_ON = 'F'
+            self.GROUNDWATER_KIND = 'none'
+            self.GROUNDWATER_FILE = 'none'
+            self.GROUNDWATER_FLOW = 0.0
+            self.GROUNDWATER_TEMP = 0.0
+            self.GROUNDWATER_SALT = 0.0
+
+    class Lag(object):
+        def __init__(self):
+            """ Prepare the default NML_LAG section. """
+            self.LAG_PARTICLES_ON = 'F'
+            self.LAG_START_FILE = 'casename_lag_init.nc'
+            self.LAG_OUT_FILE = 'casename_lag_out.nc'
+            self.LAG_FIRST_OUT = 'cycle=0'
+            self.LAG_RESTART_FILE = 'casename_lag_restart.nc'
+            self.LAG_OUT_INTERVAL = 'cycle=30'
+            self.LAG_SCAL_CHOICE = 'none'
+
+    class AdditionalModels(object):
+        def __init__(self):
+            """ Prepare the default NML_ADDITIONAL_MODELS section. """
+            self.DATA_ASSIMILATION = 'F'
+            self.DATA_ASSIMILATION_FILE = 'casename_run.nml'
+            self.BIOLOGICAL_MODEL = 'F'
+            self.STARTUP_BIO_TYPE = 'observed'
+            self.FABM_MODEL = 'F'
+            self.SEDIMENT_MODEL = 'F'
+            self.SEDIMENT_MODEL_FILE = 'none'
+            self.SEDIMENT_PARAMETER_TYPE = 'none'
+            self.SEDIMENT_PARAMETER_FILE = 'none'
+            self.BEDFLAG_TYPE = 'none'
+            self.BEDFLAG_FILE = 'none'
+            self.ICING_MODEL = 'F'
+            self.ICING_FORCING_FILE = 'none'
+            self.ICING_FORCING_KIND = 'none'
+            self.ICING_AIR_TEMP = 0.0
+            self.ICING_WSPD = 0.0
+            self.ICE_MODEL = 'F'
+            self.ICE_FORCING_FILE = 'none'
+            self.ICE_FORCING_KIND = 'none'
+            self.ICE_SEA_LEVEL_PRESSURE = 0.0
+            self.ICE_AIR_TEMP = 0.0
+            self.ICE_SPEC_HUMIDITY = 0.0
+            self.ICE_SHORTWAVE = 0.0
+            self.ICE_CLOUD_COVER = 0.0
+
+    class Probes(object):
+        def __init__(self):
+            """ Prepare the default NML_PROBES section. """
+            self.PROBES_ON = 'F'
+            self.PROBES_NUMBER = 0
+            self.PROBES_FILE = 'casename_probes.nml'
+
+    class StationTimeseries(object):
+        def __init__(self):
+            """ Prepare the default NML_STATION_TIMESERIES section. """
+            self.OUT_STATION_TIMESERIES_ON = 'F'
+            self.STATION_FILE = 'casename_station.dat'
+            self.LOCATION_TYPE = 'node'
+            self.OUT_ELEVATION = 'F'
+            self.OUT_VELOCITY_3D = 'F'
+            self.OUT_VELOCITY_2D = 'F'
+            self.OUT_WIND_VELOCITY = 'F'
+            self.OUT_SALT_TEMP = 'F'
+            self.OUT_INTERVAL = 'seconds= 360.0'
+
+    class FABM(object):
+        def __init__(self):
+            """ Prepare the default NML_FABM section. """
+            self.STARTUP_FABM_TYPE = 'set values'
+            self.USE_FABM_BOTTOM_THICKNESS = 'F'
+            self.USE_FABM_SALINITY = 'F'
+            self.FABM_DEBUG = 'F'
+            self.FABM_DIAG_OUT = 'T'
+
+    class Nesting(object):
+        def __init__(self):
+            """ Prepare the default NML_NESTING section. """
+            self.NESTING_ON = 'F'
+            self.FABM_NESTING_ON = 'F'
+            self.NESTING_BLOCKSIZE = 10
+            self.NESTING_TYPE = 1
+            self.NESTING_FILE_NAME = 'casename_nest.nc'
+
+    class NetCDFNest(object):
+        def __init__(self):
+            """ Prepare the default NML_NCNEST section. """
+            self.NCNEST_ON = 'F'
+            self.NCNEST_BLOCKSIZE = 10
+            self.NCNEST_NODE_FILES = ''
+            self.NCNEST_OUT_INTERVAL = 'seconds=900.0'
+
+    class NetCDFNestWave(object):
+        def __init__(self):
+            """ Prepare the default NML_NCNEST_WAVE section. """
+            self.NCNEST_ON_WAVE = 'F'
+            self.NCNEST_TYPE_WAVE = 'spectral density'
+            self.NCNEST_BLOCKSIZE_WAVE = -1
+            self.NCNEST_NODE_FILES_WAVE = 'none'
+
+    class BoundsCheck(object):
+        def __init__(self):
+            """ Prepare the default NML_RIVER_TYPE section. """
+            self.BOUNDSCHK_ON = 'F'
+            self.CHK_INTERVAL = 1.0
+            self.VELOC_MAG_MAX = 6.5
+            self.ZETA_MAG_MAX = 10.0
+            self.TEMP_MAX = 30.0
+            self.TEMP_MIN = -4.0
+            self.SALT_MAX = 40.0
+            self.SALT_MIN = -0.5
+
+    class DyeRelease(object):
+        def __init__(self):
+            """ Prepare the default NML_DYE_RELEASE section. """
+            self.DYE_ON = 'F'
+            self.DYE_RELEASE_START = None
+            self.DYE_RELEASE_STOP = None
+            self.KSPE_DYE = 1
+            self.MSPE_DYE = 1
+            self.K_SPECIFY = 1
+            self.M_SPECIFY = 1
+            self.DYE_SOURCE_TERM = 1.0
+
+    class MixedLayerModel(object):
+        def __init__(self):
+            """ Prepare the default NML_PWP section. """
+            self.UPPER_DEPTH_LIMIT = 20.0
+            self.LOWER_DEPTH_LIMIT = 200.0
+            self.VERTICAL_RESOLUTION = 1.0
+            self.BULK_RICHARDSON = 0.65
+            self.GRADIENT_RICHARDSON = 0.25
+
+    class SeaSurfaceTemperatureAssimilation(object):
+        def __init__(self):
+            """ Prepare the default NML_SST_ASSIMILATION section. """
+            self.SST_ASSIM = 'F'
+            self.SST_ASSIM_FILE = 'casename_sst.nc'
+            self.SST_RADIUS = 0.0
+            self.SST_WEIGHT_MAX = 1.0
+            self.SST_TIMESCALE = 0.0
+            self.SST_TIME_WINDOW = 0.0
+            self.SST_N_PER_INTERVAL = 0.0
+
+    class SeaSurfaceTemperatureGridAssimilation(object):
+        def __init__(self):
+            """ Prepare the default NML_SSTGRD_ASSIMILATION section. """
+            self.SSTGRD_ASSIM = 'F'
+            self.SSTGRD_ASSIM_FILE = 'casename_sstgrd.nc'
+            self.SSTGRD_WEIGHT_MAX = 0.5
+            self.SSTGRD_TIMESCALE = 0.0001
+            self.SSTGRD_TIME_WINDOW = 1.0
+            self.SSTGRD_N_PER_INTERVAL = 24.0
+
+    class SeaSurfaceHeightGridAssimilation(object):
+        def __init__(self):
+            """ Prepare the default NML_SSHGRD_ASSIMILATION section. """
+            self.SSHGRD_ASSIM = 'F'
+            self.SSHGRD_ASSIM_FILE = 'casename_sshgrd.nc'
+            self.SSHGRD_WEIGHT_MAX = 0.0
+            self.SSHGRD_TIMESCALE = 0.0
+            self.SSHGRD_TIME_WINDOW = 0.0
+            self.SSHGRD_N_PER_INTERVAL = 0.0
+
+    class TemperatureSalinityGridAssimilation(object):
+        def __init__(self):
+            """ Prepare the default NML_TSGRD_ASSIMILATION section. """
+            self.TSGRD_ASSIM = 'F'
+            self.TSGRD_ASSIM_FILE = 'casename_tsgrd.nc'
+            self.TSGRD_WEIGHT_MAX = 0.0
+            self.TSGRD_TIMESCALE = 0.0
+            self.TSGRD_TIME_WINDOW = 0.0
+            self.TSGRD_N_PER_INTERVAL = 0.0
+
+    class CurrentsNudgingAssimilation(object):
+        def __init__(self):
+            """ Prepare the default NML_CUR_NGASSIMILATION section. """
+            self.CUR_NGASSIM = 'F'
+            self.CUR_NGASSIM_FILE = 'casename_cur.nc'
+            self.CUR_NG_RADIUS = 0.0
+            self.CUR_GAMA = 0.0
+            self.CUR_GALPHA = 0.0
+            self.CUR_NG_ASTIME_WINDOW = 0.0
+
+    class CurrentsOptimalInterpolationAssimilation(object):
+        def __init__(self):
+            """ Prepare the default NML_CUR_OIASSIMILATION section. """
+            self.CUR_OIASSIM = 'F'
+            self.CUR_OIASSIM_FILE = 'casename_curoi.nc'
+            self.CUR_OI_RADIUS = 0.0
+            self.CUR_OIGALPHA = 0.0
+            self.CUR_OI_ASTIME_WINDOW = 0.0
+            self.CUR_N_INFLU = 0.0
+            self.CUR_NSTEP_OI = 0.0
+
+    class TemperatureSalinityNudgingAssimilation(object):
+        def __init__(self):
+            """ Prepare the default NML_TS_NGASSIMILATION section. """
+            self.TS_NGASSIM = 'F'
+            self.TS_NGASSIM_FILE = 'casename_ts.nc'
+            self.TS_NG_RADIUS = 0.0
+            self.TS_GAMA = 0.0
+            self.TS_GALPHA = 0.0
+            self.TS_NG_ASTIME_WINDOW = 0.0
+
+    class TemperatureSalinityOptimalInterpolationAssimilation(object):
+        def __init__(self):
+            """ Prepare the default NML_TS_OIASSIMILATION section. """
+            self.TS_OIASSIM = 'F'
+            self.TS_OIASSIM_FILE = 'casename_tsoi.nc'
+            self.TS_OI_RADIUS = 0.0
+            self.TS_OIGALPHA = 0.0
+            self.TS_OI_ASTIME_WINDOW = 0.0
+            self.TS_MAX_LAYER = 0.0
+            self.TS_N_INFLU = 0.0
+            self.TS_NSTEP_OI = 0.0
+
+    def write_model_namelist(self, namelist_file):
+        """
+        Write the current object to ASCII in FVCOM namelist format.
+
+        Parameters
+        ----------
+        namelist_file : pathlib.Path, str
+            The file to which to write the namelist.
+
+        """
+
+        # Set some defaults that might be None based on what we've got already.
+        starts = [('restart', 'RST_FIRST_OUT'),
+                  ('dye_release', 'DYE_RELEASE_START'),
+                  ('output', 'NC_FIRST_OUT'),
+                  ('output_average', 'NCAV_FIRST_OUT')]
+        ends = [('dye_release', 'DYE_RELEASE_STOP')]
+        for start in starts:
+            defaults = getattr(self, start[0])
+            setattr(defaults, start[1], self.case.START_DATE)
+            setattr(self, start[0], defaults)
+        for end in ends:
+            defaults = getattr(self, end[0])
+            setattr(defaults, end[1], self.case.END_DATE)
+            setattr(self, end[0], defaults)
+
+        with Path(namelist_file).open('w') as f:
+            for section in self._sections:
+                f.write(f'&NML_{section}\n')
+                defaults = getattr(self, self._sections[section])
+                # Use defaults.__dict__ as it's an ordered dictionary so we keep the order of the namelist entries.
+                # This is only true for python versions 3.6 and above. Below that, the entries are alphabetical,
+                # I think, or maybe even random. I'm pretty sure FVCOM doesn't care one way or the other,
+                # but it's easier for humans to read if it's in a sensible order.
+                attributes = [i for i in defaults.__dict__ if not i.startswith('__') and not i.endswith('__')]
+                for attribute in attributes:
+                    value = getattr(defaults, attribute)
+                    if value is None:
+                        raise ValueError(f'Mandatory NML_{section} {attribute} value missing.')
+                    # Make the formatting appropriate for different data.
+                    if isinstance(value, str) and not value in ('T', 'F'):
+                        f.write(f" {attribute} = '{value}'")
+                    elif isinstance(value, int) or value in ('T', 'F'):
+                        f.write(f" {attribute} = {value}")
+                    else:
+                        f.write(f" {attribute} = {value:f}")
+
+                    if attribute != attributes[-1]:
+                        f.write(',\n')
+                    else:
+                        f.write('\n')
+                f.write('/\n\n')
+
+
 class Nest(object):
     """
     Class to hold a set of open boundaries as OpenBoundary objects.
