@@ -1071,9 +1071,9 @@ def mixedlayerdepth(rho, depth, thresh=0.03):
     Parameters
     ----------
     rho : ndarray
-        Density in kg m^{3}.
+        Density in kg m^{3} [time, depth, position] or [depth, position] or [depth].
     depth : ndarray
-        Water depth (m, -ve down).
+        Water depth (m, -ve down) corresponding to the positions in rho whose space matches rho.
     thresh : float, optional
         Optionally specify a different threshold (use at your own risk!).
         Defaults to 0.03kg m^{-3}.
