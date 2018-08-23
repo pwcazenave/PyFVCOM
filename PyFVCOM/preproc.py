@@ -1930,6 +1930,12 @@ class Model(Domain):
             this_nest.add_nested_forcing(fvcom_var, regular_var, regular_reader, interval=self.sampling, mode=mode)
 
     def avg_nest_force_vel(self):
+        """
+        TODO: Add docstring.
+
+        :return:
+
+        """
         for this_nest in self.nest:
             this_nest.avg_nest_force_vel()
 
