@@ -407,6 +407,35 @@ def residual_flow(FVCOM, idxRange=False, checkPlot=False, noisy=False):
     return uRes, vRes, rDir, rMag
 
 
+def progressive_vectors(x, y, u, v, time):
+    """
+    Given some velocity and time, create progressive vector arrays.
+
+    Parameters
+    ----------
+    x, y : np.ndarray
+        Initial positions for the progressive vectors. Best as cartesian coordinates in the same units as the
+        distance component of the u and v data.
+    u, v : np.ndarray
+        The velocity data (time, space).
+    time : list-like
+        Python datetime objects.
+
+    Returns
+    -------
+    u_pvd, v_pvd : np.ndarray
+        The progressive vector positions.
+
+    """
+
+    dt = np.concatenate(([0], [i.total_seconds() for i in np.diff(time)]))
+
+    u_pvd = x + np.cumsum(u, axis=0) * dt[..., np.newaxis]
+    v_pvd = y + np.cumsum(v, axis=0) * dt[..., np.newaxis]
+
+    return u_pvd, v_pvd
+
+
 def vorticity(fvcom, depth_averaged=False):
     """
     This function computes the vorticity from some velocity data.
