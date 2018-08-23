@@ -1102,13 +1102,13 @@ def mixedlayerdepth(rho, depth, thresh=0.03):
 
     if np.ndim(rho) == 3:
         rhosurface = rho[:, 0, :][:, np.newaxis, :]
-        axis=1
+        axis = 1
     elif np.ndim(rho) == 2:
         rhosurface = rho[0, :][np.newaxis, :]
-        axis=0
+        axis = 0
     elif np.ndim(rho) == 1:
         rhosurface = rho[0]
-        axis=0
+        axis = 0
     else:
         raise ValueError('Unsupported array shape for the density data. Provide density as [time, depth, position], '
                          '[depth, position] or [depth].')
