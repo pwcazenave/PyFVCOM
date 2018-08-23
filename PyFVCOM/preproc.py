@@ -475,7 +475,6 @@ class Model(Domain):
         self.ady.ady = ady
         self.ady.time = dates
 
-
     def write_adygrd(self, output_file, ncopts={'zlib': True, 'complevel': 7}, **kwargs):
         """
         Generate a gelbstoff absorption file for the given FVCOM domain from the self.ady data.
@@ -511,8 +510,6 @@ class Model(Domain):
                     'grid': 'fvcom_grid',
                     'type': 'data'}
             sstgrd.add_variable('Kd_ady', self.ady.ady, ['time', 'node'], attributes=atts, ncopts=ncopts)
-
-
 
     def add_sigma_coordinates(self, sigma_file, noisy=False):
         """
