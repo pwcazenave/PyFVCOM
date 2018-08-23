@@ -3315,7 +3315,7 @@ def unstructured_grid_depths(h, zeta, sigma, nan_invalid=False):
 
     Returns
     -------
-    allDepths : np.ndarray
+    depths : np.ndarray
         Time series of model depths.
 
     """
@@ -3327,9 +3327,9 @@ def unstructured_grid_depths(h, zeta, sigma, nan_invalid=False):
     abs_water_depth = zeta + h
     # Add zeta again so the range is surface elevation (`zeta') to mean water depth rather (`h') than zero to water
     # depth (`h' + `zeta') which is much more useful for plotting.
-    allDepths = abs_water_depth[:, np.newaxis, :] * sigma[np.newaxis, ...] + zeta[:, np.newaxis, :]
+    depths = abs_water_depth[:, np.newaxis, :] * sigma[np.newaxis, ...] + zeta[:, np.newaxis, :]
 
-    return allDepths
+    return depths
 
 
 def elems2nodes(elems, tri, nvert=None):
