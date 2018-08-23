@@ -12,6 +12,7 @@ import os
 import sys
 from collections import defaultdict, deque
 from functools import partial
+from warnings import warn
 
 import networkx
 import numpy as np
@@ -789,7 +790,7 @@ class OpenBoundary(object):
         amp_data, phase_data : np.ndarray
             The tidal constituent amplitude and phase data.
         harmonics_lon, harmonics_lat : np.ndarray
-            The positions of the harmonics data.
+            The positions of the harmonics data (1D).
 
         Returns
         -------
@@ -797,6 +798,14 @@ class OpenBoundary(object):
             The interpolated data.
 
         """
+
+        if np.ndim(harmonics_lon) != 1 and np.ndim(harmonics_lat) != 1:
+            # Creating the RegularGridInterpolator object will fail if we've got 2D position arrays with a
+            # ValueError. So, this is fragile, but try first assuming we've got the right shape arrays and try again
+            # if that fails with the unique coordinates in the relevant position arrays.
+            warn('Harmonics are given as 2D arrays: trying to convert to 1D for the interpolation.')
+            harmonics_lon = np.unique(harmonics_lon)
+            harmonics_lat = np.unique(harmonics_lat)
 
         # Make a dummy first dimension since we need it for the RegularGridInterpolator but don't actually
         # interpolated along it.
