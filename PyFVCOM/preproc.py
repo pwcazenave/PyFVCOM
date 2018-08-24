@@ -2996,7 +2996,7 @@ class ModelNameList(object):
 
 def write_model_namelist(namelist_file, namelist_config, mode='w'):
     """
-    Write the current object to ASCII in FVCOM namelist format.
+    Write the given dictionary of namelist sections to ASCII in FVCOM namelist format.
 
     Parameters
     ----------
