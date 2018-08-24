@@ -479,14 +479,14 @@ class OpenBoundary(object):
         Parameters
         ----------
         radius : float, list, np.ndarray
-            The sponge layer radius at the given nodes (in metres).
+            The sponge layer radius at the given nodes.
         coefficient : float, list, np.ndarray
             The sponge layer coefficient at the given nodes.
 
         Provides
         --------
         sponge_radius : np.ndarray
-            Sponge radiuses for the nodes in the boundary.
+            Sponge radii for the nodes in the boundary.
         sponge_coefficient
             Sponge coefficients for the nodes in the boundary.
 
