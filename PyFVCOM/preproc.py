@@ -1748,38 +1748,36 @@ class Model(Domain):
 
         """
 
-        # TODO: Rewrite to use the write_model_namelist and NameListEntry approach.
-
         if not hasattr(self, 'probes'):
             raise AttributeError('No probes object found. Please run PyFVCOM.preproc.add_probes() first.')
 
-        with open(output_file, 'w') as f:
-            grid = self.probes.grid
-            name = self.probes.name
-            levels = self.probes.levels
-            description = self.probes.description
-            long_names = self.probes.long_names
-            variables = self.probes.variables
-            # First level of iteration is the site. Transpose with map.
-            for probes in list(map(list, zip(*[grid, name, levels, description, long_names, variables]))):
-                # Second level is the variable
-                for loc, site, sigma, desc, long_name, variable in list(map(list, zip(*probes))):
-                    # Skip positions with grid IDs as None. These are sites which were too far from the nearest grid
-                    # point.
-                    if grid is None:
-                        continue
+        if Path(output_file).exists():
+            Path(output_file).unlink()
 
-                    f.write('&NML_PROBE\n')
-                    f.write(' PROBE_INTERVAL = "seconds={:.1f}",\n'.format(self.probes.interval))
-                    f.write(' PROBE_LOCATION = {:d},\n'.format(loc))
-                    f.write(' PROBE_TITLE = "{}",\n'.format(site))
-                    # If we've got something which is vertically resolved, output the vertical levels.
-                    if np.any(sigma):
-                        f.write(' PROBE_LEVELS = {:d} {:d},\n'.format(*sigma))
-                    f.write(' PROBE_DESCRIPTION = "{}",\n'.format(desc))
-                    f.write(' PROBE_VARIABLE = "{}",\n'.format(variable))
-                    f.write(' PROBE_VAR_NAME = "{}"\n'.format(long_name))
-                    f.write('/\n')
+        grid = self.probes.grid
+        name = self.probes.name
+        levels = self.probes.levels
+        description = self.probes.description
+        long_names = self.probes.long_names
+        variables = self.probes.variables
+        # First level of iteration is the site. Transpose with map.
+        for probes in list(map(list, zip(*[grid, name, levels, description, long_names, variables]))):
+            # Second level is the variable
+            for loc, site, sigma, desc, long_name, variable in list(map(list, zip(*probes))):
+                # Skip positions with grid IDs as None. These are sites which were too far from the nearest grid
+                # point.
+                if grid is None:
+                    continue
+                namelist = {'NML_PROBE': [NameListEntry('PROBE_INTERVAL', f'seconds={self.probes.interval:.1f}'),
+                                          NameListEntry('PROBE_LOCATION', loc, 'd'),
+                                          NameListEntry('PROBE_TITLE', site),
+                                          NameListEntry('PROBE_DESCRIPTION', desc),
+                                          NameListEntry('PROBE_VARIABLE', variable),
+                                          NameListEntry('PROBE_VAR_NAME', long_name)]}
+                if np.any(sigma):
+                    sigma_nml = NameListEntry('PROBE_LEVELS', f'{sigma[0]:d} {simga[1]:d}', no_quote_string=True)
+                    namelist['NML_PROBE'].append(sigma_nml)
+                write_model_namelist(namelist, output_file, mode='a')
 
     def add_stations(self, positions, names, max_distance=np.inf):
         """
