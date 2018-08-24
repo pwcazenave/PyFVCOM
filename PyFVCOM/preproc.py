@@ -2433,21 +2433,69 @@ class Model(Domain):
                     print('done.')
 
 
-class Namelist(object):
+class NameListEntry(object):
+
+    def __init__(self, name, value, type='s'):
+        """
+        Hold a namelist entry with its name, value and, optionally, format type.
+
+        Parameters
+        ----------
+        name : str
+            The namelist entry name.
+        value : str
+            The namelist entry value.
+        type : str, optional
+            The namelist entry type as a string formatting specifier (e.g. '.03f' for zero padded float to three
+            decimal points, '2d' for integers with two figures). If omitted, the type is 's'.
+
+        """
+
+        self.name = name
+        self.value = value
+        self.type = type
+
+    def string(self):
+        """
+        Return the current namelist entry as an appropriately formatted string:
+
+        " {self.name = {self.value:{self.type}}\n"
+
+        """
+
+        if self.type == 's':
+            string = f" {self.name} = '{self.value:{self.type}}'"
+        else:
+            string = f" {self.name} = {self.value:{self.type}}"
+
+        return string
+
+    def tolist(self):
+        """
+        Return the current name, value and type as a list (in that order).
+
+        Returns
+        -------
+        as_list : list
+            The current object as a list.
+
+        """
+
+        return [self.name, self.value, self.type]
+
+
+class ModelNameList(object):
     """
     Class to handle generating FVCOM namelists.
 
     """
 
-    def __init__(self):
+    def __init__(self, casename='casename'):
         """
         Create an object with a default FVCOM namelist configuration.
 
-        Mandatory fields are self.case.START_DATE and self.case.END_DATE. Everything else is pre-populated with
-        default options.
-
-        Integer/floating point use should be done with care as the self.write_model_namelist() function uses the
-        assigned type to determine what format to use when writing to ASCII.
+        Mandatory fields are self.config['NML_CASE'] START_DATE and self.config['NML_CASE'] END_DATE. Everything
+        else is pre-populated with default options.
 
         - The no forcing at all (surface or open boundary).
         - Temperature and salinity are deactivated.
@@ -2461,535 +2509,452 @@ class Namelist(object):
         - Time-averaged output is off.
         - There are no probes or stations.
 
+        Parameters
+        ----------
+        casename : str, optional
+            The model casename. This used to define the initial model input file names. If omitted, it is set as
+            'casename'.
+
+        Attributes
+        ----------
+        config : dict
+            The namelist configuration dictionary. Each key is an NML_ section and each value within is a list of the
+            entries as NameListEntry objects.
+
+        Methods
+        -------
+        index : find the index for a given entry in an NML_ section.
+        value : return the value for a given entry in an NML_ section.
+        update : update either the value or type of a given entry in an NML_ section.
+
+
         """
 
         # TODO: Add a sediments class.
 
-        # It feels like there has to be a better way to do this.
+        self._casename = casename
 
-        # The NML sections. Keys are namelist names and the values are the object names in self.
-        self._sections = {'CASE': 'case',
-                          'STARTUP': 'startup',
-                          'IO': 'input_output',
-                          'INTEGRATION': 'integration',
-                          'RESTART': 'restart',
-                          'NETCDF': 'output',
-                          'NETCDF_AV': 'output_average',
-                          'SURFACE_FORCING': 'surface_forcing',
-                          'HEATING_CALCULATED': 'heating_calculated',
-                          'PHYSICS': 'physics',
-                          'RIVER_TYPE': 'river_type',
-                          'OPEN_BOUNDARY_CONTROL': 'open_boundary_control',
-                          'GRID_COORDINATES': 'grid_coordinates',
-                          'GROUNDWATER': 'groundwater',
-                          'LAG': 'lagrangian',
-                          'ADDITIONAL_MODELS': 'additional_models',
-                          'PROBES': 'probes',
-                          'STATION_TIMESERIES': 'station_timeseries',
-                          'FABM': 'fabm',
-                          'NESTING': 'nesting',
-                          'NCNEST': 'netcdf_nest',
-                          'NCNEST_WAVE': 'netcdf_nest_wave',
-                          'BOUNDSCHK': 'boundscheck',
-                          'DYE_RELEASE': 'dye_release',
-                          'PWP': 'mixedlayermodel',
-                          'SST_ASSIMILATION': 'sst_assimilation',
-                          'SSTGRD_ASSIMILATION': 'sst_grid_assimilation',
-                          'SSHGRD_ASSIMILATION': 'ssh_grid_assimilation',
-                          'TSGRD_ASSIMILATION': 'ts_grid_assimilation',
-                          'CUR_NGASSIMILATION': 'currents_nudging_assimilation',
-                          'CUR_OIASSIMILATION': 'currents_optimal_interpolation_assimilation',
-                          'TS_NGASSIMILATION': 'ts_nudging_assimilation',
-                          'TS_OIASSIMILATION': 'ts_optimal_interpolation_assimilation'}
+        # Initialise all the namelist sections with default values.
+        self.config = {'NML_CASE':
+                           [NameListEntry('CASE_TITLE', 'PyFVCOM default CASE_TITLE'),
+                            NameListEntry('TIMEZONE', 'UTC'),
+                            NameListEntry('DATE_FORMAT', 'YMD'),
+                            NameListEntry('DATE_REFERENCE', 'default'),
+                            NameListEntry('START_DATE', None),
+                            NameListEntry('END_DATE', None)],
+                       'NML_STARTUP':
+                           [NameListEntry('STARTUP_TYPE', 'coldstart'),
+                            NameListEntry('STARTUP_FILE', f'{self._casename}_restart.nc'),
+                            NameListEntry('STARTUP_UV_TYPE', 'default'),
+                            NameListEntry('STARTUP_TURB_TYPE', 'default'),
+                            NameListEntry('STARTUP_TS_TYPE', 'constant'),
+                            NameListEntry('STARTUP_T_VALS', 15.0, 'f'),
+                            NameListEntry('STARTUP_S_VALS', 35.0, 'f'),
+                            NameListEntry('STARTUP_U_VALS', 0.0, 'f'),
+                            NameListEntry('STARTUP_V_VALS', 0.0, 'f'),
+                            NameListEntry('STARTUP_DMAX', -3.0, 'f')],
+                       'NML_IO':
+                           [NameListEntry('INPUT_DIR', './input'),
+                            NameListEntry('OUTPUT_DIR', './output'),
+                            NameListEntry('IREPORT', 300, 'd'),
+                            NameListEntry('VISIT_ALL_VARS', 'F'),
+                            NameListEntry('WAIT_FOR_VISIT', 'F'),
+                            NameListEntry('USE_MPI_IO_MODE', 'F')],
+                       'NML_INTEGRATION':
+                           [NameListEntry('EXTSTEP_SECONDS', 1.0, 'f'),
+                            NameListEntry('ISPLIT', 10, 'd'),
+                            NameListEntry('IRAMP', 0, 'd'),
+                            NameListEntry('MIN_DEPTH', 0.2, 'f'),
+                            NameListEntry('STATIC_SSH_ADJ', 0.0, 'f')],
+                       'NML_RESTART':
+                           [NameListEntry('RST_ON', 'T'),
+                            NameListEntry('RST_FIRST_OUT', None),
+                            NameListEntry('RST_OUT_INTERVAL', 'seconds=86400.'),
+                            NameListEntry('RST_OUTPUT_STACK', 0, 'd')],
+                       'NML_NETCDF':
+                           [NameListEntry('NC_ON', 'T'),
+                            NameListEntry('NC_FIRST_OUT', None),
+                            NameListEntry('NC_OUT_INTERVAL', 'seconds=900.'),
+                            NameListEntry('NC_OUTPUT_STACK', 0, 'd'),
+                            NameListEntry('NC_SUBDOMAIN_FILES', 'FVCOM'),
+                            NameListEntry('NC_GRID_METRICS', 'T'),
+                            NameListEntry('NC_FILE_DATE', 'T'),
+                            NameListEntry('NC_VELOCITY', 'T'),
+                            NameListEntry('NC_SALT_TEMP', 'T'),
+                            NameListEntry('NC_TURBULENCE', 'T'),
+                            NameListEntry('NC_AVERAGE_VEL', 'T'),
+                            NameListEntry('NC_VERTICAL_VEL', 'T'),
+                            NameListEntry('NC_WIND_VEL', 'F'),
+                            NameListEntry('NC_WIND_STRESS', 'F'),
+                            NameListEntry('NC_EVAP_PRECIP', 'F'),
+                            NameListEntry('NC_SURFACE_HEAT', 'F'),
+                            NameListEntry('NC_GROUNDWATER', 'F'),
+                            NameListEntry('NC_BIO', 'F'),
+                            NameListEntry('NC_WQM', 'F'),
+                            NameListEntry('NC_VORTICITY', 'F'),
+                            NameListEntry('NC_FABM', 'F')],
+                       'NML_NCAV':
+                           [NameListEntry('NCAV_ON', 'F'),
+                            NameListEntry('NCAV_FIRST_OUT', None),
+                            NameListEntry('NCAV_OUT_INTERVAL', 'seconds=86400.'),
+                            NameListEntry('NCAV_OUTPUT_STACK', 0, 'd'),
+                            NameListEntry('NCAV_GRID_METRICS', 'F'),
+                            NameListEntry('NCAV_FILE_DATE', 'T'),
+                            NameListEntry('NCAV_VELOCITY', 'F'),
+                            NameListEntry('NCAV_SALT_TEMP', 'T'),
+                            NameListEntry('NCAV_TURBULENCE', 'F'),
+                            NameListEntry('NCAV_AVERAGE_VEL', 'F'),
+                            NameListEntry('NCAV_VERTICAL_VEL', 'F'),
+                            NameListEntry('NCAV_WIND_VEL', 'F'),
+                            NameListEntry('NCAV_WIND_STRESS', 'F'),
+                            NameListEntry('NCAV_EVAP_PRECIP', 'F'),
+                            NameListEntry('NCAV_SURFACE_HEAT', 'F'),
+                            NameListEntry('NCAV_GROUNDWATER', 'F'),
+                            NameListEntry('NCAV_BIO', 'F'),
+                            NameListEntry('NCAV_WQM', 'F'),
+                            NameListEntry('NCAV_VORTICITY', 'F'),
+                            NameListEntry('NCAV_FABM', 'F')],
+                       'NML_SURFACE_FORCING':
+                           [NameListEntry('WIND_ON', 'F'),
+                            NameListEntry('WIND_TYPE', 'speed'),
+                            NameListEntry('WIND_FILE', f'{self._casename}_wnd.nc'),
+                            NameListEntry('WIND_KIND', 'variable'),
+                            NameListEntry('WIND_X', 5.0, 'f'),
+                            NameListEntry('WIND_Y', 5.0, 'f'),
+                            NameListEntry('HEATING_ON', 'F'),
+                            NameListEntry('HEATING_TYPE', 'flux'),
+                            NameListEntry('HEATING_KIND', 'variable'),
+                            NameListEntry('HEATING_FILE', f'{self._casename}_wnd.nc'),
+                            NameListEntry('HEATING_LONGWAVE_LENGTHSCALE', 0.7, 'f'),
+                            NameListEntry('HEATING_LONGWAVE_PERCTAGE', 10, 'f'),
+                            NameListEntry('HEATING_SHORTWAVE_LENGTHSCALE', 1.1, 'f'),
+                            NameListEntry('HEATING_RADIATION', 0.0, 'f'),
+                            NameListEntry('HEATING_NETFLUX', 0.0, 'f'),
+                            NameListEntry('PRECIPITATION_ON', 'F'),
+                            NameListEntry('PRECIPITATION_KIND', 'variable'),
+                            NameListEntry('PRECIPITATION_FILE', f'{self._casename}_wnd.nc'),
+                            NameListEntry('PRECIPITATION_PRC', 0.0, 'f'),
+                            NameListEntry('PRECIPITATION_EVP', 0.0, 'f'),
+                            NameListEntry('AIRPRESSURE_ON', 'F'),
+                            NameListEntry('AIRPRESSURE_KIND', 'variable'),
+                            NameListEntry('AIRPRESSURE_FILE', f'{self._casename}_wnd.nc'),
+                            NameListEntry('AIRPRESSURE_VALUE', 0.0, 'f'),
+                            NameListEntry('WAVE_ON', 'F'),
+                            NameListEntry('WAVE_FILE', f'{self._casename}_wav.nc'),
+                            NameListEntry('WAVE_KIND', 'constant'),
+                            NameListEntry('WAVE_HEIGHT', 0.0, 'f'),
+                            NameListEntry('WAVE_LENGTH', 0.0, 'f'),
+                            NameListEntry('WAVE_DIRECTION', 0.0, 'f'),
+                            NameListEntry('WAVE_PERIOD', 0.0, 'f'),
+                            NameListEntry('WAVE_PER_BOT', 0.0, 'f'),
+                            NameListEntry('WAVE_UB_BOT', 0.0, 'f')],
+                       'NML_HEATING_CALCULATED':
+                           [NameListEntry('HEATING_CALCULATE_ON', 'F'),
+                            NameListEntry('HEATING_CALCULATE_TYPE', 'flux'),
+                            NameListEntry('HEATING_CALCULATE_FILE', f'{self._casename}_wnd.nc'),
+                            NameListEntry('HEATING_CALCULATE_KIND', 'variable'),
+                            NameListEntry('ZUU', 10.0, 'f'),
+                            NameListEntry('ZTT', 10.0, 'f'),
+                            NameListEntry('ZQQ', 10.0, 'f'),
+                            NameListEntry('AIR_TEMPERATURE', 0.0, 'f'),
+                            NameListEntry('RELATIVE_HUMIDITY', 0.0, 'f'),
+                            NameListEntry('SURFACE_PRESSURE', 0.0, 'f'),
+                            NameListEntry('LONGWAVE_RADIATION', 0.0, 'f'),
+                            NameListEntry('SHORTWAVE_RADIATION', 0.0, 'f'),
+                            NameListEntry('HEATING_LONGWAVE_PERCTAGE_IN_HEATFLUX', 0.78, 'f'),
+                            NameListEntry('HEATING_LONGWAVE_LENGTHSCALE_IN_HEATFLUX', 1.4, 'f'),
+                            NameListEntry('HEATING_SHORTWAVE_LENGTHSCALE_IN_HEATFLUX', 6.3, 'f')],
+                       'NML_PHYSICS':
+                           [NameListEntry('HORIZONTAL_MIXING_TYPE', 'closure'),
+                            NameListEntry('HORIZONTAL_MIXING_KIND', 'constant'),
+                            NameListEntry('HORIZONTAL_MIXING_COEFFICIENT', 0.1, 'f'),
+                            NameListEntry('HORIZONTAL_PRANDTL_NUMBER', 1.0, 'f'),
+                            NameListEntry('VERTICAL_MIXING_TYPE', 'closure'),
+                            NameListEntry('VERTICAL_MIXING_COEFFICIENT', 0.00001, 'f'),
+                            NameListEntry('VERTICAL_PRANDTL_NUMBER', 1.0, 'f'),
+                            NameListEntry('BOTTOM_ROUGHNESS_MINIMUM', 0.0001, 'f'),
+                            NameListEntry('BOTTOM_ROUGHNESS_LENGTHSCALE', -1, 'f'),
+                            NameListEntry('BOTTOM_ROUGHNESS_KIND', 'static'),
+                            NameListEntry('BOTTOM_ROUGHNESS_TYPE', 'orig'),
+                            NameListEntry('BOTTOM_ROUGHNESS_FILE', f'{self._casename}_roughness.nc'),
+                            NameListEntry('CONVECTIVE_OVERTURNING', 'F'),
+                            NameListEntry('SCALAR_POSITIVITY_CONTROL', 'T'),
+                            NameListEntry('BAROTROPIC', 'F'),
+                            NameListEntry('BAROCLINIC_PRESSURE_GRADIENT', 'sigma levels'),
+                            NameListEntry('SEA_WATER_DENSITY_FUNCTION', 'dens2'),
+                            NameListEntry('RECALCULATE_RHO_MEAN', 'F'),
+                            NameListEntry('INTERVAL_RHO_MEAN', 'days=1.0'),
+                            NameListEntry('TEMPERATURE_ACTIVE', 'F'),
+                            NameListEntry('SALINITY_ACTIVE', 'F'),
+                            NameListEntry('SURFACE_WAVE_MIXING', 'F'),
+                            NameListEntry('WETTING_DRYING_ON', 'T'),
+                            NameListEntry('NOFLUX_BOT_CONDITION', 'T'),
+                            NameListEntry('ADCOR_ON', 'T'),
+                            NameListEntry('EQUATOR_BETA_PLANE', 'F'),
+                            NameListEntry('BACKWARD_ADVECTION', 'F'),
+                            NameListEntry('BACKWARD_STEP', 1, 'd')],
+                       'NML_RIVER_TYPE':
+                           [NameListEntry('RIVER_NUMBER', 0),
+                            NameListEntry('RIVER_KIND', 'variable'),
+                            NameListEntry('RIVER_TS_SETTING', 'calculated'),
+                            NameListEntry('RIVER_INFLOW_LOCATION', 'node'),
+                            NameListEntry('RIVER_INFO_FILE', f'{self._casename}_riv_ersem.nml')],
+                       'NML_OPEN_BOUNDARY_CONTROL':
+                           [NameListEntry('OBC_ON', 'F'),
+                            NameListEntry('OBC_NODE_LIST_FILE', f'{self._casename}_obc.dat'),
+                            NameListEntry('OBC_ELEVATION_FORCING_ON', 'F'),
+                            NameListEntry('OBC_ELEVATION_FILE', f'{self._casename}_elevtide.nc'),
+                            NameListEntry('OBC_TS_TYPE', 3, 'd'),
+                            NameListEntry('OBC_TEMP_NUDGING', 'F'),
+                            NameListEntry('OBC_TEMP_FILE', f'{self._casename}_tsobc.nc'),
+                            NameListEntry('OBC_TEMP_NUDGING_TIMESCALE', 0.0001736111, 'f'),
+                            NameListEntry('OBC_SALT_NUDGING', 'F'),
+                            NameListEntry('OBC_SALT_FILE', f'{self._casename}_tsobc.nc'),
+                            NameListEntry('OBC_SALT_NUDGING_TIMESCALE', 0.0001736111, 'f'),
+                            NameListEntry('OBC_FABM_NUDGING', 'F'),
+                            NameListEntry('OBC_FABM_FILE', f'{self._casename}_ERSEMobc.nc'),
+                            NameListEntry('OBC_FABM_NUDGING_TIMESCALE', 0.0001736111, 'f'),
+                            NameListEntry('OBC_MEANFLOW', 'F'),
+                            NameListEntry('OBC_MEANFLOW_FILE', f'{self._casename}_meanflow.nc'),
+                            NameListEntry('OBC_TIDEOUT_INITIAL', 1, 'd'),
+                            NameListEntry('OBC_TIDEOUT_INTERVAL', 900, 'd'),
+                            NameListEntry('OBC_LONGSHORE_FLOW_ON', 'F'),
+                            NameListEntry('OBC_LONGSHORE_FLOW_FILE', f'{self._casename}_lsf.dat')],
+                       'NML_GRID_COORDINATES':
+                           [NameListEntry('GRID_FILE', f'{self._casename}_grd.dat'),
+                            NameListEntry('GRID_FILE_UNITS', 'meters'),
+                            NameListEntry('PROJECTION_REFERENCE', 'proj=utm +ellps=WGS84 +zone=30'),
+                            NameListEntry('SIGMA_LEVELS_FILE', 'sigma_gen.dat'),
+                            NameListEntry('DEPTH_FILE', f'{self._casename}_dep.dat'),
+                            NameListEntry('CORIOLIS_FILE', f'{self._casename}_cor.dat'),
+                            NameListEntry('SPONGE_FILE', f'{self._casename}_spg.dat')],
+                       'NML_GROUNDWATER':
+                           [NameListEntry('GROUNDWATER_ON', 'F'),
+                            NameListEntry('GROUNDWATER_TEMP_ON', 'F'),
+                            NameListEntry('GROUNDWATER_SALT_ON', 'F'),
+                            NameListEntry('GROUNDWATER_KIND', 'none'),
+                            NameListEntry('GROUNDWATER_FILE', f'{self._casename}_groundwater.nc'),
+                            NameListEntry('GROUNDWATER_FLOW', 0.0, 'f'),
+                            NameListEntry('GROUNDWATER_TEMP', 0.0, 'f'),
+                            NameListEntry('GROUNDWATER_SALT', 0.0, 'f')],
+                       'NML_LAG':
+                           [NameListEntry('LAG_PARTICLES_ON', 'F'),
+                            NameListEntry('LAG_START_FILE', f'{self._casename}_lag_init.nc'),
+                            NameListEntry('LAG_OUT_FILE', f'{self._casename}_lag_out.nc'),
+                            NameListEntry('LAG_FIRST_OUT', 'cycle=0'),
+                            NameListEntry('LAG_RESTART_FILE', f'{self._casename}_lag_restart.nc'),
+                            NameListEntry('LAG_OUT_INTERVAL', 'cycle=30'),
+                            NameListEntry('LAG_SCAL_CHOICE', 'none')],
+                       'NML_ADDITIONAL_MODELS':
+                           [NameListEntry('DATA_ASSIMILATION', 'F'),
+                            NameListEntry('DATA_ASSIMILATION_FILE', f'{self._casename}_run.nml'),
+                            NameListEntry('BIOLOGICAL_MODEL', 'F'),
+                            NameListEntry('STARTUP_BIO_TYPE', 'observed'),
+                            NameListEntry('FABM_MODEL', 'F'),
+                            NameListEntry('SEDIMENT_MODEL', 'F'),
+                            NameListEntry('SEDIMENT_MODEL_FILE', 'none'),
+                            NameListEntry('SEDIMENT_PARAMETER_TYPE', 'none'),
+                            NameListEntry('SEDIMENT_PARAMETER_FILE', 'none'),
+                            NameListEntry('BEDFLAG_TYPE', 'none'),
+                            NameListEntry('BEDFLAG_FILE', 'none'),
+                            NameListEntry('ICING_MODEL', 'F'),
+                            NameListEntry('ICING_FORCING_FILE', 'none'),
+                            NameListEntry('ICING_FORCING_KIND', 'none'),
+                            NameListEntry('ICING_AIR_TEMP', 0.0, 'f'),
+                            NameListEntry('ICING_WSPD', 0.0, 'f'),
+                            NameListEntry('ICE_MODEL', 'F'),
+                            NameListEntry('ICE_FORCING_FILE', 'none'),
+                            NameListEntry('ICE_FORCING_KIND', 'none'),
+                            NameListEntry('ICE_SEA_LEVEL_PRESSURE', 0.0, 'f'),
+                            NameListEntry('ICE_AIR_TEMP', 0.0, 'f'),
+                            NameListEntry('ICE_SPEC_HUMIDITY', 0.0, 'f'),
+                            NameListEntry('ICE_SHORTWAVE', 0.0, 'f'),
+                            NameListEntry('ICE_CLOUD_COVER', 0.0, 'f')],
+                       'NML_PROBES':
+                           [NameListEntry('PROBES_ON', 'F'),
+                            NameListEntry('PROBES_NUMBER', 0, 'd'),
+                            NameListEntry('PROBES_FILE', f'{self._casename}_probes.nml')],
+                       'NML_STATION_TIMESERIES':
+                           [NameListEntry('OUT_STATION_TIMESERIES_ON', 'F'),
+                            NameListEntry('STATION_FILE', f'{self._casename}_station.dat'),
+                            NameListEntry('LOCATION_TYPE', 'node'),
+                            NameListEntry('OUT_ELEVATION', 'F'),
+                            NameListEntry('OUT_VELOCITY_3D', 'F'),
+                            NameListEntry('OUT_VELOCITY_2D', 'F'),
+                            NameListEntry('OUT_WIND_VELOCITY', 'F'),
+                            NameListEntry('OUT_SALT_TEMP', 'F'),
+                            NameListEntry('OUT_INTERVAL', 'seconds= 360.0')],
+                       'NML_FABM':
+                           [NameListEntry('STARTUP_FABM_TYPE', 'set values'),
+                            NameListEntry('USE_FABM_BOTTOM_THICKNESS', 'F'),
+                            NameListEntry('USE_FABM_SALINITY', 'F'),
+                            NameListEntry('FABM_DEBUG', 'F'),
+                            NameListEntry('FABM_DIAG_OUT', 'T')],
+                       'NML_NESTING':
+                           [NameListEntry('NESTING_ON', 'F'),
+                            NameListEntry('FABM_NESTING_ON', 'F'),
+                            NameListEntry('NESTING_BLOCKSIZE', 10, 'd'),
+                            NameListEntry('NESTING_TYPE', 1, 'd'),
+                            NameListEntry('NESTING_FILE_NAME', f'{self._casename}_nest.nc')],
+                       'NML_NCNEST':
+                           [NameListEntry('NCNEST_ON', 'F'),
+                            NameListEntry('NCNEST_BLOCKSIZE', 10, 'd'),
+                            NameListEntry('NCNEST_NODE_FILES', ''),
+                            NameListEntry('NCNEST_OUT_INTERVAL', 'seconds=900.0')],
+                       'NML_NCNEST_WAVE':
+                           [NameListEntry('NCNEST_ON_WAVE', 'F'),
+                            NameListEntry('NCNEST_TYPE_WAVE', 'spectral density'),
+                            NameListEntry('NCNEST_BLOCKSIZE_WAVE', -1, 'd'),
+                            NameListEntry('NCNEST_NODE_FILES_WAVE', 'none')],
+                       'NML_RIVER_TYPE':
+                           [NameListEntry('BOUNDSCHK_ON', 'F'),
+                            NameListEntry('CHK_INTERVAL', 1.0, 'f'),
+                            NameListEntry('VELOC_MAG_MAX', 6.5, 'f'),
+                            NameListEntry('ZETA_MAG_MAX', 10.0, 'f'),
+                            NameListEntry('TEMP_MAX', 30.0, 'f'),
+                            NameListEntry('TEMP_MIN', -4.0, 'f'),
+                            NameListEntry('SALT_MAX', 40.0, 'f'),
+                            NameListEntry('SALT_MIN', -0.5, 'f')],
+                       'NML_DYE_RELEASE':
+                           [NameListEntry('DYE_ON', 'F'),
+                            NameListEntry('DYE_RELEASE_START', None),
+                            NameListEntry('DYE_RELEASE_STOP', None),
+                            NameListEntry('KSPE_DYE', 1, 'd'),
+                            NameListEntry('MSPE_DYE', 1, 'd'),
+                            NameListEntry('K_SPECIFY', 1, 'd'),
+                            NameListEntry('M_SPECIFY', 1, 'd'),
+                            NameListEntry('DYE_SOURCE_TERM', 1.0, 'f')],
+                       'NML_PWP':
+                           [NameListEntry('UPPER_DEPTH_LIMIT', 20.0, 'f'),
+                            NameListEntry('LOWER_DEPTH_LIMIT', 200.0, 'f'),
+                            NameListEntry('VERTICAL_RESOLUTION', 1.0, 'f'),
+                            NameListEntry('BULK_RICHARDSON', 0.65, 'f'),
+                            NameListEntry('GRADIENT_RICHARDSON', 0.25, 'f')],
+                       'NML_SST_ASSIMILATION':
+                           [NameListEntry('SST_ASSIM', 'F'),
+                            NameListEntry('SST_ASSIM_FILE', f'{self._casename}_sst.nc'),
+                            NameListEntry('SST_RADIUS', 0.0, 'f'),
+                            NameListEntry('SST_WEIGHT_MAX', 1.0, 'f'),
+                            NameListEntry('SST_TIMESCALE', 0.0, 'f'),
+                            NameListEntry('SST_TIME_WINDOW', 0.0, 'f'),
+                            NameListEntry('SST_N_PER_INTERVAL', 0.0, 'f')],
+                       'NML_SSTGRD_ASSIMILATION':
+                           [NameListEntry('SSTGRD_ASSIM', 'F'),
+                            NameListEntry('SSTGRD_ASSIM_FILE', f'{self._casename}_sstgrd.nc'),
+                            NameListEntry('SSTGRD_WEIGHT_MAX', 0.5, 'f'),
+                            NameListEntry('SSTGRD_TIMESCALE', 0.0001, 'f'),
+                            NameListEntry('SSTGRD_TIME_WINDOW', 1.0, 'f'),
+                            NameListEntry('SSTGRD_N_PER_INTERVAL', 24.0, 'f')],
+                       'NML_SSHGRD_ASSIMILATION':
+                           [NameListEntry('SSHGRD_ASSIM', 'F'),
+                            NameListEntry('SSHGRD_ASSIM_FILE', f'{self._casename}_sshgrd.nc'),
+                            NameListEntry('SSHGRD_WEIGHT_MAX', 0.0, 'f'),
+                            NameListEntry('SSHGRD_TIMESCALE', 0.0, 'f'),
+                            NameListEntry('SSHGRD_TIME_WINDOW', 0.0, 'f'),
+                            NameListEntry('SSHGRD_N_PER_INTERVAL', 0.0, 'f')],
+                       'NML_TSGRD_ASSIMILATION':
+                           [NameListEntry('TSGRD_ASSIM', 'F'),
+                            NameListEntry('TSGRD_ASSIM_FILE', f'{self._casename}_tsgrd.nc'),
+                            NameListEntry('TSGRD_WEIGHT_MAX', 0.0, 'f'),
+                            NameListEntry('TSGRD_TIMESCALE', 0.0, 'f'),
+                            NameListEntry('TSGRD_TIME_WINDOW', 0.0, 'f'),
+                            NameListEntry('TSGRD_N_PER_INTERVAL', 0.0, 'f')],
+                       'NML_CUR_NGASSIMILATION':
+                           [NameListEntry('CUR_NGASSIM', 'F'),
+                            NameListEntry('CUR_NGASSIM_FILE', f'{self._casename}_cur.nc'),
+                            NameListEntry('CUR_NG_RADIUS', 0.0, 'f'),
+                            NameListEntry('CUR_GAMA', 0.0, 'f'),
+                            NameListEntry('CUR_GALPHA', 0.0, 'f'),
+                            NameListEntry('CUR_NG_ASTIME_WINDOW', 0.0, 'f')],
+                       'NML_CUR_OIASSIMILATION':
+                           [NameListEntry('CUR_OIASSIM', 'F'),
+                            NameListEntry('CUR_OIASSIM_FILE', f'{self._casename}_curoi.nc'),
+                            NameListEntry('CUR_OI_RADIUS', 0.0, 'f'),
+                            NameListEntry('CUR_OIGALPHA', 0.0, 'f'),
+                            NameListEntry('CUR_OI_ASTIME_WINDOW', 0.0, 'f'),
+                            NameListEntry('CUR_N_INFLU', 0.0, 'f'),
+                            NameListEntry('CUR_NSTEP_OI', 0.0, 'f')],
+                       'NML_TS_NGASSIMILATION':
+                           [NameListEntry('TS_NGASSIM', 'F'),
+                            NameListEntry('TS_NGASSIM_FILE', f'{self._casename}_ts.nc'),
+                            NameListEntry('TS_NG_RADIUS', 0.0, 'f'),
+                            NameListEntry('TS_GAMA', 0.0, 'f'),
+                            NameListEntry('TS_GALPHA', 0.0, 'f'),
+                            NameListEntry('TS_NG_ASTIME_WINDOW', 0.0, 'f')],
+                       'NML_TS_OIASSIMILATION':
+                           [NameListEntry('TS_OIASSIM', 'F'),
+                            NameListEntry('TS_OIASSIM_FILE', f'{self._casename}_tsoi.nc'),
+                            NameListEntry('TS_OI_RADIUS', 0.0, 'f'),
+                            NameListEntry('TS_OIGALPHA', 0.0, 'f'),
+                            NameListEntry('TS_OI_ASTIME_WINDOW', 0.0, 'f'),
+                            NameListEntry('TS_MAX_LAYER', 0.0, 'f'),
+                            NameListEntry('TS_N_INFLU', 0.0, 'f'),
+                            NameListEntry('TS_NSTEP_OI', 0.0, 'f')]}
 
-        # Initialise all the namelist sections.
-        self.case = self.Case()
-        self.startup = self.Startup()
-        self.input_output = self.InputOutput()
-        self.integration = self.Integration()
-        self.restart = self.Restart()
-        self.output = self.Output()
-        self.output_average = self.OutputAverage()
-        self.surface_forcing = self.SurfaceForcing()
-        self.heating_calculated = self.HeatingCalculated()
-        self.physics = self.Physics()
-        self.river_type = self.RiverType()
-        self.open_boundary_control = self.OpenBoundaryControl()
-        self.grid_coordinates = self.GridCoordinates()
-        self.groundwater = self.Groundwater()
-        self.lagrangian = self.Lag()
-        self.additional_models = self.AdditionalModels()
-        self.probes = self.Probes()
-        self.station_timeseries = self.StationTimeseries()
-        self.fabm = self.FABM()
-        self.nesting = self.Nesting()
-        self.netcdf_nest = self.NetCDFNest()
-        self.netcdf_nest_wave = self.NetCDFNestWave()
-        self.boundscheck = self.BoundsCheck()
-        self.dye_release = self.DyeRelease()
-        self.mixedlayermodel = self.MixedLayerModel()
-        self.sst_assimilation = self.SeaSurfaceTemperatureAssimilation()
-        self.sst_grid_assimilation = self.SeaSurfaceTemperatureGridAssimilation()
-        self.ssh_grid_assimilation = self.SeaSurfaceHeightGridAssimilation()
-        self.ts_grid_assimilation = self.TemperatureSalinityGridAssimilation()
-        self.currents_nudging_assimilation = self.CurrentsNudgingAssimilation()
-        self.currents_optimal_interpolation_assimilation = self.CurrentsOptimalInterpolationAssimilation()
-        self.ts_nudging_assimilation = self.TemperatureSalinityNudgingAssimilation()
-        self.ts_optimal_interpolation_assimilation = self.TemperatureSalinityOptimalInterpolationAssimilation()
+    def index(self, section, entry):
+        """
+        For the given namelist section, find the index of the `entry'.
 
-    class Case(object):
-        def __init__(self):
-            """ Prepare the default NML_CASE section. """
-            self.CASE_TITLE = 'PyFVCOM default CASE_TITLE'
-            self.TIMEZONE = 'UTC'
-            self.DATE_FORMAT = 'YMD'
-            self.DATE_REFERENCE = 'default'
-            self.START_DATE = None
-            self.END_DATE = None
+        Parameters
+        ----------
+        section : str
+            The NML_`section' name.
+        entry : str
+            The entry name within NML_`section'.
 
-    class Startup(object):
-        def __init__(self):
-            """ Prepare the default NML_STARTUP section. """
-            self.STARTUP_TYPE = 'coldstart'
-            self.STARTUP_FILE = 'casename_restart.nc'
-            self.STARTUP_UV_TYPE = 'default'
-            self.STARTUP_TURB_TYPE = 'default'
-            self.STARTUP_TS_TYPE = 'constant'
-            self.STARTUP_T_VALS = 15.0
-            self.STARTUP_S_VALS = 35.0
-            self.STARTUP_U_VALS = 0.0
-            self.STARTUP_V_VALS = 0.0
-            self.STARTUP_DMAX = -3.0
+        Returns
+        -------
+        index : str, int, float
+            The index for the NML_`section' `entry'.
 
-    class InputOutput(object):
-        def __init__(self):
-            """ Prepare the default NML_IO section. """
-            self.INPUT_DIR = './input'
-            self.OUTPUT_DIR = './output'
-            self.IREPORT = 300
-            self.VISIT_ALL_VARS = 'F'
-            self.WAIT_FOR_VISIT = 'F'
-            self.USE_MPI_IO_MODE = 'F'
+        """
 
-    class Integration(object):
-        def __init__(self):
-            """ Prepare the default NML_INTEGRATION section. """
-            self.EXTSTEP_SECONDS = 1.0
-            self.ISPLIT = 10
-            self.IRAMP = 0
-            self.MIN_DEPTH = 0.2
-            self.STATIC_SSH_ADJ = 0.0
+        return [i.name for i in self.config[section]].index(entry)
 
-    class Restart(object):
-        def __init__(self):
-            """ Prepare the default NML_RESTART section. """
-            self.RST_ON = 'T'
-            self.RST_FIRST_OUT = None
-            self.RST_OUT_INTERVAL = 'seconds = 86400.'
-            self.RST_OUTPUT_STACK = 0
+    def value(self, section, entry):
+        """
+        For the given namelist section, find the value for `entry'.
 
-    class Output(object):
-        def __init__(self):
-            """ Prepare the default NML_NETCDF section. """
-            self.NC_ON = 'T'
-            self.NC_FIRST_OUT = None
-            self.NC_OUT_INTERVAL = 'seconds=900.'
-            self.NC_OUTPUT_STACK = 0
-            self.NC_SUBDOMAIN_FILES = 'FVCOM'
-            self.NC_GRID_METRICS = 'T'
-            self.NC_FILE_DATE = 'T'
-            self.NC_VELOCITY = 'T'
-            self.NC_SALT_TEMP = 'T'
-            self.NC_TURBULENCE = 'T'
-            self.NC_AVERAGE_VEL = 'T'
-            self.NC_VERTICAL_VEL = 'T'
-            self.NC_WIND_VEL = 'F'
-            self.NC_WIND_STRESS = 'F'
-            self.NC_EVAP_PRECIP = 'F'
-            self.NC_SURFACE_HEAT = 'F'
-            self.NC_GROUNDWATER = 'F'
-            self.NC_BIO = 'F'
-            self.NC_WQM = 'F'
-            self.NC_VORTICITY = 'F'
-            self.NC_FABM = 'F'
+        Parameters
+        ----------
+        section : str
+            The NML_`section' name.
+        entry : str
+            The entry name within NML_`section'.
 
-    class OutputAverage(object):
-        def __init__(self):
-            """ Prepare the default NML_NCAV section. """
-            self.NCAV_ON = 'F'
-            self.NCAV_FIRST_OUT = None
-            self.NCAV_OUT_INTERVAL = 'seconds=86400.'
-            self.NCAV_OUTPUT_STACK = 0
-            self.NCAV_GRID_METRICS = 'F'
-            self.NCAV_FILE_DATE = 'T'
-            self.NCAV_VELOCITY = 'F'
-            self.NCAV_SALT_TEMP = 'T'
-            self.NCAV_TURBULENCE = 'F'
-            self.NCAV_AVERAGE_VEL = 'F'
-            self.NCAV_VERTICAL_VEL = 'F'
-            self.NCAV_WIND_VEL = 'F'
-            self.NCAV_WIND_STRESS = 'F'
-            self.NCAV_EVAP_PRECIP = 'F'
-            self.NCAV_SURFACE_HEAT = 'F'
-            self.NCAV_GROUNDWATER = 'F'
-            self.NCAV_BIO = 'F'
-            self.NCAV_WQM = 'F'
-            self.NCAV_VORTICITY = 'F'
-            self.NCAV_FABM = 'F'
+        Returns
+        -------
+        value : str, int, float
+            The value for the NML_`section' `entry'.
 
-    class SurfaceForcing(object):
-        def __init__(self):
-            """ Prepare the default NML_SURFACE_FORCING section. """
-            self.WIND_ON = 'F'
-            self.WIND_TYPE = 'speed'
-            self.WIND_FILE = 'casename_wnd.nc'
-            self.WIND_KIND = 'variable'
-            self.WIND_X = 5.0
-            self.WIND_Y = 5.0
-            self.HEATING_ON = 'F'
-            self.HEATING_TYPE = 'flux'
-            self.HEATING_KIND = 'variable'
-            self.HEATING_FILE = 'casename_wnd.nc'
-            self.HEATING_LONGWAVE_LENGTHSCALE = 0.7
-            self.HEATING_LONGWAVE_PERCTAGE = 10
-            self.HEATING_SHORTWAVE_LENGTHSCALE = 1.1
-            self.HEATING_RADIATION = 0.0
-            self.HEATING_NETFLUX = 0.0
-            self.PRECIPITATION_ON = 'F'
-            self.PRECIPITATION_KIND = 'variable'
-            self.PRECIPITATION_FILE = 'casename_wnd.nc'
-            self.PRECIPITATION_PRC = 0.0
-            self.PRECIPITATION_EVP = 0.0
-            self.AIRPRESSURE_ON = 'F'
-            self.AIRPRESSURE_KIND = 'variable'
-            self.AIRPRESSURE_FILE = 'casename_wnd.nc'
-            self.AIRPRESSURE_VALUE = 0.0
-            self.WAVE_ON = 'F'
-            self.WAVE_FILE = 'casename_wav.nc'
-            self.WAVE_KIND = 'constant'
-            self.WAVE_HEIGHT = 0.0
-            self.WAVE_LENGTH = 0.0
-            self.WAVE_DIRECTION = 0.0
-            self.WAVE_PERIOD = 0.0
-            self.WAVE_PER_BOT = 0.0
-            self.WAVE_UB_BOT = 0.0
+        """
 
-    class HeatingCalculated(object):
-        def __init__(self):
-            """ Prepare the default NML_HEATING_CALCULATED section. """
-            self.HEATING_CALCULATE_ON = 'F'
-            self.HEATING_CALCULATE_TYPE = 'flux'
-            self.HEATING_CALCULATE_FILE = 'casename_wnd.nc'
-            self.HEATING_CALCULATE_KIND = 'variable'
-            self.ZUU = 10.0
-            self.ZTT = 10.0
-            self.ZQQ = 10.0
-            self.AIR_TEMPERATURE = 0.0
-            self.RELATIVE_HUMIDITY = 0.0
-            self.SURFACE_PRESSURE = 0.0
-            self.LONGWAVE_RADIATION = 0.0
-            self.SHORTWAVE_RADIATION = 0.0
-            self.HEATING_LONGWAVE_PERCTAGE_IN_HEATFLUX = 0.78
-            self.HEATING_LONGWAVE_LENGTHSCALE_IN_HEATFLUX = 1.4
-            self.HEATING_SHORTWAVE_LENGTHSCALE_IN_HEATFLUX = 6.3
+        return self.config[section][self.index(section, entry)].value
 
-    class Physics(object):
-        def __init__(self):
-            """ Prepare the default NML_PHYSICS section. """
-            self.HORIZONTAL_MIXING_TYPE = 'closure'
-            self.HORIZONTAL_MIXING_KIND = 'constant'
-            self.HORIZONTAL_MIXING_COEFFICIENT = 0.1
-            self.HORIZONTAL_PRANDTL_NUMBER = 1.0
-            self.VERTICAL_MIXING_TYPE = 'closure'
-            self.VERTICAL_MIXING_COEFFICIENT = 0.00001
-            self.VERTICAL_PRANDTL_NUMBER = 1.0
-            self.BOTTOM_ROUGHNESS_MINIMUM = 0.0001
-            self.BOTTOM_ROUGHNESS_LENGTHSCALE = -1
-            self.BOTTOM_ROUGHNESS_KIND = 'static'
-            self.BOTTOM_ROUGHNESS_TYPE = 'orig'
-            self.BOTTOM_ROUGHNESS_FILE = 'casename_roughness.nc'
-            self.CONVECTIVE_OVERTURNING = 'F'
-            self.SCALAR_POSITIVITY_CONTROL = 'T'
-            self.BAROTROPIC = 'F'
-            self.BAROCLINIC_PRESSURE_GRADIENT = 'sigma levels'
-            self.SEA_WATER_DENSITY_FUNCTION = 'dens2'
-            self.RECALCULATE_RHO_MEAN = 'F'
-            self.INTERVAL_RHO_MEAN = 'days=1.0'
-            self.TEMPERATURE_ACTIVE = 'F'
-            self.SALINITY_ACTIVE = 'F'
-            self.SURFACE_WAVE_MIXING = 'F'
-            self.WETTING_DRYING_ON = 'T'
-            self.NOFLUX_BOT_CONDITION = 'T'
-            self.ADCOR_ON = 'T'
-            self.EQUATOR_BETA_PLANE = 'F'
-            self.BACKWARD_ADVECTION = 'F'
-            self.BACKWARD_STEP = 1
+    def update(self, section, entry, value=None, type=None):
+        """
+        For the given namelist `section' `entry', update either its `value' or `type'.
 
-    class RiverType(object):
-        def __init__(self):
-            """ Prepare the default NML_RIVER_TYPE section. """
-            self.RIVER_NUMBER = 0
-            self.RIVER_KIND = 'variable'
-            self.RIVER_TS_SETTING = 'calculated'
-            self.RIVER_INFLOW_LOCATION = 'node'
-            self.RIVER_INFO_FILE = 'casename_riv_ersem.nml'
+        Parameters
+        ----------
+        section : str
+            The NML_`section' name.
+        entry : str
+            The entry name within NML_`section'.
+        value : str, int, float, optional
+            The value to update the namelist entry with.
+        type : str, optional
+            The type to update the namelist entry with.
 
-    class OpenBoundaryControl(object):
-        def __init__(self):
-            """ Prepare the default NML_OPEN_BOUNDARY_CONTROL section. """
-            self.OBC_ON = 'F'
-            self.OBC_NODE_LIST_FILE = 'casename_obc.dat'
-            self.OBC_ELEVATION_FORCING_ON = 'F'
-            self.OBC_ELEVATION_FILE = 'casename_elevtide.nc'
-            self.OBC_TS_TYPE = 3
-            self.OBC_TEMP_NUDGING = 'F'
-            self.OBC_TEMP_FILE = 'casename_tsobc.nc'
-            self.OBC_TEMP_NUDGING_TIMESCALE = 0.0001736111
-            self.OBC_SALT_NUDGING = 'F'
-            self.OBC_SALT_FILE = 'casename_tsobc.nc'
-            self.OBC_SALT_NUDGING_TIMESCALE = 0.0001736111
-            self.OBC_FABM_NUDGING = 'F'
-            self.OBC_FABM_FILE = 'casename_ERSEMobc.nc'
-            self.OBC_FABM_NUDGING_TIMESCALE = 0.0001736111
-            self.OBC_MEANFLOW = 'F'
-            self.OBC_MEANFLOW_FILE = 'casename_meanflow.nc'
-            self.OBC_TIDEOUT_INITIAL = 1
-            self.OBC_TIDEOUT_INTERVAL = 900
-            self.OBC_LONGSHORE_FLOW_ON = 'F'
-            self.OBC_LONGSHORE_FLOW_FILE = 'casename_lsf.dat'
+        """
+        if value is None and type is None:
+            raise ValueError("Give one of `value' or `type' to update.")
 
-    class GridCoordinates(object):
-        def __init__(self):
-            """ Prepare the default NML_GRID_COORDINATES section. """
-            self.GRID_FILE = 'casename_grd.dat'
-            self.GRID_FILE_UNITS = 'meters'
-            self.PROJECTION_REFERENCE = 'proj=utm +ellps=WGS84 +zone=30'
-            self.SIGMA_LEVELS_FILE = 'sigma_gen.dat'
-            self.DEPTH_FILE = 'casename_dep.dat'
-            self.CORIOLIS_FILE = 'casename_cor.dat'
-            self.SPONGE_FILE = 'casename_spg.dat'
+        if not value is None:
+            self.config[section][self.index(section, entry)].value = value
 
-    class Groundwater(object):
-        def __init__(self):
-            """ Prepare the default NML_GROUNDWATER section. """
-            self.GROUNDWATER_ON = 'F'
-            self.GROUNDWATER_TEMP_ON = 'F'
-            self.GROUNDWATER_SALT_ON = 'F'
-            self.GROUNDWATER_KIND = 'none'
-            self.GROUNDWATER_FILE = 'none'
-            self.GROUNDWATER_FLOW = 0.0
-            self.GROUNDWATER_TEMP = 0.0
-            self.GROUNDWATER_SALT = 0.0
-
-    class Lag(object):
-        def __init__(self):
-            """ Prepare the default NML_LAG section. """
-            self.LAG_PARTICLES_ON = 'F'
-            self.LAG_START_FILE = 'casename_lag_init.nc'
-            self.LAG_OUT_FILE = 'casename_lag_out.nc'
-            self.LAG_FIRST_OUT = 'cycle=0'
-            self.LAG_RESTART_FILE = 'casename_lag_restart.nc'
-            self.LAG_OUT_INTERVAL = 'cycle=30'
-            self.LAG_SCAL_CHOICE = 'none'
-
-    class AdditionalModels(object):
-        def __init__(self):
-            """ Prepare the default NML_ADDITIONAL_MODELS section. """
-            self.DATA_ASSIMILATION = 'F'
-            self.DATA_ASSIMILATION_FILE = 'casename_run.nml'
-            self.BIOLOGICAL_MODEL = 'F'
-            self.STARTUP_BIO_TYPE = 'observed'
-            self.FABM_MODEL = 'F'
-            self.SEDIMENT_MODEL = 'F'
-            self.SEDIMENT_MODEL_FILE = 'none'
-            self.SEDIMENT_PARAMETER_TYPE = 'none'
-            self.SEDIMENT_PARAMETER_FILE = 'none'
-            self.BEDFLAG_TYPE = 'none'
-            self.BEDFLAG_FILE = 'none'
-            self.ICING_MODEL = 'F'
-            self.ICING_FORCING_FILE = 'none'
-            self.ICING_FORCING_KIND = 'none'
-            self.ICING_AIR_TEMP = 0.0
-            self.ICING_WSPD = 0.0
-            self.ICE_MODEL = 'F'
-            self.ICE_FORCING_FILE = 'none'
-            self.ICE_FORCING_KIND = 'none'
-            self.ICE_SEA_LEVEL_PRESSURE = 0.0
-            self.ICE_AIR_TEMP = 0.0
-            self.ICE_SPEC_HUMIDITY = 0.0
-            self.ICE_SHORTWAVE = 0.0
-            self.ICE_CLOUD_COVER = 0.0
-
-    class Probes(object):
-        def __init__(self):
-            """ Prepare the default NML_PROBES section. """
-            self.PROBES_ON = 'F'
-            self.PROBES_NUMBER = 0
-            self.PROBES_FILE = 'casename_probes.nml'
-
-    class StationTimeseries(object):
-        def __init__(self):
-            """ Prepare the default NML_STATION_TIMESERIES section. """
-            self.OUT_STATION_TIMESERIES_ON = 'F'
-            self.STATION_FILE = 'casename_station.dat'
-            self.LOCATION_TYPE = 'node'
-            self.OUT_ELEVATION = 'F'
-            self.OUT_VELOCITY_3D = 'F'
-            self.OUT_VELOCITY_2D = 'F'
-            self.OUT_WIND_VELOCITY = 'F'
-            self.OUT_SALT_TEMP = 'F'
-            self.OUT_INTERVAL = 'seconds= 360.0'
-
-    class FABM(object):
-        def __init__(self):
-            """ Prepare the default NML_FABM section. """
-            self.STARTUP_FABM_TYPE = 'set values'
-            self.USE_FABM_BOTTOM_THICKNESS = 'F'
-            self.USE_FABM_SALINITY = 'F'
-            self.FABM_DEBUG = 'F'
-            self.FABM_DIAG_OUT = 'T'
-
-    class Nesting(object):
-        def __init__(self):
-            """ Prepare the default NML_NESTING section. """
-            self.NESTING_ON = 'F'
-            self.FABM_NESTING_ON = 'F'
-            self.NESTING_BLOCKSIZE = 10
-            self.NESTING_TYPE = 1
-            self.NESTING_FILE_NAME = 'casename_nest.nc'
-
-    class NetCDFNest(object):
-        def __init__(self):
-            """ Prepare the default NML_NCNEST section. """
-            self.NCNEST_ON = 'F'
-            self.NCNEST_BLOCKSIZE = 10
-            self.NCNEST_NODE_FILES = ''
-            self.NCNEST_OUT_INTERVAL = 'seconds=900.0'
-
-    class NetCDFNestWave(object):
-        def __init__(self):
-            """ Prepare the default NML_NCNEST_WAVE section. """
-            self.NCNEST_ON_WAVE = 'F'
-            self.NCNEST_TYPE_WAVE = 'spectral density'
-            self.NCNEST_BLOCKSIZE_WAVE = -1
-            self.NCNEST_NODE_FILES_WAVE = 'none'
-
-    class BoundsCheck(object):
-        def __init__(self):
-            """ Prepare the default NML_RIVER_TYPE section. """
-            self.BOUNDSCHK_ON = 'F'
-            self.CHK_INTERVAL = 1.0
-            self.VELOC_MAG_MAX = 6.5
-            self.ZETA_MAG_MAX = 10.0
-            self.TEMP_MAX = 30.0
-            self.TEMP_MIN = -4.0
-            self.SALT_MAX = 40.0
-            self.SALT_MIN = -0.5
-
-    class DyeRelease(object):
-        def __init__(self):
-            """ Prepare the default NML_DYE_RELEASE section. """
-            self.DYE_ON = 'F'
-            self.DYE_RELEASE_START = None
-            self.DYE_RELEASE_STOP = None
-            self.KSPE_DYE = 1
-            self.MSPE_DYE = 1
-            self.K_SPECIFY = 1
-            self.M_SPECIFY = 1
-            self.DYE_SOURCE_TERM = 1.0
-
-    class MixedLayerModel(object):
-        def __init__(self):
-            """ Prepare the default NML_PWP section. """
-            self.UPPER_DEPTH_LIMIT = 20.0
-            self.LOWER_DEPTH_LIMIT = 200.0
-            self.VERTICAL_RESOLUTION = 1.0
-            self.BULK_RICHARDSON = 0.65
-            self.GRADIENT_RICHARDSON = 0.25
-
-    class SeaSurfaceTemperatureAssimilation(object):
-        def __init__(self):
-            """ Prepare the default NML_SST_ASSIMILATION section. """
-            self.SST_ASSIM = 'F'
-            self.SST_ASSIM_FILE = 'casename_sst.nc'
-            self.SST_RADIUS = 0.0
-            self.SST_WEIGHT_MAX = 1.0
-            self.SST_TIMESCALE = 0.0
-            self.SST_TIME_WINDOW = 0.0
-            self.SST_N_PER_INTERVAL = 0.0
-
-    class SeaSurfaceTemperatureGridAssimilation(object):
-        def __init__(self):
-            """ Prepare the default NML_SSTGRD_ASSIMILATION section. """
-            self.SSTGRD_ASSIM = 'F'
-            self.SSTGRD_ASSIM_FILE = 'casename_sstgrd.nc'
-            self.SSTGRD_WEIGHT_MAX = 0.5
-            self.SSTGRD_TIMESCALE = 0.0001
-            self.SSTGRD_TIME_WINDOW = 1.0
-            self.SSTGRD_N_PER_INTERVAL = 24.0
-
-    class SeaSurfaceHeightGridAssimilation(object):
-        def __init__(self):
-            """ Prepare the default NML_SSHGRD_ASSIMILATION section. """
-            self.SSHGRD_ASSIM = 'F'
-            self.SSHGRD_ASSIM_FILE = 'casename_sshgrd.nc'
-            self.SSHGRD_WEIGHT_MAX = 0.0
-            self.SSHGRD_TIMESCALE = 0.0
-            self.SSHGRD_TIME_WINDOW = 0.0
-            self.SSHGRD_N_PER_INTERVAL = 0.0
-
-    class TemperatureSalinityGridAssimilation(object):
-        def __init__(self):
-            """ Prepare the default NML_TSGRD_ASSIMILATION section. """
-            self.TSGRD_ASSIM = 'F'
-            self.TSGRD_ASSIM_FILE = 'casename_tsgrd.nc'
-            self.TSGRD_WEIGHT_MAX = 0.0
-            self.TSGRD_TIMESCALE = 0.0
-            self.TSGRD_TIME_WINDOW = 0.0
-            self.TSGRD_N_PER_INTERVAL = 0.0
-
-    class CurrentsNudgingAssimilation(object):
-        def __init__(self):
-            """ Prepare the default NML_CUR_NGASSIMILATION section. """
-            self.CUR_NGASSIM = 'F'
-            self.CUR_NGASSIM_FILE = 'casename_cur.nc'
-            self.CUR_NG_RADIUS = 0.0
-            self.CUR_GAMA = 0.0
-            self.CUR_GALPHA = 0.0
-            self.CUR_NG_ASTIME_WINDOW = 0.0
-
-    class CurrentsOptimalInterpolationAssimilation(object):
-        def __init__(self):
-            """ Prepare the default NML_CUR_OIASSIMILATION section. """
-            self.CUR_OIASSIM = 'F'
-            self.CUR_OIASSIM_FILE = 'casename_curoi.nc'
-            self.CUR_OI_RADIUS = 0.0
-            self.CUR_OIGALPHA = 0.0
-            self.CUR_OI_ASTIME_WINDOW = 0.0
-            self.CUR_N_INFLU = 0.0
-            self.CUR_NSTEP_OI = 0.0
-
-    class TemperatureSalinityNudgingAssimilation(object):
-        def __init__(self):
-            """ Prepare the default NML_TS_NGASSIMILATION section. """
-            self.TS_NGASSIM = 'F'
-            self.TS_NGASSIM_FILE = 'casename_ts.nc'
-            self.TS_NG_RADIUS = 0.0
-            self.TS_GAMA = 0.0
-            self.TS_GALPHA = 0.0
-            self.TS_NG_ASTIME_WINDOW = 0.0
-
-    class TemperatureSalinityOptimalInterpolationAssimilation(object):
-        def __init__(self):
-            """ Prepare the default NML_TS_OIASSIMILATION section. """
-            self.TS_OIASSIM = 'F'
-            self.TS_OIASSIM_FILE = 'casename_tsoi.nc'
-            self.TS_OI_RADIUS = 0.0
-            self.TS_OIGALPHA = 0.0
-            self.TS_OI_ASTIME_WINDOW = 0.0
-            self.TS_MAX_LAYER = 0.0
-            self.TS_N_INFLU = 0.0
-            self.TS_NSTEP_OI = 0.0
+        if not type is None:
+            self.config[section][self.index(section, entry)].type = type
 
     def write_model_namelist(self, namelist_file):
         """
@@ -3003,46 +2968,54 @@ class Namelist(object):
         """
 
         # Set some defaults that might be None based on what we've got already.
-        starts = [('restart', 'RST_FIRST_OUT'),
-                  ('dye_release', 'DYE_RELEASE_START'),
-                  ('output', 'NC_FIRST_OUT'),
-                  ('output_average', 'NCAV_FIRST_OUT')]
-        ends = [('dye_release', 'DYE_RELEASE_STOP')]
+        starts = [('NML_RESTART', 'RST_FIRST_OUT'),
+                  ('NML_DYE_RELEASE', 'DYE_RELEASE_START'),
+                  ('NML_NETCDF', 'NC_FIRST_OUT'),
+                  ('NML_NCAV', 'NCAV_FIRST_OUT')]
+        ends = [('NML_DYE_RELEASE', 'DYE_RELEASE_STOP')]
+        case_start = self.value('NML_CASE', 'START_DATE')
+        case_end = self.value('NML_CASE', 'END_DATE')
         for start in starts:
-            defaults = getattr(self, start[0])
-            setattr(defaults, start[1], self.case.START_DATE)
-            setattr(self, start[0], defaults)
+            current_start = self.value(*start)
+            if current_start is None:
+                self.update(*start, case_start)
         for end in ends:
-            defaults = getattr(self, end[0])
-            setattr(defaults, end[1], self.case.END_DATE)
-            setattr(self, end[0], defaults)
+            current_end = self.value(*end)
+            if current_end is None:
+                self.update(*end, case_end)
 
-        with Path(namelist_file).open('w') as f:
-            for section in self._sections:
-                f.write(f'&NML_{section}\n')
-                defaults = getattr(self, self._sections[section])
-                # Use defaults.__dict__ as it's an ordered dictionary so we keep the order of the namelist entries.
-                # This is only true for python versions 3.6 and above. Below that, the entries are alphabetical,
-                # I think, or maybe even random. I'm pretty sure FVCOM doesn't care one way or the other,
-                # but it's easier for humans to read if it's in a sensible order.
-                attributes = [i for i in defaults.__dict__ if not i.startswith('__') and not i.endswith('__')]
-                for attribute in attributes:
-                    value = getattr(defaults, attribute)
-                    if value is None:
-                        raise ValueError(f'Mandatory NML_{section} {attribute} value missing.')
-                    # Make the formatting appropriate for different data.
-                    if isinstance(value, str) and not value in ('T', 'F'):
-                        f.write(f" {attribute} = '{value}'")
-                    elif isinstance(value, int) or value in ('T', 'F'):
-                        f.write(f" {attribute} = {value}")
-                    else:
-                        f.write(f" {attribute} = {value:f}")
+        write_model_namelist(self.config, namelist_file)
 
-                    if attribute != attributes[-1]:
-                        f.write(',\n')
-                    else:
-                        f.write('\n')
-                f.write('/\n\n')
+
+def write_model_namelist(namelist_config, namelist_file, mode='w'):
+    """
+    Write the current object to ASCII in FVCOM namelist format.
+
+    Parameters
+    ----------
+    namelist_config : dict
+        The dictionary whose keys are the NML_ section and whose entries are NameListEntry objects.
+    namelist_file : pathlib.Path, str
+        The file to which to write the namelist.
+    mode : str, optional
+        The file access mode. Defaults to write ('w').
+
+    """
+
+    # Set some defaults that might be None based on what we've got already.
+    with Path(namelist_file).open(mode) as f:
+        for section in namelist_config:
+            f.write(f'&{section}\n')
+            for attribute in namelist_config[section]:
+                if attribute.value is None:
+                    raise ValueError(f'Mandatory {section} {attribute.name} value missing.')
+                f.write(attribute.string())
+
+                if attribute != namelist_config[section][-1]:
+                    f.write(',\n')
+                else:
+                    f.write('\n')
+            f.write('/\n\n')
 
 
 class Nest(object):
