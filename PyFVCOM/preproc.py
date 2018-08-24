@@ -1748,6 +1748,8 @@ class Model(Domain):
 
         """
 
+        # TODO: Rewrite to use the write_model_namelist and NameListEntry approach.
+
         if not hasattr(self, 'probes'):
             raise AttributeError('No probes object found. Please run PyFVCOM.preproc.add_probes() first.')
 
