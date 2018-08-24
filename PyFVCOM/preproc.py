@@ -2443,8 +2443,9 @@ class NameListEntry(object):
         ----------
         name : str
             The namelist entry name.
-        value : str
-            The namelist entry value.
+        value : str, bool
+            The namelist entry value. Boolean values are automatically converted to the corresponding FVCOM 'T' and
+            'F' values. 'T'/'F' values are also always unquoted.
         type : str, optional
             The namelist entry type as a string formatting specifier (e.g. '.03f' for zero padded float to three
             decimal points, '2d' for integers with two figures). If omitted, the type is 's'.
@@ -2458,6 +2459,14 @@ class NameListEntry(object):
         self.value = value
         self.type = type
         self._no_quote_string = no_quote_string
+
+        # Convert True/False to T/F.
+        if isinstance(value, bool):
+            self.value = str(value)[0]
+
+        # Convert 'T'/'S' strings to be unquoted when writing out.
+        if self.value in ('T', 'F'):
+            self._no_quote_string = True
 
     def string(self):
         """
@@ -2503,6 +2512,8 @@ class ModelNameList(object):
 
         Mandatory fields are self.config['NML_CASE'] START_DATE and self.config['NML_CASE'] END_DATE. Everything
         else is pre-populated with default options.
+
+        Python True/False is supported (as well as T/F strings) for enabling/disabling things in the namelist.
 
         - The no forcing at all (surface or open boundary).
         - Temperature and salinity are deactivated.
