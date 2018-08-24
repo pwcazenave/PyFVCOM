@@ -1497,7 +1497,7 @@ class Model(Domain):
                                       NameListEntry('RIVER_FILE', forcing_file),
                                       NameListEntry('RIVER_GRID_LOCATION', self.river.node[ri] + 1, 'd'),
                                       NameListEntry('RIVER_VERTICAL_DISTRIBUTION', vertical_distribution)]}
-            write_model_namelist(namelist, output_file, mode='a')
+            write_model_namelist(output_file, namelist, mode='a')
 
     def read_nemo_rivers(self, nemo_file, remove_baltic=True):
         """
@@ -1777,7 +1777,7 @@ class Model(Domain):
                 if np.any(sigma):
                     sigma_nml = NameListEntry('PROBE_LEVELS', f'{sigma[0]:d} {simga[1]:d}', no_quote_string=True)
                     namelist['NML_PROBE'].append(sigma_nml)
-                write_model_namelist(namelist, output_file, mode='a')
+                write_model_namelist(output_file, namelist, mode='a')
 
     def add_stations(self, positions, names, max_distance=np.inf):
         """
@@ -2991,19 +2991,19 @@ class ModelNameList(object):
             if current_end is None:
                 self.update(*end, case_end)
 
-        write_model_namelist(self.config, namelist_file)
+        write_model_namelist(namelist_file, self.config)
 
 
-def write_model_namelist(namelist_config, namelist_file, mode='w'):
+def write_model_namelist(namelist_file, namelist_config, mode='w'):
     """
     Write the current object to ASCII in FVCOM namelist format.
 
     Parameters
     ----------
-    namelist_config : dict
-        The dictionary whose keys are the NML_ section and whose entries are NameListEntry objects.
     namelist_file : pathlib.Path, str
         The file to which to write the namelist.
+    namelist_config : dict
+        The dictionary whose keys are the NML_ section and whose entries are NameListEntry objects.
     mode : str, optional
         The file access mode. Defaults to write ('w').
 
