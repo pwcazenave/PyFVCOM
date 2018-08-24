@@ -1888,7 +1888,7 @@ class Model(Domain):
             if nesting_type >= 2:
                 self.nest[-1].add_weights()
 
-    def add_nests_harmonics(self, harmonics_file, harmonics_vars=['u', 'v', 'zeta'], constituents=['M2', 'S2'], pool_size=4):
+    def add_nests_harmonics(self, harmonics_file, harmonics_vars=['u', 'v', 'zeta'], constituents=['M2', 'S2'], pool_size=None):
         """
         Adds series of values based on harmonic predictions to the boundaries in the nest object
 
