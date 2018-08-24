@@ -2437,7 +2437,7 @@ class Model(Domain):
 
 class NameListEntry(object):
 
-    def __init__(self, name, value, type='s'):
+    def __init__(self, name, value, type='s', no_quote_string=False):
         """
         Hold a namelist entry with its name, value and, optionally, format type.
 
@@ -2450,12 +2450,16 @@ class NameListEntry(object):
         type : str, optional
             The namelist entry type as a string formatting specifier (e.g. '.03f' for zero padded float to three
             decimal points, '2d' for integers with two figures). If omitted, the type is 's'.
+        no_quote_string : bool
+            If set to True, remove quotes around the entry. This is useful if you want to pass a pre-formatted string
+            of integers, for example. Defaults to False (strings are quoted).
 
         """
 
         self.name = name
         self.value = value
         self.type = type
+        self._no_quote_string = no_quote_string
 
     def string(self):
         """
@@ -2466,7 +2470,10 @@ class NameListEntry(object):
         """
 
         if self.type == 's':
-            string = f" {self.name} = '{self.value:{self.type}}'"
+            if self._no_quote_string:
+                string = f" {self.name} = {self.value:{self.type}}"
+            else:
+                string = f" {self.name} = '{self.value:{self.type}}'"
         else:
             string = f" {self.name} = {self.value:{self.type}}"
 
