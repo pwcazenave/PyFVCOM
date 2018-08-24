@@ -2611,7 +2611,7 @@ class ModelNameList(object):
                             NameListEntry('NC_WQM', 'F'),
                             NameListEntry('NC_VORTICITY', 'F'),
                             NameListEntry('NC_FABM', 'F')],
-                       'NML_NCAV':
+                       'NML_NETCDF_AV':
                            [NameListEntry('NCAV_ON', 'F'),
                             NameListEntry('NCAV_FIRST_OUT', None),
                             NameListEntry('NCAV_OUT_INTERVAL', 'seconds=86400.'),
@@ -2712,7 +2712,7 @@ class ModelNameList(object):
                             NameListEntry('BACKWARD_ADVECTION', 'F'),
                             NameListEntry('BACKWARD_STEP', 1, 'd')],
                        'NML_RIVER_TYPE':
-                           [NameListEntry('RIVER_NUMBER', 0),
+                           [NameListEntry('RIVER_NUMBER', 0, 'd'),
                             NameListEntry('RIVER_KIND', 'variable'),
                             NameListEntry('RIVER_TS_SETTING', 'calculated'),
                             NameListEntry('RIVER_INFLOW_LOCATION', 'node'),
@@ -2742,7 +2742,7 @@ class ModelNameList(object):
                            [NameListEntry('GRID_FILE', f'{self._casename}_grd.dat'),
                             NameListEntry('GRID_FILE_UNITS', 'meters'),
                             NameListEntry('PROJECTION_REFERENCE', 'proj=utm +ellps=WGS84 +zone=30'),
-                            NameListEntry('SIGMA_LEVELS_FILE', 'sigma_gen.dat'),
+                            NameListEntry('SIGMA_LEVELS_FILE', f'{self._casename}_sigma.dat'),
                             NameListEntry('DEPTH_FILE', f'{self._casename}_dep.dat'),
                             NameListEntry('CORIOLIS_FILE', f'{self._casename}_cor.dat'),
                             NameListEntry('SPONGE_FILE', f'{self._casename}_spg.dat')],
@@ -2824,7 +2824,7 @@ class ModelNameList(object):
                             NameListEntry('NCNEST_TYPE_WAVE', 'spectral density'),
                             NameListEntry('NCNEST_BLOCKSIZE_WAVE', -1, 'd'),
                             NameListEntry('NCNEST_NODE_FILES_WAVE', 'none')],
-                       'NML_RIVER_TYPE':
+                       'NML_BOUNDSCHK':
                            [NameListEntry('BOUNDSCHK_ON', 'F'),
                             NameListEntry('CHK_INTERVAL', 1.0, 'f'),
                             NameListEntry('VELOC_MAG_MAX', 6.5, 'f'),
@@ -2989,7 +2989,7 @@ class ModelNameList(object):
         starts = [('NML_RESTART', 'RST_FIRST_OUT'),
                   ('NML_DYE_RELEASE', 'DYE_RELEASE_START'),
                   ('NML_NETCDF', 'NC_FIRST_OUT'),
-                  ('NML_NCAV', 'NCAV_FIRST_OUT')]
+                  ('NML_NETCDF_AV', 'NCAV_FIRST_OUT')]
         ends = [('NML_DYE_RELEASE', 'DYE_RELEASE_STOP')]
         case_start = self.value('NML_CASE', 'START_DATE')
         case_end = self.value('NML_CASE', 'END_DATE')
