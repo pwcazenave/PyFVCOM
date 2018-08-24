@@ -493,9 +493,13 @@ class OpenBoundary(object):
         """
 
         if isinstance(radius, (float, int)):
-            self.radius = np.repeat(radius, np.shape(self.nodes))
+            radius = np.repeat(radius, np.shape(self.nodes))
         if isinstance(coefficient, (float, int)):
-            self.coefficient = np.repeat(coefficient, np.shape(self.nodes))
+            coefficient = np.repeat(coefficient, np.shape(self.nodes))
+
+        self.sponge_radius = radius
+
+        self.sponge_coefficient = coefficient
 
     def add_type(self, obc_type=1):
         """
