@@ -1490,14 +1490,14 @@ class Model(Domain):
             Vertical distribution of river input. Defaults to 'uniform'.
 
         """
-        with open(output_file, 'w') as f:
-            for ri in range(self.dims.river):
-                f.write(' &NML_RIVER\n')
-                f.write('  RIVER_NAME          = ''{}'',\n'.format(self.river.names[ri]))
-                f.write('  RIVER_FILE          = ''{}'',\n'.format(forcing_file))
-                f.write('  RIVER_GRID_LOCATION = {:d},\n'.format(self.river.node[ri] + 1))
-                f.write('  RIVER_VERTICAL_DISTRIBUTION = {}\n'.format(vertical_distribution))
-                f.write('  /\n')
+        if Path(output_file).exists():
+            Path(output_file).unlink()
+        for ri in range(self.dims.river):
+            namelist = {'NML_RIVER': [NameListEntry('RIVER_NAME', self.river.names[ri]),
+                                      NameListEntry('RIVER_FILE', forcing_file),
+                                      NameListEntry('RIVER_GRID_LOCATION', self.river.node[ri] + 1, 'd'),
+                                      NameListEntry('RIVER_VERTICAL_DISTRIBUTION', vertical_distribution)]}
+            write_model_namelist(namelist, output_file, mode='a')
 
     def read_nemo_rivers(self, nemo_file, remove_baltic=True):
         """
