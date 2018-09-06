@@ -34,6 +34,11 @@ from netCDF4 import Dataset, date2num, num2date, stringtochar
 from scipy.interpolate import RegularGridInterpolator
 
 
+class _passive_data_store(object):
+    def __init__(self):
+        pass
+
+
 class Model(Domain):
     """
     Everything related to making a new model run.
@@ -64,13 +69,13 @@ class Model(Domain):
             self.noisy = kwargs['noisy']
 
         # Initialise things so we can add attributes to them later.
-        self.time = type('time', (), {})()
-        self.sigma = type('sigma', (), {})()
-        self.sst = type('sst', (), {})()
-        self.nest = type('nest', (), {})()
-        self.stations = type('stations', (), {})()
-        self.probes = type('probes', (), {})()
-        self.ady = type('sst', (), {})()
+        self.time = _passive_data_store()
+        self.sigma = _passive_data_store()
+        self.sst = _passive_data_store()
+        self.nest = _passive_data_store()
+        self.stations = _passive_data_store()
+        self.probes = _passive_data_store()
+        self.ady = _passive_data_store()
         self.regular = None
 
         # Make some potentially useful time representations.
@@ -95,7 +100,7 @@ class Model(Domain):
 
     def __prep_rivers(self):
         """ Create a few object and attributes which are useful for the river data. """
-        self.river = type('river', (object,), {})()
+        self.river = _passive_data_store()
         self.dims.river = 0  # assume no rivers.
 
         self.river.history = ''
@@ -528,7 +533,7 @@ class Model(Domain):
         sigma_file = str(sigma_file)
 
         # Make an object to store the sigma data.
-        self.sigma = type('sigma', (object,), {})()
+        self.sigma = _passive_data_store()
 
         with open(sigma_file, 'r') as f:
             lines = f.readlines()
@@ -804,7 +809,7 @@ class Model(Domain):
         """
 
         # Make an object to store the sigma data.
-        self.sigma = type('sigma', (object,), {})()
+        self.sigma = _passive_data_store()
 
         self.dims.levels = levels
         self.dims.layers = self.dims.levels - 1
@@ -1808,7 +1813,7 @@ class Model(Domain):
         """
 
         # Store everything in an object to make it cleaner passing stuff around.
-        self.stations = type('stations', (object,), {})()
+        self.stations = _passive_data_store()
         self.stations.name = []
         self.stations.grid_node = []
         self.stations.grid_element = []
