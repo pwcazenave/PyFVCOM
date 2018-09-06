@@ -682,7 +682,7 @@ class Plotter(object):
         self.tripcolor_plot = self.axes.tripcolor(self.mx, self.my, self.triangles, np.squeeze(field), *args,
                                                   vmin=self.vmin, vmax=self.vmax,
                                                   cmap=self.cmap, edgecolors=self.edgecolors,
-                                                  zorder=1, norm=self.norm, **kwargs)
+                                                  norm=self.norm, **kwargs)
 
         if self.cartesian:
             self.axes.set_aspect('equal')
