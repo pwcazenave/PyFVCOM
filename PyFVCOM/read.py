@@ -703,6 +703,7 @@ class FileReader(Domain):
                     z = self.grid.h_center
                 else:
                     z = self.grid.h
+
                 # Set the sigma data to the 0-1 range for siglay so that the maximum depth value is equal to the
                 # actual depth. This may be a problem.
                 _fixed_sig = fix_range(getattr(self.grid, var), 0, 1)
@@ -893,28 +894,36 @@ class FileReader(Domain):
             self.load_time()
             return np.argmin(np.abs(self.time.datetime - when))
 
-    def grid_volume(self):
+    def grid_volume(self, load_zeta=False):
         """
         Calculate the grid volume (optionally time varying) for the loaded grid.
 
         If the surface elevation data have been loaded (`zeta'), the volume varies with time, otherwise, the volume
         is for the mean water depth (`h').
 
+        Parameters
+        ----------
+        load_zeta : bool, optional
+            Set to True to load the surface elevation data. If omitted, any existing surface elevation data are used,
+            otherwise it is ignored.
+
         Provides
         --------
-        self.depth_volume : ndarray
+        self.grid.depth_volume : np.ndarray
             Depth-resolved volume.
-        self.volume : ndarray
+        self.grid.depth_integrated_volume : np.ndarray
             Depth-integrated volume.
 
         """
 
-        if not hasattr(self.data, 'zeta'):
-            surface_elevation = np.zeros((self.dims.time, self.dims.node))
-        else:
+        if hasattr(self.data, 'zeta'):
             surface_elevation = self.data.zeta
+        elif load_zeta:
+            self.load_data(['zeta'])
+        else:
+            surface_elevation = np.zeros((self.dims.time, self.dims.node))
 
-        self.depth_volume, self.volume = unstructured_grid_volume(self.grid.art1, self.grid.h, surface_elevation, self.grid.siglev, depth_integrated=True)
+        self.grid.depth_volume, self.grid.depth_integrated_volume = unstructured_grid_volume(self.grid.art1, self.grid.h, surface_elevation, self.grid.siglev, depth_integrated=True)
 
     def _get_cv_volumes(self, poolsize=None):
         """
@@ -927,10 +936,10 @@ class FileReader(Domain):
 
         Provides
         --------
-        self.grid.dz : np.ndarray
-            Sigma layer thickness.
         self.grid.depth : np.ndarray
             Time varying water depth.
+        self.grid.depth_volume : np.ndarray
+            Depth-resolved volume.
         self.grid.depth_integrated_volume : np.ndarray
             The volume of the model domain over time.
 
@@ -940,13 +949,16 @@ class FileReader(Domain):
         variables if we can use existing ones instead.
 
         """
-        self.grid.cv_area = np.asarray(control_volumes(self.grid.x, self.grid.y, self.grid.triangles, element_control=False, poolsize=poolsize))
+
+        if not hasattr(self.grid, 'art1'):
+            self.grid.art1 = np.asarray(control_volumes(self.grid.x, self.grid.y, self.grid.triangles,
+                                                        element_control=False, poolsize=poolsize))
 
         if not hasattr(self.data, 'zeta'):
             self.load_data(['zeta'])
-        self.grid.dz = np.abs(np.diff(self.grid.siglev, axis=0))
+        # Calculate depth-resolved and depth-integrated volume.
+        self.grid_volume()
         self.grid.depth = self.data.zeta + self.grid.h
-        self.grid.integrated_volume = (self.grid.cv_area * self.grid.depth)
 
     def total_volume_var(self, var, poolsize=None):
         """
@@ -965,17 +977,22 @@ class FileReader(Domain):
             Adds a new array which is a time series of the integrated value of the variable at each model time.
 
         """
-        if not hasattr(self.grid, 'volume'):
-            self._get_cv_volumes(poolsize=poolsize)
+
+        self._get_cv_volumes(poolsize=poolsize)
 
         if not hasattr(self.data, var):
             self.load_data([var])
+
+        if len(getattr(self.data, var).shape) != 3:
+            raise ValueError('The requested variable ({}) is not depth-resolved.'.format(var))
 
         # Do as a loop because it nukes the memory otherwise
         int_vol = np.zeros(self.dims.time)
 
         for i in range(len(self.grid.x)):
-            int_vol += np.sum(getattr(self.data, var)[:,:,i] * self.grid.integrated_volume[:, np.newaxis, i] * self.grid.dz[np.newaxis, :, i], axis=1)
+            int_vol += np.sum(getattr(self.data, var)[..., i] *
+                              self.grid.depth_volume[..., i], axis=1)
+
         setattr(self.data, '{}_total'.format(var), int_vol)
 
     def avg_volume_var(self, var):
@@ -994,8 +1011,8 @@ class FileReader(Domain):
 
         int_vol = 0
         for i in range(len(self.grid.x)):
-            int_vol += np.average(getattr(self.data, var)[:,:,i], 
-                    weights=self.grid.integrated_volume[:, np.newaxis, i] * self.grid.dz[np.newaxis, :, i], axis=1)
+            int_vol += np.average(getattr(self.data, var)[:, :, i],
+                                  weights=self.grid.depth_volume[..., i], axis=1)
         setattr(self.data, '{}_average'.format(var), int_vol)
 
     def time_to_index(self, target_time, tolerance=False):
