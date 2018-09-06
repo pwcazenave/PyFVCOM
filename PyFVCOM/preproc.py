@@ -2937,8 +2937,15 @@ class ModelNameList(object):
             The index for the NML_`section' `entry'.
 
         """
+        if section not in self.config:
+            raise KeyError(f'{section} is not defined in this namelist configuration.')
 
-        return [i.name for i in self.config[section]].index(entry)
+        try:
+            index = [i.name for i in self.config[section]].index(entry)
+        except ValueError:
+            raise ValueError(f'{entry} is not defined in this namelist {section} configuration.')
+
+        return index
 
     def value(self, section, entry):
         """
@@ -2957,6 +2964,8 @@ class ModelNameList(object):
             The value for the NML_`section' `entry'.
 
         """
+        if section not in self.config:
+            raise KeyError(f'{section} is not defined in this namelist configuration.')
 
         return self.config[section][self.index(section, entry)].value
 
@@ -2978,6 +2987,9 @@ class ModelNameList(object):
         """
         if value is None and type is None:
             raise ValueError("Give one of `value' or `type' to update.")
+
+        if section not in self.config:
+            raise KeyError(f'{section} not defined in this namelist configuration.')
 
         if not value is None:
             self.config[section][self.index(section, entry)].value = value
