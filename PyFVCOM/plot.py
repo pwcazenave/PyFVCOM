@@ -428,8 +428,8 @@ class Plotter(object):
     Class to assist in the creation of plots and animations based on output
     from the FVCOM.
 
-    Provides
-    --------
+    Methods
+    -------
     plot_field
     plot_quiver
     plot_lines
@@ -449,8 +449,8 @@ class Plotter(object):
                  edgecolors='none', s_stations=20, s_particles=20, linewidth=1.0,
                  tick_inc=None, cb_label=None, extend='neither', norm=None, m=None):
         """
-        Parameters:
-        -----------
+        Parameters
+        ----------
         dataset : Dataset, PyFVCOM.read.FileReader
             netCDF4 Dataset or PyFVCOM.read.FileReader object.
         stations : 2D array, optional
@@ -503,8 +503,8 @@ class Plotter(object):
         m : mpl_toolkits.basemap.Basemap, optional
             Pass a Basemap object rather than creating one on each invocation.
 
-        Author(s):
-        -------
+        Author(s)
+        ---------
         James Clark (PML)
         Pierre Cazenave (PML)
 
@@ -630,12 +630,13 @@ class Plotter(object):
         self._init_figure()
 
     def plot_field(self, field, *args, **kwargs):
-        """ Map the given field.
+        """
+        Map the given `field'.
 
-        Parameters:
-        -----------
-        field : 1D array TOCHECK
-            Field to plot.
+        Parameters
+        ----------
+        field : np.ndarray
+            Field to plot (either on elements or nodes).
 
         Additional arguments and keyword arguments are passed to matplotlib.pyplot.tripcolor.
 
@@ -689,8 +690,8 @@ class Plotter(object):
     def plot_quiver(self, u, v, field=False, add_key=True, scale=1.0, label=None):
         """ Produce quiver plot using u and v velocity components.
 
-        Parameters:
-        -----------
+        Parameters
+        ----------
         u : 1D or 2D array
             u-component of the velocity field.
         v : 1D or 2D array
@@ -743,25 +744,17 @@ class Plotter(object):
 
         Parameters:
         -----------
-        x : 1D array TOCHECK
-            Array of x coordinates to plot.
-
-        y : 1D array TOCHECK
-            Array of y coordinates to plot.
-
+        x : np.ndarray, list
+            Array of x coordinates to plot (cartesian coordinates).
+        y : np.ndarray, list
+            Array of y coordinates to plot (cartesian coordinates).
         group_name : str, optional
-            Group name for this set of particles - a separate plot object is
-            created for each group name passed in.
-
-            Default `None'
-
+            Group name for this set of particles - a separate plot object is created for each group name passed in.
+            Defaults to `Default'
         color : string, optional
-            Colour to use when making the plot.
-
-            Default `r'
-
+            Colour to use when making the plot. Default `r'
         zone_number : string, optional
-            See PyFVCOM documentation for a full list of supported codes.
+            See PyFVCOM.coordinates documentation for a full list of supported codes. Defaults to `30N'.
 
         """
 
@@ -781,8 +774,8 @@ class Plotter(object):
     def remove_line_plots(self, group_name):
         """ Remove line plots for group `group_name'
 
-        Parameters:
-        -----------
+        Parameters
+        ----------
         group_name : str
             Name of the group for which line plots should be deleted.
 
@@ -794,29 +787,19 @@ class Plotter(object):
     def plot_scatter(self, x, y, group_name='Default', colour='r', zone_number='30N'):
         """ Plot scatter.
 
-        Parameters:
-        -----------
-        x : 1D array TOCHECK
-            Array of x coordinates to plot.
-
-        y : 1D array TOCHECK
-            Array of y coordinates to plot.
-
+        Parameters
+        ----------
+        x : np.ndarray, list
+            Array of x coordinates to plot (cartesian coordinates).
+        y : np.ndarray, list
+            Array of y coordinates to plot (cartesian coordinates).
         group_name : str, optional
-            Group name for this set of particles - a separate plot object is
-            created for each group name passed in.
-
-            Default `None'
-
+            Group name for this set of particles - a separate plot object is created for each group name passed in.
+            Defaults to `Default'
         color : string, optional
-            Colour to use when making the plot.
-
-            Default `r'
-
+            Colour to use when making the plot. Default `r'.
         zone_number : string, optional
-            See PyFVCOM documentation for a full list of supported codes.
-
-            Default `30N'
+            See PyFVCOM.coordinates documentation for a full list of supported codes. Defaults to `30N'.
 
         """
         if not self.scat_plot:
