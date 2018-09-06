@@ -2589,7 +2589,7 @@ class ModelNameList(object):
                        'NML_INTEGRATION':
                            [NameListEntry('EXTSTEP_SECONDS', 1.0, 'f'),
                             NameListEntry('ISPLIT', 10, 'd'),
-                            NameListEntry('IRAMP', 0, 'd'),
+                            NameListEntry('IRAMP', 1, 'd'),
                             NameListEntry('MIN_DEPTH', 0.2, 'f'),
                             NameListEntry('STATIC_SSH_ADJ', 0.0, 'f')],
                        'NML_RESTART':
@@ -2731,10 +2731,10 @@ class ModelNameList(object):
                             NameListEntry('OBC_TS_TYPE', 3, 'd'),
                             NameListEntry('OBC_TEMP_NUDGING', 'F'),
                             NameListEntry('OBC_TEMP_FILE', f'{self._casename}_tsobc.nc'),
-                            NameListEntry('OBC_TEMP_NUDGING_TIMESCALE', 0.0001736111, 'f'),
+                            NameListEntry('OBC_TEMP_NUDGING_TIMESCALE', 0.0001736111, '.10f'),
                             NameListEntry('OBC_SALT_NUDGING', 'F'),
                             NameListEntry('OBC_SALT_FILE', f'{self._casename}_tsobc.nc'),
-                            NameListEntry('OBC_SALT_NUDGING_TIMESCALE', 0.0001736111, 'f'),
+                            NameListEntry('OBC_SALT_NUDGING_TIMESCALE', 0.0001736111, '.10f'),
                             NameListEntry('OBC_MEANFLOW', 'F'),
                             NameListEntry('OBC_MEANFLOW_FILE', f'{self._casename}_meanflow.nc'),
                             NameListEntry('OBC_TIDEOUT_INITIAL', 1, 'd'),
@@ -2821,7 +2821,7 @@ class ModelNameList(object):
                             NameListEntry('NCNEST_NODE_FILES_WAVE', 'none')],
                        'NML_BOUNDSCHK':
                            [NameListEntry('BOUNDSCHK_ON', 'F'),
-                            NameListEntry('CHK_INTERVAL', 1.0, 'f'),
+                            NameListEntry('CHK_INTERVAL', 1, 'd'),
                             NameListEntry('VELOC_MAG_MAX', 6.5, 'f'),
                             NameListEntry('ZETA_MAG_MAX', 10.0, 'f'),
                             NameListEntry('TEMP_MAX', 30.0, 'f'),
