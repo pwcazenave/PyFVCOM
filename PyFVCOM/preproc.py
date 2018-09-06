@@ -2992,6 +2992,8 @@ class ModelNameList(object):
             raise KeyError(f'{section} not defined in this namelist configuration.')
 
         if not value is None:
+            if isinstance(value, bool):
+                value = str(value)[0]
             self.config[section][self.index(section, entry)].value = value
 
         if not type is None:
