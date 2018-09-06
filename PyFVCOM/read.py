@@ -167,7 +167,7 @@ class FileReader(Domain):
 
         Returns
         -------
-        NEW : PyFVCOM.FileReader
+        idem : PyFVCOM.FileReader
             Concatenated (in time) `PyFVCOM.FileReader' class.
 
         Notes
