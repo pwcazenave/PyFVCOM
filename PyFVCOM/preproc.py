@@ -3556,7 +3556,7 @@ class RegularReader(FileReader):
             try:
                 setattr(self.grid, grid, self.ds.variables[grid][:])
                 # Save the attributes.
-                attributes = type('attributes', (object,), {})()
+                attributes = _passive_data_store()
                 for attribute in self.ds.variables[grid].ncattrs():
                     setattr(attributes, attribute, getattr(self.ds.variables[grid], attribute))
                 setattr(self.atts, grid, attributes)
@@ -3758,7 +3758,7 @@ class RegularReader(FileReader):
                 # Should we error here or carry on having warned?
                 warn("{} does not contain a `time' dimension.".format(v))
 
-            attributes = type('attributes', (object,), {})()
+            attributes = _passive_data_store()
             for attribute in self.ds.variables[v].ncattrs():
                 setattr(attributes, attribute, getattr(self.ds.variables[v], attribute))
             setattr(self.atts, v, attributes)
@@ -3950,7 +3950,7 @@ class HYCOMReader(RegularReader):
             try:
                 setattr(self.grid, grid, self.ds.variables[grid][:])
                 # Save the attributes.
-                attributes = type('attributes', (object,), {})()
+                attributes = _passive_data_store()
                 for attribute in self.ds.variables[grid].ncattrs():
                     setattr(attributes, attribute, getattr(self.ds.variables[grid], attribute))
                 setattr(self.atts, grid, attributes)
@@ -4144,7 +4144,7 @@ class HYCOMReader(RegularReader):
                 # Should we error here or carry on having warned?
                 warn("{} does not contain an `MT' (time) dimension.".format(v))
 
-            attributes = type('attributes', (object,), {})()
+            attributes = _passive_data_store()
             for attribute in self.ds.variables[v].ncattrs():
                 setattr(attributes, attribute, getattr(self.ds.variables[v], attribute))
             setattr(self.atts, v, attributes)
