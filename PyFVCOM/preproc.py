@@ -1665,7 +1665,7 @@ class Model(Domain):
         """
 
         # Store everything in an object to make it cleaner passing stuff around.
-        self.probes = type('probes', (object,), {})()
+        self.probes = _passive_data_store()
 
         self.probes.interval = interval  # currently assuming the same for all probes
 
