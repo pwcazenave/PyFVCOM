@@ -1058,7 +1058,7 @@ class CrossPlotter(Plotter):
         for this_ind, (point_1, point_2) in enumerate(zip(self.sub_samp[0:-2], self.sub_samp[2:])):
             # work out pll vectors
             this_pll_vec = np.asarray([point_2[0] - point_1[0], point_2[1] - point_1[1]])
-            pll_vec[this_ind + 1,:] = this_pll_vec/np.sqrt(this_pll_vec[0]**2 + this_pll_vec[1]**2)
+            pll_vec[this_ind + 1, :] = this_pll_vec / np.sqrt(this_pll_vec[0]**2 + this_pll_vec[1]**2)
 
         pll_vec[0] = pll_vec[1]
         pll_vec[-1] = pll_vec[-2]
