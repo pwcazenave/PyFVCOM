@@ -990,16 +990,18 @@ class Model(Domain):
         # Work through all the open boundary objects collecting all the information we need and then dump that to file.
         radius = []
         coefficient = []
+        nodes = []
         for boundary in self.open_boundaries:
             radius += boundary.sponge_radius.tolist()
             coefficient += boundary.sponge_coefficient.tolist()
+            nodes += boundary.nodes
 
         # I feel like this should be in self.dims.
         number_of_nodes = len(radius)
 
         with sponge_file.open('w') as f:
             f.write('Sponge Node Number = {:d}\n'.format(number_of_nodes))
-            for node in zip(np.arange(number_of_nodes) + 1, radius, coefficient):
+            for node in zip([i + 1 for i in nodes], radius, coefficient):
                 f.write('{} {:.6f} {:.6f}\n'.format(*node))
 
     def add_grid_metrics(self, noisy=False):
