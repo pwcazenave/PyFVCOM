@@ -679,19 +679,6 @@ class Plotter(object):
                 self.tripcolor_plot.set_array(field)
             return
 
-        # Create tripcolor plot
-        x, y = self.m(self.lon, self.lat)
-        # Creating a Triangulation object and then using that to plot data on the elements breaks, whereas just
-        # passing the coordinates and the existing triangulation table to tripcolor works fine. We'll do the latter
-        # so we can plot both element and node-based data with this method. However, this removes the masking bit.
-        # I'm not sure what that does anyway, so until someone moans, we'll just ignore it. I'll leave it in despite
-        # this being in version control.
-        # self.tri = Triangulation(x, y, self.triangles)
-        # self.masked_tris = self.tri.get_masked_triangles()
-        # field = np.squeeze(field)[self.masked_tris].mean(axis=1)
-        # self.tripcolor_plot = self.axes.tripcolor(self.tri, field,
-        #                                           vmin=self.vmin, vmax=self.vmax, cmap=self.cmap,
-        #                                           edgecolors=self.edgecolors, zorder=1, norm=self.norm)
         self.tripcolor_plot = self.axes.tripcolor(self.mx, self.my, self.triangles, np.squeeze(field), *args,
                                                   vmin=self.vmin, vmax=self.vmax,
                                                   cmap=self.cmap, edgecolors=self.edgecolors,
@@ -701,15 +688,7 @@ class Plotter(object):
             self.axes.set_aspect('equal')
             self.axes.set_xlim(self.mx.min(), self.mx.max())
             self.axes.set_ylim(self.my.min(), self.my.max())
-        # Overlay the grid
-        # self.axes.triplot(self.tri, zorder=2)
 
-        # Overlay stations in the first instance
-        if self.stations is not None:
-            mx, my = self.m(self.stations[0, :], self.stations[1, :])
-            self.axes.scatter(mx, my, marker='*', c='k', s=self.s_stations, edgecolors='none', zorder=4)
-
-        # Add colorbar scaled to axis width
         divider = make_axes_locatable(self.axes)
         self.colorbar_axis = divider.append_axes("right", size="5%", pad=0.05)
         self.cbar = self.figure.colorbar(self.tripcolor_plot, cax=self.colorbar_axis, extend=self.extend)
