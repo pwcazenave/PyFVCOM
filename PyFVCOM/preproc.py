@@ -571,15 +571,13 @@ class Model(Domain):
                     for i in range(kl):
                         zkl[i] = s[i]
 
-        # Do some checks if we've got uniform or generalised coordinates to make sure the input is correct.
-        if sigtype == 'GENERALIZED':
+        # Calculate the sigma level distributions at each grid node.
+        if sigtype.lower() == 'generalized':
+            # Do some checks if we've got uniform or generalised coordinates to make sure the input is correct.
             if len(zku) != ku:
                 raise ValueError('Number of zku values does not match the number specified in ku')
             if len(zkl) != kl:
                 raise ValueError('Number of zkl values does not match the number specified in kl')
-
-        # Calculate the sigma level distributions at each grid node.
-        if sigtype.lower() == 'generalized':
             sigma_levels = np.empty((self.dims.node, nlev)) * np.nan
             for i in range(self.dims.node):
                 sigma_levels[i, :] = self.sigma_generalized(nlev, dl, du, kl, ku, zkl, zku, self.grid.h[i], min_constant_depth)
