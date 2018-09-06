@@ -1905,8 +1905,8 @@ class Model(Domain):
         constituents : list, optional
             The tidal constituents to use for predictions
         pool_size : int, optional
-            The number of multiprocessing tasks to use in the intepolation of the harmonics and doing the predictions. None causes it 
-            to use all available.
+            The number of multiprocessing tasks to use in the intepolation of the harmonics and doing the
+            predictions. None causes it to use all available.
 
         Provides
         --------
