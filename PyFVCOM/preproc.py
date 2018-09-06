@@ -2997,6 +2997,24 @@ class ModelNameList(object):
         if not type is None:
             self.config[section][self.index(section, entry)].type = type
 
+    def update_nudging(self, recovery_time):
+        """
+        Calculate some of the nudging time scales based on the formula in the FVCOM manual for the specified recovery
+        time.
+
+        Parameters
+        ----------
+        recovery_time : float
+            The recovery time (in hours) for the boundary forcing.
+
+        """
+
+        nudging_timescale = 1 / (recovery_time * 3600 / self.value('NML_INTEGRATION', 'EXTSTEP_SECONDS'))
+        self.update('NML_OPEN_BOUNDARY_CONTROL', 'OBC_TEMP_NUDGING_TIMESCALE', nudging_timescale)
+        self.update('NML_OPEN_BOUNDARY_CONTROL', 'OBC_SALT_NUDGING_TIMESCALE', nudging_timescale)
+        if self._fabm:
+            self.update('NML_OPEN_BOUNDARY_CONTROL', 'OBC_FABM_NUDGING_TIMESCALE', nudging_timescale)
+
     def write_model_namelist(self, namelist_file):
         """
         Write the current object to ASCII in FVCOM namelist format.
