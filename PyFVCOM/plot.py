@@ -696,8 +696,6 @@ class Plotter(object):
         if self.cb_label:
             self.cbar.set_label(self.cb_label)
 
-        return
-
     def plot_quiver(self, u, v, field=False, add_key=True, scale=1.0, label=None):
         """ Produce quiver plot using u and v velocity components.
 
@@ -750,7 +748,6 @@ class Plotter(object):
             self.axes.set_aspect('equal')
             self.axes.set_xlim(self.mx.min(), self.mx.max())
             self.axes.set_ylim(self.my.min(), self.my.max())
-        return
 
     def plot_lines(self, x, y, group_name='Default', colour='r', zone_number='30N'):
         """ Plot path lines.
