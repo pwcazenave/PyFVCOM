@@ -11,7 +11,7 @@ from datetime import datetime
 
 from PyFVCOM.coordinate import lonlat_from_utm
 from PyFVCOM.read import FileReader
-from PyFVCOM.grid import getcrossectiontriangles, unstructured_grid_depths, Domain
+from PyFVCOM.grid import getcrossectiontriangles, unstructured_grid_depths, Domain, nodes2elems
 
 import numpy as np
 
@@ -666,10 +666,13 @@ class Plotter(object):
         if self.mask is not None:
             field = np.ma.masked_where(field <= self.mask, field)
 
-        # Update array values if the plot has already been initialised
         if self.tripcolor_plot:
-            field = field[self.masked_tris].mean(axis=1)
-            self.tripcolor_plot.set_array(field)
+            # The field needs to be on the elements since that's the how it's plotted internally in tripcolor (unless
+            # shading is 'gouraud'). Check if we've been given element data and if not, convert accordingly.
+            if len(field) == len(self.mx):
+                self.tripcolor_plot.set_array(nodes2elems(field, self.triangles))
+            else:
+                self.tripcolor_plot.set_array(field)
             return
 
         # Create tripcolor plot
