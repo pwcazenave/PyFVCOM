@@ -447,7 +447,8 @@ class Plotter(object):
                  extents=None, vmin=None, vmax=None, mask=None, res='c', fs=10,
                  title=None, cmap='viridis', figsize=(10., 10.), axis_position=None,
                  edgecolors='none', s_stations=20, s_particles=20, linewidth=1.0,
-                 tick_inc=None, cb_label=None, extend='neither', norm=None, m=None):
+                 tick_inc=None, cb_label=None, extend='neither', norm=None, m=None,
+                 cartesian=False):
         """
         Parameters
         ----------
@@ -502,6 +503,9 @@ class Plotter(object):
             matplotlib.colors.LogNorm to do log plots of fields.
         m : mpl_toolkits.basemap.Basemap, optional
             Pass a Basemap object rather than creating one on each invocation.
+        cartesian : bool, optional
+            Set to True to skip using Basemap and instead return a simple
+            cartesian axis plot. Defaults to False (geographical coordinates).
 
         Author(s)
         ---------
@@ -533,6 +537,7 @@ class Plotter(object):
         self.extend = extend
         self.norm = norm
         self.m = m
+        self.cartesian = cartesian
 
         # Plot instances (initialise to None for truthiness test later)
         self.quiver_plot = None
@@ -560,6 +565,10 @@ class Plotter(object):
             self.lat = getattr(self.ds.grid, 'lat')
             self.lonc = getattr(self.ds.grid, 'lonc')
             self.latc = getattr(self.ds.grid, 'latc')
+            self.x = getattr(self.ds.grid, 'x')
+            self.y = getattr(self.ds.grid, 'y')
+            self.xc = getattr(self.ds.grid, 'xc')
+            self.yc = getattr(self.ds.grid, 'yc')
             self.nv = getattr(self.ds.grid, 'nv')
         else:
             self.n_nodes = len(self.ds.dimensions['node'])
@@ -568,7 +577,18 @@ class Plotter(object):
             self.lat = self.ds.variables['lat'][:]
             self.lonc = self.ds.variables['lonc'][:]
             self.latc = self.ds.variables['latc'][:]
+            self.x = self.ds.variables['x'][:]
+            self.y = self.ds.variables['y'][:]
+            self.xc = self.ds.variables['xc'][:]
+            self.yc = self.ds.variables['yc'][:]
             self.nv = self.ds.variables['nv'][:]
+
+        if self.cartesian:
+            self.mx, self.my = self.x, self.y
+            self.mxc, self.myc = self.xc, self.yc
+        else:
+            self.mx, self.my = self.m(self.lon, self.lat)
+            self.mxc, self.myc = self.m(self.lonc, self.latc)
 
         if self.nv.min() != 1:
             self.nv -= self.nv.min()
@@ -594,7 +614,7 @@ class Plotter(object):
                                      self.lat.min(), self.lat.max()])
 
         # Create basemap object
-        if not self.m:
+        if not self.m and not self.cartesian:
             if have_basemap:
                 self.m = Basemap(llcrnrlon=self.extents[:2].min(),
                                 llcrnrlat=self.extents[-2:].min(),
@@ -611,15 +631,16 @@ class Plotter(object):
             else:
                 raise RuntimeError('mpl_toolkits is not available in this Python.')
 
-        self.m.drawmapboundary()
-        self.m.drawcoastlines(zorder=2)
-        self.m.fillcontinents(color='0.6', zorder=2)
+        if not self.cartesian:
+            self.m.drawmapboundary()
+            self.m.drawcoastlines(zorder=2)
+            self.m.fillcontinents(color='0.6', zorder=2)
 
         if self.title:
             self.axes.set_title(self.title)
 
         # Add coordinate labels to the x and y axes.
-        if self.tick_inc:
+        if self.tick_inc and not self.cartesian:
             meridians = np.arange(np.floor(np.min(self.extents[:2])), np.ceil(np.max(self.extents[:2])), self.tick_inc[0])
             parallels = np.arange(np.floor(np.min(self.extents[2:])), np.ceil(np.max(self.extents[2:])), self.tick_inc[1])
             self.m.drawparallels(parallels, labels=[1, 0, 0, 0], fontsize=self.fs, linewidth=0, ax=self.axes)
@@ -664,11 +685,15 @@ class Plotter(object):
         # self.tripcolor_plot = self.axes.tripcolor(self.tri, field,
         #                                           vmin=self.vmin, vmax=self.vmax, cmap=self.cmap,
         #                                           edgecolors=self.edgecolors, zorder=1, norm=self.norm)
-        self.tripcolor_plot = self.axes.tripcolor(x, y, self.triangles, np.squeeze(field), *args,
+        self.tripcolor_plot = self.axes.tripcolor(self.mx, self.my, self.triangles, np.squeeze(field), *args,
                                                   vmin=self.vmin, vmax=self.vmax,
                                                   cmap=self.cmap, edgecolors=self.edgecolors,
                                                   zorder=1, norm=self.norm, **kwargs)
 
+        if self.cartesian:
+            self.axes.set_aspect('equal')
+            self.axes.set_xlim(self.mx.min(), self.mx.max())
+            self.axes.set_ylim(self.my.min(), self.my.max())
         # Overlay the grid
         # self.axes.triplot(self.tri, zorder=2)
 
@@ -718,10 +743,8 @@ class Plotter(object):
         if not label:
             label = '{} '.format(scale) + r'$\mathrm{ms^{-1}}$'
 
-        x, y = self.m(self.lonc, self.latc)
-
         if np.any(field):
-            self.quiver_plot = self.axes.quiver(x, y, u, v, field,
+            self.quiver_plot = self.axes.quiver(self.mxc, self.myc, u, v, field,
                                                 cmap=self.cmap,
                                                 units='inches',
                                                 scale_units='inches',
@@ -733,10 +756,14 @@ class Plotter(object):
             if self.cb_label:
                 self.cbar.set_label(self.cb_label)
         else:
-            self.quiver_plot = self.axes.quiver(x, y, u, v, units='inches', scale_units='inches', scale=scale)
+            self.quiver_plot = self.axes.quiver(self.mxc, self.myc, u, v, units='inches', scale_units='inches', scale=scale)
         if add_key:
             self.quiver_key = plt.quiverkey(self.quiver_plot, 0.9, 0.9, scale, label, coordinates='axes')
 
+        if self.cartesian:
+            self.axes.set_aspect('equal')
+            self.axes.set_xlim(self.mx.min(), self.mx.max())
+            self.axes.set_ylim(self.my.min(), self.my.max())
         return
 
     def plot_lines(self, x, y, group_name='Default', colour='r', zone_number='30N'):
@@ -767,7 +794,10 @@ class Plotter(object):
                 self.remove_line_plots(group_name)
 
         lon, lat = lonlat_from_utm(x, y, zone_number)
-        mx, my = self.m(lon, lat)
+        if self.cartesian:
+            mx, my = lon, lat
+        else:
+            mx, my = self.m(lon, lat)
         self.line_plot[group_name] = self.axes.plot(mx, my, color=colour,
                                                     linewidth=self.linewidth, alpha=0.25, zorder=2)
 
@@ -806,7 +836,10 @@ class Plotter(object):
             self.scat_plot = dict()
 
         lon, lat = lonlat_from_utm(x, y, zone_number)
-        mx, my = self.m(lon, lat)
+        if self.cartesian:
+            mx, my = lon, lat
+        else:
+            mx, my = self.m(lon, lat)
 
         try:
             data = np.array([mx, my])
