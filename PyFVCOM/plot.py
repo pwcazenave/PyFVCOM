@@ -539,14 +539,14 @@ class Plotter(object):
         self.m = m
         self.cartesian = cartesian
 
-        # Plot instances (initialise to None for truthiness test later)
-        self.quiver_plot = None
-        self.scat_plot = None
-        self.tripcolor_plot = None
+        # Plot instances (initialise to None/[] for truthiness test later)
+        self.quiver_plot = []
+        self.scat_plot = []
+        self.tripcolor_plot = []
+        self.line_plot = []
         self.tri = None
         self.masked_tris = None
         self.cbar = None
-        self.line_plot = None
 
         # Are we working with a FileReader object or a bog-standard netCDF4 Dataset?
         self._FileReader = False
@@ -649,6 +649,10 @@ class Plotter(object):
     def replot(self):
         self.axes.cla()
         self._init_figure()
+        self.tripcolor_plot = []
+        self.line_plot = []
+        self.quiver_plot = []
+        self.scat_plot = []
 
     def plot_field(self, field, *args, **kwargs):
         """
