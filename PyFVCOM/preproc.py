@@ -2510,7 +2510,7 @@ class ModelNameList(object):
 
     """
 
-    def __init__(self, casename='casename'):
+    def __init__(self, casename='casename', fabm=False):
         """
         Create an object with a default FVCOM namelist configuration.
 
@@ -2536,6 +2536,9 @@ class ModelNameList(object):
         casename : str, optional
             The model casename. This used to define the initial model input file names. If omitted, it is set as
             'casename'.
+        fabm : bool, optional
+            Enable FABM-specific outputs in the namelist. This is mainly the output controls in NML_NETCDF and
+            NML_NETCDF_AV and the whole NML_FABM section.
 
         Attributes
         ----------
@@ -2555,6 +2558,7 @@ class ModelNameList(object):
         # TODO: Add a sediments class.
 
         self._casename = casename
+        self._fabm = fabm
 
         # Initialise all the namelist sections with default values.
         self.config = {'NML_CASE':
@@ -2613,8 +2617,7 @@ class ModelNameList(object):
                             NameListEntry('NC_GROUNDWATER', 'F'),
                             NameListEntry('NC_BIO', 'F'),
                             NameListEntry('NC_WQM', 'F'),
-                            NameListEntry('NC_VORTICITY', 'F'),
-                            NameListEntry('NC_FABM', 'F')],
+                            NameListEntry('NC_VORTICITY', 'F')],
                        'NML_NETCDF_AV':
                            [NameListEntry('NCAV_ON', 'F'),
                             NameListEntry('NCAV_FIRST_OUT', None),
@@ -2634,8 +2637,7 @@ class ModelNameList(object):
                             NameListEntry('NCAV_GROUNDWATER', 'F'),
                             NameListEntry('NCAV_BIO', 'F'),
                             NameListEntry('NCAV_WQM', 'F'),
-                            NameListEntry('NCAV_VORTICITY', 'F'),
-                            NameListEntry('NCAV_FABM', 'F')],
+                            NameListEntry('NCAV_VORTICITY', 'F')],
                        'NML_SURFACE_FORCING':
                            [NameListEntry('WIND_ON', 'F'),
                             NameListEntry('WIND_TYPE', 'speed'),
@@ -2733,9 +2735,6 @@ class ModelNameList(object):
                             NameListEntry('OBC_SALT_NUDGING', 'F'),
                             NameListEntry('OBC_SALT_FILE', f'{self._casename}_tsobc.nc'),
                             NameListEntry('OBC_SALT_NUDGING_TIMESCALE', 0.0001736111, 'f'),
-                            NameListEntry('OBC_FABM_NUDGING', 'F'),
-                            NameListEntry('OBC_FABM_FILE', f'{self._casename}_ERSEMobc.nc'),
-                            NameListEntry('OBC_FABM_NUDGING_TIMESCALE', 0.0001736111, 'f'),
                             NameListEntry('OBC_MEANFLOW', 'F'),
                             NameListEntry('OBC_MEANFLOW_FILE', f'{self._casename}_meanflow.nc'),
                             NameListEntry('OBC_TIDEOUT_INITIAL', 1, 'd'),
@@ -2772,7 +2771,6 @@ class ModelNameList(object):
                             NameListEntry('DATA_ASSIMILATION_FILE', f'{self._casename}_run.nml'),
                             NameListEntry('BIOLOGICAL_MODEL', 'F'),
                             NameListEntry('STARTUP_BIO_TYPE', 'observed'),
-                            NameListEntry('FABM_MODEL', 'F'),
                             NameListEntry('SEDIMENT_MODEL', 'F'),
                             NameListEntry('SEDIMENT_MODEL_FILE', 'none'),
                             NameListEntry('SEDIMENT_PARAMETER_TYPE', 'none'),
@@ -2806,15 +2804,8 @@ class ModelNameList(object):
                             NameListEntry('OUT_WIND_VELOCITY', 'F'),
                             NameListEntry('OUT_SALT_TEMP', 'F'),
                             NameListEntry('OUT_INTERVAL', 'seconds= 360.0')],
-                       'NML_FABM':
-                           [NameListEntry('STARTUP_FABM_TYPE', 'set values'),
-                            NameListEntry('USE_FABM_BOTTOM_THICKNESS', 'F'),
-                            NameListEntry('USE_FABM_SALINITY', 'F'),
-                            NameListEntry('FABM_DEBUG', 'F'),
-                            NameListEntry('FABM_DIAG_OUT', 'T')],
                        'NML_NESTING':
                            [NameListEntry('NESTING_ON', 'F'),
-                            NameListEntry('FABM_NESTING_ON', 'F'),
                             NameListEntry('NESTING_BLOCKSIZE', 10, 'd'),
                             NameListEntry('NESTING_TYPE', 1, 'd'),
                             NameListEntry('NESTING_FILE_NAME', f'{self._casename}_nest.nc')],
@@ -2912,6 +2903,22 @@ class ModelNameList(object):
                             NameListEntry('TS_MAX_LAYER', 0.0, 'f'),
                             NameListEntry('TS_N_INFLU', 0.0, 'f'),
                             NameListEntry('TS_NSTEP_OI', 0.0, 'f')]}
+
+        if self._fabm:
+            # Update existing configuration sections.
+            self.config['NML_NETCDF'].append(NameListEntry('NC_FABM', 'F'))
+            self.config['NML_NETCDF_AV'].append(NameListEntry('NCAV_FABM', 'F'))
+            self.config['NML_OPEN_BOUNDARY_CONTROL'] += [NameListEntry('OBC_FABM_NUDGING', 'F'),
+                                                         NameListEntry('OBC_FABM_FILE', f'{self._casename}_ERSEMobc.nc'),
+                                                         NameListEntry('OBC_FABM_NUDGING_TIMESCALE', 0.0001736111, '.10f')]
+            self.config['NML_NESTING'].append(NameListEntry('FABM_NESTING_ON', 'F'))
+            self.config['NML_ADDITIONAL_MODELS'].append(NameListEntry('FABM_MODEL', 'F'))
+            # Add the main FABM section.
+            self.config['NML_FABM'] = [NameListEntry('STARTUP_FABM_TYPE', 'set values'),
+                                       NameListEntry('USE_FABM_BOTTOM_THICKNESS', 'F'),
+                                       NameListEntry('USE_FABM_SALINITY', 'F'),
+                                       NameListEntry('FABM_DEBUG', 'F'),
+                                       NameListEntry('FABM_DIAG_OUT', 'T')]
 
     def index(self, section, entry):
         """
