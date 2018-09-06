@@ -233,25 +233,36 @@ def scalar2vector(direction, magnitude):
     return u, v
 
 
-def vector2scalar(u, v):
+def vector2scalar(u, v, w=0):
     """
     Convert two vector components into the scalar values. Mainly used for
     converting u and v velocity components into direction and magnitude.
 
     Parameters
     ----------
-    u, v : ndarray
+    u, v : np.ndarray
         n-dimensional arrays of u and v vectors.
+    w : np.ndarray, optional
+        Optionally give the vertical (w) velocity component.
 
     Returns
     -------
     direction, magnitude : ndarray
         Arrays of direction (degrees) and magnitude (u and v units).
 
+    Notes
+    -----
+
+    If the vertical component is given, the reverse transformation
+    (scalar2vector) will not give the same answer as the inputs as we
+    ignore the vertical direction component when returning direction here.
+
     """
 
     direction = np.rad2deg(np.arctan2(u, v))
-    magnitude = np.hypot(u, v)
+    # Use all numpy functions in case we get given a list (i.e. don't
+    # use **2 for the squaring).
+    magnitude = np.sqrt(np.power(u, 2) + np.power(v, 2) + np.power(w, 2))
 
     return direction, magnitude
 
