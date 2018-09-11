@@ -1631,7 +1631,7 @@ class Model(Domain):
         Parameters
         ----------
         positions : np.ndarray
-            Positions (in longitude/latitude).
+            Positions as an array of lon/lats ((x1, x2, x3), (y1, y2, y3)).
         names : np.ndarray, list
             Names of the probes defined by `positions'.
         variables : list, np.ndarray
