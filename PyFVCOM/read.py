@@ -346,7 +346,7 @@ class FileReader(Domain):
                 # happens if you stop a model part way through a run. We check for masked arrays at this point
                 # because the netCDF library only returns masked arrays when we have NaNs in the results.
                 if isinstance(self.ds.variables['Times'][:], np.ma.core.MaskedArray):
-                    bad_times = np.any(np.argwhere(np.any(self.ds.variables['Times'][:].data == ([b''] * self.ds.dimensions['DateStrLen'].size), axis=1)).ravel())
+                    bad_times = np.argwhere(np.any(self.ds.variables['Times'][:].data == ([b''] * self.ds.dimensions['DateStrLen'].size), axis=1)).ravel()
                     if np.any(bad_times):
                         if 'time' in got_time:
                             for bad_time in bad_times:
