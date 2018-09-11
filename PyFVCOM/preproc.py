@@ -1061,7 +1061,8 @@ class Model(Domain):
             atts = {'long_name': 'Open Boundary Elevation', 'units': 'meters'}
             elev.add_variable('elevation', zeta, ['time', 'nobc'], attributes=atts, ncopts=ncopts)
 
-    def add_rivers(self, positions, names, times, flux, temperature, salinity, threshold=np.inf, history='', info='', ersem=None, sediments=None):
+    def add_rivers(self, positions, names, times, flux, temperature, salinity, threshold=np.inf, history='', info='',
+                   ersem=None, sediments=None):
         """
         Add river nodes closest to the given locations.
 
@@ -1355,7 +1356,8 @@ class Model(Domain):
         else:
             return possible_nodes[0]
 
-    def write_river_forcing(self, output_file, ersem=False, ncopts={'zlib': True, 'complevel': 7}, sediments=False, **kwargs):
+    def write_river_forcing(self, output_file, ersem=False, ncopts={'zlib': True, 'complevel': 7}, sediments=False,
+                            **kwargs):
         """
         Write out an FVCOM river forcing netCDF file.
 
@@ -1893,7 +1895,8 @@ class Model(Domain):
             if nesting_type >= 2:
                 self.nest[-1].add_weights()
 
-    def add_nests_harmonics(self, harmonics_file, harmonics_vars=['u', 'v', 'zeta'], constituents=['M2', 'S2'], pool_size=None):
+    def add_nests_harmonics(self, harmonics_file, harmonics_vars=['u', 'v', 'zeta'], constituents=['M2', 'S2'],
+                            pool_size=None):
         """
         Adds series of values based on harmonic predictions to the boundaries in the nest object
 
@@ -2343,12 +2346,23 @@ class Model(Domain):
 
         with WriteForcing(str(output_file), dims, global_attributes=globals, clobber=True, format='NETCDF4', **kwargs) as groundwater:
             # Add the variables.
-            atts = {'long_name': 'groundwater volume flux', 'units': 'm3 s-1', 'grid': 'fvcom_grid', 'type': 'data'}
-            groundwater.add_variable('groundwater_flux', self.groundwater.flux, ['time', 'node'], attributes=atts, ncopts=ncopts)
-            atts = {'long_name': 'groundwater inflow temperature', 'units': 'degrees_C', 'grid': 'fvcom_grid', 'type': 'data'}
-            groundwater.add_variable('groundwater_temp', self.groundwater.temperature, ['time', 'node'], attributes=atts, ncopts=ncopts)
-            atts = {'long_name': 'groundwater inflow salinity', 'units': '1e-3', 'grid': 'fvcom_grid', 'type': 'data'}
-            groundwater.add_variable('groundwater_salt', self.groundwater.salinity, ['time', 'node'], attributes=atts, ncopts=ncopts)
+            atts = {'long_name': 'groundwater volume flux',
+                    'units': 'm3 s-1',
+                    'grid': 'fvcom_grid',
+                    'type': 'data'}
+            groundwater.add_variable('groundwater_flux', self.groundwater.flux, ['time', 'node'],
+                                     attributes=atts, ncopts=ncopts)
+            atts = {'long_name': 'groundwater inflow temperature',
+                    'units': 'degrees_C',
+                    'grid': 'fvcom_grid',
+                    'type': 'data'}
+            groundwater.add_variable('groundwater_temp', self.groundwater.temperature, ['time', 'node'],
+                                     attributes=atts, ncopts=ncopts)
+            atts = {'long_name': 'groundwater inflow salinity', 'units': '1e-3',
+                    'grid': 'fvcom_grid',
+                    'type': 'data'}
+            groundwater.add_variable('groundwater_salt', self.groundwater.salinity, ['time', 'node'],
+                                     attributes=atts, ncopts=ncopts)
             groundwater.write_fvcom_time(self.time.datetime)
 
     def read_regular(self, *args, **kwargs):
@@ -3343,6 +3357,7 @@ class Nest(object):
                     print('creating ua,va for boundary {} of {}'.format(ii + 1, len(self.boundaries)))
                 boundary.avg_nest_force_vel()
 
+
 def read_regular(regular, variables, noisy=False, **kwargs):
     """
     Read regularly gridded model data and provides a RegularReader object which mimics a FileReader object.
@@ -3875,12 +3890,14 @@ class RegularReader(FileReader):
             index = index[0]
         return np.unravel_index(index, (len(self.grid.lon), len(self.grid.lat)))
 
+
 class Regular2DReader(RegularReader):
     """
     As for regular reader but where data has no depth component (i.e. ssh, sst)
     """
     def _get_depth_dim(self):
         return None, None, None, True
+
 
 class HYCOMReader(RegularReader):
     """
