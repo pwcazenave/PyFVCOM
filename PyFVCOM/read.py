@@ -359,7 +359,7 @@ class FileReader(Domain):
 
                 # Overwrite the existing Times array with a more sensibly shaped one.
                 try:
-                    if self.dims.time == 1:
+                    if self.dims.time == 1 and not isinstance(self.time.Times, np.ndarray):
                         self.time.Times = ''.join(self.time.Times.astype(str)).strip()
                     else:
                         self.time.Times = np.asarray([''.join(t.astype(str)).strip() for t in self.time.Times])
