@@ -49,7 +49,7 @@ class Model(Domain):
     contain methods for interpolating SST, creating restart files etc.
 
     TODO:
-    Open boundaries end up held in Model.open_boundaries and Model.grid.open_boundaries which seems wrong
+    Open boundaries end up held in Model.open_boundaries and Model.grid.open_boundaries which seems wrong.
 
     """
 
@@ -2332,7 +2332,7 @@ class Model(Domain):
         ncopts : dict, optional
             Dictionary of options to use when creating the netCDF variables. Defaults to compression on.
 
-        Remaining arguments are passed to WriteForcing.
+        Remaining keyword arguments arguments are passed to WriteForcing.
 
         """
 
