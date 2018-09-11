@@ -583,13 +583,6 @@ class Plotter(object):
             self.yc = self.ds.variables['yc'][:]
             self.nv = self.ds.variables['nv'][:]
 
-        if self.cartesian:
-            self.mx, self.my = self.x, self.y
-            self.mxc, self.myc = self.xc, self.yc
-        else:
-            self.mx, self.my = self.m(self.lon, self.lat)
-            self.mxc, self.myc = self.m(self.lonc, self.latc)
-
         if self.nv.min() != 1:
             self.nv -= self.nv.min()
 
@@ -631,7 +624,13 @@ class Plotter(object):
             else:
                 raise RuntimeError('mpl_toolkits is not available in this Python.')
 
-        if not self.cartesian:
+        if self.cartesian:
+            self.mx, self.my = self.x, self.y
+            self.mxc, self.myc = self.xc, self.yc
+        else:
+            self.mx, self.my = self.m(self.lon, self.lat)
+            self.mxc, self.myc = self.m(self.lonc, self.latc)
+
             self.m.drawmapboundary()
             self.m.drawcoastlines(zorder=2)
             self.m.fillcontinents(color='0.6', zorder=2)
