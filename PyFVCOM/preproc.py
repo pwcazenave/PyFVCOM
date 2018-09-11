@@ -77,6 +77,7 @@ class Model(Domain):
         self.probes = _passive_data_store()
         self.ady = _passive_data_store()
         self.regular = None
+        self.groundwater = _passive_data_store()
 
         # Make some potentially useful time representations.
         self.start = start
@@ -2287,6 +2288,68 @@ class Model(Domain):
             f.write('OBC Node Number = {:d}\n'.format(number_of_nodes))
             for count, node, obc_type in zip(np.arange(number_of_nodes) + 1, ids, types):
                 f.write('{} {:d} {:d}\n'.format(count, node + 1, obc_type))
+
+    def add_groundwater(self, locations, flux, temperature=15, salinity=35):
+        """
+        Add groundwater flux at the given location.
+
+        Parameters
+        ----------
+        locations : list-like
+            Positions of the groundwater source as an array of lon/lats ((x1, x2, x3), (y1, y2, y3)).
+        flux : float
+            The discharge in m^3/s for each location in `locations'.
+        temperature : float, optional
+            If given, the temperature of the groundwater input at each location in `locations' (Celsius). If omitted,
+            15 Celsius.
+        salinity : float, optional
+            If given, the salinity of the groundwater input at each location in `locations' (PSU). If omitted, 35 PSU.
+
+        """
+
+        self.groundwater.flux = np.zeros((len(self.time.datetime), self.dims.node))
+        self.groundwater.temperature = np.full((len(self.time.datetime), self.dims.node), temperature)
+        self.groundwater.salinity = np.full((len(self.time.datetime), self.dims.node), salinity)
+
+        for location in zip(locations[:, 0], locations[:, 1]):
+            node_index = self.closest_node(location)
+            self.groundwater.flux[:, node_index[0]] = flux
+            self.groundwater.temperature[:, node_index[0]] = temperature
+            self.groundwater.salinity[:, node_index[0]] = salinity
+
+    def write_groundwater(self, output_file, ncopts={'zlib': True, 'complevel': 7}, **kwargs):
+        """
+        Generate a groundwater forcing file for the given FVCOM domain from the data in self.groundwater object. It
+        should contain flux, temp and salt attributes (generated from self.add_groundwater).
+
+        Parameters
+        ----------
+        output_file : str, pathlib.Path
+            File to which to write open boundary tidal elevation forcing data.
+        ncopts : dict, optional
+            Dictionary of options to use when creating the netCDF variables. Defaults to compression on.
+
+        Remaining arguments are passed to WriteForcing.
+
+        """
+
+        globals = {'type': 'FVCOM GROUNDWATER FORCING FILE',
+                   'title': 'Groundwater input forcing time series',
+                   'source': 'FVCOM grid (unstructured) surface forcing',
+                   'history': 'File created using {} from PyFVCOM'.format(inspect.stack()[0][3])}
+        # FVCOM checks for the existence of the nele dimension even though none of the groundwater data are specified
+        # on elements.
+        dims = {'node': self.dims.node, 'nele': self.dims.nele, 'time': 0, 'DateStrLen': 26}
+
+        with WriteForcing(str(output_file), dims, global_attributes=globals, clobber=True, format='NETCDF4', **kwargs) as groundwater:
+            # Add the variables.
+            atts = {'long_name': 'groundwater volume flux', 'units': 'm3 s-1', 'grid': 'fvcom_grid', 'type': 'data'}
+            groundwater.add_variable('groundwater_flux', self.groundwater.flux, ['time', 'node'], attributes=atts, ncopts=ncopts)
+            atts = {'long_name': 'groundwater inflow temperature', 'units': 'degrees_C', 'grid': 'fvcom_grid', 'type': 'data'}
+            groundwater.add_variable('groundwater_temp', self.groundwater.temperature, ['time', 'node'], attributes=atts, ncopts=ncopts)
+            atts = {'long_name': 'groundwater inflow salinity', 'units': '1e-3', 'grid': 'fvcom_grid', 'type': 'data'}
+            groundwater.add_variable('groundwater_salt', self.groundwater.salinity, ['time', 'node'], attributes=atts, ncopts=ncopts)
+            groundwater.write_fvcom_time(self.time.datetime)
 
     def read_regular(self, *args, **kwargs):
         """
