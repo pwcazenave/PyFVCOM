@@ -198,9 +198,11 @@ def overlap(t1start, t1end, t2start, t2end):
     overlap : bool
         True if the two periods overlap at all, False otherwise.
 
-    """
+    References
+    ----------
+    Shamelessly copied from http://stackoverflow.com/questions/3721249
 
-    # Shamelessly copied from http://stackoverflow.com/questions/3721249
+    """
 
     return (t1start <= t2start <= t1end) or (t2start <= t1start <= t2end)
 
@@ -231,7 +233,6 @@ def common_time(times1, times2):
 
     References
     ----------
-
     Shamelessly copied from https://stackoverflow.com/questions/9044084.
 
     """
