@@ -2,10 +2,13 @@ from __future__ import division
 
 from collections import namedtuple
 from datetime import datetime
+from datetime import timedelta
 
 import jdcal
 import numpy as np
 import pytz
+
+from PyFVCOM.utilities.general import fix_range
 
 
 def julian_day(gregorianDateTime, mjd=False):
@@ -275,3 +278,99 @@ def make_signal(time, amplitude=1, phase=0, period=1):
     return signal
 
 
+def ramped_signal(start, end, time_interval, signal_start, signal_end, min_rate, max_rate, ramp_duration):
+    """
+    Generate a constant time series which ramps over the given period (both upto and down from the rates).
+
+    Parameters
+    ----------
+    start : str
+        Start of the period for which to generate the signal, formatted '%Y-%m-%d %H:%M:%S'.
+    end : str
+        End date of periof for the signal. Same format as above.
+    time_interval : float
+        Increment in days for the time series.
+    signal_start : str
+        Leak start time, formatted '%Y-%m-%d %H:%M:%S'
+    signal_end : str
+        Leak end time, formatted '%Y-%m-%d %H:%M:%S'
+    min_rate : float
+        Minimum signal value.
+    max_rate : float
+        Maximum signal value.
+    ramp_duration : list
+        Periods in days over which to ramp up and down the signal from `min_rate' to `max_rate'. To only ramp up,
+        specify the second element in the list as -1. If values are None, no ramping is applied.
+
+    Returns
+    -------
+    t : np.ndarray
+        Time series for the signal (datetime objects).
+    sigmal : np.ndarray
+        Leak values for the times in `t'.
+
+    """
+
+    if len(ramp_duration) > 2:
+        raise UserWarning('Specify two ramps only (start and end).')
+
+    if ramp_duration[0] is not None and ramp_duration[0] < time_interval:
+        raise ValueError("The start ramp is shorter than the time interval. Specify either a bigger ramp or supply a "
+                         "higher resolution time series (`t')")
+
+    if ramp_duration[1] is not None and ramp_duration[1] < time_interval:
+        raise ValueError("The end ramp is shorter than the time interval. Specify either a bigger ramp or supply a "
+                         "higher resolution time series (`t')")
+
+    start_datetime = datetime.strptime(start, '%Y-%m-%d %H:%M:%S')
+    end_datetime = datetime.strptime(end, '%Y-%m-%d %H:%M:%S')
+    run_duration = (end_datetime - start_datetime).days
+    start_signal_datetime = datetime.strptime(signal_start, '%Y-%m-%d %H:%M:%S')
+    end_signal_datetime = datetime.strptime(signal_end, '%Y-%m-%d %H:%M:%S')
+
+    t = []
+    for d in np.arange(run_duration):
+        for h in np.arange(0, 1 - time_interval, time_interval):
+            t.append(start_datetime + timedelta(days=float(d), hours=float(h) * 24.0))
+    # Add the end of the requested period to the list and convert to array.
+    t.append(end_datetime)
+    t = np.asarray(t)
+
+    signal = np.repeat(min_rate, len(t)).astype(float)
+
+    if ramp_duration[0] is None:
+        signal_start_index_offset = 0
+    else:
+        signal_start_index_offset = np.ceil(ramp_duration[0] / time_interval).astype(int)
+
+    if ramp_duration[-1] is None:
+        signal_end_index_offset = len(t) - 1
+    elif ramp_duration[-1] < 0:
+        signal_end_index_offset = signal_start_index_offset
+    else:
+        signal_end_index_offset = np.ceil(ramp_duration[-1] / time_interval).astype(int)
+
+    start_index = np.argmin([np.abs((tt - start_signal_datetime).total_seconds()) for tt in t])
+    start_max_index = start_index + signal_start_index_offset
+    end_index = np.argmin([np.abs((tt - end_signal_datetime).total_seconds()) for tt in t])
+    end_max_index = np.min((end_index + signal_end_index_offset, len(signal) - 1))
+
+    hyperbolic_start = np.arange(-signal_start_index_offset / 2, signal_start_index_offset / 2)
+    hyperbolic_end = np.arange(-signal_start_index_offset / 2, signal_end_index_offset / 2)
+    ramp_start = np.tanh((hyperbolic_start / signal_start_index_offset) * np.pi * 2)
+    ramp_end = np.tanh((hyperbolic_end / signal_end_index_offset) * np.pi * 2)
+    if np.any(ramp_start):
+        ramp_start = fix_range(ramp_start, min_rate, max_rate)
+    if np.any(ramp_end):
+        ramp_end = fix_range(ramp_end, min_rate, max_rate)
+
+    signal[start_index:start_max_index] = ramp_start
+    # If the end indices are the same, assume we're just running the signal to the end, otherwise taper it with the
+    # reverse of the ramp up.
+    if end_index != end_max_index:
+        signal[start_max_index:end_index] = max_rate
+        signal[end_index:end_max_index] = ramp_end[::-1]
+    else:
+        signal[start_max_index:end_index + 1] = max_rate
+
+    return t, signal
