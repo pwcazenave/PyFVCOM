@@ -8,6 +8,7 @@ from matplotlib import rcParams
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from matplotlib.dates import DateFormatter, date2num
 from datetime import datetime
+from pathlib import Path
 
 from PyFVCOM.coordinate import lonlat_from_utm
 from PyFVCOM.read import FileReader
@@ -1095,6 +1096,160 @@ class CrossPlotter(Plotter):
             new_chan_y.append(this_y)
 
         return np.asarray(new_chan_x), np.asarray(new_chan_y)
+
+
+class MPIWorker(object):
+
+    def __init__(self, comm, root=0, verbose=False):
+        """
+        Create a plotting worker object. MPIWorker.plot_* load and plot a subset in time of the results.
+
+        Parameters
+        ----------
+        comm : mpi4py.MPI.Intracomm
+            The MPI intracommunicator object.
+        root : int, optional
+            Specify a given rank to act as the root process. This is only for outputting verbose messages (if enabled
+            with `verbose').
+        verbose : bool, optional
+            Set to True to enabled some verbose output messages. Defaults to False (no messages).
+
+        """
+
+        self.comm = comm
+        self.rank = self.comm.Get_rank()
+        self.size = self.comm.Get_size()
+        self.root = root
+        self._noisy = verbose
+
+    def __loader(self, fvcom_file, variable, *args, **kwargs):
+        """
+        Function to load and make meta-variables, if appropriate, which can then be plotted by `plot_*'.
+
+        Parameters
+        ----------
+        fvcom_file : str, pathlib.Path
+            The file to load.
+        variable : str
+            The variable name to load from `fvcom_file'. This can be a meta-variable name. Currently configured are:
+                - 'speed'
+                - 'depth_averaged_speed'
+                - 'speed_anomaly'
+                - 'depth_averaged_speed_anomaly'
+                - 'direction'
+                - 'depth_averaged_direction'
+
+        Additional args and kwargs are passed to PyFVCOM.read.FileReader.
+
+        Provides
+        --------
+        self.fvcom : PyFVCOM.read.FileReader
+            The FVCOM data ready for plotting.
+
+        """
+
+        if self._noisy and self.rank == self.root:
+            print(f'Loading {variable} data from netCDF...', end=' ', flush=True)
+
+        load_vars = [variable]
+        if variable in ('speed', 'direction', 'speed_anomaly'):
+            load_vars = ['u', 'v']
+        elif variable in ('depth_averaged_speed', 'depth_averaged_direction', 'depth_averaged_speed_anomaly'):
+            load_vars = ['ua', 'va']
+        elif variable == 'tauc':
+            load_vars = [variable, 'temp', 'salinity']
+
+        self.fvcom = pf.read.FileReader(fvcom_file, variables=load_vars, *args, **kwargs)
+
+        # Make the meta-variable data.
+        if variable in ('speed', 'direction'):
+            self.fvcom.data.direction, self.fvcom.data.speed = pf.current.vector2scalar(self.fvcom.data.u,
+                                                                                        self.fvcom.data.v)
+        elif variable in ('depth_averaged_speed', 'depth_averaged_direction'):
+            self.fvcom.data.depth_averaged_direction, self.fvcom.data.depth_averaged_speed = pf.current.vector2scalar(
+                self.fvcom.data.ua, self.fvcom.data.va
+            )
+
+        if variable == 'speed_anomaly':
+            self.fvcom.data.speed_anomaly = self.fvcom.data.speed.mean(axis=0) - fvcom.data.speed
+        elif variable == 'depth_averaged_speed_anomaly':
+            self.fvcom.data.depth_averaged_speed_anomaly = self.fvcom.data.uava.mean(axis=0) - fvcom.data.uava
+        elif var == 'tauc':
+            pressure = pf.grid.nodes2elems(pf.ocean.depth2pressure(self.fvcom.data.h, self.fvcom.data.y),
+                                           self.fvcom.grid.triangles)
+            tempc = pf.grid.nodes2elems(self.fvcom.data.temp, self.fvcom.grid.triangles)
+            salinityc = pf.grid.nodes2elems(self.fvcom.data.temp, self.fvcom.grid.triangles)
+            rho = pf.ocean.dens_jackett(tempc, salinityc, pressure[np.newaxis, :])
+            self.fvcom.data.tauc *= rho
+
+        if self._noisy and self.rank == self.root:
+            print(f'done.', flush=True)
+
+    def plot_field(self, fvcom_file, time_indices, variable, figures_directory, label=None, dimensions=None, clims=None,
+                   norm=None, *args, **kwargs):
+        """
+        Plot a given horizontal surface for `variable' for the time indices in `time_indices'.
+
+        fvcom_file : str, pathlib.Path
+            The file to load.
+        time_indices : list-like
+            The time indices to load from the `fvcom_file'.
+        variable : str
+            The variable name to load from `fvcom_file'.
+        figures_directory : str, pathlib.Path
+            Where to save the figures. Figure files are named f'{variable}_{time_index + 1}.png'.
+        label : str, optional
+            What label to use for the colour bar. If omitted, uses the variable's `long_name' and `units'.
+        dimensions : str, optional
+            What dimensions to load.
+        clims : str, optional
+            Limit the colour range to these values.
+        norm : matplotlib.colors.Normalize, optional
+            Apply the normalisation given to the colours in the plot.
+
+        Additional args and kwargs are passed to PyFVCOM.plot.Plotter.
+
+        """
+
+        if dimensions is None:
+            dimensions = {}
+        dimensions.update({'time': time_indices})
+
+        self.__loader(fvcom_file, variable, dimensions)
+
+        # Find out what the range of data is so we can set the colour limits automatically, if necessary.
+        if clims is None:
+            global_min = self.comm.reduce(getattr(self.fvcom.data, variable).min(), op=MPI.MIN)
+            global_max = self.comm.reduce(getattr(self.fvcom.data, variable).max(), op=MPI.MAX)
+            clims = [global_min, global_max]
+            clims = self.comm.bcast(clims, root=0)
+
+        if label is None:
+            label = f'{getattr(self.fvcom.atts, variable).long_name.title()} ' \
+                    f'({getattr(self.fvcom.atts, variable).units})'
+
+        local_plot = pf.plot.Plotter(self.fvcom, cb_label=label, *args, **kwargs)
+
+        field = np.squeeze(getattr(self.fvcom.data, variable))
+
+        if norm is not None:
+            # Check for zero and negative values if we're LogNorm'ing the data and replace with the colour limit
+            # minimum.
+            invalid = field <= 0
+            if np.any(invalid):
+                if clims is None or clims[0] <= 0:
+                    raise ValueError("For log-scaling data with zero or negative values, we need a floor with which "
+                                     "to replace those values. This is provided through the `clims' argument, "
+                                     "which hasn't been supplied, or which has a zero (or below) minimum.")
+                field[invalid] = clims[0]
+
+        for local_time, global_time in enumerate(time_indices):
+            local_plot.plot_field(field[local_time])
+            local_plot.tripcolor_plot.set_clim(*clims)
+            local_plot.figure.savefig(str(Path(figures_directory, f'{variable}_{global_time + 1:04d}.png')),
+                                      bbox_inches='tight',
+                                      pad_inches=0.2,
+                                      dpi=120)
 
 
 def plot_domain(domain, mesh=False, depth=False, **kwargs):
