@@ -774,21 +774,7 @@ class FileReader(Domain):
 
         """
 
-        if not isinstance(target_time, datetime):
-            try:
-                target_time = datetime.strptime(target_time, '%Y-%m-%d %H:%M:%S.%f')
-            except ValueError:
-                # Try again in case we've not been given fractional seconds, just to be nice.
-                target_time = datetime.strptime(target_time, '%Y-%m-%d %H:%M:%S')
-
-        time_diff = np.abs(self.time.datetime - target_time)
-        if not tolerance:
-            time_idx = np.argmin(time_diff)
-        else:
-            if np.min(time_diff) <= timedelta(seconds=tolerance):
-                time_idx = np.argmin(time_diff)
-            else:
-                time_idx = None
+        time_idx = time_to_index(self.time.datetime, target_time, tolerance=tolerance)
 
         return time_idx
 
@@ -1273,6 +1259,45 @@ class SubDomainReader(FileReader):
 
         """
         pass
+
+
+def time_to_index(times, target_time, tolerance=False):
+    """
+    Find the time index for the given time string (%Y-%m-%d %H:%M:%S.%f) or datetime object.
+
+    Parameters
+    ----------
+    target_time : str or datetime.datetime
+        Time for which to find the time index. If given as a string, the time format must be "%Y-%m-%d %H:%M:%S.%f".
+    tolerance : float, optional
+        Seconds of tolerance to allow when finding the appropriate index. Use this flag to only return an index
+        to within some tolerance. By default, the closest time is returned irrespective of how far in time it is
+        from the data.
+
+    Returns
+    -------
+    time_idx : int
+        Index for the currently loaded data closest to the specified time.
+
+    """
+
+    if not isinstance(target_time, datetime):
+        try:
+            target_time = datetime.strptime(target_time, '%Y-%m-%d %H:%M:%S.%f')
+        except ValueError:
+            # Try again in case we've not been given fractional seconds, just to be nice.
+            target_time = datetime.strptime(target_time, '%Y-%m-%d %H:%M:%S')
+
+    time_diff = np.abs(times - target_time)
+    if not tolerance:
+        time_idx = np.argmin(time_diff)
+    else:
+        if np.min(time_diff) <= timedelta(seconds=tolerance):
+            time_idx = np.argmin(time_diff)
+        else:
+            time_idx = None
+
+    return time_idx
 
 
 class ncwrite(object):
