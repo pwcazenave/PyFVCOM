@@ -29,7 +29,504 @@ from utide.utilities import Bunch
 
 from PyFVCOM.coordinate import utm_from_lonlat, lonlat_from_utm
 from PyFVCOM.utilities.time import date_range
+from PyFVCOM.utilities.general import _passive_data_store, fix_range
 from PyFVCOM.ocean import zbar
+
+
+class GridReaderNetCDF(object):
+
+    def __init__(self, filename, dims=None, zone='30N', debug=False, verbose=False):
+        """
+        Load the grid data.
+
+        Convert from UTM to spherical if we haven't got those data in the existing output file.
+
+        Parameters
+        ----------
+        filename : str, pathlib.Path
+            The FVCOM netCDF file to read.
+        dims : dict, optional
+            Dictionary of dimension names along which to subsample e.g. dims={'nele': [0, 10, 100], 'node': 100}.
+            All netCDF variable dimensions are specified as list of indices.
+            Any combination of dimensions is possible; omitted dimensions are loaded in their entirety.
+            Negative indices are supported.
+            A special dimension of 'wesn' can be used to specify a bounding box within which to extract the model
+            grid and data.
+        zone : str, list-like, optional
+            UTM zones (defaults to '30N') for conversion of UTM to spherical coordinates.
+        verbose : bool, optional
+            Set to True to enable verbose output. Defaults to False.
+        debug : bool, optional
+            Set to True to enable debug output. Defaults to False.
+
+        """
+
+        self._debug = debug
+        self._noisy = verbose
+
+        self.ds = Dataset(filename, 'r')
+        _dims = copy.deepcopy(dims)
+
+        if not hasattr(self, '_bounding_box'):
+            self._bounding_box = False
+
+        grid_metrics = {'ntsn': 'node', 'nbsn': 'node', 'ntve': 'node', 'nbve': 'node', 'art1': 'node', 'art2': 'node',
+                        'a1u': 'nele', 'a2u': 'nele', 'nbe': 'nele'}
+        grid_variables = ['lon', 'lat', 'x', 'y', 'lonc', 'latc', 'xc', 'yc', 'h', 'siglay', 'siglev']
+
+        # Get the grid data.
+        for grid in grid_variables:
+            try:
+                setattr(self, grid, self.ds.variables[grid][:])
+                # Save the attributes.
+                attributes = _passive_data_store()
+                for attribute in self.ds.variables[grid].ncattrs():
+                    setattr(attributes, attribute, getattr(self.ds.variables[grid], attribute))
+                # setattr(self.atts, grid, attributes)
+            except KeyError:
+                # Make zeros for this missing variable so we can convert from the non-missing data below.
+                if grid.endswith('c'):
+                    setattr(self, grid, np.zeros(self.ds.dimensions['nele'].size).T)
+                else:
+                    setattr(self, grid, np.zeros(self.ds.dimensions['node'].size).T)
+            except ValueError as value_error_message:
+                warn('Variable {} has a problem with the data. Setting value as all zeros.'.format(grid))
+                print(value_error_message)
+                setattr(self, grid, np.zeros(self.ds.variables[grid].shape))
+
+        # And the triangulation
+        try:
+            self.nv = self.ds.variables['nv'][:].astype(
+                int)  #  force integers even though they should already be so
+            self.triangles = copy.copy(self.nv.T - 1)  # zero-indexed for python
+        except KeyError:
+            # If we don't have a triangulation, make one. Warn that if we've made one, it might not match the
+            # original triangulation used in the model run.
+            if self._debug:
+                print("Creating new triangulation since we're missing one")
+            triangulation = tri.Triangulation(self.lon, self.lat)
+            self.triangles = triangulation.triangles
+            self.nv = copy.copy(self.triangles.T + 1)
+            dims.nele = self.triangles.shape[0]
+            warn('Triangulation created from node positions. This may be inconsistent with the original triangulation.')
+
+        # Fix broken triangulations if necessary.
+        if self.nv.min() != 1:
+            if self._debug:
+                print('Fixing broken triangulation. Current minimum for nv is {} and for triangles is {} but they '
+                      'should be 1 and 0, respectively.'.format(self.nv.min(), self.triangles.min()))
+            self.nv = (self.ds.variables['nv'][:].astype(int) - self.ds.variables['nv'][:].astype(int).min()) + 1
+            self.triangles = copy.copy(self.nv.T) - 1
+
+        # Convert the given W/E/S/N coordinates into node and element IDs to subset.
+        if self._bounding_box:
+            self._make_subset_dimensions()
+
+        # If we've been given a spatial dimension to subsample in fix the triangulation.
+        if 'nele' in _dims or 'node' in _dims:
+            if self._debug:
+                print('Fix triangulation table as we have been asked for only specific nodes/elements.')
+
+            if 'node' in _dims:
+                new_tri, new_ele = reduce_triangulation(self.triangles, _dims['node'], return_elements=True)
+                if not new_ele.size and 'nele' not in _dims:
+                    if self._noisy:
+                        print(
+                            'Nodes selected cannot produce new triangulation and no elements specified so including all element of which the nodes are members')
+                    _dims['nele'] = np.squeeze(
+                        np.argwhere(np.any(np.isin(self.triangles, _dims['node']), axis=1)))
+                    if _dims['nele'].size == 1:  # Annoying error for the differnce between array(n) and array([n])
+                        _dims['nele'] = np.asarray([_dims['nele']])
+                elif 'nele' not in _dims:
+                    if self._noisy:
+                        print(
+                            'Elements not specified but reducing to only those within the triangulation of selected nodes')
+                    _dims['nele'] = new_ele
+                elif not np.array_equal(np.sort(new_ele), np.sort(_dims['nele'])):
+                    if self._noisy:
+                        print(
+                            'Mismatch between given elements and nodes for triangulation, retaining original elements')
+            else:
+                if self._noisy:
+                    print(
+                        'Nodes not specified but reducing to only those within the triangulation of selected elements')
+                _dims['node'] = np.unique(self.triangles[_dims['nele'], :])
+                new_tri = reduce_triangulation(self.triangles, _dims['node'])
+
+            self.nv = new_tri.T + 1
+            self.triangles = new_tri
+
+        if 'node' in _dims:
+            nodes = len(_dims['node'])
+            for var in 'x', 'y', 'lon', 'lat', 'h', 'siglay', 'siglev':
+                try:
+                    node_index = self.ds.variables[var].dimensions.index('node')
+                    var_shape = [i for i in np.shape(self.ds.variables[var])]
+                    var_shape[node_index] = nodes
+
+                    if 'siglay' in _dims and 'siglay' in self.ds.variables[var].dimensions:
+                        var_shape[self.ds.variables[var].dimensions.index('siglay')] = self.ds.dimensions['siglay'].size
+                    elif 'siglev' in _dims and 'siglev' in self.ds.variables[var].dimensions:
+                        var_shape[self.ds.variables[var].dimensions.index('siglev')] = self.ds.dimensions['siglev'].size
+                    _temp = np.empty(var_shape)
+                    if 'siglay' in self.ds.variables[var].dimensions:
+                        for ni, node in enumerate(_dims['node']):
+                            if 'siglay' in _dims:
+                                _temp[..., ni] = self.ds.variables[var][_dims['siglay'], node]
+                            else:
+                                _temp[..., ni] = self.ds.variables[var][:, node]
+                    elif 'siglev' in self.ds.variables[var].dimensions:
+                        for ni, node in enumerate(_dims['node']):
+                            if 'siglev' in _dims:
+                                _temp[..., ni] = self.ds.variables[var][_dims['siglev'], node]
+                            else:
+                                _temp[..., ni] = self.ds.variables[var][:, node]
+                    else:
+                        for ni, node in enumerate(_dims['node']):
+                            _temp[..., ni] = self.ds.variables[var][..., node]
+                except KeyError:
+                    if 'siglay' in var:
+                        _temp = np.empty((self.ds.dimensions['siglay'].size, nodes))
+                    elif 'siglev' in var:
+                        _temp = np.empty((self.ds.dimensions['siglev'].size, nodes))
+                    else:
+                        _temp = np.empty(nodes)
+                setattr(self, var, _temp)
+
+        if 'nele' in _dims:
+            nele = len(_dims['nele'])
+            for var in 'xc', 'yc', 'lonc', 'latc', 'h_center', 'siglay_center', 'siglev_center':
+                try:
+                    nele_index = self.ds.variables[var].dimensions.index('nele')
+                    var_shape = [i for i in np.shape(self.ds.variables[var])]
+                    var_shape[nele_index] = nele
+                    if 'siglay' in _dims and 'siglay' in self.ds.variables[var].dimensions:
+                        var_shape[self.ds.variables[var].dimensions.index('siglay')] = self.ds.dimensions['siglay'].size
+                    elif 'siglev' in _dims and 'siglev' in self.ds.variables[var].dimensions:
+                        var_shape[self.ds.variables[var].dimensions.index('siglev')] = self.ds.dimensions['siglev'].size
+                    _temp = np.full(var_shape, np.nan)
+                    if 'siglay' in self.ds.variables[var].dimensions:
+                        for ni, current_nele in enumerate(_dims['nele']):
+                            if 'siglay' in _dims:
+                                _temp[..., ni] = self.ds.variables[var][_dims['siglay'], current_nele]
+                            else:
+                                _temp[..., ni] = self.ds.variables[var][:, current_nele]
+                    elif 'siglev' in self.ds.variables[var].dimensions:
+                        for ni, current_nele in enumerate(_dims['nele']):
+                            if 'siglev' in _dims:
+                                _temp[..., ni] = self.ds.variables[var][_dims['siglev'], current_nele]
+                            else:
+                                _temp[..., ni] = self.ds.variables[var][:, current_nele]
+                    else:
+                        for ni, current_nele in enumerate(_dims['nele']):
+                            _temp[..., ni] = self.ds.variables[var][..., current_nele]
+                except KeyError:
+                    # FVCOM3 files don't have h_center, siglay_center and siglev_center, so make var_shape manually.
+                    if self._noisy:
+                        print('Adding element-centred {} for compatibility.'.format(var))
+                    if var.startswith('siglev'):
+                        var_shape = [self.ds.dimensions['siglev'].size, nele]
+                    elif var.startswith('siglay'):
+                        var_shape = [self.ds.dimensions['siglay'].size, nele]
+                    else:
+                        var_shape = nele
+                    _temp = np.zeros(var_shape)
+                setattr(self, var, _temp)
+
+        # Load the grid metrics data separately as we don't want to set a bunch of zeros for missing data.
+        for metric, grid_pos in grid_metrics.items():
+            if metric in self.ds.variables:
+                if grid_pos in _dims:
+                    metric_raw = self.ds.variables[metric][:]
+                    setattr(self, metric, metric_raw[..., _dims[grid_pos]])
+                else:
+                    setattr(self, metric, self.ds.variables[metric][:])
+                # Save the attributes.
+                attributes = _passive_data_store()
+                for attribute in self.ds.variables[metric].ncattrs():
+                    setattr(attributes, attribute, getattr(self.ds.variables[metric], attribute))
+                # setattr(self.atts, metric, attributes)
+
+                # Fix the indexing and shapes of the grid metrics variables. Only transpose and offset indexing for nbe.
+                if metric == 'nbe':
+                    setattr(self, metric, getattr(self, metric).T - 1)
+
+        # Add compatibility for FVCOM3 (these variables are only specified on the element centres in FVCOM4+ output
+        # files). Only create the element centred values if we have the same number of nodes as in the triangulation.
+        # This does not occur if we've been asked to extract an incompatible set of nodes and elements, for whatever
+        # reason (e.g. testing). We don't add attributes for the data if we've created it as doing so is a pain.
+        for var in 'h_center', 'siglay_center', 'siglev_center':
+            try:
+                if 'nele' in _dims:
+                    var_raw = self.ds.variables[var][:]
+                    setattr(self, var, var_raw[..., _dims['nele']])
+                else:
+                    setattr(self, var, self.ds.variables[var][:])
+                # Save the attributes.
+                attributes = _passive_data_store()
+                for attribute in self.ds.variables[var].ncattrs():
+                    setattr(attributes, attribute, getattr(self.ds.variables[var], attribute))
+                # setattr(self.atts, var, attributes)
+            except KeyError:
+                if self._noisy:
+                    print('Missing {} from the netCDF file. Trying to recreate it from other sources.'.format(var))
+                if self.nv.max() == len(self.x):
+                    try:
+                        setattr(self, var, nodes2elems(getattr(self, var.split('_')[0]), self.triangles))
+                    except IndexError:
+                        # Maybe the array's the wrong way around. Flip it and try again.
+                        setattr(self, var,
+                                nodes2elems(getattr(self, var.split('_')[0]).T, self.triangles))
+                else:
+                    # The triangulation is invalid, so we can't properly move our existing data, so just set things
+                    # to 0 but at least they're the right shape. Warn accordingly.
+                    if self._noisy:
+                        print(
+                            '{} cannot be migrated to element centres (invalid triangulation). Setting to zero.'.format(
+                                var))
+                    if var is 'siglev_center':
+                        setattr(self, var, np.zeros((self.ds.dimensions['siglev'].size, nele)))
+                    elif var is 'siglay_center':
+                        setattr(self, var, np.zeros((self.ds.dimensions['siglay'].size, nele)))
+                    elif var is 'h_center':
+                        setattr(self, var, np.zeros((nele)))
+                    else:
+                        raise ValueError('Inexplicably, we have a variable not in the loop we have defined.')
+
+        # Make depth-resolved sigma data. This is useful for plotting things.
+        for var in self:
+            # Ignore previously created depth-resolved data (in the case where we're updating the grid with a call to
+            # self._load_data() with dims supplied).
+            if var.startswith('sig') and not var.endswith('_z'):
+                if var.endswith('_center'):
+                    z = self.h_center
+                else:
+                    z = self.h
+
+                # Set the sigma data to the 0-1 range for siglay so that the maximum depth value is equal to the
+                # actual depth. This may be a problem.
+                _fixed_sig = fix_range(getattr(self, var), 0, 1)
+
+                # h_center can have a time dimension (when running with sediment transport and morphological
+                # update enabled). As such, we need to account for that in the creation of the _z arrays.
+                if np.ndim(z) > 1:
+                    z = z[:, np.newaxis, :]
+                    _fixed_sig = fix_range(getattr(self, var), 0, 1)[np.newaxis, ...]
+                try:
+                    setattr(self, '{}_z'.format(var), fix_range(getattr(self, var), 0, 1) * z)
+                except ValueError:
+                    # The arrays might be the wrong shape for broadcasting to work, so transpose and retranspose
+                    # accordingly. This is less than ideal.
+                    setattr(self, '{}_z'.format(var), (_fixed_sig.T * z).T)
+
+        # Check if we've been given vertical dimensions to subset in too, and if so, do that. Check we haven't
+        # already done this if the 'node' and 'nele' sections above first.
+        for var in 'siglay', 'siglev', 'siglay_center', 'siglev_center':
+            # Only carry on if we have this variable in the output file with which we're working (mainly this
+            # is for compatibility with FVCOM 3 outputs which do not have the _center variables).
+            if var not in self.ds.variables:
+                continue
+            short_dim = copy.copy(var)
+            # Assume we need to subset this one unless 'node' or 'nele' are missing from _dims. If they're in
+            # _dims, we've already subsetted in the 'node' and 'nele' sections above, so doing it again here
+            # would fail.
+            subset_variable = True
+            if 'node' in _dims or 'nele' in _dims:
+                subset_variable = False
+            # Strip off the _center to match the dimension name.
+            if short_dim.endswith('_center'):
+                short_dim = short_dim.split('_')[0]
+            if short_dim in _dims:
+                if short_dim in self.ds.variables[var].dimensions and subset_variable:
+                    _temp = getattr(self, var)[_dims[short_dim], ...]
+                    setattr(self, var, _temp)
+
+        # Check ranges and if zero assume we're missing that particular type, so convert from the other accordingly.
+        self.lon_range = np.ptp(self.lon)
+        self.lat_range = np.ptp(self.lat)
+        self.lonc_range = np.ptp(self.lonc)
+        self.latc_range = np.ptp(self.latc)
+        self.x_range = np.ptp(self.x)
+        self.y_range = np.ptp(self.y)
+        self.xc_range = np.ptp(self.xc)
+        self.yc_range = np.ptp(self.yc)
+
+        # Only do the conversions when we have more than a single point since the relevant ranges will be zero with
+        # only one position.
+        if len(self.lon) > 1:
+            if self.lon_range == 0 and self.lat_range == 0:
+                self.lon, self.lat = lonlat_from_utm(self.x, self.y, zone=zone)
+                self.lon_range = np.ptp(self.lon)
+                self.lat_range = np.ptp(self.lat)
+            if self.x_range == 0 and self.y_range == 0:
+                self.x, self.y, _ = utm_from_lonlat(self.lon, self.lat)
+                self.x_range = np.ptp(self.x)
+                self.y_range = np.ptp(self.y)
+        if len(self.lonc) > 1:
+            if self.lonc_range == 0 and self.latc_range == 0:
+                self.lonc, self.latc = lonlat_from_utm(self.xc, self.yc, zone=zone)
+                self.lonc_range = np.ptp(self.lonc)
+                self.latc_range = np.ptp(self.latc)
+            if self.xc_range == 0 and self.yc_range == 0:
+                self.xc, self.yc, _ = utm_from_lonlat(self.lonc, self.latc)
+                self.xc_range = np.ptp(self.xc)
+                self.yc_range = np.ptp(self.yc)
+
+        # Make a bounding box variable too (spherical coordinates): W/E/S/N
+        self.bounding_box = (np.min(self.lon), np.max(self.lon), np.min(self.lat), np.max(self.lat))
+
+    def __iter__(self):
+        return (a for a in dir(self) if not a.startswith('__'))
+
+    def _update_dimensions(self, dims):
+        """
+        Update dimensions to match those we've been given, if any. Omit time here as we shouldn't be touching that
+        # dimension for any variable in use in here.
+
+        Parameters
+        ----------
+        dims : dict
+            The dimensions to update.
+
+        """
+        for dim in dims:
+            if dim != 'time':
+                if self._noisy:
+                    print('Resetting {} dimension length from {} to {}'.format(dim, getattr(dims, dim), len(dims[dim])))
+                setattr(self.dims, dim, len(dims[dim]))
+
+
+class _GridReader(object):
+
+    def __init__(self, gridfile, native_coordinates='spherical', zone=None, verbose=False):
+        """
+        Load an unstructured grid.
+
+        Parameters
+        ----------
+        gridfile : str, pathlib.Path
+            The grid file to load.
+        native_coordinates : str
+            Defined the coordinate system used in the grid ('spherical' or 'cartesian'). Defaults to `spherical'.
+        zone : str, optional
+            If `native_coordinates' is 'cartesian', give the UTM zone as a string, formatted as, for example,
+            '30N'. Ignored if `native_coordinates' is 'spherical'.
+        verbose : bool, optional
+            Set to True to enable verbose output. Defaults to False.
+
+        """
+
+        self.filename = gridfile
+        self.native_coordinates = native_coordinates
+        self.zone = zone
+        self._noisy = verbose
+        self.open_boundary_nodes = None
+
+        if self.native_coordinates.lower() == 'cartesian' and not self.zone:
+            raise ValueError('For cartesian coordinates, a UTM Zone for the grid is required.')
+
+        # Default to no node strings. Only the SMS read function can parse them as they're stored within that file.
+        # We'll try and grab them from the FVCOM file assuming the standard FVCOM naming conventions.
+        nodestrings = []
+        types = None
+        try:
+            basedir = str(self.filename.parent)
+            basename = self.filename.stem
+            extension = self.filename.suffix
+            self.filename = str(self.filename)  # most stuff will want a string later.
+        except AttributeError:
+            extension = os.path.splitext(self.filename)[-1]
+            basedir, basename = os.path.split(self.filename)
+            basename = basename.replace(extension, '')
+
+        if extension == '.2dm':
+            if self._noisy:
+                print('Loading SMS grid: {}'.format(self.filename))
+            triangle, nodes, x, y, z, types, nodestrings = read_sms_mesh(self.filename, nodestrings=True)
+        elif extension == '.dat':
+            if self._noisy:
+                print('Loading FVCOM grid: {}'.format(self.filename))
+            triangle, nodes, x, y, z = read_fvcom_mesh(self.filename)
+            try:
+                obcname = basename.replace('_grd', '_obc')
+                obcfile = os.path.join(basedir, '{}.dat'.format(obcname))
+                obc_node_array, types, count = read_fvcom_obc(obcfile)
+                nodestrings = parse_obc_sections(obc_node_array, triangle)
+                if self._noisy:
+                    print('Found and parsed open boundary file: {}'.format(obcfile))
+            except OSError:
+                # File probably doesn't exist, so just carry on.
+                pass
+        elif extension == '.gmsh':
+            if self._noisy:
+                print('Loading GMSH grid: {}'.format(self.filename))
+            triangle, nodes, x, y, z = read_gmsh_mesh(self.filename)
+        elif extension == '.m21fm':
+            if self._noisy:
+                print('Loading MIKE21 grid: {}'.format(self.filename))
+            triangle, nodes, x, y, z = read_mike_mesh(self.filename)
+        else:
+            raise ValueError('Unknown file format ({}) for file: {}'.format(extension, self.filename))
+
+        # Make open boundary objects from the nodestrings.
+        self.open_boundary = []
+        for nodestring in nodestrings:
+            self.open_boundary.append(OpenBoundary(nodestring))
+
+        if self.native_coordinates.lower() != 'spherical':
+            # Convert from UTM.
+            self.lon, self.lat = lonlat_from_utm(x, y, self.zone)
+            self.x, self.y = x, y
+        else:
+            # Convert to UTM.
+            self.lon, self.lat = x, y
+            self.x, self.y, _ = utm_from_lonlat(x, y, zone=self.zone)
+
+        self.triangles = triangle
+        self.nv = triangle.T + 1  # for compatibility with FileReader
+        self.h = z
+        self.nodes = nodes
+        self.types = types
+        self.open_boundary_nodes = nodestrings
+        # Make element-centred versions of everything.
+        self.xc = nodes2elems(self.x, self.triangles)
+        self.yc = nodes2elems(self.y, self.triangles)
+        self.lonc = nodes2elems(self.lon, self.triangles)
+        self.latc = nodes2elems(self.lat, self.triangles)
+        self.h_center = nodes2elems(self.h, self.triangles)
+
+        # Add the coordinate ranges too
+        self.lon_range = np.ptp(self.lon)
+        self.lat_range = np.ptp(self.lat)
+        self.lonc_range = np.ptp(self.lonc)
+        self.latc_range = np.ptp(self.latc)
+        self.x_range = np.ptp(self.x)
+        self.y_range = np.ptp(self.y)
+        self.xc_range = np.ptp(self.xc)
+        self.yc_range = np.ptp(self.yc)
+        # Make a bounding box variable too (spherical coordinates): W/E/S/N
+        self.bounding_box = (np.min(self.lon), np.max(self.lon), np.min(self.lat), np.max(self.lat))
+
+
+class _MakeDimensions(object):
+    def __init__(self, grid_reader):
+        """
+        Calculate some dimensions from the given _GridReader object.
+
+        Parameters
+        ----------
+        grid_reader : _GridReader
+            The grid reader which contains the grid information from which we calculate the dimensions.
+
+        """
+
+        # Make the relevant dimensions.
+        self.nele = len(grid_reader.xc)
+        self.node = len(grid_reader.x)
+
+    def __iter__(self):
+        return (a for a in dir(self) if not a.startswith('__'))
+
 
 class Domain(object):
     """
@@ -65,27 +562,13 @@ class Domain(object):
         self._debug = debug
         self._noisy = noisy
 
-        # Prepare this object with all the objects we'll need later on (dims, time, grid).
-        self._prep()
+        # Add some extra bits for the grid information.
+        self.grid = _GridReader(grid, native_coordinates, zone)
+        self.dims = _MakeDimensions(self.grid)
 
         # Get the things to iterate over for a given object. This is a bit hacky, but until or if I create separate
         # classes for the dims, time, grid and data objects, this'll have to do.
         self.obj_iter = lambda x: [a for a in dir(x) if not a.startswith('__')]
-
-        self.grid.native_coordinates = native_coordinates
-        self.grid.zone = zone
-        # Initialise everything to None so we don't get caught out expecting something to exist when it doesn't.
-        self.grid.open_boundary_nodes = None
-        self.grid.filename = grid
-
-        if self.grid.native_coordinates.lower() == 'cartesian' and not self.grid.zone:
-            raise ValueError('For cartesian coordinates, a UTM Zone for the grid is required.')
-
-        self._load_grid()
-
-        # Make the relevant dimensions.
-        self.dims.nele = len(self.grid.xc)
-        self.dims.node = len(self.grid.x)
 
         # Set two dimensions: number of open boundaries (obc) and number of open boundary nodes (open_boundary_nodes).
         if self.grid.open_boundary_nodes:
@@ -97,108 +580,6 @@ class Domain(object):
             except TypeError:
                 self.dims.open_boundary_nodes = len(self.grid.open_boundary_nodes)
                 self.dims.open_boundary = 1
-
-    def _prep(self):
-        # Create empty object for the grid and dimension data. This ought to be possible with nested classes,
-        # but I can't figure it out. That approach would also mean we can set __iter__ to make the object iterable
-        # without the need for obj_iter, which is a bit of a hack. It might also make FileReader object pickleable,
-        # meaning we can pass them with multiprocessing. Another day, perhaps.
-        self.dims = type('dims', (object,), {})()
-        self.grid = type('grid', (object,), {})()
-        # self.time = type('time', (object,), {})()
-
-        # Add docstrings for the relevant objects.
-        self.dims.__doc__ = "This contains the dimensions of the data from the given grid file."
-        self.grid.__doc__ = "Unstructured grid information. Missing spherical or cartesian coordinates are " \
-                            "automatically created depending on which is missing."
-        # self.time.__doc__ = "This contains the time data for the given netCDFs. Missing standard FVCOM time variables " \
-        #                     "are automatically created."
-
-    def _load_grid(self):
-        """ Load the model grid. """
-
-        # Default to no node strings. Only the SMS read function can parse them as they're stored within that file.
-        # We'll try and grab them from the FVCOM file assuming the standard FVCOM naming conventions.
-        nodestrings = []
-        types = None
-        try:
-            basedir = str(self.grid.filename.parent)
-            basename = self.grid.filename.stem
-            extension = self.grid.filename.suffix
-            self.grid.filename = str(self.grid.filename)  # most stuff will want a string later.
-        except AttributeError:
-            extension = os.path.splitext(self.grid.filename)[-1]
-            basedir, basename = os.path.split(self.grid.filename)
-            basename = basename.replace(extension, '')
-
-        if extension == '.2dm':
-            if self._noisy:
-                print('Loading SMS grid: {}'.format(self.grid.filename))
-            triangle, nodes, x, y, z, types, nodestrings = read_sms_mesh(self.grid.filename, nodestrings=True)
-        elif extension == '.dat':
-            if self._noisy:
-                print('Loading FVCOM grid: {}'.format(self.grid.filename))
-            triangle, nodes, x, y, z = read_fvcom_mesh(self.grid.filename)
-            try:
-                obcname = basename.replace('_grd', '_obc')
-                obcfile = os.path.join(basedir, '{}.dat'.format(obcname))
-                obc_node_array, types, count = read_fvcom_obc(obcfile)
-                nodestrings = parse_obc_sections(obc_node_array, triangle)
-                if self._noisy:
-                    print('Found and parsed open boundary file: {}'.format(obcfile))
-            except OSError:
-                # File probably doesn't exist, so just carry on.
-                pass
-        elif extension == '.gmsh':
-            if self._noisy:
-                print('Loading GMSH grid: {}'.format(self.grid.filename))
-            triangle, nodes, x, y, z = read_gmsh_mesh(self.grid.filename)
-        elif extension == '.m21fm':
-            if self._noisy:
-                print('Loading MIKE21 grid: {}'.format(self.grid.filename))
-            triangle, nodes, x, y, z = read_mike_mesh(self.grid.filename)
-        else:
-            raise ValueError('Unknown file format ({}) for file: {}'.format(extension, self.grid.filename))
-
-        # Make open boundary objects from the nodestrings.
-        self.grid.open_boundary = []
-        for nodestring in nodestrings:
-            self.grid.open_boundary.append(OpenBoundary(nodestring))
-
-        if self.grid.native_coordinates.lower() != 'spherical':
-            # Convert from UTM.
-            self.grid.lon, self.grid.lat = lonlat_from_utm(x, y, self.grid.zone)
-            self.grid.x, self.grid.y = x, y
-        else:
-            # Convert to UTM.
-            self.grid.lon, self.grid.lat = x, y
-            self.grid.x, self.grid.y, _ = utm_from_lonlat(x, y, zone=self.grid.zone)
-
-        self.grid.triangles = triangle
-        self.grid.nv = triangle.T + 1  # for compatibility with FileReader
-        self.grid.h = z
-        self.grid.nodes = nodes
-        self.grid.types = types
-        self.grid.open_boundary_nodes = nodestrings
-        # Make element-centred versions of everything.
-        self.grid.xc = nodes2elems(self.grid.x, self.grid.triangles)
-        self.grid.yc = nodes2elems(self.grid.y, self.grid.triangles)
-        self.grid.lonc = nodes2elems(self.grid.lon, self.grid.triangles)
-        self.grid.latc = nodes2elems(self.grid.lat, self.grid.triangles)
-        self.grid.h_center = nodes2elems(self.grid.h, self.grid.triangles)
-
-        # Add the coordinate ranges too
-        self.grid.lon_range = np.ptp(self.grid.lon)
-        self.grid.lat_range = np.ptp(self.grid.lat)
-        self.grid.lonc_range = np.ptp(self.grid.lonc)
-        self.grid.latc_range = np.ptp(self.grid.latc)
-        self.grid.x_range = np.ptp(self.grid.x)
-        self.grid.y_range = np.ptp(self.grid.y)
-        self.grid.xc_range = np.ptp(self.grid.xc)
-        self.grid.yc_range = np.ptp(self.grid.yc)
-        # Make a bounding box variable too (spherical coordinates): W/E/S/N
-        self.grid.bounding_box = (np.min(self.grid.lon), np.max(self.grid.lon),
-                                  np.min(self.grid.lat), np.max(self.grid.lat))
 
     @staticmethod
     def _closest_point(x, y, lon, lat, where, threshold=np.inf, vincenty=False, haversine=False):
