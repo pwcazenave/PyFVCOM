@@ -470,9 +470,9 @@ class FileReader(Domain):
         siglay_compare = self.dims.siglay == fvcom.dims.siglay
         siglev_compare = self.dims.siglev == fvcom.dims.siglev
         time_compare = self.time.datetime[-1] <= fvcom.time.datetime[0]
-        data_compare = self.obj_iter(self.data) == self.obj_iter(fvcom.data)
-        old_data = self.obj_iter(self.data)
-        new_data = self.obj_iter(fvcom.data)
+        old_data = [i for i in self.data]
+        new_data = [i for i in fvcom.data]
+        data_compare = new_data == old_data
         if not node_compare:
             raise ValueError('Horizontal node data are incompatible.')
         if not nele_compare:
@@ -495,22 +495,22 @@ class FileReader(Domain):
         idem = copy.copy(self)
 
         # Go through all the parts of the data with a time dependency and concatenate them. Leave the grid alone.
-        for var in self.obj_iter(idem.data):
+        for var in idem.data:
             if 'time' in idem.ds.variables[var].dimensions:
                 setattr(idem.data, var, np.concatenate((getattr(idem.data, var), getattr(fvcom.data, var))))
-        for time in self.obj_iter(idem.time):
+        for time in idem.time:
             setattr(idem.time, time, np.concatenate((getattr(idem.time, time), getattr(fvcom.time, time))))
 
         # Remove duplicate times.
         time_indices = np.arange(len(idem.time.time))
         _, dupes = np.unique(idem.time.time, return_index=True)
         dupe_indices = np.setdiff1d(time_indices, dupes)
-        for var in self.obj_iter(idem.data):
+        for var in idem.data:
             # Only delete things with a time dimension.
             if 'time' in idem.ds.variables[var].dimensions:
                 time_axis = idem.ds.variables[var].dimensions.index('time')
                 setattr(idem.data, var, np.delete(getattr(idem.data, var), dupe_indices, axis=time_axis))
-        for time in self.obj_iter(idem.time):
+        for time in idem.time:
             try:
                 time_axis = idem.ds.variables[time].dimensions.index('time')
                 setattr(idem.time, time, np.delete(getattr(idem.time, time), dupe_indices, axis=time_axis))
@@ -523,22 +523,6 @@ class FileReader(Domain):
         idem.dims.time = len(idem.time.time)
 
         return idem
-
-    @staticmethod
-    def obj_iter(x):
-        """
-        Get the things to iterate over for a given object.
-
-        This is a bit hacky, but until or if I create separate classes for the dims, time, grid and data objects,
-        this'll have to do.
-
-        Parameters
-        ----------
-        x : object
-            Object from which to identify attributes which are useful for us.
-        """
-
-        return [a for a in dir(x) if not a.startswith('__')]
 
     def _update_dimensions(self, variables):
         # Update the dimensions based on variables we've been given. Construct a list of the unique dimensions in all
@@ -1004,7 +988,7 @@ class FileReaderFromDict(FileReader):
         self.dims.maxelem = 9
         # This is a little repetitive (each dimension can be set multiple times), but it has simplicity to its
         # advantage.
-        for obj in self.obj_iter(self.data):
+        for obj in self.data:
             if obj in ('ua', 'va'):
                 try:
                     self.dims.time, self.dims.nele = getattr(self.data, obj).shape
