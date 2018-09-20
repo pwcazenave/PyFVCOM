@@ -805,13 +805,15 @@ class FileReader(Domain):
             setattr(self.dims, dim, unique_dims[dim])
 
     def load_data(self, var, dims=None):
-        """ Add a given variable/variables at the given indices. If any indices are omitted or Falsey, return all
-        data for the missing dimensions.
+        """
+        Load a given variable(s).
+
+        Respect dimensions if supplied, otherwise falls back to those in self.FileReader (if any).
 
         Parameters
         ----------
         var : list-like, str
-            List of variables to load.
+            Variable(s) to load.
         dims : dictionary, optional
             Supply specific dimensions to load. If omitted, uses the global dimensions supplied to FileReader (if any).
 
