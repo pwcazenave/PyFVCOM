@@ -219,8 +219,8 @@ class Domain(object):
             Set to True to use cartesian coordinates. Defaults to False.
         threshold : float, optional
             Give a threshold distance beyond which the closest grid is considered too far away. Units are the same as
-            the coordinates in `where', unless using lat/lon and vincenty when it is in metres. Return None when
-            beyond threshold.
+            the coordinates in `where', unless using lat/lon and `vincenty' or `haversine' when it is in metres.
+            Return None when beyond threshold.
         vincenty : bool, optional
             Use vincenty distance calculation. Allows specification of point in lat/lon but threshold in metres.
         haversine : bool, optional
