@@ -333,8 +333,6 @@ class FileReader(Domain):
             time string (e.g. '2000-01-25 23:00:00.00000') or given as a datetime object.
             Any combination of dimensions is possible; omitted dimensions are loaded in their entirety.
             Negative indices are supported. To load from the 10th and last time can be written as 'time': [9, -1]).
-            A special dimension of 'wesn' can be used to specify a bounding box within which to extract the model
-            grid and data.
         zone : str, list-like, optional
             UTM zones (defaults to '30N') for conversion of UTM to spherical coordinates.
         verbose : bool, optional
