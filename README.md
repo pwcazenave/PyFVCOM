@@ -9,6 +9,8 @@ Table of contents
 - [Prerequisites](#prerequisites)
 - [Provides](#provides)
 - [Examples](#examples)
+- [Code conventions](#style)
+- [Citation](#citation)
 
 Introduction
 ------------
@@ -320,4 +322,9 @@ Coding conventions
 - Use properties for accessing or setting data where you would normally have used simple, lightweight getter or setter methods
 - Use `with` when opening files or explicitly close files and sockets when done with them
 - Use TODO comments for code that is temporary, a short-term solution, or good-enough but not perfect
+
+Citation
+--------
+
+Cazenave, P. W. and Bedington, M. (2018). PyFVCOM (version x.x.x) [software]. Plymouth, Devon, United Kingdom: Plymouth Marine Laboratory. https://doi.org/10.5281/zenodo.1048221
 
