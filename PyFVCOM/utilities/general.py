@@ -7,6 +7,19 @@ from sys import stderr
 from traceback import print_exc
 
 
+class _passive_data_store(object):
+    def __init__(self):
+        """ Make an empty object. """
+        pass
+
+    def __iter__(self):
+        # Iterate over attributes inside this object which don't start with an underscore.
+        return (a for a in dir(self) if not a.startswith('__') and not a.endswith('__'))
+
+    def __eq__(self, other):
+        # For easy comparison of classes.
+        return self.__dict__ == other.__dict__
+
 def fix_range(a, nmin, nmax):
     """
     Given an array of values `a', scale the values within in to the range

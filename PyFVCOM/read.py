@@ -20,6 +20,7 @@ from PyFVCOM.coordinate import lonlat_from_utm, utm_from_lonlat
 from PyFVCOM.grid import Domain, reduce_triangulation, control_volumes, get_area_heron
 from PyFVCOM.utilities.general import fix_range
 from PyFVCOM.grid import unstructured_grid_volume, elems2nodes, GridReaderNetCDF
+from PyFVCOM.utilities.general import _passive_data_store
 
 
 class _TimeReader(object):
@@ -302,9 +303,6 @@ class _MakeDimensions(object):
 
     def __iter__(self):
         return (a for a in dir(self) if not a.startswith('__') and not a.endswith('__'))
-class _passive_data_store(object):
-    def __init__(self):
-        pass
 
 
 class FileReader(Domain):
