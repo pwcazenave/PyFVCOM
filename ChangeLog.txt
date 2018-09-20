@@ -25,7 +25,8 @@ Major changes
         - casename_riv.nc - River forcing (including ERSEM support).
         - casename_riv.nml - River forcing configuration.
         - casename_elevtide.nc - Tidal forcing at the boundary.
-        - casename_tsobc.nc - Temperature and salinity at the open boundary.'
+        - casename_tsobc.nc - Temperature and salinity at the open boundary.
+        - casename_groundwater.nc - Groundwater input.
         - casename_nest.nc - Nested forcing from another model (e.g. regularly
         gridded data interpolated onto the FVCOM grid).
         - casename_probes.dat - A probe configuration file.
@@ -38,6 +39,8 @@ Major changes
     - There is a corresponding examples/pyfvcom_preprocessing_example.ipynb
     Jupyter Notebook to illustrate how to use this functionality.
 
+    - A new ModelNameList class also allows for the easy creation and writing
+    of FVCOM namelists, including support for FABM.
     - Also provides a Nest class for configuring nested inputs.
     - New WriteForcing class creates netCDF forcing files for FVCOM.
     - A class for reading regularly gridded data (RegularReader) to mimic the
@@ -60,12 +63,17 @@ Minor changes
     - New function to convert from degrees minutes seconds to decimal degrees.
 
 - PyFVCOM.ctd
-
     - Added a new CTD class to hold CTD data. Again, this is mainly focused on
     using data from the Western Channel Observatory and BODC.
 
 - PyFVCOM.current
     - Mostly minor code tweaks.
+    - vector2scalar can now optionally use a vertical vector when calculating
+    speed.
+    - progressive_vectors: new function to calculate progressive vectors from
+    a time series of u and v.
+    - principal_axis: fix the orientation of the resulting axis (was formerly
+    90 degrees out).
 
 - PyFVCOM.grid
     - Add a new Domain class which forms the basis of the functions which deal
@@ -88,8 +96,20 @@ Minor changes
     - GraphFVCOMdepth sets up a graph of an FVCOM grid weighting the edges by
     depth. This is useful for finding a channel between two arbitrary points
     e.g. find the centre of a river channel.
+    - The function node_control_area has a new argument to return the
+    positions of the polygon which makes up the node control area.
+    - New function clockwise will order points clockwise from North.
+    - New function parse_obc_sections to separate each open boundary from a
+    list of open boundary nodes.
+    - Removed fix_coordinates.
+    - Removed clip_triangulation (better to use reduce_triangulation instead).
+    - Moved get_river_config and get_rivers to `PyFVCOM.read'.
 
 - PyFVCOM.ocean
+    - Make the depth-averaging work with less fiddling around trying to find
+    out what dimensions we've got.
+    - Add support to mld for more dimensions in the density supplied when
+    calculating mixed layer depth.
     - Minor tweak to the mixed layer depth function (support for higher
     dimension arrays).
 
@@ -99,6 +119,8 @@ Minor changes
     - Tweaks to the Time time-series plotting class and the Plotter grid
     plotting class.
     - New function to quickly plot a domain (plot_domain).
+    - New worker function intended to facilitate plotting in parallel with
+    MPI. Takes a series of time IDs and plots those data only.
 
 - PyFVCOM.read
     - Indexing for dimensions is now the same for all dimensions (including
@@ -111,6 +133,11 @@ Minor changes
     code has been moved into there.
     - Add new method to time average a variable.
     - Add new method to add river flow data to the object.
+    - Add new method to calculate the grid volume.
+    - Add new method to calculate the total volume of given variable over time.
+    - Add new method to calcualte the average volume of a given variable.
+    - Add new method to average a given variable at a given time interval.
+    - Grid metrics are now loaded by default.
     - New class (SubDomainReader) for reading a subdomain of an FVCOM grid, by
     either interactively selecting a region or specifying one as coordinates.
     This class includes methods for integrating fields within the subdomain.
@@ -130,6 +157,7 @@ Minor changes
     - New function for flattening nested lists (general.flatten_list).
     - New function (general.split_string) to split a list of strings on a given
     separators.
+    - New function to make a ramped signal (time.ramped_signal).
     - general.ObjectFromDict converts an object into a dictionary with
     attributes named from the dictionary keys.
     - general.cleanhtml removes markup leaving only text.
