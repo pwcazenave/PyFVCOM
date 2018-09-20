@@ -3,22 +3,18 @@
 from __future__ import print_function, division
 
 import copy
-import inspect
 import sys
 from datetime import datetime, timedelta
 from warnings import warn
 
 import matplotlib.path as mpath
 import matplotlib.pyplot as plt
-import matplotlib.tri as tri
 import netCDF4 as nc
 import numpy as np
 from netCDF4 import Dataset, MFDataset, num2date, date2num
 from shapely.geometry import Polygon
 
-from PyFVCOM.coordinate import lonlat_from_utm, utm_from_lonlat
-from PyFVCOM.grid import Domain, reduce_triangulation, control_volumes, get_area_heron
-from PyFVCOM.utilities.general import fix_range
+from PyFVCOM.grid import Domain, control_volumes, get_area_heron
 from PyFVCOM.grid import unstructured_grid_volume, elems2nodes, GridReaderNetCDF
 from PyFVCOM.utilities.general import _passive_data_store
 
