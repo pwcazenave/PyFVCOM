@@ -6,10 +6,9 @@ Table of contents
 
 - [Introduction](#introduction)
 - [Installing](#installing)
-- [Prerequisites](#prerequisites)
 - [Provides](#provides)
 - [Examples](#examples)
-- [Code conventions](#code conventions)
+- [Coding conventions](#coding-conventions)
 - [Citation](#citation)
 
 Introduction
