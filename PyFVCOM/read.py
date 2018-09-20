@@ -379,6 +379,7 @@ class FileReader(Domain):
         # We may modify the dimensions, so make a deepcopy (copy isn't sufficient) so successive calls to FileReader
         # from MFileReader work properly.
         self._dims = copy.deepcopy(dims)
+
         # Silently convert a string variable input to an iterable list.
         if isinstance(variables, str):
             variables = [variables]
@@ -564,8 +565,10 @@ class FileReader(Domain):
                 print('Updating existing data to match supplied dimensions when loading data')
             # Use the supplied dimensions as the new dimensions array.
             self._dims = dims
-            self._load_time()
-            self._load_grid()
+            self.time = _TimeReader(self.ds, dims=self._dims)
+            self.dims.time = len(self.time)
+            self.grid = _GridReaderNetCDF(self._fvcom, dims=self._dims, zone=self._zone, debug=self._debug,
+                                          verbose=self._noisy)
 
         # Check if we've got iterable variables and make one if not.
         if not hasattr(var, '__iter__') or isinstance(var, str):
@@ -589,11 +592,8 @@ class FileReader(Domain):
                         print('Extracting specific indices for {}'.format(dimension))
                     variable_indices[variable_index] = dims[dimension]
 
-            # Save any attributes associated with this variable before trying to load the data.
-            attributes = _passive_data_store()
-            for attribute in self.ds.variables[v].ncattrs():
-                setattr(attributes, attribute, getattr(self.ds.variables[v], attribute))
-            setattr(self.atts, v, attributes)
+            # Add attributes for the variable we're loading.
+            self.atts.get_attribute(v)
 
             if 'time' not in var_dim:
                 # Should we error here or carry on having warned?
