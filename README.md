@@ -9,7 +9,7 @@ Table of contents
 - [Prerequisites](#prerequisites)
 - [Provides](#provides)
 - [Examples](#examples)
-- [Code conventions](#style)
+- [Code conventions](#code conventions)
 - [Citation](#citation)
 
 Introduction
