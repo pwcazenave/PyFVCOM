@@ -425,6 +425,9 @@ class FileReader(Domain):
         if self._variables:
             self.load_data(self._variables)
 
+    def __iter__(self):
+        return (a for a in dir(self) if not a.startswith('_'))
+
     def __eq__(self, other):
         # For easy comparison of classes.
         return self.__dict__ == other.__dict__
