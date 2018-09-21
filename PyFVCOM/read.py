@@ -197,7 +197,7 @@ class _TimeReader(object):
     def __iter__(self):
         return (a for a in dir(self) if not a.startswith('_'))
 
-    def _time_to_index(self, target_time, tolerance=False):
+    def _time_to_index(self, *args, **kwargs):
         """
         Find the time index for the given time string (%Y-%m-%d %H:%M:%S.%f) or datetime object.
 
@@ -217,7 +217,7 @@ class _TimeReader(object):
 
         """
 
-        time_idx = time_to_index(self.datetime, target_time, tolerance=tolerance)
+        time_idx = time_to_index(self.datetime, *args, **kwargs)
 
         return time_idx
 
@@ -752,7 +752,7 @@ class FileReader(Domain):
                                   weights=self.grid.depth_volume[..., i], axis=1)
         setattr(self.data, '{}_average'.format(var), int_vol)
 
-    def time_to_index(self, target_time, tolerance=False):
+    def time_to_index(self, *args, **kwargs):
         """
         Find the time index for the given time string (%Y-%m-%d %H:%M:%S.%f) or datetime object.
 
@@ -772,7 +772,7 @@ class FileReader(Domain):
 
         """
 
-        time_idx = time_to_index(self.time.datetime, target_time, tolerance=tolerance)
+        time_idx = time_to_index(self.time.datetime, *args, **kwargs)
 
         return time_idx
 
@@ -1265,8 +1265,11 @@ def time_to_index(times, target_time, tolerance=False):
 
     Parameters
     ----------
+    times : list
+        List of datetime objects from which to find the closest `target_time'.
     target_time : str or datetime.datetime
-        Time for which to find the time index. If given as a string, the time format must be "%Y-%m-%d %H:%M:%S.%f".
+        Time for which to find the time index from `times'. If given as a string, the time format must be "%Y-%m-%d
+        %H:%M:%S.%f".
     tolerance : float, optional
         Seconds of tolerance to allow when finding the appropriate index. Use this flag to only return an index
         to within some tolerance. By default, the closest time is returned irrespective of how far in time it is
