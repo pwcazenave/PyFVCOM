@@ -27,16 +27,11 @@ from PyFVCOM.grid import OpenBoundary, find_connected_elements
 from PyFVCOM.grid import find_bad_node
 from PyFVCOM.grid import write_fvcom_mesh, connectivity, haversine_distance
 from PyFVCOM.read import FileReader
-from PyFVCOM.utilities.general import flatten_list
+from PyFVCOM.utilities.general import flatten_list, _passive_data_store
 from PyFVCOM.utilities.time import date_range
 from dateutil.relativedelta import relativedelta
 from netCDF4 import Dataset, date2num, num2date, stringtochar
 from scipy.interpolate import RegularGridInterpolator
-
-
-class _passive_data_store(object):
-    def __init__(self):
-        pass
 
 
 class Model(Domain):
