@@ -156,6 +156,34 @@ class Model(Domain):
                 except AttributeError:
                     pass
 
+    def estimate_time_step(self, maximum_speed, maximum_elevation):
+        """
+        Estimate the time step for the current grid based on the given anticipated maximum speed and surface elevation.
+
+        Parameters
+        ----------
+        maximum_speed : float
+            The anticipated maximum speed.
+        maximum_elevation : float
+            The anticipated maximum surface elevation.
+
+        """
+
+        gravity = 9.81
+
+        # Calculate the length of each side in the elements in the grid and the propagation of a gravity wave across
+        # those distances to figure out what the time step should be.
+
+        # *lick index finger and stick in the air now*
+        lengths = element_side_lengths(self.grid.triangles, self.grid.x, self.grid.y)
+        depths = np.max(self.grid.h[self.grid.triangles] + maximum_elevation, axis=1)
+        timesteps = (lengths.T / (np.sqrt(gravity * depths) + maximum_speed)).T
+
+        self.time_step = np.nanmin(timesteps)
+
+        if self._noisy:
+            print(f'Estimated time step {self.time_step} seconds.')
+
     def write_grid(self, grid_file, depth_file=None):
         """
         Write out the unstructured grid data to file.
