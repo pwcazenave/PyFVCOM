@@ -1249,7 +1249,6 @@ class SubDomainReader(FileReader):
 
         setattr(self, var + '_total', np.sum(np.sum(getattr(self.data, var) * self.volume, axis=2), axis=1))
 
-
     def surface_integral(self, var):
         """
         TODO: docstring.
