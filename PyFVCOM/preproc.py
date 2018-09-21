@@ -176,7 +176,17 @@ class Model(Domain):
         else:
             x, y = self.grid.x, self.grid.y
 
-        write_fvcom_mesh(self.grid.triangles, nodes, x, y, self.grid.h, grid_file, extra_depth=depth_file)
+        # Check for the distribution of depths. Since FVCOM is positive down and some grids are specified as negative
+        # down, do a sanity check here. If we've got more negatives than positive depths, then flip the sign (and
+        # warn we're doing that), otherwise, go as is.
+        negative_total = sum(self.grid.h < 0)
+        positive_total = sum(self.grid.h > 0)
+        depth = self.grid.h
+        if negative_total > positive_total:
+            depth = -depth
+            warn('Flipping depths to be positive down since we have been supplied with mostly negative depths.')
+
+        write_fvcom_mesh(self.grid.triangles, nodes, x, y, depth, grid_file, extra_depth=depth_file)
 
     def write_coriolis(self, coriolis_file):
         """
