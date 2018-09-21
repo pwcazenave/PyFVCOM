@@ -3144,25 +3144,33 @@ class ModelNameList(object):
 
         """
 
-        # Check the range from the minimum useful time (time_resolution) to double the target should yield at least
-        # one suitable interval. Do intervals of a minute since that's less weird (who wants a nesting output ever 34
-        # seconds? No one.). Only do that if we're running the model for more than a minute. Otherwise, interval is a
-        # second.
+        model_start = datetime.strptime(self.value('NML_CASE', 'START_DATE'), '%Y-%m-%d %H:%M:%S')
+        model_end = datetime.strptime(self.value('NML_CASE', 'END_DATE'), '%Y-%m-%d %H:%M:%S')
+        model_duration_seconds = (model_end - model_start).total_seconds()
+
+        # Checking the range from the minimum useful time (time_resolution_seconds) to ten times the target should
+        # yield at least one suitable interval. Do intervals of a minute since that's less weird (who wants a nesting
+        # output every 4 minutes 34 seconds? No one.). Only do that if we're running the model for more than a
+        # minute. Otherwise, the interval is a second.
         candidate_interval = []
-        time_resolution = 60
-        if duration <= time_resolution:
-            time_resolution = 1
-        for interval in range(time_resolution, (2 * target_interval) + time_resolution, time_resolution):
+        time_resolution_seconds = 60
+        if model_duration_seconds <= time_resolution_seconds:
+            time_resolution_seconds = 1
+        time_tries = range(time_resolution_seconds,
+                           (10 * target_interval) + time_resolution_seconds,
+                           time_resolution_seconds)
+        for interval in time_tries:
             if self.valid_nesting_timescale(interval):
                 candidate_interval.append(interval)
 
         if not candidate_interval:
-            raise ValueError('Unable to identify a suitable NCNEST_OUT_INTERVAL. '
-                             'Try setting the target_interval to something bigger.')
+            raise ValueError("Unable to identify a suitable NCNEST_OUT_INTERVAL. "
+                             "Try setting the `target_interval' to something bigger or changing the NCNEST_BLOCKSIZE "
+                             "or EXTSTEP_SECONDS values.")
 
         # Find the one closest to the target.
-        ncnest_out_interval = candidate_interval[np.argmin(np.abs(candidate_interval - target_interval))]
-        self.update('NML_NCNEST', 'NCNEST_OUT_INTERVAL', ncnest_out_interval)
+        ncnest_out_interval = candidate_interval[np.argmin(np.abs(np.asarray(candidate_interval) - target_interval))]
+        self.update('NML_NCNEST', 'NCNEST_OUT_INTERVAL', f'seconds={float(ncnest_out_interval):g}')
 
     def valid_nesting_timescale(self, interval=None):
         """
@@ -3171,7 +3179,7 @@ class ModelNameList(object):
         Parameters
         ----------
         interval : float, optional
-            The current NCNEST_OUT_INTERVAL value. If omitted, we grab the one defined in self.namelist.
+            The current NCNEST_OUT_INTERVAL value. If omitted, we grab the one defined in self.config.
 
         Returns
         -------
