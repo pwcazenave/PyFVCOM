@@ -188,9 +188,9 @@ class _TimeReader(object):
                     # Convert datetime dimensions to indices in the currently loaded data. Assume we've got a list
                     # and if that fails, we've probably got a single index, so convert it accordingly.
                     try:
-                        self._dims['time'] = [self._time_to_index(i) for i in self._dims['time']]
+                        self._dims['time'] = np.arange(*[self._time_to_index(i) for i in self._dims['time']])
                     except TypeError:
-                        self._dims['time'] = [self._time_to_index(self._dims['time'])]  # make iterable
+                        self._dims['time'] = np.arange(*[self._time_to_index(self._dims['time'])])  # make iterable
                 for time in self:
                     setattr(self, time, getattr(self, time)[self._dims['time']])
 
