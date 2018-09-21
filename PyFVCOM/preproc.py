@@ -3099,7 +3099,86 @@ class ModelNameList(object):
         if self._fabm:
             self.update('NML_OPEN_BOUNDARY_CONTROL', 'OBC_FABM_NUDGING_TIMESCALE', nudging_timescale)
 
-    def write_model_namelist(self, namelist_file):
+    def update_nesting_interval(self, target_interval=900):
+        """
+        Update the 'NCNEST_OUT_INTERVAL' to be compatible with the new (as of FVCOM version 4.1) requirement.
+
+        The simulation time (END_DATE-START_DATE) should be evenly divisible by NCNEST_OUT_INTERVAL * NCNEST_BLOCKSIZE.
+
+        Based on the current value of NCNEST_BLOCKSIZE and the model duration, find a sensible NCNEST_OUT_INTERVAL
+        which is close to the optional given target interval (defaults to 900 seconds)
+
+        Parameters
+        ----------
+        target_interval : float, optional
+            The target time in seconds for which to aim when finding the required NCNEST_OUT_INTERVAL. If omitted,
+            defaults to 900 seconds.
+
+        """
+
+        # Check the range from the minimum useful time (time_resolution) to double the target should yield at least
+        # one suitable interval. Do intervals of a minute since that's less weird (who wants a nesting output ever 34
+        # seconds? No one.). Only do that if we're running the model for more than a minute. Otherwise, interval is a
+        # second.
+        candidate_interval = []
+        time_resolution = 60
+        if duration <= time_resolution:
+            time_resolution = 1
+        for interval in range(time_resolution, (2 * target_interval) + time_resolution, time_resolution):
+            if self.valid_nesting_timescale(interval):
+                candidate_interval.append(interval)
+
+        if not candidate_interval:
+            raise ValueError('Unable to identify a suitable NCNEST_OUT_INTERVAL. '
+                             'Try setting the target_interval to something bigger.')
+
+        # Find the one closest to the target.
+        ncnest_out_interval = candidate_interval[np.argmin(np.abs(candidate_interval - target_interval))]
+        self.update('NML_NCNEST', 'NCNEST_OUT_INTERVAL', ncnest_out_interval)
+
+    def valid_nesting_timescale(self, interval=None):
+        """
+        Check the NCNEST_OUT_INTERVAL is compatible with the currently defined blocksize and model duration.
+
+        Parameters
+        ----------
+        interval : float, optional
+            The current NCNEST_OUT_INTERVAL value. If omitted, we grab the one defined in self.namelist.
+
+        Returns
+        -------
+        compatible : bool
+            True if the interval is compatible with the model duration and time step, False if not.
+
+        """
+
+        model_start = datetime.strptime(self.value('NML_CASE', 'START_DATE'), '%Y-%m-%d %H:%M:%S')
+        model_end = datetime.strptime(self.value('NML_CASE', 'END_DATE'), '%Y-%m-%d %H:%M:%S')
+        model_duration_seconds = (model_end - model_start).total_seconds()
+        nesting_blocksize = self.value('NML_NCNEST', 'NCNEST_BLOCKSIZE')
+        timestep = self.value('NML_INTEGRATION', 'EXTSTEP_SECONDS')
+
+        # We need to parse the interval format and store everything in seconds.
+        if interval is None:
+            units, interval = self.value('NML_NCNEST', 'NCNEST_OUT_INTERVAL').split('=')
+            interval = float(interval.strip())
+            units = units.strip()
+            if units == 'minutes':
+                interval /= 60
+            elif units == 'hours':
+                interval /= 60 * 60
+            elif units == 'days':
+                interval /= 60 * 60 * 24
+            elif units == 'cycles':
+                interval = timestep * int(interval)
+
+        res = model_duration_seconds / (interval * nesting_blocksize)
+        # The first check is for evenly divisible intervals and the second is for ones compatible with the model
+        # time step (not sure that's necessary).
+        if res % 2 == 0 and res / timestep % 2 == 0:
+            return True
+        else:
+            return False
         """
         Write the current object to ASCII in FVCOM namelist format.
 
