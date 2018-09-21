@@ -535,7 +535,7 @@ class Domain(object):
 
     """
 
-    def __init__(self, grid, native_coordinates, zone=None, noisy=False, debug=False):
+    def __init__(self, grid, native_coordinates, zone=None, noisy=False, debug=False, verbose=False):
         """
         Read in a grid and parse its structure into a format similar to a PyFVCOM.read.FileReader object.
 
@@ -560,7 +560,7 @@ class Domain(object):
         """
 
         self._debug = debug
-        self._noisy = noisy
+        self._noisy = noisy or verbose
 
         # Add some extra bits for the grid information.
         self.grid = _GridReader(grid, native_coordinates, zone)
