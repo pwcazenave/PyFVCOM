@@ -3179,6 +3179,8 @@ class ModelNameList(object):
             return True
         else:
             return False
+
+    def write_model_namelist(self, namelist_file):
         """
         Write the current object to ASCII in FVCOM namelist format.
 
