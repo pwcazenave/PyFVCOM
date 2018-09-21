@@ -3216,6 +3216,21 @@ class ModelNameList(object):
         else:
             return False
 
+    def update_ramp(self, duration):
+        """
+        Set the model ramp.
+
+        Parameters
+        ----------
+        duration : float
+            The ramp, in hours.
+
+        """
+
+        timestep = self.value('NML_INTEGRATION', 'EXTSTEP_SECONDS')
+        ramp = int(duration * 60 * 60 / timestep)
+        self.update('NML_INTEGRATION', 'IRAMP', ramp)
+
     def write_model_namelist(self, namelist_file):
         """
         Write the current object to ASCII in FVCOM namelist format.
