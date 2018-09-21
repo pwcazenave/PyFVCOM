@@ -167,7 +167,7 @@ class Model(Domain):
 
         """
         grid_file = str(grid_file)
-        if depth_file:
+        if depth_file is not None:
             depth_file = str(depth_file)
 
         nodes = np.arange(self.dims.node) + 1
