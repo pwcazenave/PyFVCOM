@@ -1161,7 +1161,7 @@ class MPIWorker(object):
         elif variable == 'tauc':
             load_vars = [variable, 'temp', 'salinity']
 
-        self.fvcom = FileReader(fvcom_file, variables=load_vars, *args, **kwargs)
+        self.fvcom = FileReader(fvcom_file, variables=load_vars, **kwargs)
 
         # Make the meta-variable data.
         if variable in ('speed', 'direction'):
