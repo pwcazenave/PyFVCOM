@@ -1176,7 +1176,7 @@ class MPIWorker(object):
             self.fvcom.data.speed_anomaly = self.fvcom.data.speed.mean(axis=0) - fvcom.data.speed
         elif variable == 'depth_averaged_speed_anomaly':
             self.fvcom.data.depth_averaged_speed_anomaly = self.fvcom.data.uava.mean(axis=0) - fvcom.data.uava
-        elif var == 'tauc':
+        elif variable == 'tauc':
             pressure = nodes2elems(depth2pressure(self.fvcom.data.h, self.fvcom.data.y),
                                    self.fvcom.grid.triangles)
             tempc = nodes2elems(self.fvcom.data.temp, self.fvcom.grid.triangles)
