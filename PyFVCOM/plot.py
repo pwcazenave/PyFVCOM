@@ -12,7 +12,9 @@ from pathlib import Path
 
 from PyFVCOM.coordinate import lonlat_from_utm
 from PyFVCOM.read import FileReader
+from PyFVCOM.current import vector2scalar
 from PyFVCOM.grid import getcrossectiontriangles, unstructured_grid_depths, Domain, nodes2elems
+from PyFVCOM.ocean import depth2pressure, dens_jackett
 
 import numpy as np
 
@@ -1159,14 +1161,14 @@ class MPIWorker(object):
         elif variable == 'tauc':
             load_vars = [variable, 'temp', 'salinity']
 
-        self.fvcom = pf.read.FileReader(fvcom_file, variables=load_vars, *args, **kwargs)
+        self.fvcom = FileReader(fvcom_file, variables=load_vars, *args, **kwargs)
 
         # Make the meta-variable data.
         if variable in ('speed', 'direction'):
-            self.fvcom.data.direction, self.fvcom.data.speed = pf.current.vector2scalar(self.fvcom.data.u,
-                                                                                        self.fvcom.data.v)
+            self.fvcom.data.direction, self.fvcom.data.speed = vector2scalar(self.fvcom.data.u,
+                                                                             self.fvcom.data.v)
         elif variable in ('depth_averaged_speed', 'depth_averaged_direction'):
-            self.fvcom.data.depth_averaged_direction, self.fvcom.data.depth_averaged_speed = pf.current.vector2scalar(
+            self.fvcom.data.depth_averaged_direction, self.fvcom.data.depth_averaged_speed = vector2scalar(
                 self.fvcom.data.ua, self.fvcom.data.va
             )
 
@@ -1175,11 +1177,11 @@ class MPIWorker(object):
         elif variable == 'depth_averaged_speed_anomaly':
             self.fvcom.data.depth_averaged_speed_anomaly = self.fvcom.data.uava.mean(axis=0) - fvcom.data.uava
         elif var == 'tauc':
-            pressure = pf.grid.nodes2elems(pf.ocean.depth2pressure(self.fvcom.data.h, self.fvcom.data.y),
-                                           self.fvcom.grid.triangles)
-            tempc = pf.grid.nodes2elems(self.fvcom.data.temp, self.fvcom.grid.triangles)
-            salinityc = pf.grid.nodes2elems(self.fvcom.data.temp, self.fvcom.grid.triangles)
-            rho = pf.ocean.dens_jackett(tempc, salinityc, pressure[np.newaxis, :])
+            pressure = nodes2elems(depth2pressure(self.fvcom.data.h, self.fvcom.data.y),
+                                   self.fvcom.grid.triangles)
+            tempc = nodes2elems(self.fvcom.data.temp, self.fvcom.grid.triangles)
+            salinityc = nodes2elems(self.fvcom.data.temp, self.fvcom.grid.triangles)
+            rho = dens_jackett(tempc, salinityc, pressure[np.newaxis, :])
             self.fvcom.data.tauc *= rho
 
         if self._noisy and self.rank == self.root:
