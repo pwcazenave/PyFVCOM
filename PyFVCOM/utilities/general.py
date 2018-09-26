@@ -13,7 +13,7 @@ class _passive_data_store(object):
         pass
 
     def __iter__(self):
-        # Iterate over attributes inside this object which don't start with an underscore.
+        # Iterate over attributes inside this object which don't start and end with double underscores.
         return (a for a in dir(self) if not a.startswith('__') and not a.endswith('__'))
 
     def __eq__(self, other):
