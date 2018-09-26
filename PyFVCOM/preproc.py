@@ -2452,7 +2452,7 @@ class Model(Domain):
         nest_elements = np.asarray(all_elements)[np.sort(_elem_idx)]
         del all_nodes, all_elements
 
-        # Do we really need spherical here? Or would we be better off assuming everyone's running spherical?
+        # Do we really need spherical here? Or would we be better off assuming everyone's running cartesian?
         nest_x, nest_y = self.grid.x[nest_nodes], self.grid.y[nest_nodes]
         nest_lon, nest_lat = self.grid.lon[nest_nodes], self.grid.lat[nest_nodes]
         nest_xc, nest_yc = self.grid.xc[nest_elements], self.grid.yc[nest_elements]
