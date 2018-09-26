@@ -15,7 +15,6 @@ from PyFVCOM.read import FileReader
 from PyFVCOM.current import vector2scalar
 from PyFVCOM.grid import getcrossectiontriangles, unstructured_grid_depths, Domain, nodes2elems
 from PyFVCOM.ocean import depth2pressure, dens_jackett
-from mpi4py import MPI
 
 import numpy as np
 
@@ -27,6 +26,13 @@ try:
 except ImportError:
     warn('No mpl_toolkits found in this python installation. Some functions will be disabled.')
     have_basemap = False
+
+have_mpi = True
+try:
+    from mpi4py import MPI
+except ImportError:
+    warn('No mpi4py found in this python installation. Some functions will be disabled.')
+    have_mpi = False
 
 rcParams['mathtext.default'] = 'regular'  # use non-LaTeX fonts
 
@@ -1222,8 +1228,12 @@ class MPIWorker(object):
 
         # Find out what the range of data is so we can set the colour limits automatically, if necessary.
         if clims is None:
-            global_min = self.comm.reduce(getattr(self.fvcom.data, variable).min(), op=MPI.MIN)
-            global_max = self.comm.reduce(getattr(self.fvcom.data, variable).max(), op=MPI.MAX)
+            if have_mpi:
+                global_min = self.comm.reduce(getattr(self.fvcom.data, variable).min(), op=MPI.MIN)
+                global_max = self.comm.reduce(getattr(self.fvcom.data, variable).max(), op=MPI.MAX)
+            else:
+                global_min = getattr(self.fvcom.data, variable).min()
+                global_max = getattr(self.fvcom.data, variable).max()
             clims = [global_min, global_max]
             clims = self.comm.bcast(clims, root=0)
 
