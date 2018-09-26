@@ -1241,7 +1241,7 @@ class MPIWorker(object):
             label = f'{getattr(self.fvcom.atts, variable).long_name.title()} ' \
                     f'({getattr(self.fvcom.atts, variable).units})'
 
-        local_plot = pf.plot.Plotter(self.fvcom, cb_label=label, *args, **kwargs)
+        local_plot = Plotter(self.fvcom, cb_label=label, *args, **kwargs)
 
         field = np.squeeze(getattr(self.fvcom.data, variable))
 
