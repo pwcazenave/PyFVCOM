@@ -3681,9 +3681,9 @@ class RegularReader(FileReader):
         lon_compare = xdim == getattr(other.dims, xname)
         lat_compare = ydim == getattr(other.dims, yname)
         time_compare = self.time.datetime[-1] <= other.time.datetime[0]
-        data_compare = self.obj_iter(self.data) == self.obj_iter(other.data)
-        old_data = self.obj_iter(self.data)
-        new_data = self.obj_iter(other.data)
+        old_data = [i for i in self.data]
+        new_data = [i for i in other.data]
+        data_compare = new_data == old_data
         if not lon_compare:
             raise ValueError('Horizontal longitude data are incompatible.')
         if not lat_compare:
@@ -3703,12 +3703,12 @@ class RegularReader(FileReader):
         # Copy ourselves to a new version for concatenation. self is the old so we get appended to by the new.
         idem = copy.copy(self)
 
-        for var in self.obj_iter(idem.data):
+        for var in idem.data:
             if 'time' in idem.ds.variables[var].dimensions:
                 if self._noisy:
                     print('Concatenating {} in time'.format(var))
                 setattr(idem.data, var, np.ma.concatenate((getattr(idem.data, var), getattr(other.data, var))))
-        for time in self.obj_iter(idem.time):
+        for time in idem.time:
             setattr(idem.time, time, np.concatenate((getattr(idem.time, time), getattr(other.time, time))))
 
         # Remove duplicate times.
@@ -3717,13 +3717,13 @@ class RegularReader(FileReader):
         dupe_indices = np.setdiff1d(time_indices, dupes)
         time_mask = np.ones(time_indices.shape, dtype=bool)
         time_mask[dupe_indices] = False
-        for var in self.obj_iter(idem.data):
+        for var in idem.data:
             # Only delete things with a time dimension.
             if 'time' in idem.ds.variables[var].dimensions:
                 # time_axis = idem.ds.variables[var].dimensions.index('time')
                 setattr(idem.data, var, getattr(idem.data, var)[time_mask, ...])  # assume time is first
                 # setattr(idem.data, var, np.delete(getattr(idem.data, var), dupe_indices, axis=time_axis))
-        for time in self.obj_iter(idem.time):
+        for time in idem.time:
             try:
                 time_axis = idem.ds.variables[time].dimensions.index('time')
                 setattr(idem.time, time, np.delete(getattr(idem.time, time), dupe_indices, axis=time_axis))
@@ -4061,9 +4061,9 @@ class HYCOMReader(RegularReader):
         lat_compare = self.dims.lat == other.dims.lat
         depth_compare = self.dims.depth == other.dims.depth
         time_compare = self.time.datetime[-1] <= other.time.datetime[0]
-        data_compare = self.obj_iter(self.data) == self.obj_iter(other.data)
-        old_data = self.obj_iter(self.data)
-        new_data = self.obj_iter(other.data)
+        old_data = [i for i in self.data]
+        new_data = [i for i in other.data]
+        data_compare = new_data == old_data
         if not lon_compare:
             raise ValueError('Horizontal longitude data are incompatible.')
         if not lat_compare:
@@ -4083,10 +4083,10 @@ class HYCOMReader(RegularReader):
         # Copy ourselves to a new version for concatenation. self is the old so we get appended to by the new.
         idem = copy.copy(self)
 
-        for var in self.obj_iter(idem.data):
+        for var in idem.data:
             if 'MT' in idem.ds.variables[var].dimensions:
                 setattr(idem.data, var, np.ma.concatenate((getattr(idem.data, var), getattr(other.data, var))))
-        for time in self.obj_iter(idem.time):
+        for time in idem.time:
             setattr(idem.time, time, np.concatenate((getattr(idem.time, time), getattr(other.time, time))))
 
         # Remove duplicate times.
@@ -4095,13 +4095,13 @@ class HYCOMReader(RegularReader):
         dupe_indices = np.setdiff1d(time_indices, dupes)
         time_mask = np.ones(time_indices.shape, dtype=bool)
         time_mask[dupe_indices] = False
-        for var in self.obj_iter(idem.data):
+        for var in idem.data:
             # Only delete things with a time dimension.
             if 'MT' in idem.ds.variables[var].dimensions:
                 # time_axis = idem.ds.variables[var].dimensions.index('time')
                 setattr(idem.data, var, getattr(idem.data, var)[time_mask, ...])  # assume time is first
                 # setattr(idem.data, var, np.delete(getattr(idem.data, var), dupe_indices, axis=time_axis))
-        for time in self.obj_iter(idem.time):
+        for time in idem.time:
             try:
                 time_axis = idem.ds.variables[time].dimensions.index('MT')
                 setattr(idem.time, time, np.delete(getattr(idem.time, time), dupe_indices, axis=time_axis))
