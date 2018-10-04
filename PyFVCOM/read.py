@@ -1027,6 +1027,8 @@ class SubDomainReader(FileReader):
         if 'wesn' in self._dims:
             if isinstance(self._dims['wesn'], Polygon):
                 bounding_poly = np.asarray(self._dims['wesn'].exterior.coords)
+            # Drop the 'wesn' dimension now as it's not necessary for anything else.
+            self._dims.pop('wesn')
         else:
             fig = plt.figure()
             ax = fig.add_subplot(111)
@@ -1059,9 +1061,7 @@ class SubDomainReader(FileReader):
         # Shouldn't need the np.asarray here, I think, but leaving it in as I'm not 100% sure.
         self._dims['node'] = np.squeeze(np.argwhere(np.asarray(poly_path.contains_points(np.asarray([self.grid.lon, self.grid.lat]).T))))
         self._dims['nele'] = np.squeeze(np.argwhere(np.all(np.isin(self.grid.triangles, self._dims['node']), axis=1)))
-
-        # Drop the 'wesn' dimension now as it's not necessary for anything else.
-        self._dims.pop('wesn')
+        self._get_data_pattern == 'memory'
 
     def _find_open_faces(self):
         """
