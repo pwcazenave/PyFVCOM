@@ -1956,7 +1956,7 @@ class Model(Domain):
             for this_var in harmonics_vars:
                 this_nest.add_fvcom_tides(harmonics_file, predict=this_var, constituents=constituents, interval=self.sampling, pool_size=pool_size)
 
-    def add_nests_regular(self, fvcom_var, regular_reader, regular_var):
+    def add_nests_regular(self, fvcom_var, regular_reader, regular_var, **kwargs):
         """
         Docstring
 
@@ -1968,7 +1968,7 @@ class Model(Domain):
                 mode='surface'
             else:
                 mode='nodes'
-            this_nest.add_nested_forcing(fvcom_var, regular_var, regular_reader, interval=self.sampling, mode=mode)
+            this_nest.add_nested_forcing(fvcom_var, regular_var, regular_reader, interval=self.sampling, mode=mode, **kwargs)
 
     def avg_nest_force_vel(self):
         """
