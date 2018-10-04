@@ -1195,6 +1195,7 @@ class SubDomainReader(FileReader):
     def add_evap_precip(self):
         self.load_data(['precip', 'evap'])
 
+    def add_river_data(self):
         nml_dict = get_river_config(river_nml_file)
         river_node_raw = np.asarray(nml_dict['RIVER_GRID_LOCATION'], dtype=int) - 1
 
