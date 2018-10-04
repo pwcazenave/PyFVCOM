@@ -18,7 +18,6 @@ from PyFVCOM.grid import Domain, control_volumes, get_area_heron
 from PyFVCOM.grid import unstructured_grid_volume, elems2nodes, GridReaderNetCDF
 from PyFVCOM.utilities.general import _passive_data_store
 
-
 class _TimeReader(object):
 
     def __init__(self, dataset, dims=None, verbose=False):
@@ -221,7 +220,6 @@ class _TimeReader(object):
 
         return time_idx
 
-
 class _AttributeReader(object):
     def __init__(self, dataset, variables=None, verbose=False):
         """
@@ -409,7 +407,7 @@ class FileReader(Domain):
 
                 self._dims[dim] = [self._dims[dim]]
 
-        self.time = _TimeReader(self.ds, dims=self._dims)
+        self._load_time()
         self._dims = self.time._dims  # grab the updated dimensions from the _TimeReader object.
 
         # Update the time dimension no we've read in the time data (in case we did so with a specificed dimension
@@ -525,6 +523,9 @@ class FileReader(Domain):
 
     def _load_grid(self, fvcom):
         self.grid = GridReaderNetCDF(fvcom, dims=self._dims, zone=self._zone, debug=self._debug, verbose=self._noisy)
+    
+    def _load_time(self):
+        self.time = _TimeReader(self.ds, dims=self._dims)
 
     def _update_dimensions(self, variables):
         # Update the dimensions based on variables we've been given. Construct a list of the unique dimensions in all

@@ -26,7 +26,7 @@ from PyFVCOM.grid import Domain, grid_metrics, read_fvcom_obc, nodes2elems
 from PyFVCOM.grid import OpenBoundary, find_connected_elements
 from PyFVCOM.grid import find_bad_node, element_side_lengths
 from PyFVCOM.grid import write_fvcom_mesh, connectivity, haversine_distance
-from PyFVCOM.read import FileReader
+from PyFVCOM.read import FileReader, _TimeReader
 from PyFVCOM.utilities.general import flatten_list, _passive_data_store
 from PyFVCOM.utilities.time import date_range
 from dateutil.relativedelta import relativedelta
@@ -3741,26 +3741,7 @@ class RegularReader(FileReader):
         """
         Populate a time object with additional useful time representations from the netCDF time data.
         """
-
-        if 'time' in self.ds.variables:
-            time_var = 'time'
-        elif 'time_counter' in self.ds.variables:
-            time_var = 'time_counter'
-        else:
-            raise ValueError('Missing a known time variable.')
-        time = self.ds.variables[time_var][:]
-
-        # Make other time representations.
-        self.time.datetime = num2date(time, units=getattr(self.ds.variables[time_var], 'units'))
-        if isinstance(self.time.datetime, (list, tuple, np.ndarray)):
-            setattr(self.time, 'Times', np.array([datetime.strftime(d, '%Y-%m-%dT%H:%M:%S.%f') for d in self.time.datetime]))
-        else:
-            setattr(self.time, 'Times', datetime.strftime(self.time.datetime, '%Y-%m-%dT%H:%M:%S.%f'))
-        self.time.time = date2num(self.time.datetime, units='days since 1858-11-17 00:00:00')
-        self.time.Itime = np.floor(self.time.time)
-        self.time.Itime2 = (self.time.time - np.floor(self.time.time)) * 1000 * 60 * 60  # microseconds since midnight
-        self.time.datetime = self.time.datetime
-        self.time.matlabtime = self.time.time + 678942.0  # convert to MATLAB-indexed times from Modified Julian Date.
+        self.time = _TimeReaderReg(self.ds, dims=self._dims)
 
     def _load_grid(self, netcdf_filestr):
         """
@@ -4030,6 +4011,31 @@ class RegularReader(FileReader):
         if len(index) == 1:
             index = index[0]
         return np.unravel_index(index, (len(self.grid.lon), len(self.grid.lat)))
+
+class _TimeReaderReg(_TimeReader):
+
+    def __init__(self, dataset, dims=None, verbose=False):
+        self._dims = copy.deepcopy(dims)
+        if 'time' in dataset.variables:
+            time_var = 'time'
+        elif 'time_counter' in dataset.variables:
+            time_var = 'time_counter'
+        else:
+            raise ValueError('Missing a known time variable.')
+        time = dataset.variables[time_var][:]
+
+        # Make other time representations.
+        self.datetime = num2date(time, units=getattr(dataset.variables[time_var], 'units'))
+        if isinstance(self.datetime, (list, tuple, np.ndarray)):
+            setattr(self, 'Times', np.array([datetime.strftime(d, '%Y-%m-%dT%H:%M:%S.%f') for d in self.datetime]))
+        else:
+            setattr(self, 'Times', datetime.strftime(self.datetime, '%Y-%m-%dT%H:%M:%S.%f'))
+
+        self.time = date2num(self.datetime, units='days since 1858-11-17 00:00:00')
+        self.Itime = np.floor(self.time)
+        self.Itime2 = (self.time - np.floor(self.time)) * 1000 * 60 * 60  # microseconds since midnight
+        self.datetime = self.datetime
+        self.matlabtime = self.time + 678942.0
 
 
 class Regular2DReader(RegularReader):
