@@ -416,7 +416,7 @@ class FileReader(Domain):
         # range).
         self.dims.time = len(self.time.time)
 
-        self.grid = GridReaderNetCDF(fvcom, dims=self._dims, zone=self._zone, debug=self._debug, verbose=self._noisy)
+        self._load_grid(fvcom)
 
         # Load the attributes of anything we've been asked to load.
         self.atts = _AttributeReader(self.ds, self._variables)
@@ -522,6 +522,9 @@ class FileReader(Domain):
         idem.dims.time = len(idem.time.time)
 
         return idem
+
+    def _load_grid(self, fvcom):
+        self.grid = GridReaderNetCDF(fvcom, dims=self._dims, zone=self._zone, debug=self._debug, verbose=self._noisy)
 
     def _update_dimensions(self, variables):
         # Update the dimensions based on variables we've been given. Construct a list of the unique dimensions in all

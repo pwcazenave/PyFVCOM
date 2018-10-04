@@ -3762,7 +3762,7 @@ class RegularReader(FileReader):
         self.time.datetime = self.time.datetime
         self.time.matlabtime = self.time.time + 678942.0  # convert to MATLAB-indexed times from Modified Julian Date.
 
-    def _load_grid(self):
+    def _load_grid(self, netcdf_filestr):
         """
         Load the grid data.
 
@@ -3771,7 +3771,7 @@ class RegularReader(FileReader):
         """
 
         grid_variables = ['lon', 'lat', 'x', 'y', 'depth', 'Longitude', 'Latitude']
-
+        self.grid = _passive_data_store()
         # Get the grid data.
         for grid in grid_variables:
             try:
@@ -3780,7 +3780,7 @@ class RegularReader(FileReader):
                 attributes = _passive_data_store()
                 for attribute in self.ds.variables[grid].ncattrs():
                     setattr(attributes, attribute, getattr(self.ds.variables[grid], attribute))
-                setattr(self.atts, grid, attributes)
+                #setattr(self.atts, grid, attributes)
             except KeyError:
                 # Make zeros for this missing variable so we can convert from the non-missing data below.
                 if hasattr(self.dims, 'lon') and hasattr(self.dims, 'lat'):
