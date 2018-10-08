@@ -573,10 +573,10 @@ class FileReader(Domain):
 
         for v in var:
             if self._debug or self._noisy:
-                print('Loading: {}'.format(v))
+                print(f'Loading: {v}')
 
             if v not in self.ds.variables:
-                raise NameError("Variable '{}' not present in {}".format(v, self._fvcom))
+                raise NameError(f"Variable '{v}' not present in {self._fvcom}")
 
             var_dim = self.ds.variables[v].dimensions
             variable_shape = self.ds.variables[v].shape
@@ -586,7 +586,7 @@ class FileReader(Domain):
                 if dimension in dims:
                     variable_index = var_dim.index(dimension)
                     if self._debug:
-                        print('Extracting specific indices for {}'.format(dimension))
+                        print(f'Extracting specific indices for {dimension}')
                     variable_indices[variable_index] = dims[dimension]
 
             # Add attributes for the variable we're loading.
@@ -594,7 +594,7 @@ class FileReader(Domain):
 
             if 'time' not in var_dim:
                 # Should we error here or carry on having warned?
-                warn('{} does not contain a time dimension.'.format(v))
+                warn(f'{v} does not contain a time dimension.')
 
             try:
                 if self._get_data_pattern == 'slice':
@@ -609,7 +609,7 @@ class FileReader(Domain):
                     for i in range(data_raw.ndim):
                         if not isinstance(variable_indices[i], slice):
                             if self._debug:
-                                print('Extracting indices {} for variable {}'.format(variable_indices[i], v))
+                                print(f'Extracting indices {variable_indices[i]} for variable {v}')
                             data_raw = data_raw.take(variable_indices[i], axis=i)
 
                     setattr(self.data, v, data_raw)
