@@ -405,7 +405,6 @@ class FileReader(Domain):
             if not dim_is_iterable and not dim_is_slice and not dim_is_string:
                 if self._noisy:
                     print('Making dimension {} iterable'.format(dim))
-                    print(type(self._dims[dim]))
 
                 self._dims[dim] = [self._dims[dim]]
 
