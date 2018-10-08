@@ -1132,7 +1132,7 @@ class MPIWorker(object):
         self.root = root
         self._noisy = verbose
 
-    def __loader(self, fvcom_file, variable, *args, **kwargs):
+    def __loader(self, fvcom_file, variable):
         """
         Function to load and make meta-variables, if appropriate, which can then be plotted by `plot_*'.
 
@@ -1148,8 +1148,6 @@ class MPIWorker(object):
                 - 'depth_averaged_speed_anomaly'
                 - 'direction'
                 - 'depth_averaged_direction'
-
-        Additional args and kwargs are passed to PyFVCOM.read.FileReader.
 
         Provides
         --------
@@ -1169,7 +1167,7 @@ class MPIWorker(object):
         elif variable == 'tauc':
             load_vars = [variable, 'temp', 'salinity']
 
-        self.fvcom = FileReader(fvcom_file, variables=load_vars, **kwargs)
+        self.fvcom = FileReader(fvcom_file, variables=load_vars, dims=self.dims, verbose=load_verbose)
 
         # Make the meta-variable data.
         if variable in ('speed', 'direction'):
@@ -1234,8 +1232,8 @@ class MPIWorker(object):
         label : str, optional
             What label to use for the colour bar. If omitted, uses the variable's `long_name' and `units'.
         dimensions : str, optional
-            What dimensions to load.
-        clims : str, optional
+            What additional dimensions to load (time is handled by the `time_indices' argument).
+        clims : tuple, list, optional
             Limit the colour range to these values.
         norm : matplotlib.colors.Normalize, optional
             Apply the normalisation given to the colours in the plot.
@@ -1244,11 +1242,12 @@ class MPIWorker(object):
 
         """
 
-        if dimensions is None:
-            dimensions = {}
-        dimensions.update({'time': time_indices})
+        self.dims = dimensions
+        if self.dims is None:
+            self.dims = {}
+        self.dims.update({'time': time_indices})
 
-        self.__loader(fvcom_file, variable, dimensions)
+        self.__loader(fvcom_file, variable)
 
         # Find out what the range of data is so we can set the colour limits automatically, if necessary.
         if clims is None:
