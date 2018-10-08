@@ -1156,7 +1156,9 @@ class MPIWorker(object):
 
         """
 
+        load_verbose = False
         if self._noisy and self.rank == self.root:
+            load_verbose = True
             print(f'Loading {variable} data from netCDF...', end=' ', flush=True)
 
         load_vars = [variable]
