@@ -15,6 +15,7 @@ from PyFVCOM.read import FileReader
 from PyFVCOM.current import vector2scalar
 from PyFVCOM.grid import getcrossectiontriangles, unstructured_grid_depths, Domain, nodes2elems
 from PyFVCOM.ocean import depth2pressure, dens_jackett
+from PyFVCOM.utilities.general import _passive_data_store
 
 import numpy as np
 
