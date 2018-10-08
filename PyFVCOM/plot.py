@@ -1265,7 +1265,7 @@ class MPIWorker(object):
 
         if label is None:
             label = f'{getattr(self.fvcom.atts, variable).long_name.title()} ' \
-                    f'({getattr(self.fvcom.atts, variable).units})'
+                    f'(${getattr(self.fvcom.atts, variable).units}$)'
 
         local_plot = Plotter(self.fvcom, cb_label=label, *args, **kwargs)
 
