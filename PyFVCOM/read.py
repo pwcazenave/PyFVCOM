@@ -18,7 +18,6 @@ from PyFVCOM.grid import Domain, control_volumes, get_area_heron
 from PyFVCOM.grid import unstructured_grid_volume, elems2nodes, GridReaderNetCDF
 from PyFVCOM.utilities.general import _passive_data_store
 
-
 class _TimeReader(object):
 
     def __init__(self, dataset, dims=None, verbose=False):
@@ -221,7 +220,6 @@ class _TimeReader(object):
 
         return time_idx
 
-
 class _AttributeReader(object):
     def __init__(self, dataset, variables=None, verbose=False):
         """
@@ -408,14 +406,14 @@ class FileReader(Domain):
 
                 self._dims[dim] = [self._dims[dim]]
 
-        self.time = _TimeReader(self.ds, dims=self._dims)
+        self._load_time()
         self._dims = self.time._dims  # grab the updated dimensions from the _TimeReader object.
 
         # Update the time dimension no we've read in the time data (in case we did so with a specificed dimension
         # range).
         self.dims.time = len(self.time.time)
 
-        self.grid = GridReaderNetCDF(fvcom, dims=self._dims, zone=self._zone, debug=self._debug, verbose=self._noisy)
+        self._load_grid(fvcom)
 
         # Load the attributes of anything we've been asked to load.
         self.atts = _AttributeReader(self.ds, self._variables)
@@ -521,6 +519,12 @@ class FileReader(Domain):
         idem.dims.time = len(idem.time.time)
 
         return idem
+
+    def _load_grid(self, fvcom):
+        self.grid = GridReaderNetCDF(fvcom, dims=self._dims, zone=self._zone, debug=self._debug, verbose=self._noisy)
+    
+    def _load_time(self):
+        self.time = _TimeReader(self.ds, dims=self._dims)
 
     def _update_dimensions(self, variables):
         # Update the dimensions based on variables we've been given. Construct a list of the unique dimensions in all
@@ -1023,6 +1027,8 @@ class SubDomainReader(FileReader):
         if 'wesn' in self._dims:
             if isinstance(self._dims['wesn'], Polygon):
                 bounding_poly = np.asarray(self._dims['wesn'].exterior.coords)
+            # Drop the 'wesn' dimension now as it's not necessary for anything else.
+            self._dims.pop('wesn')
         else:
             fig = plt.figure()
             ax = fig.add_subplot(111)
@@ -1055,9 +1061,7 @@ class SubDomainReader(FileReader):
         # Shouldn't need the np.asarray here, I think, but leaving it in as I'm not 100% sure.
         self._dims['node'] = np.squeeze(np.argwhere(np.asarray(poly_path.contains_points(np.asarray([self.grid.lon, self.grid.lat]).T))))
         self._dims['nele'] = np.squeeze(np.argwhere(np.all(np.isin(self.grid.triangles, self._dims['node']), axis=1)))
-
-        # Drop the 'wesn' dimension now as it's not necessary for anything else.
-        self._dims.pop('wesn')
+        self._get_data_pattern == 'memory'
 
     def _find_open_faces(self):
         """
@@ -1190,6 +1194,7 @@ class SubDomainReader(FileReader):
     def add_evap_precip(self):
         self.load_data(['precip', 'evap'])
 
+    def add_river_data(self):
         nml_dict = get_river_config(river_nml_file)
         river_node_raw = np.asarray(nml_dict['RIVER_GRID_LOCATION'], dtype=int) - 1
 

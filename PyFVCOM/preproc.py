@@ -26,7 +26,7 @@ from PyFVCOM.grid import Domain, grid_metrics, read_fvcom_obc, nodes2elems
 from PyFVCOM.grid import OpenBoundary, find_connected_elements
 from PyFVCOM.grid import find_bad_node, element_side_lengths
 from PyFVCOM.grid import write_fvcom_mesh, connectivity, haversine_distance
-from PyFVCOM.read import FileReader
+from PyFVCOM.read import FileReader, _TimeReader
 from PyFVCOM.utilities.general import flatten_list, _passive_data_store
 from PyFVCOM.utilities.time import date_range
 from dateutil.relativedelta import relativedelta
@@ -1956,7 +1956,7 @@ class Model(Domain):
             for this_var in harmonics_vars:
                 this_nest.add_fvcom_tides(harmonics_file, predict=this_var, constituents=constituents, interval=self.sampling, pool_size=pool_size)
 
-    def add_nests_regular(self, fvcom_var, regular_reader, regular_var):
+    def add_nests_regular(self, fvcom_var, regular_reader, regular_var, **kwargs):
         """
         Docstring
 
@@ -1968,7 +1968,7 @@ class Model(Domain):
                 mode='surface'
             else:
                 mode='nodes'
-            this_nest.add_nested_forcing(fvcom_var, regular_var, regular_reader, interval=self.sampling, mode=mode)
+            this_nest.add_nested_forcing(fvcom_var, regular_var, regular_reader, interval=self.sampling, mode=mode, **kwargs)
 
     def avg_nest_force_vel(self):
         """
@@ -2720,14 +2720,14 @@ class ModelNameList(object):
                             NameListEntry('NC_TURBULENCE', 'T'),
                             NameListEntry('NC_AVERAGE_VEL', 'T'),
                             NameListEntry('NC_VERTICAL_VEL', 'T'),
-                            NameListEntry('NC_WIND_VEL', 'T'),
-                            NameListEntry('NC_WIND_STRESS', 'T'),
-                            NameListEntry('NC_EVAP_PRECIP', 'T'),
-                            NameListEntry('NC_SURFACE_HEAT', 'T'),
-                            NameListEntry('NC_GROUNDWATER', 'T'),
-                            NameListEntry('NC_BIO', 'T'),
-                            NameListEntry('NC_WQM', 'T'),
-                            NameListEntry('NC_VORTICITY', 'T')],
+                            NameListEntry('NC_WIND_VEL', 'F'),
+                            NameListEntry('NC_WIND_STRESS', 'F'),
+                            NameListEntry('NC_EVAP_PRECIP', 'F'),
+                            NameListEntry('NC_SURFACE_HEAT', 'F'),
+                            NameListEntry('NC_GROUNDWATER', 'F'),
+                            NameListEntry('NC_BIO', 'F'),
+                            NameListEntry('NC_WQM', 'F'),
+                            NameListEntry('NC_VORTICITY', 'F')],
                        'NML_NETCDF_AV':
                            [NameListEntry('NCAV_ON', 'F'),
                             NameListEntry('NCAV_FIRST_OUT', None),
@@ -2740,14 +2740,14 @@ class ModelNameList(object):
                             NameListEntry('NCAV_TURBULENCE', 'T'),
                             NameListEntry('NCAV_AVERAGE_VEL', 'T'),
                             NameListEntry('NCAV_VERTICAL_VEL', 'T'),
-                            NameListEntry('NCAV_WIND_VEL', 'T'),
-                            NameListEntry('NCAV_WIND_STRESS', 'T'),
-                            NameListEntry('NCAV_EVAP_PRECIP', 'T'),
-                            NameListEntry('NCAV_SURFACE_HEAT', 'T'),
-                            NameListEntry('NCAV_GROUNDWATER', 'T'),
-                            NameListEntry('NCAV_BIO', 'T'),
-                            NameListEntry('NCAV_WQM', 'T'),
-                            NameListEntry('NCAV_VORTICITY', 'T')],
+                            NameListEntry('NCAV_WIND_VEL', 'F'),
+                            NameListEntry('NCAV_WIND_STRESS', 'F'),
+                            NameListEntry('NCAV_EVAP_PRECIP', 'F'),
+                            NameListEntry('NCAV_SURFACE_HEAT', 'F'),
+                            NameListEntry('NCAV_GROUNDWATER', 'F'),
+                            NameListEntry('NCAV_BIO', 'F'),
+                            NameListEntry('NCAV_WQM', 'F'),
+                            NameListEntry('NCAV_VORTICITY', 'F')],
                        'NML_SURFACE_FORCING':
                            [NameListEntry('WIND_ON', 'F'),
                             NameListEntry('WIND_TYPE', 'speed'),
@@ -2788,8 +2788,8 @@ class ModelNameList(object):
                             NameListEntry('HEATING_CALCULATE_FILE', f'{self._casename}_wnd.nc'),
                             NameListEntry('HEATING_CALCULATE_KIND', 'variable'),
                             NameListEntry('ZUU', 10.0, 'f'),
-                            NameListEntry('ZTT', 10.0, 'f'),
-                            NameListEntry('ZQQ', 10.0, 'f'),
+                            NameListEntry('ZTT', 2.0, 'f'),
+                            NameListEntry('ZQQ', 2.0, 'f'),
                             NameListEntry('AIR_TEMPERATURE', 0.0, 'f'),
                             NameListEntry('RELATIVE_HUMIDITY', 0.0, 'f'),
                             NameListEntry('SURFACE_PRESSURE', 0.0, 'f'),
@@ -3681,9 +3681,9 @@ class RegularReader(FileReader):
         lon_compare = xdim == getattr(other.dims, xname)
         lat_compare = ydim == getattr(other.dims, yname)
         time_compare = self.time.datetime[-1] <= other.time.datetime[0]
-        data_compare = self.obj_iter(self.data) == self.obj_iter(other.data)
-        old_data = self.obj_iter(self.data)
-        new_data = self.obj_iter(other.data)
+        old_data = [i for i in self.data]
+        new_data = [i for i in other.data]
+        data_compare = new_data == old_data
         if not lon_compare:
             raise ValueError('Horizontal longitude data are incompatible.')
         if not lat_compare:
@@ -3703,12 +3703,12 @@ class RegularReader(FileReader):
         # Copy ourselves to a new version for concatenation. self is the old so we get appended to by the new.
         idem = copy.copy(self)
 
-        for var in self.obj_iter(idem.data):
+        for var in idem.data:
             if 'time' in idem.ds.variables[var].dimensions:
                 if self._noisy:
                     print('Concatenating {} in time'.format(var))
                 setattr(idem.data, var, np.ma.concatenate((getattr(idem.data, var), getattr(other.data, var))))
-        for time in self.obj_iter(idem.time):
+        for time in idem.time:
             setattr(idem.time, time, np.concatenate((getattr(idem.time, time), getattr(other.time, time))))
 
         # Remove duplicate times.
@@ -3717,13 +3717,13 @@ class RegularReader(FileReader):
         dupe_indices = np.setdiff1d(time_indices, dupes)
         time_mask = np.ones(time_indices.shape, dtype=bool)
         time_mask[dupe_indices] = False
-        for var in self.obj_iter(idem.data):
+        for var in idem.data:
             # Only delete things with a time dimension.
             if 'time' in idem.ds.variables[var].dimensions:
                 # time_axis = idem.ds.variables[var].dimensions.index('time')
                 setattr(idem.data, var, getattr(idem.data, var)[time_mask, ...])  # assume time is first
                 # setattr(idem.data, var, np.delete(getattr(idem.data, var), dupe_indices, axis=time_axis))
-        for time in self.obj_iter(idem.time):
+        for time in idem.time:
             try:
                 time_axis = idem.ds.variables[time].dimensions.index('time')
                 setattr(idem.time, time, np.delete(getattr(idem.time, time), dupe_indices, axis=time_axis))
@@ -3741,28 +3741,9 @@ class RegularReader(FileReader):
         """
         Populate a time object with additional useful time representations from the netCDF time data.
         """
+        self.time = _TimeReaderReg(self.ds, dims=self._dims)
 
-        if 'time' in self.ds.variables:
-            time_var = 'time'
-        elif 'time_counter' in self.ds.variables:
-            time_var = 'time_counter'
-        else:
-            raise ValueError('Missing a known time variable.')
-        time = self.ds.variables[time_var][:]
-
-        # Make other time representations.
-        self.time.datetime = num2date(time, units=getattr(self.ds.variables[time_var], 'units'))
-        if isinstance(self.time.datetime, (list, tuple, np.ndarray)):
-            setattr(self.time, 'Times', np.array([datetime.strftime(d, '%Y-%m-%dT%H:%M:%S.%f') for d in self.time.datetime]))
-        else:
-            setattr(self.time, 'Times', datetime.strftime(self.time.datetime, '%Y-%m-%dT%H:%M:%S.%f'))
-        self.time.time = date2num(self.time.datetime, units='days since 1858-11-17 00:00:00')
-        self.time.Itime = np.floor(self.time.time)
-        self.time.Itime2 = (self.time.time - np.floor(self.time.time)) * 1000 * 60 * 60  # microseconds since midnight
-        self.time.datetime = self.time.datetime
-        self.time.matlabtime = self.time.time + 678942.0  # convert to MATLAB-indexed times from Modified Julian Date.
-
-    def _load_grid(self):
+    def _load_grid(self, netcdf_filestr):
         """
         Load the grid data.
 
@@ -3771,7 +3752,7 @@ class RegularReader(FileReader):
         """
 
         grid_variables = ['lon', 'lat', 'x', 'y', 'depth', 'Longitude', 'Latitude']
-
+        self.grid = _passive_data_store()
         # Get the grid data.
         for grid in grid_variables:
             try:
@@ -3780,7 +3761,7 @@ class RegularReader(FileReader):
                 attributes = _passive_data_store()
                 for attribute in self.ds.variables[grid].ncattrs():
                     setattr(attributes, attribute, getattr(self.ds.variables[grid], attribute))
-                setattr(self.atts, grid, attributes)
+                #setattr(self.atts, grid, attributes)
             except KeyError:
                 # Make zeros for this missing variable so we can convert from the non-missing data below.
                 if hasattr(self.dims, 'lon') and hasattr(self.dims, 'lat'):
@@ -4031,6 +4012,31 @@ class RegularReader(FileReader):
             index = index[0]
         return np.unravel_index(index, (len(self.grid.lon), len(self.grid.lat)))
 
+class _TimeReaderReg(_TimeReader):
+
+    def __init__(self, dataset, dims=None, verbose=False):
+        self._dims = copy.deepcopy(dims)
+        if 'time' in dataset.variables:
+            time_var = 'time'
+        elif 'time_counter' in dataset.variables:
+            time_var = 'time_counter'
+        else:
+            raise ValueError('Missing a known time variable.')
+        time = dataset.variables[time_var][:]
+
+        # Make other time representations.
+        self.datetime = num2date(time, units=getattr(dataset.variables[time_var], 'units'))
+        if isinstance(self.datetime, (list, tuple, np.ndarray)):
+            setattr(self, 'Times', np.array([datetime.strftime(d, '%Y-%m-%dT%H:%M:%S.%f') for d in self.datetime]))
+        else:
+            setattr(self, 'Times', datetime.strftime(self.datetime, '%Y-%m-%dT%H:%M:%S.%f'))
+
+        self.time = date2num(self.datetime, units='days since 1858-11-17 00:00:00')
+        self.Itime = np.floor(self.time)
+        self.Itime2 = (self.time - np.floor(self.time)) * 1000 * 60 * 60  # microseconds since midnight
+        self.datetime = self.datetime
+        self.matlabtime = self.time + 678942.0
+
 
 class Regular2DReader(RegularReader):
     """
@@ -4061,9 +4067,9 @@ class HYCOMReader(RegularReader):
         lat_compare = self.dims.lat == other.dims.lat
         depth_compare = self.dims.depth == other.dims.depth
         time_compare = self.time.datetime[-1] <= other.time.datetime[0]
-        data_compare = self.obj_iter(self.data) == self.obj_iter(other.data)
-        old_data = self.obj_iter(self.data)
-        new_data = self.obj_iter(other.data)
+        old_data = [i for i in self.data]
+        new_data = [i for i in other.data]
+        data_compare = new_data == old_data
         if not lon_compare:
             raise ValueError('Horizontal longitude data are incompatible.')
         if not lat_compare:
@@ -4083,10 +4089,10 @@ class HYCOMReader(RegularReader):
         # Copy ourselves to a new version for concatenation. self is the old so we get appended to by the new.
         idem = copy.copy(self)
 
-        for var in self.obj_iter(idem.data):
+        for var in idem.data:
             if 'MT' in idem.ds.variables[var].dimensions:
                 setattr(idem.data, var, np.ma.concatenate((getattr(idem.data, var), getattr(other.data, var))))
-        for time in self.obj_iter(idem.time):
+        for time in idem.time:
             setattr(idem.time, time, np.concatenate((getattr(idem.time, time), getattr(other.time, time))))
 
         # Remove duplicate times.
@@ -4095,13 +4101,13 @@ class HYCOMReader(RegularReader):
         dupe_indices = np.setdiff1d(time_indices, dupes)
         time_mask = np.ones(time_indices.shape, dtype=bool)
         time_mask[dupe_indices] = False
-        for var in self.obj_iter(idem.data):
+        for var in idem.data:
             # Only delete things with a time dimension.
             if 'MT' in idem.ds.variables[var].dimensions:
                 # time_axis = idem.ds.variables[var].dimensions.index('time')
                 setattr(idem.data, var, getattr(idem.data, var)[time_mask, ...])  # assume time is first
                 # setattr(idem.data, var, np.delete(getattr(idem.data, var), dupe_indices, axis=time_axis))
-        for time in self.obj_iter(idem.time):
+        for time in idem.time:
             try:
                 time_axis = idem.ds.variables[time].dimensions.index('MT')
                 setattr(idem.time, time, np.delete(getattr(idem.time, time), dupe_indices, axis=time_axis))

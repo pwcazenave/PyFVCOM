@@ -1456,7 +1456,7 @@ class OpenBoundary(object):
             # Drop the interpolated data into the nest object.
 
         if tide_adjust and fvcom_name in ['u', 'v', 'ua', 'va']:
-            interpolated_coars_data = interpolated_coarse_data + getattr(self.tide, fvcom_name)            
+            interpolated_coarse_data = interpolated_coarse_data + getattr(self.tide, fvcom_name)
 
         setattr(self.nest, fvcom_name, interpolated_coarse_data)
 
