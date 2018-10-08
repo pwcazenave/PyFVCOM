@@ -635,7 +635,7 @@ class FileReader(Domain):
         Calculate the grid volume (optionally time varying) for the loaded grid.
 
         If the surface elevation data have been loaded (`zeta'), the volume varies with time, otherwise, the volume
-        is for the mean water depth (`h').
+        is for the mean water depth (`h'). To load the surface elevation with this call, set `load_zeta' to True.
 
         Parameters
         ----------
