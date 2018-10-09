@@ -20,6 +20,7 @@ class _passive_data_store(object):
         # For easy comparison of classes.
         return self.__dict__ == other.__dict__
 
+
 def fix_range(a, nmin, nmax):
     """
     Given an array of values `a', scale the values within in to the range
