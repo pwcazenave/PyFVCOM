@@ -28,13 +28,6 @@ except ImportError:
     warn('No mpl_toolkits found in this python installation. Some functions will be disabled.')
     have_basemap = False
 
-have_mpi = True
-try:
-    from mpi4py import MPI
-except ImportError:
-    warn('No mpi4py found in this python installation. Some functions will be disabled.')
-    have_mpi = False
-
 rcParams['mathtext.default'] = 'regular'  # use non-LaTeX fonts
 
 
@@ -1110,14 +1103,14 @@ class CrossPlotter(Plotter):
 
 class MPIWorker(object):
 
-    def __init__(self, comm, root=0, verbose=False):
+    def __init__(self, comm=None, root=0, verbose=False):
         """
         Create a plotting worker object. MPIWorker.plot_* load and plot a subset in time of the results.
 
         Parameters
         ----------
-        comm : mpi4py.MPI.Intracomm
-            The MPI intracommunicator object.
+        comm : mpi4py.MPI.Intracomm, optional
+            The MPI intracommunicator object. Omit if not running in parallel.
         root : int, optional
             Specify a given rank to act as the root process. This is only for outputting verbose messages (if enabled
             with `verbose').
@@ -1125,10 +1118,20 @@ class MPIWorker(object):
             Set to True to enabled some verbose output messages. Defaults to False (no messages).
 
         """
+        self.dims = None
+
+        self.have_mpi = True
+        try:
+            from mpi4py import MPI
+        except ImportError:
+            warn('No mpi4py found in this python installation. Some functions will be disabled.')
+            self.have_mpi = False
 
         self.comm = comm
-        self.rank = self.comm.Get_rank()
-        self.size = self.comm.Get_size()
+        if self.have_mpi:
+            self.rank = self.comm.Get_rank()
+        else:
+            self.rank = 0
         self.root = root
         self._noisy = verbose
 
@@ -1253,7 +1256,7 @@ class MPIWorker(object):
 
         # Find out what the range of data is so we can set the colour limits automatically, if necessary.
         if clims is None:
-            if have_mpi:
+            if self.have_mpi:
                 global_min = self.comm.reduce(np.nanmin(getattr(self.fvcom.data, variable)), op=MPI.MIN)
                 global_max = self.comm.reduce(np.nanmax(getattr(self.fvcom.data, variable)), op=MPI.MAX)
             else:
@@ -1261,7 +1264,8 @@ class MPIWorker(object):
                 global_min = np.nanmin(getattr(self.fvcom.data, variable))
                 global_max = np.nanmax(getattr(self.fvcom.data, variable))
             clims = [global_min, global_max]
-            clims = self.comm.bcast(clims, root=0)
+            if self.have_mpi:
+                clims = self.comm.bcast(clims, root=0)
 
         if label is None:
             label = f'{getattr(self.fvcom.atts, variable).long_name.title()} ' \
