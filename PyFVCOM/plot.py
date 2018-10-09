@@ -542,6 +542,7 @@ class Plotter(object):
         self.norm = norm
         self.m = m
         self.cartesian = cartesian
+        self.colorbar_axis = None
 
         # Plot instances (initialise to None/[] for truthiness test later)
         self.quiver_plot = []
@@ -812,7 +813,7 @@ class Plotter(object):
         group_name : str, optional
             Group name for this set of particles - a separate plot object is created for each group name passed in.
             Defaults to `Default'
-        color : string, optional
+        colour : string, optional
             Colour to use when making the plot. Default `r'.
         zone_number : string, optional
             See PyFVCOM.coordinates documentation for a full list of supported codes. Defaults to `30N'.
@@ -890,7 +891,32 @@ class CrossPlotter(Plotter):
 
     """
 
+    def __init__(self):
+
+        super(Plotter, self).__init__()
+
+        self.cross_plot_x = None
+        self.cross_plot_y = None
+        self.cross_plot_x_pcolor = None
+        self.cross_plot_y_pcolor = None
+        self.sub_samp = None
+        self.sample_points = None
+        self.sample_points_ind = None
+        self.sample_points_ind_pcolor = None
+        self.wet_points_data = None
+        self.chan_x = None
+        self.chan_y = None
+        self.sub_samp = None
+        self.sel_points = None
+        self.xlim_vals = None
+        self.ylim_vals = None
+
     def _init_figure(self):
+        """
+        Initialise a cross-sectional plot object.
+
+        """
+
         if self._FileReader:
             self.nv = self.ds.grid.nv
             self.x = self.ds.grid.x
@@ -917,13 +943,29 @@ class CrossPlotter(Plotter):
         if self.title:
             self.axes.set_title(self.title)
 
-    def cross_section_init(self, cross_section_points, dist_res = 50, variable_at_cells=False, wetting_and_drying=True):
-        # sample the cross section
-        [sub_samp, sample_cells, sample_nodes] = getcrossectiontriangles(cross_section_points[0], self.triangles, self.x, self.y, dist_res)
+    def cross_section_init(self, cross_section_points, dist_res=50, variable_at_cells=False, wetting_and_drying=True):
+        """
+        Sample the cross section.
+
+        TODO: Finish this docstring!
+
+        Parameters
+        ----------
+        cross_section_points :
+        dist_res :
+        variable_at_cells :
+        wetting_and_drying :
+
+        """
+        [sub_samp, sample_cells, sample_nodes] = getcrossectiontriangles(cross_section_points[0],
+                                                                         self.triangles, self.x, self.y, dist_res)
 
         if len(cross_section_points) > 1:
             for this_cross_section in cross_section_points[1:]:
-                [this_sub_samp, this_sample_cells, this_sample_nodes] = getcrossectiontriangles(this_cross_section, self.triangles, self.x, self.y, dist_res)
+                [this_sub_samp, this_sample_cells, this_sample_nodes] = getcrossectiontriangles(this_cross_section,
+                                                                                                self.triangles,
+                                                                                                self.x, self.y,
+                                                                                                dist_res)
                 sub_samp = np.vstack([sub_samp, this_sub_samp])
                 sample_cells = np.append(sample_cells, this_sample_cells)
                 sample_nodes = np.append(sample_nodes, this_sample_nodes)
@@ -934,7 +976,7 @@ class CrossPlotter(Plotter):
             self.sample_points = sample_nodes
         self.sub_samp = sub_samp
 
-        self.sel_points = np.asarray(np.unique(self.sample_points[self.sample_points!=-1]), dtype=int)
+        self.sel_points = np.asarray(np.unique(self.sample_points[self.sample_points != -1]), dtype=int)
         sample_points_ind = np.zeros(len(self.sample_points))
         for this_ind, this_point in enumerate(self.sel_points):
             sample_points_ind[self.sample_points == this_point] = this_ind
@@ -945,16 +987,16 @@ class CrossPlotter(Plotter):
             self.ds.load_data(['zeta'])
 
         if variable_at_cells:
-            siglay = self.ds.grid.siglay_center[:,self.sel_points]
-            siglev = self.ds.grid.siglev_center[:,self.sel_points]
+            siglay = self.ds.grid.siglay_center[:, self.sel_points]
+            siglev = self.ds.grid.siglev_center[:, self.sel_points]
             h = self.ds.grid.h_center[self.sel_points]
-            zeta = np.mean(self.ds.data.zeta[:,self.ds.grid.nv -1], axis=1)[:,self.sel_points]
+            zeta = np.mean(self.ds.data.zeta[:, self.ds.grid.nv - 1], axis=1)[:, self.sel_points]
 
         else:
-            siglay = self.ds.grid.siglay[:,self.sel_points]
-            siglev = self.ds.grid.siglev[:,self.sel_points]
+            siglay = self.ds.grid.siglay[:, self.sel_points]
+            siglev = self.ds.grid.siglev[:, self.sel_points]
             h = self.ds.grid.h[self.sel_points]
-            zeta = self.ds.data.zeta[:,self.sel_points]
+            zeta = self.ds.data.zeta[:, self.sel_points]
 
         depth_sel = -unstructured_grid_depths(h, zeta, siglay, nan_invalid=True)
         depth_sel_pcolor = -unstructured_grid_depths(h, zeta, siglev, nan_invalid=True)
@@ -963,20 +1005,22 @@ class CrossPlotter(Plotter):
         depth_sel_pcolor = self._nan_extend(depth_sel_pcolor)
 
         # set up the x and y for the plots
-        self.cross_plot_x = np.tile(np.arange(0, len(self.sample_points)), [depth_sel.shape[1], 1])*dist_res + dist_res*1/2
-        self.cross_plot_x_pcolor = np.tile(np.arange(0, len(self.sample_points)+1), [depth_sel_pcolor.shape[1], 1])*dist_res
+        self.cross_plot_x = np.tile(np.arange(0, len(self.sample_points)),
+                                    [depth_sel.shape[1], 1]) * dist_res + dist_res * 1/2
+        self.cross_plot_x_pcolor = np.tile(np.arange(0, len(self.sample_points) + 1),
+                                           [depth_sel_pcolor.shape[1], 1]) * dist_res
 
-        self.cross_plot_y = -depth_sel[:,:,self.sample_points_ind]
+        self.cross_plot_y = -depth_sel[:, :, self.sample_points_ind]
         insert_ind = np.min(np.where(self.sample_points_ind != np.max(self.sample_points_ind))[0])
         self.sample_points_ind_pcolor = np.insert(self.sample_points_ind, insert_ind, self.sample_points_ind[insert_ind])
-        self.cross_plot_y_pcolor = -depth_sel_pcolor[:,:,self.sample_points_ind_pcolor]
+        self.cross_plot_y_pcolor = -depth_sel_pcolor[:, :, self.sample_points_ind_pcolor]
 
         # pre process the channel variables
-        chan_y_raw = np.nanmin(self.cross_plot_y_pcolor, axis=1)[-1,:]
-        chan_x_raw = self.cross_plot_x_pcolor[-1,:]
+        chan_y_raw = np.nanmin(self.cross_plot_y_pcolor, axis=1)[-1, :]
+        chan_x_raw = self.cross_plot_x_pcolor[-1, :]
         max_zeta = np.ceil(np.max(zeta))
         if np.any(np.isnan(chan_y_raw)):
-            chan_y_raw[np.min(np.where(~np.isnan(chan_y_raw)))] = max_zeta # bodge to get left bank adjacent
+            chan_y_raw[np.min(np.where(~np.isnan(chan_y_raw)))] = max_zeta  # bodge to get left bank adjacent
             chan_y_raw[np.isnan(chan_y_raw)] = max_zeta
         self.chan_x, self.chan_y = self._chan_corners(chan_x_raw, chan_y_raw)
 
@@ -984,10 +1028,10 @@ class CrossPlotter(Plotter):
         if wetting_and_drying:
             if variable_at_cells:
                 self.ds.load_data(['wet_cells'])
-                self.wet_points_data = np.asarray(self.ds.data.wet_cells[:,self.sel_points], dtype=bool)
+                self.wet_points_data = np.asarray(self.ds.data.wet_cells[:, self.sel_points], dtype=bool)
             else:
                 self.ds.load_data(['wet_nodes'])
-                self.wet_points_data = np.asarray(self.ds.data.wet_nodes[:,self.sel_points], dtype=bool)
+                self.wet_points_data = np.asarray(self.ds.data.wet_nodes[:, self.sel_points], dtype=bool)
         else:
             self.wet_points_data = np.asarray(np.ones((self.ds.dims.time, len(self.sel_points))), dtype=bool)
 
@@ -995,13 +1039,25 @@ class CrossPlotter(Plotter):
         self.xlim_vals = [np.nanmin(self.cross_plot_x_pcolor), np.nanmax(self.cross_plot_x_pcolor)]
 
     def plot_pcolor_field(self, var, timestep):
+        """
+        Finish me.
+
+        TODO: docstring!
+
+        Parameters
+        ----------
+        var :
+        timestep :
+
+        """
+
         if isinstance(var, str):
             plot_z = self._var_prep(var, timestep).T
         else:
             plot_z = var
 
         plot_x = self.cross_plot_x_pcolor.T
-        plot_y = self.cross_plot_y_pcolor[timestep,:,:].T
+        plot_y = self.cross_plot_y_pcolor[timestep, :, :].T
 
         if self.vmin is None:
             self.vmin = np.nanmin(plot_z)
@@ -1011,12 +1067,12 @@ class CrossPlotter(Plotter):
         for this_node in self.sel_points:
             # choose_horiz = np.asarray(self.sample_points == this_node, dtype=bool)
             choose_horiz = np.asarray(np.where(self.sample_points == this_node)[0], dtype=int)
-            choose_horiz_extend = np.asarray(np.append(choose_horiz, np.max(choose_horiz) +1), dtype=int)
+            choose_horiz_extend = np.asarray(np.append(choose_horiz, np.max(choose_horiz) + 1), dtype=int)
 
-            y_uniform = np.tile(np.median(plot_y[choose_horiz_extend,:], axis=0), [len(choose_horiz_extend),1])
-            pc = self.axes.pcolormesh(plot_x[choose_horiz_extend,:],
+            y_uniform = np.tile(np.median(plot_y[choose_horiz_extend, :], axis=0), [len(choose_horiz_extend), 1])
+            pc = self.axes.pcolormesh(plot_x[choose_horiz_extend, :],
                                       y_uniform,
-                                      plot_z[choose_horiz,:],
+                                      plot_z[choose_horiz, :],
                                       cmap=self.cmap,
                                       vmin=self.vmin,
                                       vmax=self.vmax)
@@ -1027,6 +1083,20 @@ class CrossPlotter(Plotter):
         self.axes.set_xlim(self.xlim_vals)
 
     def plot_quiver(self, timestep, u_str='u', v_str='v', w_str='ww', w_factor=1):
+        """
+        Finish me.
+
+        TODO: docstring!
+
+        Parameters
+        ----------
+        timestep :
+        u_str :
+        v_str :
+        w_str :
+        w_factor :
+
+        """
         raw_cross_u = self._var_prep(u_str, timestep)
         raw_cross_v = self._var_prep(v_str, timestep)
         raw_cross_w = self._var_prep(w_str, timestep)
@@ -1034,16 +1104,27 @@ class CrossPlotter(Plotter):
         cross_u, cross_v, cross_io = self._uvw_rectify(raw_cross_u, raw_cross_v, raw_cross_w)
 
         plot_x = np.ma.masked_invalid(self.cross_plot_x).T
-        plot_y = np.ma.masked_invalid(self.cross_plot_y[timestep,:,:]).T
+        plot_y = np.ma.masked_invalid(self.cross_plot_y[timestep, :, :]).T
 
         self.plot_pcolor_field(cross_io.T, timestep)
         self.axes.quiver(plot_x, plot_y, cross_u.T, cross_v.T*w_factor)
 
     def _var_prep(self, var, timestep):
+        """
+        Finish me.
+
+        TODO: docstring!
+
+        Parameters
+        ----------
+        var :
+        timestep :
+
+        """
         self.ds.load_data([var], dims={'time': [timestep]})
         var_sel = np.squeeze(getattr(self.ds.data, var))[..., self.sel_points]
 
-        this_step_wet_points = np.asarray(self.wet_points_data[timestep,:], dtype=bool)
+        this_step_wet_points = np.asarray(self.wet_points_data[timestep, :], dtype=bool)
         var_sel[:, ~this_step_wet_points] = np.NAN
         self.var_sel = var_sel
         var_sel_ext = self._nan_extend(var_sel)
@@ -1053,6 +1134,18 @@ class CrossPlotter(Plotter):
         return np.ma.masked_invalid(cross_plot_z)
 
     def _uvw_rectify(self, u_field, v_field, w_field):
+        """
+        Finish me.
+
+        TODO: docstring!
+
+        Parameters
+        ----------
+        u_field :
+        v_field :
+        w_field :
+
+        """
         cross_lr = np.empty(u_field.shape)
         cross_io = np.empty(v_field.shape)
         cross_ud = w_field
@@ -1076,14 +1169,15 @@ class CrossPlotter(Plotter):
 
     @staticmethod
     def _nan_extend(in_array):
-        in_shape = in_array.shape
-        if len(in_shape) == 3:
-            nan_ext = np.empty([in_shape[0],in_shape[1],1])
-        elif len(in_shape)==2:
-            nan_ext = np.empty([in_shape[0],1])
+        if np.ndim(in_array) == 3:
+            nan_ext = np.empty([in_array.shape[0], in_array.shape[1], 1])
+        elif np.ndim(in_array) == 2:
+            nan_ext = np.empty([in_array.shape[0], 1])
+        else:
+            raise ValueError('Unsupported number of dimensions.')
 
         nan_ext[:] = np.NAN
-        return np.append(in_array, nan_ext, axis=len(in_shape)-1)
+        return np.append(in_array, nan_ext, axis=len(in_shape) - 1)
 
     @staticmethod
     def _chan_corners(chan_x, chan_y):
@@ -1095,13 +1189,14 @@ class CrossPlotter(Plotter):
                 new_chan_x.append(chan_x[this_ind])
                 new_chan_y.append(this_y)
 
-            new_chan_x.append(chan_x[this_ind +1])
+            new_chan_x.append(chan_x[this_ind + 1])
             new_chan_y.append(this_y)
 
         return np.asarray(new_chan_x), np.asarray(new_chan_y)
 
 
 class MPIWorker(object):
+    """ Worker class for parallel plotting. """
 
     def __init__(self, comm=None, root=0, verbose=False):
         """
@@ -1197,7 +1292,6 @@ class MPIWorker(object):
             self.fvcom.atts.depth_averaged_direction = _passive_data_store()
             self.fvcom.atts.depth_averaged_direction.long_name = 'depth-averaged direction'
             self.fvcom.atts.depth_averaged_direction.units = '$\degree$'
-
 
         if variable == 'speed_anomaly':
             self.fvcom.data.speed_anomaly = self.fvcom.data.speed.mean(axis=0) - fvcom.data.speed
