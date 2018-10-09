@@ -3,28 +3,300 @@
 from __future__ import print_function, division
 
 import copy
-import inspect
 import sys
 from datetime import datetime, timedelta
 from warnings import warn
 
 import matplotlib.path as mpath
 import matplotlib.pyplot as plt
-import matplotlib.tri as tri
 import netCDF4 as nc
 import numpy as np
 from netCDF4 import Dataset, MFDataset, num2date, date2num
 from shapely.geometry import Polygon
 
-from PyFVCOM.coordinate import lonlat_from_utm, utm_from_lonlat
-from PyFVCOM.grid import Domain, reduce_triangulation, control_volumes, get_area_heron
-from PyFVCOM.grid import unstructured_grid_volume, nodes2elems, elems2nodes
-from PyFVCOM.utilities.general import fix_range
+from PyFVCOM.grid import Domain, control_volumes, get_area_heron
+from PyFVCOM.grid import unstructured_grid_volume, elems2nodes, GridReaderNetCDF
+from PyFVCOM.utilities.general import _passive_data_store
+
+class _TimeReader(object):
+
+    def __init__(self, dataset, dims=None, verbose=False):
+        """
+        Parse the time data from an FVCOM netCDF file Missing standard FVCOM time variables are automatically created.
+
+        Parameters
+        ----------
+        dataset : netCDF4.Dataset
+            The netCDF file Dataset object.
+        dims : dict, optional
+            Dictionary of dimension names along which to subsample e.g. dims={'time': [0, 100]}. Dimensions are
+            specified as list of indices. Time can also be specified as either a time string (e.g. '2000-01-25
+            23:00:00.00000') or given as a datetime object. If omitted, all times are loaded. Negative indices are
+            supported. To load from the 10th and last time can be written as 'time': [9, -1]).
+        verbose : bool, optional
+            Set to True to enable verbose output. Defaults to False.
+
+        """
+
+        _noisy = verbose
+        self._dims = copy.deepcopy(dims)
+
+        time_variables = ('time', 'Itime', 'Itime2', 'Times')
+        got_time, missing_time = [], []
+        for time in time_variables:
+            # Since not all of the time_variables specified above are required, only try to load the data if they
+            # exist. We'll raise an error if we don't find any of them though.
+            if time in dataset.variables:
+                setattr(self, time, dataset.variables[time][:])
+                got_time.append(time)
+                attributes = _passive_data_store()
+                for attribute in dataset.variables[time].ncattrs():
+                    setattr(attributes, attribute, getattr(dataset.variables[time], attribute))
+                # setattr(self.atts, time, attributes)
+            else:
+                missing_time.append(time)
+
+        if len(missing_time) == len(time_variables):
+            warn('No time variables found in the netCDF.')
+        else:
+            # If our file has incomplete dimensions (i.e. no time), add that here.
+            if not hasattr(dims, 'time'):
+
+                _Times_shape = None
+                _other_time_shape = None
+                if 'Times' in got_time:
+                    _Times_shape = np.shape(self.Times)
+                _other_times = [i for i in got_time if i != 'Times']
+                if _other_times:
+                    if getattr(self, _other_times[0]).shape:
+                        _other_time_shape = len(getattr(self, _other_times[0]))
+                    else:
+                        # We only have a single value, so len doesn't work.
+                        _other_time_shape = 1
+
+                if _noisy:
+                    print('Added time dimension size since it is missing from the input netCDF file.')
+
+            if 'Times' in got_time:
+                # Check whether we've got missing values and try and make them from one of the others. This sometimes
+                # happens if you stop a model part way through a run. We check for masked arrays at this point
+                # because the netCDF library only returns masked arrays when we have NaNs in the results.
+                if isinstance(dataset.variables['Times'][:], np.ma.core.MaskedArray):
+                    bad_times = np.argwhere(np.any(dataset.variables['Times'][:].data == ([b''] * dataset.dimensions['DateStrLen'].size), axis=1)).ravel()
+                    if np.any(bad_times):
+                        if 'time' in got_time:
+                            for bad_time in bad_times:
+                                if self.time[bad_time]:
+                                    self.Times[bad_time] = list(datetime.strftime(num2date(self.time[bad_time], units='days since 1858-11-17 00:00:00'), '%Y-%m-%dT%H:%M:%S.%f'))
+                        elif 'Itime' in got_time and 'Itime2' in got_time:
+                            for bad_time in bad_times:
+                                if self.Itime[bad_time] and self.Itime2[bad_time]:
+                                    self.Times[bad_time] = list(datetime.strftime(num2date(self.Itime[bad_time] + self.Itime2[bad_time] / 1000.0 / 60 / 60, units=getattr(dataset.variables['Itime'], 'units')), '%Y-%m-%dT%H:%M:%S.%f'))
+
+                # Overwrite the existing Times array with a more sensibly shaped one.
+                try:
+                    self.Times = np.asarray([''.join(t.astype(str)).strip() for t in self.Times])
+                except TypeError:
+                    # We might have a masked array, so just use the raw data.
+                    self.Times = np.asarray([''.join(t.astype(str)).strip() for t in self.Times.data])
+
+            # Make whatever we got into datetime objects and use those to make everything else. Note: the `time'
+            # variable is often the one with the lowest precision, so use the others preferentially over that.
+            if 'Times' not in got_time:
+                if 'time' in got_time:
+                    _dates = num2date(self.time, units=getattr(dataset.variables['time'], 'units'))
+                elif 'Itime' in got_time and 'Itime2' in got_time:
+                    _dates = num2date(self.Itime + self.Itime2 / 1000.0 / 60 / 60 / 24, units=getattr(dataset.variables['Itime'], 'units'))
+                else:
+                    raise ValueError('Missing sufficient time information to make the relevant time data.')
+
+                try:
+                    self.Times = np.array([datetime.strftime(d, '%Y-%m-%dT%H:%M:%S.%f') for d in _dates])
+                except ValueError:
+                    self.Times = np.array([datetime.strftime(d, '%Y/%m/%d %H:%M:%S.%f') for d in _dates])
+                # Add the relevant attribute for the Times variable.
+                attributes = _passive_data_store()
+                setattr(attributes, 'time_zone', 'UTC')
+                # setattr(self.atts, 'Times', attributes)
+
+            if 'time' not in got_time:
+                if 'Times' in got_time:
+                    try:
+                        _dates = np.array([datetime.strptime(''.join(t.astype(str)).strip(), '%Y-%m-%dT%H:%M:%S.%f') for t in self.Times])
+                    except ValueError:
+                        _dates = np.array([datetime.strptime(''.join(t.astype(str)).strip(), '%Y/%m/%d %H:%M:%S.%f') for t in self.Times])
+                elif 'Itime' in got_time and 'Itime2' in got_time:
+                    _dates = num2date(self.Itime + self.Itime2 / 1000.0 / 60 / 60 / 24, units=getattr(dataset.variables['Itime'], 'units'))
+                else:
+                    raise ValueError('Missing sufficient time information to make the relevant time data.')
+
+                # We're making Modified Julian Days here to replicate FVCOM's 'time' variable.
+                self.time = date2num(_dates, units='days since 1858-11-17 00:00:00')
+                # Add the relevant attributes for the time variable.
+                attributes = _passive_data_store()
+                setattr(attributes, 'units', 'days since 1858-11-17 00:00:00')
+                setattr(attributes, 'long_name', 'time')
+                setattr(attributes, 'format', 'modified julian day (MJD)')
+                setattr(attributes, 'time_zone', 'UTC')
+                # setattr(self.atts, 'time', attributes)
+
+            if 'Itime' not in got_time and 'Itime2' not in got_time:
+                if 'Times' in got_time:
+                    try:
+                        _dates = np.array([datetime.strptime(''.join(t.astype(str)).strip(), '%Y-%m-%dT%H:%M:%S.%f') for t in self.Times])
+                    except ValueError:
+                        _dates = np.array([datetime.strptime(''.join(t.astype(str)).strip(), '%Y/%m/%d %H:%M:%S.%f') for t in self.Times])
+                elif 'time' in got_time:
+                    _dates = num2date(self.time, units=getattr(dataset.variables['time'], 'units'))
+                else:
+                    raise ValueError('Missing sufficient time information to make the relevant time data.')
+
+                # We're making Modified Julian Days here to replicate FVCOM's 'time' variable.
+                _datenum = date2num(_dates, units='days since 1858-11-17 00:00:00')
+                self.Itime = np.floor(_datenum)
+                self.Itime2 = (_datenum - np.floor(_datenum)) * 1000 * 60 * 60 * 24  # microseconds since midnight
+                attributes = _passive_data_store()
+                setattr(attributes, 'units', 'days since 1858-11-17 00:00:00')
+                setattr(attributes, 'format', 'modified julian day (MJD)')
+                setattr(attributes, 'time_zone', 'UTC')
+                # setattr(self.atts, 'Itime', attributes)
+                attributes = _passive_data_store()
+                setattr(attributes, 'units', 'msec since 00:00:00')
+                setattr(attributes, 'time_zone', 'UTC')
+                # setattr(self.atts, 'Itime2', attributes)
+
+            # Additional nice-to-have time representations.
+            if 'Times' in got_time:
+                try:
+                    self.datetime = np.array([datetime.strptime(d, '%Y-%m-%dT%H:%M:%S.%f') for d in self.Times])
+                except ValueError:
+                    self.datetime = np.array([datetime.strptime(d, '%Y/%m/%d %H:%M:%S.%f') for d in self.Times])
+                attributes = _passive_data_store()
+                setattr(attributes, 'long_name', 'Python datetime.datetime')
+                # setattr(self.atts, 'datetime', attributes)
+            else:
+                self.datetime = _dates
+            self.matlabtime = self.time + 678942.0  # to MATLAB-indexed times from Modified Julian Date.
+            attributes = _passive_data_store()
+            setattr(attributes, 'long_name', 'MATLAB datenum')
+            # setattr(self.atts, 'matlabtime', attributes)
+
+            # Clip everything to the time indices if we've been given them. Update the time dimension too.
+            if 'time' in self._dims:
+                if not isinstance(self._dims['time'], slice) and all([isinstance(i, (datetime, str)) for i in self._dims['time']]):
+                    # Convert datetime dimensions to indices in the currently loaded data. Assume we've got a list
+                    # and if that fails, we've probably got a single index, so convert it accordingly.
+                    try:
+                        self._dims['time'] = np.arange(*[self._time_to_index(i) for i in self._dims['time']])
+                    except TypeError:
+                        self._dims['time'] = np.arange(*[self._time_to_index(self._dims['time'])])  # make iterable
+                for time in self:
+                    setattr(self, time, getattr(self, time)[self._dims['time']])
+
+    def __iter__(self):
+        return (a for a in dir(self) if not a.startswith('_'))
+
+    def _time_to_index(self, *args, **kwargs):
+        """
+        Find the time index for the given time string (%Y-%m-%d %H:%M:%S.%f) or datetime object.
+
+        Parameters
+        ----------
+        target_time : str or datetime.datetime
+            Time for which to find the time index. If given as a string, the time format must be "%Y-%m-%d %H:%M:%S.%f".
+        tolerance : float, optional
+            Seconds of tolerance to allow when finding the appropriate index. Use this flag to only return an index
+            to within some tolerance. By default, the closest time is returned irrespective of how far in time it is
+            from the data.
+
+        Returns
+        -------
+        time_idx : int
+            Index for the currently loaded data closest to the specified time.
+
+        """
+
+        time_idx = time_to_index(self.datetime, *args, **kwargs)
+
+        return time_idx
+
+class _AttributeReader(object):
+    def __init__(self, dataset, variables=None, verbose=False):
+        """
+        Load the attributes for the variables in the dataset. Optionally limit the attributes to the variables in
+        variables.
+
+        Parameters
+        ----------
+        dataset : netCDF4.Dataset
+            The netCDF file dataset object.
+        variables : list, optional
+            List of variables to extract. If omitted, only the grid, grid metrics and time variables are extracted.
+        verbose : bool, optional
+            Set to True to enable verbose output. Defaults to False.
+
+        """
+
+        self._ds = dataset
+        self._noisy = verbose
+
+        grid = ['a1u', 'a2u', 'art1', 'art2',
+                'h', 'h_center',
+                'lat', 'latc', 'lon', 'lonc',
+                'nbe', 'nbsn', 'nbve', 'ntsn', 'ntve', 'nv',
+                'siglay', 'siglay_center', 'siglev', 'siglev_center',
+                'x', 'y', 'xc', 'yc']
+        time = ['time', 'Times', 'Itime', 'Itime2']
+
+        all_variables = grid + time
+        if variables is not None:
+            all_variables = all_variables + variables
+
+        for var in all_variables:
+            if var in self._ds.variables:
+                if self._noisy:
+                    print(f'Getting attributes for {var}')
+                self.get_attribute(var)
+
+    def get_attribute(self, variable):
+        """
+        Get the attributes for the given variable and add them to the relevant object.
+
+        Parameters
+        ----------
+        variable : str
+            The variable from which to extract the attributes.
+
+        """
+
+        if not hasattr(self, variable):
+            # Hmmm, don't like using _passive_data_store here...
+            setattr(self, variable, _passive_data_store())
+
+        for attribute in self._ds.variables[variable].ncattrs():
+            setattr(getattr(self, variable), attribute, getattr(self._ds.variables[variable], attribute))
+
+    def __iter__(self):
+        return (a for a in dir(self) if not a.startswith('__') and not a.endswith('__'))
 
 
-class _passive_data_store(object):
-    def __init__(self):
-        pass
+class _MakeDimensions(object):
+    def __init__(self, dataset):
+        """
+        Calculate some dimensions from the given _GridReader object.
+
+        Parameters
+        ----------
+        dataset : netCDF4.Dataset
+            The netCDF4 object from which to extract the dimensions we need.
+
+        """
+
+        for dim in dataset.dimensions:
+            setattr(self, dim, dataset.dimensions[dim].size)
+
+    def __iter__(self):
+        return (a for a in dir(self) if not a.startswith('__') and not a.endswith('__'))
 
 
 class FileReader(Domain):
@@ -59,8 +331,6 @@ class FileReader(Domain):
             time string (e.g. '2000-01-25 23:00:00.00000') or given as a datetime object.
             Any combination of dimensions is possible; omitted dimensions are loaded in their entirety.
             Negative indices are supported. To load from the 10th and last time can be written as 'time': [9, -1]).
-            A special dimension of 'wesn' can be used to specify a bounding box within which to extract the model
-            grid and data.
         zone : str, list-like, optional
             UTM zones (defaults to '30N') for conversion of UTM to spherical coordinates.
         verbose : bool, optional
@@ -105,13 +375,16 @@ class FileReader(Domain):
         # We may modify the dimensions, so make a deepcopy (copy isn't sufficient) so successive calls to FileReader
         # from MFileReader work properly.
         self._dims = copy.deepcopy(dims)
+
         # Silently convert a string variable input to an iterable list.
         if isinstance(variables, str):
             variables = [variables]
         self._variables = variables
 
-        # Prepare this object with all the objects we'll need later on (data, dims, time, grid, atts).
-        self._prep()
+        # Prepare this object with an empty object for the data which we may populate later on. It feels like this
+        # should be created by a separate class (in the same style as _MakeDimensions et al.), but I haven't got
+        # around to it yet.
+        self.data = _passive_data_store()
 
         if isinstance(self._fvcom, Dataset):
             self.ds = self._fvcom
@@ -121,35 +394,35 @@ class FileReader(Domain):
             self._fvcom = str(self._fvcom)  # in case it was a pathlib.Path.
             self.ds = Dataset(self._fvcom, 'r')
 
-        for dim in self.ds.dimensions:
-            setattr(self.dims, dim, self.ds.dimensions[dim].size)
+        self.dims = _MakeDimensions(self.ds)
 
         for dim in self._dims:
-            # Check if we've got iterable dimensions and make them if not. Allow an exception for 'wesn' here since
-            # that can also be a shapely.geometry.Polygon.
-            if dim == 'wesn' and isinstance(self._dims['wesn'], Polygon):
-                continue
-
             dim_is_iterable = hasattr(self._dims[dim], '__iter__')
             dim_is_string = isinstance(self._dims[dim], str)  # for date ranges
             dim_is_slice = isinstance(self._dims[dim], slice)
             if not dim_is_iterable and not dim_is_slice and not dim_is_string:
                 if self._noisy:
                     print('Making dimension {} iterable'.format(dim))
-                    print(type(self._dims[dim]))
 
                 self._dims[dim] = [self._dims[dim]]
 
-        # If we've been given a region to load (W/E/S/N), set a flag to extract only nodes and elements which
-        # fall within that region.
-        if 'wesn' in self._dims:
-            self._bounding_box = True
-
         self._load_time()
-        self._load_grid()
+        self._dims = self.time._dims  # grab the updated dimensions from the _TimeReader object.
+
+        # Update the time dimension no we've read in the time data (in case we did so with a specificed dimension
+        # range).
+        self.dims.time = len(self.time.time)
+
+        self._load_grid(fvcom)
+
+        # Load the attributes of anything we've been asked to load.
+        self.atts = _AttributeReader(self.ds, self._variables)
 
         if self._variables:
             self.load_data(self._variables)
+
+    def __iter__(self):
+        return (a for a in dir(self) if not a.startswith('_'))
 
     def __eq__(self, other):
         # For easy comparison of classes.
@@ -193,9 +466,9 @@ class FileReader(Domain):
         siglay_compare = self.dims.siglay == fvcom.dims.siglay
         siglev_compare = self.dims.siglev == fvcom.dims.siglev
         time_compare = self.time.datetime[-1] <= fvcom.time.datetime[0]
-        data_compare = self.obj_iter(self.data) == self.obj_iter(fvcom.data)
-        old_data = self.obj_iter(self.data)
-        new_data = self.obj_iter(fvcom.data)
+        old_data = [i for i in self.data]
+        new_data = [i for i in fvcom.data]
+        data_compare = new_data == old_data
         if not node_compare:
             raise ValueError('Horizontal node data are incompatible.')
         if not nele_compare:
@@ -218,22 +491,22 @@ class FileReader(Domain):
         idem = copy.copy(self)
 
         # Go through all the parts of the data with a time dependency and concatenate them. Leave the grid alone.
-        for var in self.obj_iter(idem.data):
+        for var in idem.data:
             if 'time' in idem.ds.variables[var].dimensions:
                 setattr(idem.data, var, np.concatenate((getattr(idem.data, var), getattr(fvcom.data, var))))
-        for time in self.obj_iter(idem.time):
+        for time in idem.time:
             setattr(idem.time, time, np.concatenate((getattr(idem.time, time), getattr(fvcom.time, time))))
 
         # Remove duplicate times.
         time_indices = np.arange(len(idem.time.time))
         _, dupes = np.unique(idem.time.time, return_index=True)
         dupe_indices = np.setdiff1d(time_indices, dupes)
-        for var in self.obj_iter(idem.data):
+        for var in idem.data:
             # Only delete things with a time dimension.
             if 'time' in idem.ds.variables[var].dimensions:
                 time_axis = idem.ds.variables[var].dimensions.index('time')
                 setattr(idem.data, var, np.delete(getattr(idem.data, var), dupe_indices, axis=time_axis))
-        for time in self.obj_iter(idem.time):
+        for time in idem.time:
             try:
                 time_axis = idem.ds.variables[time].dimensions.index('time')
                 setattr(idem.time, time, np.delete(getattr(idem.time, time), dupe_indices, axis=time_axis))
@@ -247,545 +520,11 @@ class FileReader(Domain):
 
         return idem
 
-    @staticmethod
-    def obj_iter(x):
-        """
-        Get the things to iterate over for a given object.
-
-        This is a bit hacky, but until or if I create separate classes for the dims, time, grid and data objects,
-        this'll have to do.
-
-        Parameters
-        ----------
-        x : object
-            Object from which to identify attributes which are useful for us.
-        """
-
-        return [a for a in dir(x) if not a.startswith('__')]
-
-    def _prep(self):
-        # Create empty object for the grid, dimension, data and time data. This ought to be possible with nested
-        # classes, but I can't figure it out. That approach would also mean we can set __iter__ to make the object
-        # iterable without the need for obj_iter, which is a bit of a hack. It might also make FileReader object
-        # pickleable, meaning we can pass them with multiprocessing. Another day, perhaps.
-        self.data = _passive_data_store()
-        self.dims = _passive_data_store()
-        self.atts = _passive_data_store()
-        self.grid = _passive_data_store()
-        self.time = _passive_data_store()
-
-        # Add docstrings for the relevant objects.
-        self.data.__doc__ = "This object will contain data as loaded from the netCDFs specified. Use " \
-                            "`FileReader.load_data' to get specific data (optionally at specific locations, times and" \
-                            " depths)."
-        self.dims.__doc__ = "This contains the dimensions of the data from the given netCDFs."
-        self.atts.__doc__ = "This contains the attributes for each variable in the given netCDFs as a dictionary."
-        self.grid.__doc__ = "FVCOM grid information. Missing spherical or cartesian coordinates are automatically " \
-                            "created depending on which is missing."
-        self.time.__doc__ = "This contains the time data for the given netCDFs. Missing standard FVCOM time variables " \
-                            "are automatically created."
-
+    def _load_grid(self, fvcom):
+        self.grid = GridReaderNetCDF(fvcom, dims=self._dims, zone=self._zone, debug=self._debug, verbose=self._noisy)
+    
     def _load_time(self):
-        """ Populate a time object with additional useful time representations from the netCDF time data. """
-
-        time_variables = ('time', 'Itime', 'Itime2', 'Times')
-        got_time, missing_time = [], []
-        for time in time_variables:
-            # Since not all of the time_variables specified above are required, only try to load the data if they
-            # exist. We'll raise an error if we don't find any of them though.
-            if time in self.ds.variables:
-                setattr(self.time, time, self.ds.variables[time][:])
-                got_time.append(time)
-                attributes = _passive_data_store()
-                for attribute in self.ds.variables[time].ncattrs():
-                    setattr(attributes, attribute, getattr(self.ds.variables[time], attribute))
-                setattr(self.atts, time, attributes)
-            else:
-                missing_time.append(time)
-
-        if len(missing_time) == len(time_variables):
-            warn('No time variables found in the netCDF.')
-        else:
-            # If our file has incomplete dimensions (i.e. no time), add that here.
-            if not hasattr(self.dims, 'time'):
-                # Set an initial number of times to zero. Not sure if this will break something later...
-                self.dims.time = 0
-
-                _Times_shape = None
-                _other_time_shape = None
-                if 'Times' in got_time:
-                    _Times_shape = np.shape(self.time.Times)
-                _other_times = [i for i in got_time if i != 'Times']
-                if _other_times:
-                    if getattr(self.time, _other_times[0]).shape:
-                        _other_time_shape = len(getattr(self.time, _other_times[0]))
-                    else:
-                        # We only have a single value, so len doesn't work.
-                        _other_time_shape = 1
-
-                # If we have an "other" time shape, use that.
-                if _other_time_shape is not None:
-                    self.dims.time = _other_time_shape
-
-                # If we have no time but a Times shape, then use that, but only if we have no "other" time. If
-                # 'Times' is one dimensional, assume a single time, otherwise grab the first dimension (which should
-                # be time).
-                if _other_time_shape is None and _Times_shape is not None:
-                    if np.ndim(self.time.Times) == 1:
-                        self.dims.time = 1
-                    else:
-                        self.dims.time = self.time.Times.shape[0]
-
-                del _Times_shape, _other_times, _other_time_shape
-
-                if self._noisy:
-                    print('Added time dimension size since it is missing from the input netCDF file.')
-
-            if 'Times' in got_time:
-                # Check whether we've got missing values and try and make them from one of the others. This sometimes
-                # happens if you stop a model part way through a run. We check for masked arrays at this point
-                # because the netCDF library only returns masked arrays when we have NaNs in the results.
-                if isinstance(self.ds.variables['Times'][:], np.ma.core.MaskedArray):
-                    bad_times = np.argwhere(np.any(self.ds.variables['Times'][:].data == ([b''] * self.ds.dimensions['DateStrLen'].size), axis=1)).ravel()
-                    if np.any(bad_times):
-                        if 'time' in got_time:
-                            for bad_time in bad_times:
-                                if self.time.time[bad_time]:
-                                    self.time.Times[bad_time] = list(datetime.strftime(num2date(self.time.time[bad_time], units='days since 1858-11-17 00:00:00'), '%Y-%m-%dT%H:%M:%S.%f'))
-                        elif 'Itime' in got_time and 'Itime2' in got_time:
-                            for bad_time in bad_times:
-                                if self.time.Itime[bad_time] and self.time.Itime2[bad_time]:
-                                    self.time.Times[bad_time] = list(datetime.strftime(num2date(self.time.Itime[bad_time] + self.time.Itime2[bad_time] / 1000.0 / 60 / 60, units=getattr(self.ds.variables['Itime'], 'units')), '%Y-%m-%dT%H:%M:%S.%f'))
-
-                # Overwrite the existing Times array with a more sensibly shaped one.
-                try:
-                    if self.dims.time == 1 and not isinstance(self.time.Times, np.ndarray):
-                        self.time.Times = ''.join(self.time.Times.astype(str)).strip()
-                    else:
-                        self.time.Times = np.asarray([''.join(t.astype(str)).strip() for t in self.time.Times])
-                except TypeError:
-                    # We might have a masked array, so just use the raw data.
-                    self.time.Times = np.asarray([''.join(t.astype(str)).strip() for t in self.time.Times.data])
-
-            # Make whatever we got into datetime objects and use those to make everything else. Note: the `time'
-            # variable is often the one with the lowest precision, so use the others preferentially over that.
-            if 'Times' not in got_time:
-                if 'time' in got_time:
-                    _dates = num2date(self.time.time, units=getattr(self.ds.variables['time'], 'units'))
-                elif 'Itime' in got_time and 'Itime2' in got_time:
-                    _dates = num2date(self.time.Itime + self.time.Itime2 / 1000.0 / 60 / 60 / 24, units=getattr(self.ds.variables['Itime'], 'units'))
-                else:
-                    raise ValueError('Missing sufficient time information to make the relevant time data.')
-
-                try:
-                    self.time.Times = np.array([datetime.strftime(d, '%Y-%m-%dT%H:%M:%S.%f') for d in _dates])
-                except ValueError:
-                    self.time.Times = np.array([datetime.strftime(d, '%Y/%m/%d %H:%M:%S.%f') for d in _dates])
-                # Add the relevant attribute for the Times variable.
-                attributes = _passive_data_store()
-                setattr(attributes, 'time_zone', 'UTC')
-                setattr(self.atts, 'Times', attributes)
-
-            if 'time' not in got_time:
-                if 'Times' in got_time:
-                    try:
-                        _dates = np.array([datetime.strptime(''.join(t.astype(str)).strip(), '%Y-%m-%dT%H:%M:%S.%f') for t in self.time.Times])
-                    except ValueError:
-                        _dates = np.array([datetime.strptime(''.join(t.astype(str)).strip(), '%Y/%m/%d %H:%M:%S.%f') for t in self.time.Times])
-                elif 'Itime' in got_time and 'Itime2' in got_time:
-                    _dates = num2date(self.time.Itime + self.time.Itime2 / 1000.0 / 60 / 60 / 24, units=getattr(self.ds.variables['Itime'], 'units'))
-                else:
-                    raise ValueError('Missing sufficient time information to make the relevant time data.')
-
-                # We're making Modified Julian Days here to replicate FVCOM's 'time' variable.
-                self.time.time = date2num(_dates, units='days since 1858-11-17 00:00:00')
-                # Add the relevant attributes for the time variable.
-                attributes = _passive_data_store()
-                setattr(attributes, 'units', 'days since 1858-11-17 00:00:00')
-                setattr(attributes, 'long_name', 'time')
-                setattr(attributes, 'format', 'modified julian day (MJD)')
-                setattr(attributes, 'time_zone', 'UTC')
-                setattr(self.atts, 'time', attributes)
-
-            if 'Itime' not in got_time and 'Itime2' not in got_time:
-                if 'Times' in got_time:
-                    try:
-                        _dates = np.array([datetime.strptime(''.join(t.astype(str)).strip(), '%Y-%m-%dT%H:%M:%S.%f') for t in self.time.Times])
-                    except ValueError:
-                        _dates = np.array([datetime.strptime(''.join(t.astype(str)).strip(), '%Y/%m/%d %H:%M:%S.%f') for t in self.time.Times])
-                elif 'time' in got_time:
-                    _dates = num2date(self.time.time, units=getattr(self.ds.variables['time'], 'units'))
-                else:
-                    raise ValueError('Missing sufficient time information to make the relevant time data.')
-
-                # We're making Modified Julian Days here to replicate FVCOM's 'time' variable.
-                _datenum = date2num(_dates, units='days since 1858-11-17 00:00:00')
-                self.time.Itime = np.floor(_datenum)
-                self.time.Itime2 = (_datenum - np.floor(_datenum)) * 1000 * 60 * 60 * 24  # microseconds since midnight
-                attributes = _passive_data_store()
-                setattr(attributes, 'units', 'days since 1858-11-17 00:00:00')
-                setattr(attributes, 'format', 'modified julian day (MJD)')
-                setattr(attributes, 'time_zone', 'UTC')
-                setattr(self.atts, 'Itime', attributes)
-                attributes = _passive_data_store()
-                setattr(attributes, 'units', 'msec since 00:00:00')
-                setattr(attributes, 'time_zone', 'UTC')
-                setattr(self.atts, 'Itime2', attributes)
-
-            # Additional nice-to-have time representations.
-            if 'Times' in got_time:
-                if self.dims.time == 1:
-                    self.time.Times = [''.join(self.time.Times)]
-                try:
-                    self.time.datetime = np.array([datetime.strptime(d, '%Y-%m-%dT%H:%M:%S.%f') for d in self.time.Times])
-                except ValueError:
-                    self.time.datetime = np.array([datetime.strptime(d, '%Y/%m/%d %H:%M:%S.%f') for d in self.time.Times])
-                attributes = _passive_data_store()
-                setattr(attributes, 'long_name', 'Python datetime.datetime')
-                setattr(self.atts, 'datetime', attributes)
-            else:
-                self.time.datetime = _dates
-            self.time.matlabtime = self.time.time + 678942.0  # to MATLAB-indexed times from Modified Julian Date.
-            attributes = _passive_data_store()
-            setattr(attributes, 'long_name', 'MATLAB datenum')
-            setattr(self.atts, 'matlabtime', attributes)
-
-            # Clip everything to the time indices if we've been given them. Update the time dimension too.
-            if 'time' in self._dims:
-                if not isinstance(self._dims['time'], slice) and all([isinstance(i, (datetime, str)) for i in self._dims['time']]):
-                    # Convert datetime dimensions to indices in the currently loaded data. Assume we've got a list
-                    # and if that fails, we've probably got a single index, so convert it accordingly.
-                    try:
-                        self._dims['time'] = [self.time_to_index(i) for i in self._dims['time']]
-                    except TypeError:
-                        self._dims['time'] = [self.time_to_index(self._dims['time'])]  # make iterable
-                for time in self.obj_iter(self.time):
-                    setattr(self.time, time, getattr(self.time, time)[self._dims['time']])
-                self.dims.time = len(self.time.time)
-
-    def _load_grid(self):
-        """ Load the grid data.
-
-        Convert from UTM to spherical if we haven't got those data in the existing output file.
-
-        """
-
-        grid_metrics = {'ntsn': 'node', 'nbsn': 'node', 'ntve': 'node', 'nbve': 'node', 'art1': 'node', 'art2': 'node',
-                        'a1u': 'nele', 'a2u': 'nele', 'nbe': 'nele'}
-        grid_variables = ['lon', 'lat', 'x', 'y', 'lonc', 'latc', 'xc', 'yc', 'h', 'siglay', 'siglev']
-
-        # Get the grid data.
-        for grid in grid_variables:
-            try:
-                setattr(self.grid, grid, self.ds.variables[grid][:])
-                # Save the attributes.
-                attributes = _passive_data_store()
-                for attribute in self.ds.variables[grid].ncattrs():
-                    setattr(attributes, attribute, getattr(self.ds.variables[grid], attribute))
-                setattr(self.atts, grid, attributes)
-            except KeyError:
-                # Make zeros for this missing variable so we can convert from the non-missing data below.
-                if grid.endswith('c'):
-                    setattr(self.grid, grid, np.zeros(self.dims.nele).T)
-                else:
-                    setattr(self.grid, grid, np.zeros(self.dims.node).T)
-            except ValueError as value_error_message:
-                warn('Variable {} has a problem with the data. Setting value as all zeros.'.format(grid))
-                print(value_error_message)
-                setattr(self.grid, grid, np.zeros(self.ds.variables[grid].shape))
-
-        # And the triangulation
-        try:
-            self.grid.nv = self.ds.variables['nv'][:].astype(int)  # force integers even though they should already be so
-            self.grid.triangles = copy.copy(self.grid.nv.T - 1)  # zero-indexed for python
-        except KeyError:
-            # If we don't have a triangulation, make one. Warn that if we've made one, it might not match the
-            # original triangulation used in the model run.
-            if self._debug:
-                print("Creating new triangulation since we're missing one")
-            triangulation = tri.Triangulation(self.grid.lon, self.grid.lat)
-            self.grid.triangles = triangulation.triangles
-            self.grid.nv = copy.copy(self.grid.triangles.T + 1)
-            self.dims.nele = self.grid.triangles.shape[0]
-            warn('Triangulation created from node positions. This may be inconsistent with the original triangulation.')
-
-        # Fix broken triangulations if necessary.
-        if self.grid.nv.min() != 1:
-            if self._debug:
-                print('Fixing broken triangulation. Current minimum for nv is {} and for triangles is {} but they '
-                      'should be 1 and 0, respectively.'.format(self.grid.nv.min(), self.grid.triangles.min()))
-            self.grid.nv = (self.ds.variables['nv'][:].astype(int) - self.ds.variables['nv'][:].astype(int).min()) + 1
-            self.grid.triangles = copy.copy(self.grid.nv.T) - 1
-
-        # Convert the given W/E/S/N coordinates into node and element IDs to subset.
-        if self._bounding_box:
-            self._make_subset_dimensions()
-
-        # If we've been given a spatial dimension to subsample in fix the triangulation.
-        if 'nele' in self._dims or 'node' in self._dims:
-            if self._debug:
-                print('Fix triangulation table as we have been asked for only specific nodes/elements.')
-
-            if 'node' in self._dims:
-                new_tri, new_ele = reduce_triangulation(self.grid.triangles, self._dims['node'], return_elements=True)
-                if not new_ele.size and 'nele' not in self._dims:
-                    if self._noisy:
-                        print('Nodes selected cannot produce new triangulation and no elements specified so including all element of which the nodes are members')
-                    self._dims['nele'] = np.squeeze(np.argwhere(np.any(np.isin(self.grid.triangles, self._dims['node']), axis=1)))
-                    if self._dims['nele'].size == 1: # Annoying error for the differnce between array(n) and array([n])
-                        self._dims['nele'] = np.asarray([self._dims['nele']])
-                elif 'nele' not in self._dims:
-                    if self._noisy:
-                        print('Elements not specified but reducing to only those within the triangulation of selected nodes')
-                    self._dims['nele'] = new_ele
-                elif not np.array_equal(np.sort(new_ele), np.sort(self._dims['nele'])):
-                    if self._noisy:
-                        print('Mismatch between given elements and nodes for triangulation, retaining original elements')
-            else:
-                if self._noisy:
-                    print('Nodes not specified but reducing to only those within the triangulation of selected elements')
-                self._dims['node'] = np.unique(self.grid.triangles[self._dims['nele'],:])
-                new_tri = reduce_triangulation(self.grid.triangles, self._dims['node'])
-
-            self.grid.nv = new_tri.T + 1
-            self.grid.triangles = new_tri
-
-        if 'node' in self._dims:
-            self.dims.node = len(self._dims['node'])
-            for var in 'x', 'y', 'lon', 'lat', 'h', 'siglay', 'siglev':
-                try:
-                    node_index = self.ds.variables[var].dimensions.index('node')
-                    var_shape = [i for i in np.shape(self.ds.variables[var])]
-                    var_shape[node_index] = self.dims.node
-
-                    if 'siglay' in self._dims and 'siglay' in self.ds.variables[var].dimensions:
-                        var_shape[self.ds.variables[var].dimensions.index('siglay')] = self.dims.siglay
-                    elif 'siglev' in self._dims and 'siglev' in self.ds.variables[var].dimensions:
-                        var_shape[self.ds.variables[var].dimensions.index('siglev')] = self.dims.siglev
-                    _temp = np.empty(var_shape)
-                    if 'siglay' in self.ds.variables[var].dimensions:
-                        for ni, node in enumerate(self._dims['node']):
-                            if 'siglay' in self._dims:
-                                _temp[..., ni] = self.ds.variables[var][self._dims['siglay'], node]
-                            else:
-                                _temp[..., ni] = self.ds.variables[var][:, node]
-                    elif 'siglev' in self.ds.variables[var].dimensions:
-                        for ni, node in enumerate(self._dims['node']):
-                            if 'siglev' in self._dims:
-                                _temp[..., ni] = self.ds.variables[var][self._dims['siglev'], node]
-                            else:
-                                _temp[..., ni] = self.ds.variables[var][:, node]
-                    else:
-                        for ni, node in enumerate(self._dims['node']):
-                            _temp[..., ni] = self.ds.variables[var][..., node]
-                except KeyError:
-                    if 'siglay' in var:
-                        _temp = np.empty((self.dims.siglay, self.dims.node))
-                    elif 'siglev' in var:
-                        _temp = np.empty((self.dims.siglev, self.dims.node))
-                    else:
-                        _temp = np.empty(self.dims.node)
-                setattr(self.grid, var, _temp)
-
-        if 'nele' in self._dims:
-            self.dims.nele = len(self._dims['nele'])
-            for var in 'xc', 'yc', 'lonc', 'latc', 'h_center', 'siglay_center', 'siglev_center':
-                try:
-                    nele_index = self.ds.variables[var].dimensions.index('nele')
-                    var_shape = [i for i in np.shape(self.ds.variables[var])]
-                    var_shape[nele_index] = self.dims.nele
-                    if 'siglay' in self._dims and 'siglay' in self.ds.variables[var].dimensions:
-                        var_shape[self.ds.variables[var].dimensions.index('siglay')] = self.dims.siglay
-                    elif 'siglev' in self._dims and 'siglev' in self.ds.variables[var].dimensions:
-                        var_shape[self.ds.variables[var].dimensions.index('siglev')] = self.dims.siglev
-                    _temp = np.empty(var_shape)
-                    if 'siglay' in self.ds.variables[var].dimensions:
-                        for ni, nele in enumerate(self._dims['nele']):
-                            if 'siglay' in self._dims:
-                                _temp[..., ni] = self.ds.variables[var][self._dims['siglay'], nele]
-                            else:
-                                _temp[..., ni] = self.ds.variables[var][:, nele]
-                    elif 'siglev' in self.ds.variables[var].dimensions:
-                        for ni, nele in enumerate(self._dims['nele']):
-                            if 'siglev' in self._dims:
-                                _temp[..., ni] = self.ds.variables[var][self._dims['siglev'], nele]
-                            else:
-                                _temp[..., ni] = self.ds.variables[var][:, nele]
-                    else:
-                        for ni, nele in enumerate(self._dims['nele']):
-                            _temp[..., ni] = self.ds.variables[var][..., nele]
-                except KeyError:
-                    # FVCOM3 files don't have h_center, siglay_center and siglev_center, so make var_shape manually.
-                    if self._noisy:
-                        print('Adding element-centred {} for compatibility.'.format(var))
-                    if var.startswith('siglev'):
-                        var_shape = [self.dims.siglev, self.dims.nele]
-                    elif var.startswith('siglay'):
-                        var_shape = [self.dims.siglay, self.dims.nele]
-                    else:
-                        var_shape = self.dims.nele
-                    _temp = np.zeros(var_shape)
-                setattr(self.grid, var, _temp)
-
-        # Load the grid metrics data separately as we don't want to set a bunch of zeros for missing data.
-        for metric, grid_pos in grid_metrics.items():
-            if metric in self.ds.variables:
-                if grid_pos in self._dims:
-                    metric_raw = self.ds.variables[metric][:]
-                    setattr(self.grid, metric, metric_raw[...,self._dims[grid_pos]])
-                else:
-                    setattr(self.grid, metric, self.ds.variables[metric][:])
-                # Save the attributes.
-                attributes = _passive_data_store()
-                for attribute in self.ds.variables[metric].ncattrs():
-                    setattr(attributes, attribute, getattr(self.ds.variables[metric], attribute))
-                setattr(self.atts, metric, attributes)
-
-                # Fix the indexing and shapes of the grid metrics variables. Only transpose and offset indexing for nbe.
-                if metric == 'nbe':
-                    setattr(self.grid, metric, getattr(self.grid, metric).T - 1)
-
-        # Update dimensions to match those we've been given, if any. Omit time here as we shouldn't be touching that
-        # dimension for any variable in use in here.
-        for dim in self._dims:
-            if dim != 'time':
-                if self._noisy:
-                    print('Resetting {} dimension length from {} to {}'.format(dim,
-                                                                               getattr(self.dims, dim),
-                                                                               len(self._dims[dim])))
-                setattr(self.dims, dim, len(self._dims[dim]))
-
-        # Add compatibility for FVCOM3 (these variables are only specified on the element centres in FVCOM4+ output
-        # files). Only create the element centred values if we have the same number of nodes as in the triangulation.
-        # This does not occur if we've been asked to extract an incompatible set of nodes and elements, for whatever
-        # reason (e.g. testing). We don't add attributes for the data if we've created it as doing so is a pain.
-        for var in 'h_center', 'siglay_center', 'siglev_center':
-            try:
-                if 'nele' in self._dims:
-                    var_raw = self.ds.variables[var][:]
-                    setattr(self.grid, var, var_raw[...,self._dims['nele']])
-                else:
-                    setattr(self.grid, var, self.ds.variables[var][:])
-                # Save the attributes.
-                attributes = _passive_data_store()
-                for attribute in self.ds.variables[var].ncattrs():
-                    setattr(attributes, attribute, getattr(self.ds.variables[var], attribute))
-                setattr(self.atts, var, attributes)
-            except KeyError:
-                if self._noisy:
-                    print('Missing {} from the netCDF file. Trying to recreate it from other sources.'.format(var))
-                if self.grid.nv.max() == len(self.grid.x):
-                    try:
-                        setattr(self.grid, var, nodes2elems(getattr(self.grid, var.split('_')[0]), self.grid.triangles))
-                    except IndexError:
-                        # Maybe the array's the wrong way around. Flip it and try again.
-                        setattr(self.grid, var, nodes2elems(getattr(self.grid, var.split('_')[0]).T, self.grid.triangles))
-                else:
-                    # The triangulation is invalid, so we can't properly move our existing data, so just set things
-                    # to 0 but at least they're the right shape. Warn accordingly.
-                    if self._noisy:
-                        print('{} cannot be migrated to element centres (invalid triangulation). Setting to zero.'.format(var))
-                    if var is 'siglev_center':
-                        setattr(self.grid, var, np.zeros((self.dims.siglev, self.dims.nele)))
-                    elif var is 'siglay_center':
-                        setattr(self.grid, var, np.zeros((self.dims.siglay, self.dims.nele)))
-                    elif var is 'h_center':
-                        setattr(self.grid, var, np.zeros((self.dims.nele)))
-                    else:
-                        raise ValueError('Inexplicably, we have a variable not in the loop we have defined.')
-
-        # Make depth-resolved sigma data. This is useful for plotting things.
-        for var in self.obj_iter(self.grid):
-            # Ignore previously created depth-resolved data (in the case where we're updating the grid with a call to
-            # self._load_data() with dims supplied).
-            if var.startswith('sig') and not var.endswith('_z'):
-                if var.endswith('_center'):
-                    z = self.grid.h_center
-                else:
-                    z = self.grid.h
-
-                # Set the sigma data to the 0-1 range for siglay so that the maximum depth value is equal to the
-                # actual depth. This may be a problem.
-                _fixed_sig = fix_range(getattr(self.grid, var), 0, 1)
-
-                # h_center can have a time dimension (when running with sediment transport and morphological
-                # update enabled). As such, we need to account for that in the creation of the _z arrays.
-                if np.ndim(z) > 1:
-                    z = z[:, np.newaxis, :]
-                    _fixed_sig = fix_range(getattr(self.grid, var), 0, 1)[np.newaxis, ...]
-                try:
-                    setattr(self.grid, '{}_z'.format(var), fix_range(getattr(self.grid, var), 0, 1) * z)
-                except ValueError:
-                    # The arrays might be the wrong shape for broadcasting to work, so transpose and retranspose
-                    # accordingly. This is less than ideal.
-                    setattr(self.grid, '{}_z'.format(var), (_fixed_sig.T * z).T)
-
-        # Check if we've been given vertical dimensions to subset in too, and if so, do that. Check we haven't
-        # already done this if the 'node' and 'nele' sections above first.
-        for var in 'siglay', 'siglev', 'siglay_center', 'siglev_center':
-            # Only carry on if we have this variable in the output file with which we're working (mainly this
-            # is for compatibility with FVCOM 3 outputs which do not have the _center variables).
-            if var not in self.ds.variables:
-                continue
-            short_dim = copy.copy(var)
-            # Assume we need to subset this one unless 'node' or 'nele' are missing from self._dims. If they're in
-            # self._dims, we've already subsetted in the 'node' and 'nele' sections above, so doing it again here
-            # would fail.
-            subset_variable = True
-            if 'node' in self._dims or 'nele' in self._dims:
-                subset_variable = False
-            # Strip off the _center to match the dimension name.
-            if short_dim.endswith('_center'):
-                short_dim = short_dim.split('_')[0]
-            if short_dim in self._dims:
-                if short_dim in self.ds.variables[var].dimensions and subset_variable:
-                    _temp = getattr(self.grid, var)[self._dims[short_dim], ...]
-                    setattr(self.grid, var, _temp)
-
-        # Check ranges and if zero assume we're missing that particular type, so convert from the other accordingly.
-        self.grid.lon_range = np.ptp(self.grid.lon)
-        self.grid.lat_range = np.ptp(self.grid.lat)
-        self.grid.lonc_range = np.ptp(self.grid.lonc)
-        self.grid.latc_range = np.ptp(self.grid.latc)
-        self.grid.x_range = np.ptp(self.grid.x)
-        self.grid.y_range = np.ptp(self.grid.y)
-        self.grid.xc_range = np.ptp(self.grid.xc)
-        self.grid.yc_range = np.ptp(self.grid.yc)
-
-        # Only do the conversions when we have more than a single point since the relevant ranges will be zero with
-        # only one position.
-        if self.dims.node > 1:
-            if self.grid.lon_range == 0 and self.grid.lat_range == 0:
-                self.grid.lon, self.grid.lat = lonlat_from_utm(self.grid.x, self.grid.y, zone=self._zone)
-                self.grid.lon_range = np.ptp(self.grid.lon)
-                self.grid.lat_range = np.ptp(self.grid.lat)
-            if self.grid.x_range == 0 and self.grid.y_range == 0:
-                self.grid.x, self.grid.y, _ = utm_from_lonlat(self.grid.lon, self.grid.lat)
-                self.grid.x_range = np.ptp(self.grid.x)
-                self.grid.y_range = np.ptp(self.grid.y)
-        if self.dims.nele > 1:
-            if self.grid.lonc_range == 0 and self.grid.latc_range == 0:
-                self.grid.lonc, self.grid.latc = lonlat_from_utm(self.grid.xc, self.grid.yc, zone=self._zone)
-                self.grid.lonc_range = np.ptp(self.grid.lonc)
-                self.grid.latc_range = np.ptp(self.grid.latc)
-            if self.grid.xc_range == 0 and self.grid.yc_range == 0:
-                self.grid.xc, self.grid.yc, _ = utm_from_lonlat(self.grid.lonc, self.grid.latc)
-                self.grid.xc_range = np.ptp(self.grid.xc)
-                self.grid.yc_range = np.ptp(self.grid.yc)
-
-        # Make a bounding box variable too (spherical coordinates): W/E/S/N
-        self.grid.bounding_box = (np.min(self.grid.lon), np.max(self.grid.lon),
-                                  np.min(self.grid.lat), np.max(self.grid.lat))
-
-    def _make_subset_dimensions(self):
-        self._dims['node'] = np.argwhere((self.grid.lon > self._dims['wesn'][0]) &
-                                             (self.grid.lon < self._dims['wesn'][1]) &
-                                             (self.grid.lat > self._dims['wesn'][2]) &
-                                             (self.grid.lat < self._dims['wesn'][3])).flatten()
-        self._dims['nele'] = np.argwhere((self.grid.lonc > self._dims['wesn'][0]) &
-                                             (self.grid.lonc < self._dims['wesn'][1]) &
-                                             (self.grid.latc > self._dims['wesn'][2]) &
-                                             (self.grid.latc < self._dims['wesn'][3])).flatten()
+        self.time = _TimeReader(self.ds, dims=self._dims)
 
     def _update_dimensions(self, variables):
         # Update the dimensions based on variables we've been given. Construct a list of the unique dimensions in all
@@ -827,8 +566,10 @@ class FileReader(Domain):
                 print('Updating existing data to match supplied dimensions when loading data')
             # Use the supplied dimensions as the new dimensions array.
             self._dims = dims
-            self._load_time()
-            self._load_grid()
+            self.time = _TimeReader(self.ds, dims=self._dims)
+            self.dims.time = len(self.time)
+            self.grid = _GridReaderNetCDF(self._fvcom, dims=self._dims, zone=self._zone, debug=self._debug,
+                                          verbose=self._noisy)
 
         # Check if we've got iterable variables and make one if not.
         if not hasattr(var, '__iter__') or isinstance(var, str):
@@ -836,10 +577,10 @@ class FileReader(Domain):
 
         for v in var:
             if self._debug or self._noisy:
-                print('Loading: {}'.format(v))
+                print(f'Loading: {v}')
 
             if v not in self.ds.variables:
-                raise NameError("Variable '{}' not present in {}".format(v, self._fvcom))
+                raise NameError(f"Variable '{v}' not present in {self._fvcom}")
 
             var_dim = self.ds.variables[v].dimensions
             variable_shape = self.ds.variables[v].shape
@@ -849,18 +590,15 @@ class FileReader(Domain):
                 if dimension in dims:
                     variable_index = var_dim.index(dimension)
                     if self._debug:
-                        print('Extracting specific indices for {}'.format(dimension))
+                        print(f'Extracting specific indices for {dimension}')
                     variable_indices[variable_index] = dims[dimension]
 
-            # Save any attributes associated with this variable before trying to load the data.
-            attributes = _passive_data_store()
-            for attribute in self.ds.variables[v].ncattrs():
-                setattr(attributes, attribute, getattr(self.ds.variables[v], attribute))
-            setattr(self.atts, v, attributes)
+            # Add attributes for the variable we're loading.
+            self.atts.get_attribute(v)
 
             if 'time' not in var_dim:
                 # Should we error here or carry on having warned?
-                warn('{} does not contain a time dimension.'.format(v))
+                warn(f'{v} does not contain a time dimension.')
 
             try:
                 if self._get_data_pattern == 'slice':
@@ -875,7 +613,7 @@ class FileReader(Domain):
                     for i in range(data_raw.ndim):
                         if not isinstance(variable_indices[i], slice):
                             if self._debug:
-                                print('Extracting indices {} for variable {}'.format(variable_indices[i], v))
+                                print(f'Extracting indices {variable_indices[i]} for variable {v}')
                             data_raw = data_raw.take(variable_indices[i], axis=i)
 
                     setattr(self.data, v, data_raw)
@@ -901,7 +639,7 @@ class FileReader(Domain):
         Calculate the grid volume (optionally time varying) for the loaded grid.
 
         If the surface elevation data have been loaded (`zeta'), the volume varies with time, otherwise, the volume
-        is for the mean water depth (`h').
+        is for the mean water depth (`h'). To load the surface elevation with this call, set `load_zeta' to True.
 
         Parameters
         ----------
@@ -1017,7 +755,7 @@ class FileReader(Domain):
                                   weights=self.grid.depth_volume[..., i], axis=1)
         setattr(self.data, '{}_average'.format(var), int_vol)
 
-    def time_to_index(self, target_time, tolerance=False):
+    def time_to_index(self, *args, **kwargs):
         """
         Find the time index for the given time string (%Y-%m-%d %H:%M:%S.%f) or datetime object.
 
@@ -1037,21 +775,7 @@ class FileReader(Domain):
 
         """
 
-        if not isinstance(target_time, datetime):
-            try:
-                target_time = datetime.strptime(target_time, '%Y-%m-%d %H:%M:%S.%f')
-            except ValueError:
-                # Try again in case we've not been given fractional seconds, just to be nice.
-                target_time = datetime.strptime(target_time, '%Y-%m-%d %H:%M:%S')
-
-        time_diff = np.abs(self.time.datetime - target_time)
-        if not tolerance:
-            time_idx = np.argmin(time_diff)
-        else:
-            if np.min(time_diff) <= timedelta(seconds=tolerance):
-                time_idx = np.argmin(time_diff)
-            else:
-                time_idx = None
+        time_idx = time_to_index(self.time.datetime, *args, **kwargs)
 
         return time_idx
 
@@ -1251,7 +975,7 @@ class FileReaderFromDict(FileReader):
         self.dims.maxelem = 9
         # This is a little repetitive (each dimension can be set multiple times), but it has simplicity to its
         # advantage.
-        for obj in self.obj_iter(self.data):
+        for obj in self.data:
             if obj in ('ua', 'va'):
                 try:
                     self.dims.time, self.dims.nele = getattr(self.data, obj).shape
@@ -1303,6 +1027,8 @@ class SubDomainReader(FileReader):
         if 'wesn' in self._dims:
             if isinstance(self._dims['wesn'], Polygon):
                 bounding_poly = np.asarray(self._dims['wesn'].exterior.coords)
+            # Drop the 'wesn' dimension now as it's not necessary for anything else.
+            self._dims.pop('wesn')
         else:
             fig = plt.figure()
             ax = fig.add_subplot(111)
@@ -1335,9 +1061,7 @@ class SubDomainReader(FileReader):
         # Shouldn't need the np.asarray here, I think, but leaving it in as I'm not 100% sure.
         self._dims['node'] = np.squeeze(np.argwhere(np.asarray(poly_path.contains_points(np.asarray([self.grid.lon, self.grid.lat]).T))))
         self._dims['nele'] = np.squeeze(np.argwhere(np.all(np.isin(self.grid.triangles, self._dims['node']), axis=1)))
-
-        # Drop the 'wesn' dimension now as it's not necessary for anything else.
-        self._dims.pop('wesn')
+        self._get_data_pattern == 'memory'
 
     def _find_open_faces(self):
         """
@@ -1470,6 +1194,7 @@ class SubDomainReader(FileReader):
     def add_evap_precip(self):
         self.load_data(['precip', 'evap'])
 
+    def add_river_data(self):
         nml_dict = get_river_config(river_nml_file)
         river_node_raw = np.asarray(nml_dict['RIVER_GRID_LOCATION'], dtype=int) - 1
 
@@ -1528,7 +1253,6 @@ class SubDomainReader(FileReader):
 
         setattr(self, var + '_total', np.sum(np.sum(getattr(self.data, var) * self.volume, axis=2), axis=1))
 
-
     def surface_integral(self, var):
         """
         TODO: docstring.
@@ -1536,6 +1260,48 @@ class SubDomainReader(FileReader):
 
         """
         pass
+
+
+def time_to_index(times, target_time, tolerance=False):
+    """
+    Find the time index for the given time string (%Y-%m-%d %H:%M:%S.%f) or datetime object.
+
+    Parameters
+    ----------
+    times : list
+        List of datetime objects from which to find the closest `target_time'.
+    target_time : str or datetime.datetime
+        Time for which to find the time index from `times'. If given as a string, the time format must be "%Y-%m-%d
+        %H:%M:%S.%f".
+    tolerance : float, optional
+        Seconds of tolerance to allow when finding the appropriate index. Use this flag to only return an index
+        to within some tolerance. By default, the closest time is returned irrespective of how far in time it is
+        from the data.
+
+    Returns
+    -------
+    time_idx : int
+        Index for the currently loaded data closest to the specified time.
+
+    """
+
+    if not isinstance(target_time, datetime):
+        try:
+            target_time = datetime.strptime(target_time, '%Y-%m-%d %H:%M:%S.%f')
+        except ValueError:
+            # Try again in case we've not been given fractional seconds, just to be nice.
+            target_time = datetime.strptime(target_time, '%Y-%m-%d %H:%M:%S')
+
+    time_diff = np.abs(times - target_time)
+    if not tolerance:
+        time_idx = np.argmin(time_diff)
+    else:
+        if np.min(time_diff) <= timedelta(seconds=tolerance):
+            time_idx = np.argmin(time_diff)
+        else:
+            time_idx = None
+
+    return time_idx
 
 
 class ncwrite(object):

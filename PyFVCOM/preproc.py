@@ -24,19 +24,14 @@ import scipy.optimize
 from PyFVCOM.coordinate import utm_from_lonlat, lonlat_from_utm
 from PyFVCOM.grid import Domain, grid_metrics, read_fvcom_obc, nodes2elems
 from PyFVCOM.grid import OpenBoundary, find_connected_elements
-from PyFVCOM.grid import find_bad_node
+from PyFVCOM.grid import find_bad_node, element_side_lengths
 from PyFVCOM.grid import write_fvcom_mesh, connectivity, haversine_distance
-from PyFVCOM.read import FileReader
-from PyFVCOM.utilities.general import flatten_list
+from PyFVCOM.read import FileReader, _TimeReader
+from PyFVCOM.utilities.general import flatten_list, _passive_data_store
 from PyFVCOM.utilities.time import date_range
 from dateutil.relativedelta import relativedelta
 from netCDF4 import Dataset, date2num, num2date, stringtochar
 from scipy.interpolate import RegularGridInterpolator
-
-
-class _passive_data_store(object):
-    def __init__(self):
-        pass
 
 
 class Model(Domain):
@@ -161,6 +156,34 @@ class Model(Domain):
                 except AttributeError:
                     pass
 
+    def estimate_time_step(self, maximum_speed, maximum_elevation):
+        """
+        Estimate the time step for the current grid based on the given anticipated maximum speed and surface elevation.
+
+        Parameters
+        ----------
+        maximum_speed : float
+            The anticipated maximum speed.
+        maximum_elevation : float
+            The anticipated maximum surface elevation.
+
+        """
+
+        gravity = 9.81
+
+        # Calculate the length of each side in the elements in the grid and the propagation of a gravity wave across
+        # those distances to figure out what the time step should be.
+
+        # *lick index finger and stick in the air now*
+        lengths = element_side_lengths(self.grid.triangles, self.grid.x, self.grid.y)
+        depths = np.max(self.grid.h[self.grid.triangles] + maximum_elevation, axis=1)
+        timesteps = (lengths.T / (np.sqrt(gravity * depths) + maximum_speed)).T
+
+        self.time_step = np.nanmin(timesteps)
+
+        if self._noisy:
+            print(f'Estimated time step {self.time_step} seconds.')
+
     def write_grid(self, grid_file, depth_file=None):
         """
         Write out the unstructured grid data to file.
@@ -172,7 +195,7 @@ class Model(Domain):
 
         """
         grid_file = str(grid_file)
-        if depth_file:
+        if depth_file is not None:
             depth_file = str(depth_file)
 
         nodes = np.arange(self.dims.node) + 1
@@ -181,7 +204,17 @@ class Model(Domain):
         else:
             x, y = self.grid.x, self.grid.y
 
-        write_fvcom_mesh(self.grid.triangles, nodes, x, y, self.grid.h, grid_file, extra_depth=depth_file)
+        # Check for the distribution of depths. Since FVCOM is positive down and some grids are specified as negative
+        # down, do a sanity check here. If we've got more negatives than positive depths, then flip the sign (and
+        # warn we're doing that), otherwise, go as is.
+        negative_total = sum(self.grid.h < 0)
+        positive_total = sum(self.grid.h > 0)
+        depth = self.grid.h
+        if negative_total > positive_total:
+            depth = -depth
+            warn('Flipping depths to be positive down since we have been supplied with mostly negative depths.')
+
+        write_fvcom_mesh(self.grid.triangles, nodes, x, y, depth, grid_file, extra_depth=depth_file)
 
     def write_coriolis(self, coriolis_file):
         """
@@ -1923,7 +1956,7 @@ class Model(Domain):
             for this_var in harmonics_vars:
                 this_nest.add_fvcom_tides(harmonics_file, predict=this_var, constituents=constituents, interval=self.sampling, pool_size=pool_size)
 
-    def add_nests_regular(self, fvcom_var, regular_reader, regular_var):
+    def add_nests_regular(self, fvcom_var, regular_reader, regular_var, **kwargs):
         """
         Docstring
 
@@ -1935,7 +1968,7 @@ class Model(Domain):
                 mode='surface'
             else:
                 mode='nodes'
-            this_nest.add_nested_forcing(fvcom_var, regular_var, regular_reader, interval=self.sampling, mode=mode)
+            this_nest.add_nested_forcing(fvcom_var, regular_var, regular_reader, interval=self.sampling, mode=mode, **kwargs)
 
     def avg_nest_force_vel(self):
         """
@@ -2419,7 +2452,7 @@ class Model(Domain):
         nest_elements = np.asarray(all_elements)[np.sort(_elem_idx)]
         del all_nodes, all_elements
 
-        # Do we really need spherical here? Or would we be better off assuming everyone's running spherical?
+        # Do we really need spherical here? Or would we be better off assuming everyone's running cartesian?
         nest_x, nest_y = self.grid.x[nest_nodes], self.grid.y[nest_nodes]
         nest_lon, nest_lat = self.grid.lon[nest_nodes], self.grid.lat[nest_nodes]
         nest_xc, nest_yc = self.grid.xc[nest_elements], self.grid.yc[nest_elements]
@@ -2700,13 +2733,13 @@ class ModelNameList(object):
                             NameListEntry('NCAV_FIRST_OUT', None),
                             NameListEntry('NCAV_OUT_INTERVAL', 'seconds=86400.'),
                             NameListEntry('NCAV_OUTPUT_STACK', 0, 'd'),
-                            NameListEntry('NCAV_GRID_METRICS', 'F'),
+                            NameListEntry('NCAV_GRID_METRICS', 'T'),
                             NameListEntry('NCAV_FILE_DATE', 'T'),
-                            NameListEntry('NCAV_VELOCITY', 'F'),
+                            NameListEntry('NCAV_VELOCITY', 'T'),
                             NameListEntry('NCAV_SALT_TEMP', 'T'),
-                            NameListEntry('NCAV_TURBULENCE', 'F'),
-                            NameListEntry('NCAV_AVERAGE_VEL', 'F'),
-                            NameListEntry('NCAV_VERTICAL_VEL', 'F'),
+                            NameListEntry('NCAV_TURBULENCE', 'T'),
+                            NameListEntry('NCAV_AVERAGE_VEL', 'T'),
+                            NameListEntry('NCAV_VERTICAL_VEL', 'T'),
                             NameListEntry('NCAV_WIND_VEL', 'F'),
                             NameListEntry('NCAV_WIND_STRESS', 'F'),
                             NameListEntry('NCAV_EVAP_PRECIP', 'F'),
@@ -2755,8 +2788,8 @@ class ModelNameList(object):
                             NameListEntry('HEATING_CALCULATE_FILE', f'{self._casename}_wnd.nc'),
                             NameListEntry('HEATING_CALCULATE_KIND', 'variable'),
                             NameListEntry('ZUU', 10.0, 'f'),
-                            NameListEntry('ZTT', 10.0, 'f'),
-                            NameListEntry('ZQQ', 10.0, 'f'),
+                            NameListEntry('ZTT', 2.0, 'f'),
+                            NameListEntry('ZQQ', 2.0, 'f'),
                             NameListEntry('AIR_TEMPERATURE', 0.0, 'f'),
                             NameListEntry('RELATIVE_HUMIDITY', 0.0, 'f'),
                             NameListEntry('SURFACE_PRESSURE', 0.0, 'f'),
@@ -3094,6 +3127,110 @@ class ModelNameList(object):
         if self._fabm:
             self.update('NML_OPEN_BOUNDARY_CONTROL', 'OBC_FABM_NUDGING_TIMESCALE', nudging_timescale)
 
+    def update_nesting_interval(self, target_interval=900):
+        """
+        Update the 'NCNEST_OUT_INTERVAL' to be compatible with the new (as of FVCOM version 4.1) requirement.
+
+        The simulation time (END_DATE-START_DATE) should be evenly divisible by NCNEST_OUT_INTERVAL * NCNEST_BLOCKSIZE.
+
+        Based on the current value of NCNEST_BLOCKSIZE and the model duration, find a sensible NCNEST_OUT_INTERVAL
+        which is close to the optional given target interval (defaults to 900 seconds)
+
+        Parameters
+        ----------
+        target_interval : float, optional
+            The target time in seconds for which to aim when finding the required NCNEST_OUT_INTERVAL. If omitted,
+            defaults to 900 seconds.
+
+        """
+
+        model_start = datetime.strptime(self.value('NML_CASE', 'START_DATE'), '%Y-%m-%d %H:%M:%S')
+        model_end = datetime.strptime(self.value('NML_CASE', 'END_DATE'), '%Y-%m-%d %H:%M:%S')
+        model_duration_seconds = (model_end - model_start).total_seconds()
+
+        # Checking the range from the minimum useful time (time_resolution_seconds) to ten times the target should
+        # yield at least one suitable interval. Do intervals of a minute since that's less weird (who wants a nesting
+        # output every 4 minutes 34 seconds? No one.). Only do that if we're running the model for more than a
+        # minute. Otherwise, the interval is a second.
+        candidate_interval = []
+        time_resolution_seconds = 60
+        if model_duration_seconds <= time_resolution_seconds:
+            time_resolution_seconds = 1
+        time_tries = range(time_resolution_seconds,
+                           (10 * target_interval) + time_resolution_seconds,
+                           time_resolution_seconds)
+        for interval in time_tries:
+            if self.valid_nesting_timescale(interval):
+                candidate_interval.append(interval)
+
+        if not candidate_interval:
+            raise ValueError("Unable to identify a suitable NCNEST_OUT_INTERVAL. "
+                             "Try setting the `target_interval' to something bigger or changing the NCNEST_BLOCKSIZE "
+                             "or EXTSTEP_SECONDS values.")
+
+        # Find the one closest to the target.
+        ncnest_out_interval = candidate_interval[np.argmin(np.abs(np.asarray(candidate_interval) - target_interval))]
+        self.update('NML_NCNEST', 'NCNEST_OUT_INTERVAL', f'seconds={float(ncnest_out_interval):g}')
+
+    def valid_nesting_timescale(self, interval=None):
+        """
+        Check the NCNEST_OUT_INTERVAL is compatible with the currently defined blocksize and model duration.
+
+        Parameters
+        ----------
+        interval : float, optional
+            The current NCNEST_OUT_INTERVAL value. If omitted, we grab the one defined in self.config.
+
+        Returns
+        -------
+        compatible : bool
+            True if the interval is compatible with the model duration and time step, False if not.
+
+        """
+
+        model_start = datetime.strptime(self.value('NML_CASE', 'START_DATE'), '%Y-%m-%d %H:%M:%S')
+        model_end = datetime.strptime(self.value('NML_CASE', 'END_DATE'), '%Y-%m-%d %H:%M:%S')
+        model_duration_seconds = (model_end - model_start).total_seconds()
+        nesting_blocksize = self.value('NML_NCNEST', 'NCNEST_BLOCKSIZE')
+        timestep = self.value('NML_INTEGRATION', 'EXTSTEP_SECONDS')
+
+        # We need to parse the interval format and store everything in seconds.
+        if interval is None:
+            units, interval = self.value('NML_NCNEST', 'NCNEST_OUT_INTERVAL').split('=')
+            interval = float(interval.strip())
+            units = units.strip()
+            if units == 'minutes':
+                interval /= 60
+            elif units == 'hours':
+                interval /= 60 * 60
+            elif units == 'days':
+                interval /= 60 * 60 * 24
+            elif units == 'cycles':
+                interval = timestep * int(interval)
+
+        res = model_duration_seconds / (interval * nesting_blocksize)
+        # The first check is for evenly divisible intervals and the second is for ones compatible with the model
+        # time step (not sure that's necessary).
+        if res % 2 == 0 and res / timestep % 2 == 0:
+            return True
+        else:
+            return False
+
+    def update_ramp(self, duration):
+        """
+        Set the model ramp.
+
+        Parameters
+        ----------
+        duration : float
+            The ramp, in hours.
+
+        """
+
+        timestep = self.value('NML_INTEGRATION', 'EXTSTEP_SECONDS')
+        ramp = int(duration * 60 * 60 / timestep)
+        self.update('NML_INTEGRATION', 'IRAMP', ramp)
+
     def write_model_namelist(self, namelist_file):
         """
         Write the current object to ASCII in FVCOM namelist format.
@@ -3121,6 +3258,10 @@ class ModelNameList(object):
             current_end = self.value(*end)
             if current_end is None:
                 self.update(*end, case_end)
+
+        if not self.valid_nesting_timescale():
+            raise ValueError('The current NCNEST_OUT_INTERVAL is invalid for FVCOM. Use '
+                             'PyFVCOM.preproc.Model.update_nesting_interval to find a suitable value.')
 
         write_model_namelist(namelist_file, self.config)
 
@@ -3540,9 +3681,9 @@ class RegularReader(FileReader):
         lon_compare = xdim == getattr(other.dims, xname)
         lat_compare = ydim == getattr(other.dims, yname)
         time_compare = self.time.datetime[-1] <= other.time.datetime[0]
-        data_compare = self.obj_iter(self.data) == self.obj_iter(other.data)
-        old_data = self.obj_iter(self.data)
-        new_data = self.obj_iter(other.data)
+        old_data = [i for i in self.data]
+        new_data = [i for i in other.data]
+        data_compare = new_data == old_data
         if not lon_compare:
             raise ValueError('Horizontal longitude data are incompatible.')
         if not lat_compare:
@@ -3562,12 +3703,12 @@ class RegularReader(FileReader):
         # Copy ourselves to a new version for concatenation. self is the old so we get appended to by the new.
         idem = copy.copy(self)
 
-        for var in self.obj_iter(idem.data):
+        for var in idem.data:
             if 'time' in idem.ds.variables[var].dimensions:
                 if self._noisy:
                     print('Concatenating {} in time'.format(var))
                 setattr(idem.data, var, np.ma.concatenate((getattr(idem.data, var), getattr(other.data, var))))
-        for time in self.obj_iter(idem.time):
+        for time in idem.time:
             setattr(idem.time, time, np.concatenate((getattr(idem.time, time), getattr(other.time, time))))
 
         # Remove duplicate times.
@@ -3576,13 +3717,13 @@ class RegularReader(FileReader):
         dupe_indices = np.setdiff1d(time_indices, dupes)
         time_mask = np.ones(time_indices.shape, dtype=bool)
         time_mask[dupe_indices] = False
-        for var in self.obj_iter(idem.data):
+        for var in idem.data:
             # Only delete things with a time dimension.
             if 'time' in idem.ds.variables[var].dimensions:
                 # time_axis = idem.ds.variables[var].dimensions.index('time')
                 setattr(idem.data, var, getattr(idem.data, var)[time_mask, ...])  # assume time is first
                 # setattr(idem.data, var, np.delete(getattr(idem.data, var), dupe_indices, axis=time_axis))
-        for time in self.obj_iter(idem.time):
+        for time in idem.time:
             try:
                 time_axis = idem.ds.variables[time].dimensions.index('time')
                 setattr(idem.time, time, np.delete(getattr(idem.time, time), dupe_indices, axis=time_axis))
@@ -3600,28 +3741,9 @@ class RegularReader(FileReader):
         """
         Populate a time object with additional useful time representations from the netCDF time data.
         """
+        self.time = _TimeReaderReg(self.ds, dims=self._dims)
 
-        if 'time' in self.ds.variables:
-            time_var = 'time'
-        elif 'time_counter' in self.ds.variables:
-            time_var = 'time_counter'
-        else:
-            raise ValueError('Missing a known time variable.')
-        time = self.ds.variables[time_var][:]
-
-        # Make other time representations.
-        self.time.datetime = num2date(time, units=getattr(self.ds.variables[time_var], 'units'))
-        if isinstance(self.time.datetime, (list, tuple, np.ndarray)):
-            setattr(self.time, 'Times', np.array([datetime.strftime(d, '%Y-%m-%dT%H:%M:%S.%f') for d in self.time.datetime]))
-        else:
-            setattr(self.time, 'Times', datetime.strftime(self.time.datetime, '%Y-%m-%dT%H:%M:%S.%f'))
-        self.time.time = date2num(self.time.datetime, units='days since 1858-11-17 00:00:00')
-        self.time.Itime = np.floor(self.time.time)
-        self.time.Itime2 = (self.time.time - np.floor(self.time.time)) * 1000 * 60 * 60  # microseconds since midnight
-        self.time.datetime = self.time.datetime
-        self.time.matlabtime = self.time.time + 678942.0  # convert to MATLAB-indexed times from Modified Julian Date.
-
-    def _load_grid(self):
+    def _load_grid(self, netcdf_filestr):
         """
         Load the grid data.
 
@@ -3630,7 +3752,7 @@ class RegularReader(FileReader):
         """
 
         grid_variables = ['lon', 'lat', 'x', 'y', 'depth', 'Longitude', 'Latitude']
-
+        self.grid = _passive_data_store()
         # Get the grid data.
         for grid in grid_variables:
             try:
@@ -3639,7 +3761,7 @@ class RegularReader(FileReader):
                 attributes = _passive_data_store()
                 for attribute in self.ds.variables[grid].ncattrs():
                     setattr(attributes, attribute, getattr(self.ds.variables[grid], attribute))
-                setattr(self.atts, grid, attributes)
+                #setattr(self.atts, grid, attributes)
             except KeyError:
                 # Make zeros for this missing variable so we can convert from the non-missing data below.
                 if hasattr(self.dims, 'lon') and hasattr(self.dims, 'lat'):
@@ -3890,6 +4012,31 @@ class RegularReader(FileReader):
             index = index[0]
         return np.unravel_index(index, (len(self.grid.lon), len(self.grid.lat)))
 
+class _TimeReaderReg(_TimeReader):
+
+    def __init__(self, dataset, dims=None, verbose=False):
+        self._dims = copy.deepcopy(dims)
+        if 'time' in dataset.variables:
+            time_var = 'time'
+        elif 'time_counter' in dataset.variables:
+            time_var = 'time_counter'
+        else:
+            raise ValueError('Missing a known time variable.')
+        time = dataset.variables[time_var][:]
+
+        # Make other time representations.
+        self.datetime = num2date(time, units=getattr(dataset.variables[time_var], 'units'))
+        if isinstance(self.datetime, (list, tuple, np.ndarray)):
+            setattr(self, 'Times', np.array([datetime.strftime(d, '%Y-%m-%dT%H:%M:%S.%f') for d in self.datetime]))
+        else:
+            setattr(self, 'Times', datetime.strftime(self.datetime, '%Y-%m-%dT%H:%M:%S.%f'))
+
+        self.time = date2num(self.datetime, units='days since 1858-11-17 00:00:00')
+        self.Itime = np.floor(self.time)
+        self.Itime2 = (self.time - np.floor(self.time)) * 1000 * 60 * 60  # microseconds since midnight
+        self.datetime = self.datetime
+        self.matlabtime = self.time + 678942.0
+
 
 class Regular2DReader(RegularReader):
     """
@@ -3920,9 +4067,9 @@ class HYCOMReader(RegularReader):
         lat_compare = self.dims.lat == other.dims.lat
         depth_compare = self.dims.depth == other.dims.depth
         time_compare = self.time.datetime[-1] <= other.time.datetime[0]
-        data_compare = self.obj_iter(self.data) == self.obj_iter(other.data)
-        old_data = self.obj_iter(self.data)
-        new_data = self.obj_iter(other.data)
+        old_data = [i for i in self.data]
+        new_data = [i for i in other.data]
+        data_compare = new_data == old_data
         if not lon_compare:
             raise ValueError('Horizontal longitude data are incompatible.')
         if not lat_compare:
@@ -3942,10 +4089,10 @@ class HYCOMReader(RegularReader):
         # Copy ourselves to a new version for concatenation. self is the old so we get appended to by the new.
         idem = copy.copy(self)
 
-        for var in self.obj_iter(idem.data):
+        for var in idem.data:
             if 'MT' in idem.ds.variables[var].dimensions:
                 setattr(idem.data, var, np.ma.concatenate((getattr(idem.data, var), getattr(other.data, var))))
-        for time in self.obj_iter(idem.time):
+        for time in idem.time:
             setattr(idem.time, time, np.concatenate((getattr(idem.time, time), getattr(other.time, time))))
 
         # Remove duplicate times.
@@ -3954,13 +4101,13 @@ class HYCOMReader(RegularReader):
         dupe_indices = np.setdiff1d(time_indices, dupes)
         time_mask = np.ones(time_indices.shape, dtype=bool)
         time_mask[dupe_indices] = False
-        for var in self.obj_iter(idem.data):
+        for var in idem.data:
             # Only delete things with a time dimension.
             if 'MT' in idem.ds.variables[var].dimensions:
                 # time_axis = idem.ds.variables[var].dimensions.index('time')
                 setattr(idem.data, var, getattr(idem.data, var)[time_mask, ...])  # assume time is first
                 # setattr(idem.data, var, np.delete(getattr(idem.data, var), dupe_indices, axis=time_axis))
-        for time in self.obj_iter(idem.time):
+        for time in idem.time:
             try:
                 time_axis = idem.ds.variables[time].dimensions.index('MT')
                 setattr(idem.time, time, np.delete(getattr(idem.time, time), dupe_indices, axis=time_axis))

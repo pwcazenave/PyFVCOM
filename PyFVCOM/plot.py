@@ -12,7 +12,10 @@ from pathlib import Path
 
 from PyFVCOM.coordinate import lonlat_from_utm
 from PyFVCOM.read import FileReader
+from PyFVCOM.current import vector2scalar
 from PyFVCOM.grid import getcrossectiontriangles, unstructured_grid_depths, Domain, nodes2elems
+from PyFVCOM.ocean import depth2pressure, dens_jackett
+from PyFVCOM.utilities.general import _passive_data_store
 
 import numpy as np
 
@@ -24,6 +27,13 @@ try:
 except ImportError:
     warn('No mpl_toolkits found in this python installation. Some functions will be disabled.')
     have_basemap = False
+
+have_mpi = True
+try:
+    from mpi4py import MPI
+except ImportError:
+    warn('No mpi4py found in this python installation. Some functions will be disabled.')
+    have_mpi = False
 
 rcParams['mathtext.default'] = 'regular'  # use non-LaTeX fonts
 
@@ -1122,7 +1132,7 @@ class MPIWorker(object):
         self.root = root
         self._noisy = verbose
 
-    def __loader(self, fvcom_file, variable, *args, **kwargs):
+    def __loader(self, fvcom_file, variable):
         """
         Function to load and make meta-variables, if appropriate, which can then be plotted by `plot_*'.
 
@@ -1139,8 +1149,6 @@ class MPIWorker(object):
                 - 'direction'
                 - 'depth_averaged_direction'
 
-        Additional args and kwargs are passed to PyFVCOM.read.FileReader.
-
         Provides
         --------
         self.fvcom : PyFVCOM.read.FileReader
@@ -1148,7 +1156,9 @@ class MPIWorker(object):
 
         """
 
+        load_verbose = False
         if self._noisy and self.rank == self.root:
+            load_verbose = True
             print(f'Loading {variable} data from netCDF...', end=' ', flush=True)
 
         load_vars = [variable]
@@ -1159,28 +1169,51 @@ class MPIWorker(object):
         elif variable == 'tauc':
             load_vars = [variable, 'temp', 'salinity']
 
-        self.fvcom = pf.read.FileReader(fvcom_file, variables=load_vars, *args, **kwargs)
+        self.fvcom = FileReader(fvcom_file, variables=load_vars, dims=self.dims, verbose=load_verbose)
 
         # Make the meta-variable data.
         if variable in ('speed', 'direction'):
-            self.fvcom.data.direction, self.fvcom.data.speed = pf.current.vector2scalar(self.fvcom.data.u,
-                                                                                        self.fvcom.data.v)
+            self.fvcom.data.direction, self.fvcom.data.speed = vector2scalar(self.fvcom.data.u,
+                                                                             self.fvcom.data.v)
+            # Add the attributes for labelling.
+            self.fvcom.atts.speed = _passive_data_store()
+            self.fvcom.atts.speed.long_name = 'speed'
+            self.fvcom.atts.speed.units = '$ms^{-1}$'
+            self.fvcom.atts.direction = _passive_data_store()
+            self.fvcom.atts.direction.long_name = 'direction'
+            self.fvcom.atts.direction.units = '$\degree$'
+
         elif variable in ('depth_averaged_speed', 'depth_averaged_direction'):
-            self.fvcom.data.depth_averaged_direction, self.fvcom.data.depth_averaged_speed = pf.current.vector2scalar(
+            self.fvcom.data.depth_averaged_direction, self.fvcom.data.depth_averaged_speed = vector2scalar(
                 self.fvcom.data.ua, self.fvcom.data.va
             )
+            # Add the attributes for labelling.
+            self.fvcom.atts.depth_averaged_speed = _passive_data_store()
+            self.fvcom.atts.depth_averaged_speed.long_name = 'depth-averaged speed'
+            self.fvcom.atts.depth_averaged_speed.units = '$ms^{-1}$'
+            self.fvcom.atts.depth_averaged_direction = _passive_data_store()
+            self.fvcom.atts.depth_averaged_direction.long_name = 'depth-averaged direction'
+            self.fvcom.atts.depth_averaged_direction.units = '$\degree$'
+
 
         if variable == 'speed_anomaly':
             self.fvcom.data.speed_anomaly = self.fvcom.data.speed.mean(axis=0) - fvcom.data.speed
+            self.fvcom.atts.speed = _passive_data_store()
+            self.fvcom.atts.speed.long_name = 'speed anomaly'
+            self.fvcom.atts.speed.units = '$ms^{-1}$'
         elif variable == 'depth_averaged_speed_anomaly':
             self.fvcom.data.depth_averaged_speed_anomaly = self.fvcom.data.uava.mean(axis=0) - fvcom.data.uava
-        elif var == 'tauc':
-            pressure = pf.grid.nodes2elems(pf.ocean.depth2pressure(self.fvcom.data.h, self.fvcom.data.y),
-                                           self.fvcom.grid.triangles)
-            tempc = pf.grid.nodes2elems(self.fvcom.data.temp, self.fvcom.grid.triangles)
-            salinityc = pf.grid.nodes2elems(self.fvcom.data.temp, self.fvcom.grid.triangles)
-            rho = pf.ocean.dens_jackett(tempc, salinityc, pressure[np.newaxis, :])
+            self.fvcom.atts.depth_averaged_speed_anomaly = _passive_data_store()
+            self.fvcom.atts.depth_averaged_speed_anomaly.long_name = 'depth-averaged speed anomaly'
+            self.fvcom.atts.depth_averaged_speed_anomaly.units = '$ms^{-1}$'
+        elif variable == 'tauc':
+            pressure = nodes2elems(depth2pressure(self.fvcom.data.h, self.fvcom.data.y),
+                                   self.fvcom.grid.triangles)
+            tempc = nodes2elems(self.fvcom.data.temp, self.fvcom.grid.triangles)
+            salinityc = nodes2elems(self.fvcom.data.temp, self.fvcom.grid.triangles)
+            rho = dens_jackett(tempc, salinityc, pressure[np.newaxis, :])
             self.fvcom.data.tauc *= rho
+            self.fvcom.atts.tauc.units = '$Nm^{-2}$'
 
         if self._noisy and self.rank == self.root:
             print(f'done.', flush=True)
@@ -1201,8 +1234,8 @@ class MPIWorker(object):
         label : str, optional
             What label to use for the colour bar. If omitted, uses the variable's `long_name' and `units'.
         dimensions : str, optional
-            What dimensions to load.
-        clims : str, optional
+            What additional dimensions to load (time is handled by the `time_indices' argument).
+        clims : tuple, list, optional
             Limit the colour range to these values.
         norm : matplotlib.colors.Normalize, optional
             Apply the normalisation given to the colours in the plot.
@@ -1211,24 +1244,30 @@ class MPIWorker(object):
 
         """
 
-        if dimensions is None:
-            dimensions = {}
-        dimensions.update({'time': time_indices})
+        self.dims = dimensions
+        if self.dims is None:
+            self.dims = {}
+        self.dims.update({'time': time_indices})
 
-        self.__loader(fvcom_file, variable, dimensions)
+        self.__loader(fvcom_file, variable)
 
         # Find out what the range of data is so we can set the colour limits automatically, if necessary.
         if clims is None:
-            global_min = self.comm.reduce(getattr(self.fvcom.data, variable).min(), op=MPI.MIN)
-            global_max = self.comm.reduce(getattr(self.fvcom.data, variable).max(), op=MPI.MAX)
+            if have_mpi:
+                global_min = self.comm.reduce(np.nanmin(getattr(self.fvcom.data, variable)), op=MPI.MIN)
+                global_max = self.comm.reduce(np.nanmax(getattr(self.fvcom.data, variable)), op=MPI.MAX)
+            else:
+                # Fall back to local extremes.
+                global_min = np.nanmin(getattr(self.fvcom.data, variable))
+                global_max = np.nanmax(getattr(self.fvcom.data, variable))
             clims = [global_min, global_max]
             clims = self.comm.bcast(clims, root=0)
 
         if label is None:
             label = f'{getattr(self.fvcom.atts, variable).long_name.title()} ' \
-                    f'({getattr(self.fvcom.atts, variable).units})'
+                    f'(${getattr(self.fvcom.atts, variable).units}$)'
 
-        local_plot = pf.plot.Plotter(self.fvcom, cb_label=label, *args, **kwargs)
+        local_plot = Plotter(self.fvcom, cb_label=label, *args, **kwargs)
 
         field = np.squeeze(getattr(self.fvcom.data, variable))
 
