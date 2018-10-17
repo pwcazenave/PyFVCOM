@@ -381,7 +381,7 @@ class Time(object):
             self.axes.xaxis.set_major_formatter(self.date_format)
 
         if self.add_legend:
-            label = '{} $\mathrm{ms^{-1}}$'.format(scale)
+            label = f'{scale} $\mathrm{{ms^{-1}}}$'
             self.quiver_key = plt.quiverkey(self.quiver_plot, 0.9, 0.9, scale, label, coordinates='axes')
 
         # Turn off the y-axis labels as they don't correspond to the vector lengths.
