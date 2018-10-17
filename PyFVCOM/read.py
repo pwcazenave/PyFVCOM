@@ -18,6 +18,7 @@ from PyFVCOM.grid import Domain, control_volumes, get_area_heron
 from PyFVCOM.grid import unstructured_grid_volume, elems2nodes, GridReaderNetCDF
 from PyFVCOM.utilities.general import _passive_data_store
 
+
 class _TimeReader(object):
 
     def __init__(self, dataset, dims=None, verbose=False):
@@ -111,7 +112,10 @@ class _TimeReader(object):
                     raise ValueError('Missing sufficient time information to make the relevant time data.')
 
                 try:
-                    self.Times = np.array([datetime.strftime(d, '%Y-%m-%dT%H:%M:%S.%f') for d in _dates])
+                    try:
+                        self.Times = np.array([datetime.strftime(d, '%Y-%m-%dT%H:%M:%S.%f') for d in _dates])
+                    except TypeError:
+                        self.Times = np.array([datetime.strftime(_dates, '%Y-%m-%dT%H:%M:%S.%f')])
                 except ValueError:
                     self.Times = np.array([datetime.strftime(d, '%Y/%m/%d %H:%M:%S.%f') for d in _dates])
                 # Add the relevant attribute for the Times variable.
@@ -411,7 +415,11 @@ class FileReader(Domain):
 
         # Update the time dimension no we've read in the time data (in case we did so with a specificed dimension
         # range).
-        self.dims.time = len(self.time.time)
+        try:
+            nt = len(self.time.time)
+        except TypeError:
+            nt = 1
+        self.dims.time = nt
 
         self._load_grid(fvcom)
 
