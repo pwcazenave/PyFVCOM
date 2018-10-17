@@ -1533,7 +1533,7 @@ def plot_domain(domain, mesh=False, depth=False, **kwargs):
     x, y = domain.domain_plot.m(domain.grid.lon, domain.grid.lat)
 
     if mesh:
-        domain.mesh_plot = domain.domain_plot.axes.triplot(x, y, domain.grid.triangles, 'k-')
+        domain.mesh_plot = domain.domain_plot.axes.triplot(x, y, domain.grid.triangles, 'k-', linewidth=1)
 
     if depth:
         # Make depths negative down.
