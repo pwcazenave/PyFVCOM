@@ -2,24 +2,25 @@
 
 from __future__ import print_function
 
-from matplotlib import pyplot as plt
-from matplotlib.tri.triangulation import Triangulation
-from matplotlib import rcParams
-from mpl_toolkits.axes_grid1 import make_axes_locatable
-from matplotlib.dates import DateFormatter, date2num
 from datetime import datetime
 from pathlib import Path
+from warnings import warn
+
+import matplotlib.widgets
+import mpl_toolkits.axes_grid1
+import numpy as np
+from matplotlib import pyplot as plt
+from matplotlib import rcParams
+from matplotlib.animation import FuncAnimation
+from matplotlib.dates import DateFormatter, date2num
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 from PyFVCOM.coordinate import lonlat_from_utm
-from PyFVCOM.read import FileReader
 from PyFVCOM.current import vector2scalar
 from PyFVCOM.grid import getcrossectiontriangles, unstructured_grid_depths, Domain, nodes2elems
 from PyFVCOM.ocean import depth2pressure, dens_jackett
+from PyFVCOM.read import FileReader
 from PyFVCOM.utilities.general import _passive_data_store
-
-import numpy as np
-
-from warnings import warn
 
 have_basemap = True
 try:
