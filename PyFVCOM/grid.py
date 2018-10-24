@@ -1450,7 +1450,7 @@ class OpenBoundary(object):
                                       np.tile(y, [nz, nt, 1]).transpose(1, 0, 2).ravel(),
                                       np.tile(x, [nz, nt, 1]).transpose(1, 0, 2).ravel())).T
             ft = RegularGridInterpolator((coarse.time.time, coarse.grid.depth, coarse.grid.lat, coarse.grid.lon),
-                                             getattr(coarse.data, coarse_name), method='linear', fill_value=np.nan)
+                                             np.ma.filled(getattr(coarse.data, coarse_name), np.nan), method='linear', fill_value=np.nan)
             # Reshape the results to match the un-ravelled boundary_grid array.
             interpolated_coarse_data = ft(boundary_grid).reshape([nt, nz, -1])
             # Drop the interpolated data into the nest object.
