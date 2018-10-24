@@ -18,6 +18,7 @@ from PyFVCOM.grid import Domain, control_volumes, get_area_heron
 from PyFVCOM.grid import unstructured_grid_volume, elems2nodes, GridReaderNetCDF
 from PyFVCOM.utilities.general import _passive_data_store
 
+
 class _TimeReader(object):
 
     def __init__(self, dataset, dims=None, verbose=False):
@@ -111,7 +112,10 @@ class _TimeReader(object):
                     raise ValueError('Missing sufficient time information to make the relevant time data.')
 
                 try:
-                    self.Times = np.array([datetime.strftime(d, '%Y-%m-%dT%H:%M:%S.%f') for d in _dates])
+                    try:
+                        self.Times = np.array([datetime.strftime(d, '%Y-%m-%dT%H:%M:%S.%f') for d in _dates])
+                    except TypeError:
+                        self.Times = np.array([datetime.strftime(_dates, '%Y-%m-%dT%H:%M:%S.%f')])
                 except ValueError:
                     self.Times = np.array([datetime.strftime(d, '%Y/%m/%d %H:%M:%S.%f') for d in _dates])
                 # Add the relevant attribute for the Times variable.
@@ -403,7 +407,6 @@ class FileReader(Domain):
             if not dim_is_iterable and not dim_is_slice and not dim_is_string:
                 if self._noisy:
                     print('Making dimension {} iterable'.format(dim))
-                    print(type(self._dims[dim]))
 
                 self._dims[dim] = [self._dims[dim]]
 
@@ -412,7 +415,11 @@ class FileReader(Domain):
 
         # Update the time dimension no we've read in the time data (in case we did so with a specificed dimension
         # range).
-        self.dims.time = len(self.time.time)
+        try:
+            nt = len(self.time.time)
+        except TypeError:
+            nt = 1
+        self.dims.time = nt
 
         self._load_grid(fvcom)
 
@@ -578,10 +585,10 @@ class FileReader(Domain):
 
         for v in var:
             if self._debug or self._noisy:
-                print('Loading: {}'.format(v))
+                print(f'Loading: {v}')
 
             if v not in self.ds.variables:
-                raise NameError("Variable '{}' not present in {}".format(v, self._fvcom))
+                raise NameError(f"Variable '{v}' not present in {self._fvcom}")
 
             var_dim = self.ds.variables[v].dimensions
             variable_shape = self.ds.variables[v].shape
@@ -591,7 +598,7 @@ class FileReader(Domain):
                 if dimension in dims:
                     variable_index = var_dim.index(dimension)
                     if self._debug:
-                        print('Extracting specific indices for {}'.format(dimension))
+                        print(f'Extracting specific indices for {dimension}')
                     variable_indices[variable_index] = dims[dimension]
 
             # Add attributes for the variable we're loading.
@@ -599,7 +606,7 @@ class FileReader(Domain):
 
             if 'time' not in var_dim:
                 # Should we error here or carry on having warned?
-                warn('{} does not contain a time dimension.'.format(v))
+                warn(f'{v} does not contain a time dimension.')
 
             try:
                 if self._get_data_pattern == 'slice':
@@ -614,7 +621,7 @@ class FileReader(Domain):
                     for i in range(data_raw.ndim):
                         if not isinstance(variable_indices[i], slice):
                             if self._debug:
-                                print('Extracting indices {} for variable {}'.format(variable_indices[i], v))
+                                print(f'Extracting indices {variable_indices[i]} for variable {v}')
                             data_raw = data_raw.take(variable_indices[i], axis=i)
 
                     setattr(self.data, v, data_raw)
@@ -640,7 +647,7 @@ class FileReader(Domain):
         Calculate the grid volume (optionally time varying) for the loaded grid.
 
         If the surface elevation data have been loaded (`zeta'), the volume varies with time, otherwise, the volume
-        is for the mean water depth (`h').
+        is for the mean water depth (`h'). To load the surface elevation with this call, set `load_zeta' to True.
 
         Parameters
         ----------
@@ -940,7 +947,7 @@ class FileReaderFromDict(FileReader):
 
     """
 
-    def __init__(self, fvcom):
+    def __init__(self, fvcom, filename=None):
         """
         Will initialise a FileReader object from an ncread dictionary. Some attempt is made to fill in missing
         information (dimensions mainly).
@@ -949,11 +956,30 @@ class FileReaderFromDict(FileReader):
         ----------
         fvcom : dict
             Output of ncread.
+        filename : str, pathlib.Path, optional
+            Give the file name used to create the ncread output so we can use self.load_data, if we want to.
 
         """
 
+        self._variables = list(fvcom.keys())
+
         # Prepare this object with all the objects we'll need later on (data, dims, time, grid, atts).
-        self._prep()
+        self.grid = _passive_data_store()
+        self.time = _passive_data_store()
+        self.data = _passive_data_store()
+        self.dims = _passive_data_store()
+        self.atts = _passive_data_store()
+
+        # If we've been given a file name, we can do a much more passable impression of a FileReader object.
+        if filename is not None:
+            self._fvcom = filename
+            self.ds = Dataset(self._fvcom, 'r')
+            self.dims = _MakeDimensions(self.ds)
+            self._load_time()
+            self._dims = self.time._dims  # grab the updated dimensions from the _TimeReader object.
+            self._load_grid(fvcom)
+            # Load the attributes of anything we've been asked to load.
+            self.atts = _AttributeReader(self.ds, self._variables)
 
         grid_names = ('lon', 'lat', 'lonc', 'latc', 'nv',
                       'h', 'h_center',
@@ -962,6 +988,9 @@ class FileReaderFromDict(FileReader):
                       'siglay', 'siglev')
         time_names = ('time', 'Times', 'datetime', 'Itime', 'Itime2')
 
+        # Preferentially use the data in the fvcom dictionary even if we've got a filename and dataset object since
+        # we don't know what dimensions might have been used to load the data and we want things to be as compatible
+        # as possible.
         for key in fvcom:
             if key in grid_names:
                 setattr(self.grid, key, fvcom[key])

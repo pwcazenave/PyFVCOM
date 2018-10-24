@@ -15,7 +15,7 @@ import inspect
 import multiprocessing
 import numpy as np
 
-from pyproj import Proj
+import pyproj
 from warnings import warn
 
 # Convert a string, tuple, float or int to a list.
@@ -58,7 +58,7 @@ def __convert(args):
 
     """
     a, b, zone, ellipsoid, datum, inverse = args
-    projection = Proj("+proj=utm +zone={}, +ellps={} +datum={} +units=m +no_defs".format(zone, ellipsoid, datum))
+    projection = pyproj.Proj("+proj=utm +zone={}, +ellps={} +datum={} +units=m +no_defs".format(zone, ellipsoid, datum))
     c, d = projection(a, b, inverse=inverse)
 
     return c, d
@@ -306,16 +306,7 @@ def lonlat_from_utm(eastings, northings, zone, ellipsoid='WGS84', datum='WGS84',
 
 def british_national_grid_to_lonlat(eastings, northings):
     """
-    Converts British National Grid coordinates to latitude and longitude on the
-    WGS84 spheroid.
-
-    Shamelessly taken from:
-        http://hannahfry.co.uk/2012/02/01/converting-british-national-grid-to-latitude-and-longitude-ii/
-
-    Modified to read NumPy arrays for eastings and northings. The conversion is
-    pretty crude (just a loop through all the input coordinates rather than
-    a proper array-based conversion). Also flipped order of the returned arrays
-    to be the same as the input (x then y).
+    Converts British National Grid coordinates to latitude and longitude on the WGS84 spheroid.
 
     Parameters
     ----------
@@ -326,128 +317,19 @@ def british_national_grid_to_lonlat(eastings, northings):
 
     Returns
     -------
-    Lon : ndarray
-        Array of converted longitudes.
-    Lat : ndarray
-        Array of converted latitudes.
+    lon : ndarray
+        Array of converted longitudes (decimal degrees)
+    lat : ndarray
+        Array of converted latitudes (decimal degrees)
 
     """
 
-    # E, N are the British national grid coordinates - eastings and northings
+    crs_british = pyproj.Proj(init='EPSG:27700')
+    crs_wgs84 = pyproj.Proj(init='EPSG:4326')
+    lon, lat = pyproj.transform(crs_british, crs_wgs84, eastings, northings)
 
-    # The Airy 180 semi-major and semi-minor axes used for OSGB36 (m)
-    a, b = 6377563.396, 6356256.909
-    # Scale factor on the central meridian
-    F0 = 0.9996012717
-    # Latitude of true origin (radians)
-    lat0 = np.deg2rad(49)
-    # Longtitude of true origin and central meridian (radians)
-    lon0 = np.deg2rad(-2)
-    # Northing & easting of true origin (m)
-    N0, E0 = -100000, 400000
-    # eccentricity squared
-    e2 = 1 - (b*b)/(a*a)
-    n = (a-b)/(a+b)
-
-    # Iterate through the pairs of values in eastings and northings.
-    lonlist, latlist = [], []
-    for xy in zip(eastings, northings):
-
-        E = xy[0]
-        N = xy[1]
-
-        # Initialise the iterative variables
-        lat, M = lat0, 0
-
-        while N - N0 - M >= 0.00001:  # Accurate to 0.01mm
-            lat = (N - N0 - M)/(a * F0) + lat
-            M1 = (1 + n + (5./4) * n**2 + (5./4) * n**3) * (lat-lat0)
-            M2 = (3*n + 3 * n**2 + (21./8)*n**3) * np.sin(lat-lat0) * \
-                np.cos(lat+lat0)
-            M3 = ((15./8) * n**2 + (15./8)*n**3) * np.sin(2*(lat-lat0)) * \
-                np.cos(2 * (lat+lat0))
-            M4 = (35./24)*n**3 * np.sin(3*(lat-lat0)) * np.cos(3*(lat+lat0))
-            # meridional arc
-            M = b * F0 * (M1 - M2 + M3 - M4)
-
-        # transverse radius of curvature
-        nu = a * F0 / np.sqrt(1-e2 * np.sin(lat)**2)
-
-        # meridional radius of curvature
-        rho = a * F0 * (1-e2) * (1-e2 * np.sin(lat)**2)**(-1.5)
-        eta2 = nu / rho-1
-
-        secLat = 1./np.cos(lat)
-        VII = np.tan(lat) / (2 * rho * nu)
-        VIII = np.tan(lat) / (24 * rho * nu**3) * (5 + 3 * np.tan(lat)**2 +
-            eta2 - 9 * np.tan(lat)**2 * eta2)
-        IX = np.tan(lat) / (720 * rho * nu**5) * (61 + 90 * np.tan(lat)**2 +
-            45 * np.tan(lat)**4)
-        X = secLat / nu
-        XI = secLat / (6 * nu**3) * (nu / rho + 2 * np.tan(lat)**2)
-        XII = secLat / (120 * nu**5) * (5 + 28 * np.tan(lat)**2 + 24 *
-            np.tan(lat)**4)
-        XIIA = secLat / (5040 * nu**7) * (61 + 662 * np.tan(lat)**2 + 1320 *
-            np.tan(lat)**4 + 720 * np.tan(lat)**6)
-        dE = E-E0
-
-        # These are on the wrong ellipsoid currently: Airy1830. (Denoted by _1)
-        lat_1 = lat - VII * dE**2 + VIII * dE**4 - IX * dE**6
-        lon_1 = lon0 + X * dE - XI * dE**3 + XII * dE**5 - XIIA * dE**7
-
-        # Want to convert to the GRS80 ellipsoid.
-        # First convert to cartesian from spherical polar coordinates
-        H = 0  # Third spherical coord.
-        x_1 = (nu / F0 + H) * np.cos(lat_1) * np.cos(lon_1)
-        y_1 = (nu / F0 + H) * np.cos(lat_1) * np.sin(lon_1)
-        z_1 = ((1-e2) * nu / F0 + H) * np.sin(lat_1)
-
-        # Perform Helmut transform (to go between Airy 1830 (_1) and GRS80 (_2))
-        s = -20.4894 * 10**-6  # The scale factor -1
-        # The translations along x,y,z axes respectively
-        tx, ty, tz = 446.448, -125.157, + 542.060
-        # The rotations along x,y,z respectively, in seconds
-        rxs, rys, rzs = 0.1502, 0.2470, 0.8421
-        # And in radians
-        rx = rxs * np.pi / (180 * 3600.)
-        ry = rys * np.pi / (180 * 3600.)
-        rz = rzs * np.pi / (180 * 3600.)
-
-        x_2 = tx + (1 + s) * x_1 + (-rz) * y_1 + (ry) * z_1
-        y_2 = ty + (rz) * x_1 + (1 + s) * y_1 + (-rx) * z_1
-        z_2 = tz + (-ry) * x_1 + (rx) * y_1 + (1 + s) * z_1
-
-        # Back to spherical polar coordinates from cartesian
-        # Need some of the characteristics of the new ellipsoid
-
-        # The GSR80 semi-major and semi-minor axes used for WGS84(m)
-        a_2, b_2 = 6378137.000, 6356752.3141
-        # The eccentricity of the GRS80 ellipsoid
-        e2_2 = 1 - (b_2 * b_2) / (a_2 * a_2)
-        p = np.sqrt(x_2**2 + y_2**2)
-
-        # Lat is obtained by an iterative proceedure:
-        lat = np.arctan2(z_2, (p * (1-e2_2)))  # Initial value
-        latold = 2 * np.pi
-        while abs(lat - latold) > 10**-16:
-            lat, latold = latold, lat
-            nu_2 = a_2 / np.sqrt(1-e2_2 * np.sin(latold)**2)
-            lat = np.arctan2(z_2 + e2_2 * nu_2 * np.sin(latold), p)
-
-        # Lon and height are then pretty easy
-        lon = np.arctan2(y_2, x_2)
-        H = p / np.cos(lat) - nu_2
-
-        # Convert to degrees
-        latlist.append(np.rad2deg(lat))
-        lonlist.append(np.rad2deg(lon))
-
-    # Convert to NumPy arrays.
-    lon = np.asarray(lonlist)
-    lat = np.asarray(latlist)
-
-    # Job's a good'n.
     return lon, lat
+
 
 def lonlat_decimal_from_degminsec(lon_degminsec, lat_degminsec):
     """
