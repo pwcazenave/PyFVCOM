@@ -703,22 +703,10 @@ class Model(Domain):
 
         dist = np.zeros(levels)
 
-        if h < hmin:
+        if h > hmin:
             dist = self.sigma_tanh(levels, du, dl)
         else:
-            dr = (h - du - dl) / h / (levels - ku - kl - 1)
-
-            for k in range(1, ku + 1):
-                dist[k] = dist[k - 1] - zku[k - 1] / h
-
-            for k in range(ku + 1, levels - kl):
-                dist[k] = dist[k - 1] - dr
-
-            kk = 0
-            for k in range(-kl, 0):
-                dist[k] = dist[k - 1] - zkl[kk] / h
-                kk += 1
-
+            dist = self.sigma_geometric(levels, 1)
         return dist
 
     def sigma_geometric(self, levels, p_sigma):
