@@ -731,8 +731,8 @@ class Model(Domain):
         dist = np.empty(levels) * np.nan
 
         if p_sigma == 1:
-            for k in range(levels):
-                dist[k] = -((k - 1) / (levels - 1))**p_sigma
+            for k in range(1,levels+1):
+                dist[k -1] = -((k - 1) / (levels - 1))**p_sigma
         else:
             split = int(np.floor((levels + 1) / 2))
             for k in range(split):
