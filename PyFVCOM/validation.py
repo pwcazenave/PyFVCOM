@@ -536,15 +536,15 @@ class BODCAnnualTideFile(object):
         Assumptions: file name of the form yearTLA.txt
 
         """
-        bodc_annual_tide_file._clean_tide_file(file_name, header_length)
+        self._clean_tide_file(file_name, header_length)
         with open(file_name) as f:
             header_lines = [next(f) for this_line in range(header_length)]
 
         for this_line in header_lines:
             if 'ongitude' in this_line:
-                self.lon = [float(s) for s in this_line.split() if bodc_annual_tide_file._is_number(s)][0]
+                self.lon = [float(s) for s in this_line.split() if self._is_number(s)][0]
             if 'atitude' in this_line:
-                self.lat = [float(s) for s in this_line.split() if bodc_annual_tide_file._is_number(s)][0]
+                self.lat = [float(s) for s in this_line.split() if self._is_number(s)][0]
             if 'Site' in this_line:
                 site_str_raw = this_line.split()[1:]
                 if len(site_str_raw) == 1:
@@ -570,10 +570,10 @@ class BODCAnnualTideFile(object):
         residual_data = []
         residual_flag = []
         for this_row in raw_data:
-            meas, error_code = bodc_annual_tide_file._parse_tide_obs(this_row[3])
+            meas, error_code = self._parse_tide_obs(this_row[3])
             elevation_data.append(meas)
             elevation_flag.append(error_code)
-            meas, error_code = bodc_annual_tide_file._parse_tide_obs(this_row[4])
+            meas, error_code = self._parse_tide_obs(this_row[4])
             residual_data.append(meas)
             residual_flag.append(error_code)
         self.elevation_data = elevation_data
