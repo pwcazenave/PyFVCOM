@@ -1254,7 +1254,7 @@ class CompareICES(object):
         TODO: Add docstring
 
         """
-        self.ices_data['time_dt'].append(sample_dt)    
+        self.ices_data['time_dt'].append(sample_dt)
         self.model_data['time_dt'].append(model_dt)
                         
         self.ices_data['lat'].append(sample['Latdeg'])
