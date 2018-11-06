@@ -988,7 +988,7 @@ class CompareData(object):
         """
         pass
 
-    def model_closest_time():
+    def model_closest_time(self):
         """
         TODO: Add docstring and code!
 
@@ -1043,12 +1043,12 @@ class CompareDataFileReader(CompareData):
 
 
 class CompareDataProbe(CompareData):
-    def retrieve_file_data():
     """
     TODO: Add docstring
 
     """
 
+    def retrieve_file_data(self):
         """
         TODO: Add docstring
 
