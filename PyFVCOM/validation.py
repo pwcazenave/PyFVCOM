@@ -869,7 +869,15 @@ class WCOObsFile(object):
 
 
 class WCOParseFile(WCOObsFile):
+    """
+    TODO: Add docstring
+
+    """
     def __init__(self, dirname):
+        """
+        TODO: Add docstring
+
+        """
         all_files = os.listdir(dirname)
         dt_list = []
         observation_dict_list = []
