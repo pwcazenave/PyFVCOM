@@ -168,7 +168,6 @@ class ValidationDB(object):
         self.conn.close()
 
 
-
 def dt_to_epochsec(time_to_convert):
     """
     Convert a datetime to our SQL database epoch.
@@ -624,10 +623,7 @@ class BODCAnnualTideFile(object):
         sp.call([sed_str], shell=True)
 
 
-#################################################################################################################
 """
-
-
 Validation against L4 and E1 CTD and buoy data
 
 observations_meta_data = {'buoy_name':'E1', 'year':'2006', 'ctd_new_file_type': False,
@@ -641,10 +637,8 @@ model_filestr_lambda = lambda m: '/data/euryale4/backup/mbe/Models/FVCOM/tamar_v
 available_months = np.arange(1,13)
 model_file_list = [model_filestr_lambda(this_month) for this_month in available_months]
 
-
-
-
 """
+
 
 class WCODB(ValidationDB):
     """ Work with an SQL database of data from PML's Western Channel Observatory. """
@@ -909,12 +903,12 @@ class CSVFormatter(object):
         """
         pass
 
-"""
-Do the comparison
 
 class CompareData(object):
+    """
+    Compare the WCO data.
 
-"""
+    """
 
     def __init__(self, buoy_list, model_ident, wco_database, max_time_threshold=dt.timedelta(hours=1), max_depth_threshold = 100, probe_depths=None):
         self.model_ident = model_ident
@@ -1065,12 +1059,6 @@ class CompareDataProbe(CompareData):
             self.model_data[this_buoy] = model_dict
 
 
-######################################################################################################################
-
-""" 
-Validation against ICES bottle data
-"""
-
 class CompareICES(object):
     """
     A class for comparing FVCOM(-ERSEM) models to ICES bottle data. It is a fvcom-ised and class-ised version of code written 
@@ -1211,7 +1199,7 @@ class CompareICES(object):
 
         """
 
-        # Read the ices datafile
+        # Read the ICES datafile
         df=read_hdf(self.ices_file,"df")
 
         start_step_len = 1000000
