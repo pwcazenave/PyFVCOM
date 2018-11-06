@@ -1,27 +1,28 @@
-import numpy as np
-import sqlite3 as sq
-import datetime as dt
-import subprocess as sp
-import glob as gb
-import os
-from pandas import read_hdf,DataFrame
-import matplotlib.path as mplPath
-
-import matplotlib.pyplot as plt
-
-from PyFVCOM.grid import get_boundary_polygons, vincenty_distance
-from PyFVCOM.read import FileReader
-from PyFVCOM.plot import Time, Plotter
-from PyFVCOM.stats import calculate_coefficient, rmse
-
-SQL_UNIX_EPOCH = dt.datetime(1970, 1, 1, 0, 0, 0)
-
 """
 Validation of model outputs against in situ data stored and extracted from a database.
 
 This also includes the code to build the databases of time series data sets.
 
 """
+
+import datetime as dt
+import glob as gb
+import os
+import sqlite3 as sq
+import subprocess as sp
+
+import matplotlib.path as mplPath
+import matplotlib.pyplot as plt
+import numpy as np
+from pandas import read_hdf
+
+from PyFVCOM.grid import get_boundary_polygons, vincenty_distance
+from PyFVCOM.plot import Time, Plotter
+from PyFVCOM.read import FileReader
+from PyFVCOM.stats import calculate_coefficient, rmse
+
+SQL_UNIX_EPOCH = dt.datetime(1970, 1, 1, 0, 0, 0)
+
 
 class validation_db(object):
     """ Work with an SQLite database. """
