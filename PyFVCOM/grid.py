@@ -781,6 +781,20 @@ class Domain(object):
                              np.asarray((x[triangles[:, 2]], y[triangles[:, 2]])).T)
 
 
+    def info(self):
+        """
+        Print out some salient information on the currently loaded grid.
+
+        """
+        print(f'Nodes: {self.dims.node}')
+        print(f'Elements: {self.dims.nele}')
+        print(f'Open boundaries: {len(self.grid.open_boundary)}')
+        print(f'Native grid coordinates: {self.grid.native_coordinates}')
+        if self.grid.native_coordinates == 'cartesian':
+            print(f'Native grid zone: {self.grid.zone}')
+        print(f'West/east/south/north: {"/".join(map(str, self.grid.bounding_box))}')
+
+
 def mp_interp_func(input):
     """
     Pass me to a multiprocessing.Pool().map() to quickly interpolate 2D data with LinearNDInterpolator.
