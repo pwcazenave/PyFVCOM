@@ -948,7 +948,7 @@ class FileReaderFromDict(FileReader):
 
     """
 
-    def __init__(self, fvcom):
+    def __init__(self, fvcom, filename=None):
         """
         Will initialise a FileReader object from an ncread dictionary. Some attempt is made to fill in missing
         information (dimensions mainly).
@@ -957,11 +957,30 @@ class FileReaderFromDict(FileReader):
         ----------
         fvcom : dict
             Output of ncread.
+        filename : str, pathlib.Path, optional
+            Give the file name used to create the ncread output so we can use self.load_data, if we want to.
 
         """
 
+        self._variables = list(fvcom.keys())
+
         # Prepare this object with all the objects we'll need later on (data, dims, time, grid, atts).
-        self._prep()
+        self.grid = _passive_data_store()
+        self.time = _passive_data_store()
+        self.data = _passive_data_store()
+        self.dims = _passive_data_store()
+        self.atts = _passive_data_store()
+
+        # If we've been given a file name, we can do a much more passable impression of a FileReader object.
+        if filename is not None:
+            self._fvcom = filename
+            self.ds = Dataset(self._fvcom, 'r')
+            self.dims = _MakeDimensions(self.ds)
+            self._load_time()
+            self._dims = self.time._dims  # grab the updated dimensions from the _TimeReader object.
+            self._load_grid(fvcom)
+            # Load the attributes of anything we've been asked to load.
+            self.atts = _AttributeReader(self.ds, self._variables)
 
         grid_names = ('lon', 'lat', 'lonc', 'latc', 'nv',
                       'h', 'h_center',
@@ -970,6 +989,9 @@ class FileReaderFromDict(FileReader):
                       'siglay', 'siglev')
         time_names = ('time', 'Times', 'datetime', 'Itime', 'Itime2')
 
+        # Preferentially use the data in the fvcom dictionary even if we've got a filename and dataset object since
+        # we don't know what dimensions might have been used to load the data and we want things to be as compatible
+        # as possible.
         for key in fvcom:
             if key in grid_names:
                 setattr(self.grid, key, fvcom[key])
