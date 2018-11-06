@@ -224,6 +224,7 @@ class _TimeReader(object):
 
         return time_idx
 
+
 class _AttributeReader(object):
     def __init__(self, dataset, variables=None, verbose=False):
         """
