@@ -24,7 +24,7 @@ from PyFVCOM.stats import calculate_coefficient, rmse
 SQL_UNIX_EPOCH = dt.datetime(1970, 1, 1, 0, 0, 0)
 
 
-class validation_db(object):
+class ValidationDB(object):
     """ Work with an SQLite database. """
 
     def __init__(self, db_name):
@@ -229,7 +229,7 @@ def plot_map(fvcom, tide_db_path, threshold=np.inf, legend=False, **kwargs):
 
     """
 
-    tide_db = db_tide(tide_db_path)
+    tide_db = TideDB(tide_db_path)
     gauge_names, gauge_locations = tide_db.get_gauge_locations(long_names=True)
 
     gauges_in_domain = []
@@ -287,7 +287,7 @@ def plot_tides(fvcom, db_name, threshold=500, figsize=(10, 10), **kwargs):
 
     """
 
-    tide_db = db_tide(db_name)
+    tide_db = TideDB(db_name)
 
     # Get all the gauges in the database and find the corresponding model nodes.
     gauge_names, gauge_locations = tide_db.get_gauge_locations(long_names=True)
@@ -362,7 +362,7 @@ def _make_normal_tide_series(h_series):
     return height_series
 
 
-class db_tide(validation_db):
+class TideDB(ValidationDB):
     """ Create a time series database and query it. """
 
     def make_bodc_tables(self):
@@ -388,7 +388,7 @@ class db_tide(validation_db):
         """
         for this_file in file_list:
             print('Inserting data from file: ' + this_file)
-            this_file_obj = bodc_annual_tide_file(this_file)
+            this_file_obj = BODCAnnualTideFile(this_file)
             try:
                 site_id = self.select_qry('sites', "site_tla == '" + this_file_obj.site_tla + "'", 'site_id')[0][0]
             except:
@@ -525,7 +525,7 @@ class db_tide(validation_db):
                        'error_flags': ['flag_id integer NOT NULL', 'flag_code text', 'flag_description text']}
 
 
-class bodc_annual_tide_file(object):
+class BODCAnnualTideFile(object):
     """
     TODO: Add docstring
 
@@ -646,7 +646,7 @@ model_file_list = [model_filestr_lambda(this_month) for this_month in available_
 
 """
 
-class db_wco(validation_db):
+class WCODB(ValidationDB):
     """ Work with an SQL database of data from PML's Western Channel Observatory. """
 
     def make_wco_tables(self):
@@ -691,7 +691,7 @@ class db_wco(validation_db):
         TODO: Add docstring
 
         """
-        file_obj = WCO_obs_file(filestr)
+        file_obj = WCOObsFile(filestr)
         self._insert_obs(file_obj, buoy_id, 0.0)
 
     def insert_buoy_file(self, filestr, buoy_id):
@@ -699,7 +699,7 @@ class db_wco(validation_db):
         TODO: Add docstring
 
         """
-        file_obj = WCO_obs_file(filestr, depth=0)
+        file_obj = WCOObsFile(filestr, depth=0)
         self._insert_obs(file_obj, buoy_id, 1.0)
 
     def insert_CTD_dir(self, dirstr, buoy_id):
@@ -707,7 +707,7 @@ class db_wco(validation_db):
         TODO: Add docstring
 
         """
-        file_obj = CTD_dir(dirstr)
+        file_obj = WCOParseFile(dirstr)
         self._insert_obs(file_obj, buoy_id, 0.0)
 
     def insert_csv_file(self, filestr, buoy_id):
@@ -715,7 +715,7 @@ class db_wco(validation_db):
         TODO: Add docstring
 
         """
-        file_obj = csv_formatted(filstr)
+        file_obj = CSVFormatter(filstr)
         self._insert_obs(file_obj, buoy_id)
 
     def _insert_obs(self, file_obj, buoy_id, measurement_id):
@@ -765,7 +765,7 @@ class db_wco(validation_db):
         return dates, data
 
 
-class WCO_obs_file(object):
+class WCOObsFile(object):
     def __init__(self, filename, depth=None):
         """
         TODO: Add docstring
@@ -874,7 +874,7 @@ class WCO_obs_file(object):
         return np.asarray(dt_list)
 
 
-class CTD_dir(WCO_obs_file):
+class WCOParseFile(WCOObsFile):
     def __init__(self, dirname):
         all_files = os.listdir(dirname)
         dt_list = []
@@ -896,7 +896,7 @@ class CTD_dir(WCO_obs_file):
         self.observation_dict['dt_time'] = np.hstack(dt_list)
 
 
-class csv_formatted(object):
+class CSVFormatter(object):
     """
     TODO: Add docstring and code!
 
@@ -912,10 +912,10 @@ class csv_formatted(object):
 """
 Do the comparison
 
+class CompareData(object):
 
 """
 
-class comp_data(object):
     def __init__(self, buoy_list, model_ident, wco_database, max_time_threshold=dt.timedelta(hours=1), max_depth_threshold = 100, probe_depths=None):
         self.model_ident = model_ident
         self.database_obj = wco_database
@@ -996,7 +996,7 @@ class comp_data(object):
         pass
 
 
-class comp_data_filereader(comp_data):
+class CompareDataFileReader(CompareData):
     def retrieve_file_data(self):
         """
         TODO: Add docstring
@@ -1042,7 +1042,7 @@ class comp_data_filereader(comp_data):
         return closest_time
 
 
-class comp_data_probe(comp_data):
+class CompareDataProbe(CompareData):
     def retrieve_file_data():
     """
     TODO: Add docstring
@@ -1071,7 +1071,7 @@ class comp_data_probe(comp_data):
 Validation against ICES bottle data
 """
 
-class ICES_comp(object):
+class CompareICES(object):
     """
     A class for comparing FVCOM(-ERSEM) models to ICES bottle data. It is a fvcom-ised and class-ised version of code written 
     by Momme Butenschon for NEMO output.
