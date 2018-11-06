@@ -538,7 +538,7 @@ class BODCAnnualTideFile(object):
         """
         self._clean_tide_file(file_name, header_length)
         with open(file_name) as f:
-            header_lines = [next(f) for this_line in range(header_length)]
+            header_lines = [next(f) for _ in range(header_length)]
 
         for this_line in header_lines:
             if 'ongitude' in this_line:
