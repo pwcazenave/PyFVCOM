@@ -789,31 +789,19 @@ class Domain(object):
         """
         This calculates the surface area of individual control volumes consisted of triangles with a common node point.
 
-        Parameters
-        ----------
-        x, y : ndarray
-            Node positions
-        tri : ndarray
-            Triangulation table for the unstructured grid.
-        node_control : bool
-            Set to False to disable calculation of node control volumes. Defaults to True.
-        element_control : bool
-            Set to False to disable calculation of element control volumes. Defaults to True.
-        noisy : bool
-            Set to True to enable verbose output.
-
         Provides
         --------
-        self.grid.art1 : ndarray
+        self.grid.art1 : np.ndarray
             Area of interior control volume (for node value integration)
-        self.grid.art2 : ndarray
+        self.grid.art2 : np.ndarray
             Sum area of all cells around each node.
 
         Notes
         -----
-        This is a python reimplementation of the FVCOM function CELL_AREA in cell_area.F. Whilst the reimplementation is
-        coded with efficiency in mind (the calculations occur in parallel), this is still slow for large grids. Please be
-        patient!
+
+        This is a python reimplementation of the FVCOM function CELL_AREA in cell_area.F. Whilst the reimplementation
+        is coded with efficiency in mind (the calculations occur in parallel), this is still slow for large grids.
+        Please be patient!
 
         """
 
@@ -821,27 +809,12 @@ class Domain(object):
 
     def calculate_element_lengths(self):
         """
-        Given a list of triangle nodes, calculate the length of each side of each
-        triangle and return as an array of lengths. Units are in the original input
-        units (no conversion from lat/long to metres, for example).
-
-        The arrays triangles, x and y can be created by running read_sms_mesh(),
-        read_fvcom_mesh() or read_mike_mesh() on a given SMS, FVCOM or MIKE grid
-        file.
-
-        Parameters
-        ----------
-        triangles : ndarray
-            Integer array of shape (ntri, 3). Each triangle is composed of
-            three points and this contains the three node numbers (stored in
-            nodes) which refer to the coordinates in X and Y (see below).
-        x, y : ndarray
-            Coordinates of each grid node.
+        Calculate the length of each side of each triangle in the grid and return as an array of lengths (in metres).
 
         Provides
         --------
         self.grid.lengths : np.ndarray
-            The lengths of each vertex in each triangle in the grid.
+            The lengths of each vertex in each element in the grid.
 
         """
 
@@ -849,23 +822,17 @@ class Domain(object):
 
     def gradient(self, field):
         """
-        Returns the gradient of `z' defined on the irregular mesh with Delaunay
-        triangulation `t'. `dx' corresponds to the partial derivative dZ/dX,
-        and `dy' corresponds to the partial derivative dZ/dY.
+        Returns the gradient of `field' defined on the model grid.
 
         Parameters
         ----------
-        x, y, z : array_like
-            Horizontal (`x' and `y') positions and vertical position (`z').
-        t : array_like, optional
-            Connectivity table for the grid. If omitted, one will be calculated
-            automatically.
+        field : np.ndarray
+            Array (on nodes) for which to calculate the gradient.
 
         Returns
         -------
-        dx, dy : ndarray
-            `dx' corresponds to the partial derivative dZ/dX, and `dy'
-            corresponds to the partial derivative dZ/dY.
+        dx, dy : np.ndarray
+            `dx' corresponds to the partial derivative dZ/dX, and `dy' corresponds to the partial derivative dZ/dY.
         """
 
         dx, dy = trigradient(self.x, self.y, field, self.triangles)
@@ -880,18 +847,13 @@ class Domain(object):
 
         Parameters
         ----------
-        elems : ndarray
-            Array of unstructured grid element values to move to the element
+        field : np.ndarray
+            Array of unstructured grid element values to move to the grid
             nodes.
-        tri : ndarray
-            Array of shape (nelem, 3) comprising the list of connectivity
-            for each element.
-        nvert : int, optional
-            Number of nodes (vertices) in the unstructured grid.
 
         Returns
         -------
-        nodes : ndarray
+        nodes : np.ndarray
             Array of values at the grid nodes.
 
         """
@@ -906,16 +868,12 @@ class Domain(object):
 
         Parameters
         ----------
-        nodes : ndarray
-            Array of unstructured grid node values to move to the element
-            centres.
-        tri : ndarray
-            Array of shape (nelem, 3) comprising the list of connectivity
-            for each element.
+        field : np.ndarray
+            Array of unstructured grid node values to move to the element centres.
 
         Returns
         -------
-        elems : ndarray
+        elems : np.ndarray
             Array of values at the grid nodes.
 
         """
