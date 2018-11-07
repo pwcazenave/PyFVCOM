@@ -453,7 +453,7 @@ class FileReader(Domain):
 
         Notes
         -----
-        - fvcom1 and fvcom2 have to cover the exact same spatial domain
+        - both object must cover the exact same spatial domain
         - last time step of fvcom1 must be <= to the first time step of fvcom2
         - if variables have not been loaded, then subsequent loads will load only the data from the first netCDF.
         Make sure you load all your variables before you merge objects.
