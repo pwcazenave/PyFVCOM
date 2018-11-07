@@ -768,17 +768,22 @@ class Domain(object):
 
         Provides
         --------
-        area : np.ndarray
+        self.grid.areas : np.ndarray
             The area of each triangular element in the grid.
+
+        Notes
+        -----
+        This differs from self.calculate_control_area_and_volume which provides what's needed for integrating fields
+        in the domain. This simply calculates the area of each triangle in the domain.
 
         """
 
         triangles = self.grid.triangles
         x = self.grid.x
         y = self.grid.y
-        self.area = get_area(np.asarray((x[triangles[:, 0]], y[triangles[:, 0]])).T,
-                             np.asarray((x[triangles[:, 1]], y[triangles[:, 1]])).T,
-                             np.asarray((x[triangles[:, 2]], y[triangles[:, 2]])).T)
+        self.grid.areas = get_area(np.asarray((x[triangles[:, 0]], y[triangles[:, 0]])).T,
+                                  np.asarray((x[triangles[:, 1]], y[triangles[:, 1]])).T,
+                                  np.asarray((x[triangles[:, 2]], y[triangles[:, 2]])).T)
 
     def calculate_control_area_and_volume(self):
         """
