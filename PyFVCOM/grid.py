@@ -1299,20 +1299,20 @@ class OpenBoundary(object):
 
         lats : np.ndarray
             Latitudes of the positions to predict.
-        times : ndarray
+        times : np.ndarray
             Array of matplotlib datenums (see `matplotlib.dates.num2date').
         coef : utide.utilities.Bunch
             Configuration options for utide.
-        amplitudes : ndarray
+        amplitudes : np.ndarray
             Amplitude of the relevant constituents shaped [nconst].
-        phases : ndarray
+        phases : np.ndarray
             Array of the phase of the relevant constituents shaped [nconst].
         noisy : bool
             Set to true to enable verbose output. Defaults to False (no output).
 
         Returns
         -------
-        zeta : ndarray
+        zeta : np.ndarray
             Time series of surface elevations.
 
         Notes
@@ -1496,6 +1496,7 @@ class OpenBoundary(object):
         layer_thickness = self.sigma.levels_center.T[0:-1,:] - self.sigma.levels_center.T[1:,:]
         self.nest.ua = zbar(self.nest.u, layer_thickness)
         self.nest.va = zbar(self.nest.v, layer_thickness)
+
 
 def read_sms_mesh(mesh, nodestrings=False):
     """
@@ -4206,6 +4207,7 @@ def isintriangle(tri_x, tri_y, point_x, point_y):
     is_in = 0 <= a <= 1 and 0 <= b <= 1 and 0 <= c <= 1
 
     return is_in
+
 
 class Graph(object):
     """
