@@ -528,6 +528,38 @@ class FileReader(Domain):
 
         return idem
 
+    def __sub__(self, fvcom, debug=False):
+        """
+        Override the default special method to handle subtracting two objects to yield the differences in the data.
+
+        Parameters
+        ----------
+        fvcom : PyFVCOM.FileReader
+            Other data to subtract from the currently loaded data.
+
+        Returns
+        -------
+        idem : PyFVCOM.FileReader
+            Differences in loaded data as a `PyFVCOM.FileReader' class.
+
+        Notes
+        -----
+        - both object must cover the exact same spatial domain
+        - both objects can have different dates but must have the same number of time steps.
+        - times are retained from the current object (i.e. `self', not `fvcom')
+
+        """
+
+        idem = copy.copy(self)  # somewhere to store the differences
+
+        if dir(self.data) != dir(fvcom.data):
+            raise ValueError("Inconsistent variables in the currently loaded data and the supplied data (`fvcom')")
+
+        for var1, var2 in zip(self.data, fvcom.data):
+            setattr(idem.data, var1, getattr(self.data, var1) - getattr(fvcom.data, var2))
+
+        return idem
+
     def _load_grid(self, fvcom):
         self.grid = GridReaderNetCDF(fvcom, dims=self._dims, zone=self._zone, debug=self._debug, verbose=self._noisy)
     
