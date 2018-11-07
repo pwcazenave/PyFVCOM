@@ -272,11 +272,11 @@ class GridReaderNetCDF(object):
                     print('Missing {} from the netCDF file. Trying to recreate it from other sources.'.format(var))
                 if self.nv.max() == len(self.x):
                     try:
-                        setattr(self, var, nodes2elems(getattr(self, var.split('_')[0]), self.triangles))
+                        setattr(self, var, self.to_elems(getattr(self, var.split('_')[0])))
                     except IndexError:
                         # Maybe the array's the wrong way around. Flip it and try again.
                         setattr(self, var,
-                                nodes2elems(getattr(self, var.split('_')[0]).T, self.triangles))
+                                self.to_elems(getattr(self, var.split('_')[0]).T))
                 else:
                     # The triangulation is invalid, so we can't properly move our existing data, so just set things
                     # to 0 but at least they're the right shape. Warn accordingly.
@@ -489,11 +489,11 @@ class _GridReader(object):
         self.types = types
         self.open_boundary_nodes = nodestrings
         # Make element-centred versions of everything.
-        self.xc = nodes2elems(self.x, self.triangles)
-        self.yc = nodes2elems(self.y, self.triangles)
-        self.lonc = nodes2elems(self.lon, self.triangles)
-        self.latc = nodes2elems(self.lat, self.triangles)
-        self.h_center = nodes2elems(self.h, self.triangles)
+        self.xc = self.to_elems(self.x)
+        self.yc = self.to_elems(self.y)
+        self.lonc = self.to_elems(self.lon)
+        self.latc = self.to_elems(self.lat)
+        self.h_center = self.to_elems(self.h)
 
         # Add the coordinate ranges too
         self.lon_range = np.ptp(self.lon)
