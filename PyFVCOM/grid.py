@@ -780,6 +780,143 @@ class Domain(object):
                              np.asarray((x[triangles[:, 1]], y[triangles[:, 1]])).T,
                              np.asarray((x[triangles[:, 2]], y[triangles[:, 2]])).T)
 
+    def calculate_control_area_and_volume(self):
+        """
+        This calculates the surface area of individual control volumes consisted of triangles with a common node point.
+
+        Parameters
+        ----------
+        x, y : ndarray
+            Node positions
+        tri : ndarray
+            Triangulation table for the unstructured grid.
+        node_control : bool
+            Set to False to disable calculation of node control volumes. Defaults to True.
+        element_control : bool
+            Set to False to disable calculation of element control volumes. Defaults to True.
+        noisy : bool
+            Set to True to enable verbose output.
+
+        Provides
+        --------
+        self.grid.art1 : ndarray
+            Area of interior control volume (for node value integration)
+        self.grid.art2 : ndarray
+            Sum area of all cells around each node.
+
+        Notes
+        -----
+        This is a python reimplementation of the FVCOM function CELL_AREA in cell_area.F. Whilst the reimplementation is
+        coded with efficiency in mind (the calculations occur in parallel), this is still slow for large grids. Please be
+        patient!
+
+        """
+
+        self.grid.art1, self.grid.art2 = control_volumes(self.x, self.y, self.triangles)
+
+    def calculate_element_lengths(self):
+        """
+        Given a list of triangle nodes, calculate the length of each side of each
+        triangle and return as an array of lengths. Units are in the original input
+        units (no conversion from lat/long to metres, for example).
+
+        The arrays triangles, x and y can be created by running read_sms_mesh(),
+        read_fvcom_mesh() or read_mike_mesh() on a given SMS, FVCOM or MIKE grid
+        file.
+
+        Parameters
+        ----------
+        triangles : ndarray
+            Integer array of shape (ntri, 3). Each triangle is composed of
+            three points and this contains the three node numbers (stored in
+            nodes) which refer to the coordinates in X and Y (see below).
+        x, y : ndarray
+            Coordinates of each grid node.
+
+        Provides
+        --------
+        self.grid.lengths : np.ndarray
+            The lengths of each vertex in each triangle in the grid.
+
+        """
+
+        self.grid.lengths = element_side_lengths(self.triangles, self.x, self.y)
+
+    def gradient(self, field):
+        """
+        Returns the gradient of `z' defined on the irregular mesh with Delaunay
+        triangulation `t'. `dx' corresponds to the partial derivative dZ/dX,
+        and `dy' corresponds to the partial derivative dZ/dY.
+
+        Parameters
+        ----------
+        x, y, z : array_like
+            Horizontal (`x' and `y') positions and vertical position (`z').
+        t : array_like, optional
+            Connectivity table for the grid. If omitted, one will be calculated
+            automatically.
+
+        Returns
+        -------
+        dx, dy : ndarray
+            `dx' corresponds to the partial derivative dZ/dX, and `dy'
+            corresponds to the partial derivative dZ/dY.
+        """
+
+        dx, dy = trigradient(self.x, self.y, field, self.triangles)
+
+        return dx, dy
+
+    def to_nodes(self, field):
+        """
+        Calculate a nodal value based on the average value for the elements
+        of which it is a part. This necessarily involves an average, so the
+        conversion from nodes2elems and elems2nodes is not reversible.
+
+        Parameters
+        ----------
+        elems : ndarray
+            Array of unstructured grid element values to move to the element
+            nodes.
+        tri : ndarray
+            Array of shape (nelem, 3) comprising the list of connectivity
+            for each element.
+        nvert : int, optional
+            Number of nodes (vertices) in the unstructured grid.
+
+        Returns
+        -------
+        nodes : ndarray
+            Array of values at the grid nodes.
+
+        """
+
+        return elems2nodes(field, self.triangles)
+
+    def to_elements(self, field):
+        """
+        Calculate an element-centre value based on the average value for the
+        nodes from which it is formed. This involves an average, so the
+        conversion from nodes to elements cannot be reversed without smoothing.
+
+        Parameters
+        ----------
+        nodes : ndarray
+            Array of unstructured grid node values to move to the element
+            centres.
+        tri : ndarray
+            Array of shape (nelem, 3) comprising the list of connectivity
+            for each element.
+
+        Returns
+        -------
+        elems : ndarray
+            Array of values at the grid nodes.
+
+        """
+
+        return nodes2elems(field, self.triangles)
+
 
 def mp_interp_func(input):
     """
