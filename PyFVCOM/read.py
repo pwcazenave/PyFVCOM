@@ -439,18 +439,20 @@ class FileReader(Domain):
 
     def __add__(self, fvcom, debug=False):
         """
-        This special method means we can stack two FileReader objects in time through a simple addition (e.g. fvcom1
-        += fvcom2)
+        This special method means we can stack two FileReader objects in time through a simple addition. For example:
+
+        >>> fvcom1 = PyFVCOM.read.FileReader('file1.nc')
+        >>> fvcom1 += PyFVCOM.read.FileReader('file2.nc')
 
         Parameters
         ----------
-        fvcom : PyFVCOM.FileReader
-            Previous time to which to add ourselves.
+        fvcom : PyFVCOM.read.FileReader
+            Subsequent time to add to ourselves.
 
         Returns
         -------
-        idem : PyFVCOM.FileReader
-            Concatenated (in time) `PyFVCOM.FileReader' class.
+        idem : PyFVCOM.read.FileReader
+            Concatenated (in time) `PyFVCOM.read.FileReader' class.
 
         Notes
         -----
@@ -535,19 +537,27 @@ class FileReader(Domain):
 
         Parameters
         ----------
-        fvcom : PyFVCOM.FileReader
+        fvcom : PyFVCOM.read.FileReader
             Other data to subtract from the currently loaded data.
 
         Returns
         -------
-        idem : PyFVCOM.FileReader
-            Differences in loaded data as a `PyFVCOM.FileReader' class.
+        idem : PyFVCOM.read.FileReader
+            Differences in loaded data as a `PyFVCOM.read.FileReader' class.
 
         Notes
         -----
         - both objects must cover the exact same spatial domain
         - both objects can have different dates but must have the same number of time steps.
         - times are retained from the current object (i.e. `self', not `fvcom')
+
+        Example
+        -------
+        >>> file1 = PyFVCOM.read.FileReader('file1.nc', variables=['u', 'v', 'zeta'])
+        >>> file2 = PyFVCOM.read.FileReader('file2.nc', variables=['u', 'v', 'zeta'])
+        >>> diff = file1 - file2
+        # List the variables for which we now have a difference.
+        >>> [a for a in dir(diff.data) if not a.startswith('_')
 
         """
 
