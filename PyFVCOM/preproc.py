@@ -1000,7 +1000,11 @@ class Model(Domain):
             Set to True to overwrite any automatically or already loaded open boundary nodes. Defaults to False.
 
         """
-        if np.any(self.grid.open_boundary_nodes) and np.any(self.grid.types) and reload:
+        try:
+            open_bds = np.asarray([np.any(this_bd) for this_bd in self.grid.open_boundary_nodes])
+        except:
+            open_bds = self.grid.open_boundary_nodes
+        if np.any(open_bds) and np.any(self.grid.types) and reload:
             # We've already got some, so warn and return.
             warn('Open boundary nodes already loaded and reload set to False.')
             return

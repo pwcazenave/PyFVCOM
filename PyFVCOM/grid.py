@@ -881,6 +881,20 @@ class Domain(object):
         return nodes2elems(field, self.triangles)
 
 
+    def info(self):
+        """
+        Print out some salient information on the currently loaded grid.
+
+        """
+        print(f'Nodes: {self.dims.node}')
+        print(f'Elements: {self.dims.nele}')
+        print(f'Open boundaries: {len(self.grid.open_boundary)}')
+        print(f'Native grid coordinates: {self.grid.native_coordinates}')
+        if self.grid.native_coordinates == 'cartesian':
+            print(f'Native grid zone: {self.grid.zone}')
+        print(f'West/east/south/north: {"/".join(map(str, self.grid.bounding_box))}')
+
+
 def mp_interp_func(input):
     """
     Pass me to a multiprocessing.Pool().map() to quickly interpolate 2D data with LinearNDInterpolator.
@@ -1550,7 +1564,7 @@ class OpenBoundary(object):
                                       np.tile(y, [nz, nt, 1]).transpose(1, 0, 2).ravel(),
                                       np.tile(x, [nz, nt, 1]).transpose(1, 0, 2).ravel())).T
             ft = RegularGridInterpolator((coarse.time.time, coarse.grid.depth, coarse.grid.lat, coarse.grid.lon),
-                                             getattr(coarse.data, coarse_name), method='linear', fill_value=np.nan)
+                                             np.ma.filled(getattr(coarse.data, coarse_name), np.nan), method='linear', fill_value=np.nan)
             # Reshape the results to match the un-ravelled boundary_grid array.
             interpolated_coarse_data = ft(boundary_grid).reshape([nt, nz, -1])
             # Drop the interpolated data into the nest object.
