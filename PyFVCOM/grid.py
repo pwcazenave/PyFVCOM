@@ -4010,7 +4010,7 @@ def shape_coefficients(xc, yc, nbe, isbce):
 
         delt = ((x1 * y2 - x2 * y1)**2 + (x1 * y3 - x3 * y1)**2 + (x2 * y3 - x3 * y2)**2) * 1000
 
-        a1u[i, 0] = (y1 + y2 + y3) * (x1 * y1 + x2 * y2+x3 * y3)- (x1 + x2 + x3) * (y1**2 + y2**2 + y3**2)
+        a1u[i, 0] = (y1 + y2 + y3) * (x1 * y1 + x2 * y2 + x3 * y3)- (x1 + x2 + x3) * (y1**2 + y2**2 + y3**2)
         a1u[i, 0] = a1u[i, 0] / delt
         a1u[i, 1] = (y1**2 + y2**2 + y3**2) * x1 - (x1 * y1 + x2 * y2 + x3 * y3) * y1
         a1u[i, 1] = a1u[i, 1] / delt
@@ -4019,7 +4019,7 @@ def shape_coefficients(xc, yc, nbe, isbce):
         a1u[i, 3] = (y1**2 + y2**2 + y3**2) * x3 - (x1 * y1 + x2 * y2 + x3 * y3) * y3
         a1u[i, 3] = a1u[i, 3] / delt
 
-        a2u[i, 0] = (x1 + x2 + x3) * (x1 * y1 + x2 * y2+x3 * y3)- (y1 + y2 + y3) * (x1**2 + x2**2 + x3**2)
+        a2u[i, 0] = (x1 + x2 + x3) * (x1 * y1 + x2 * y2 + x3 * y3)- (y1 + y2 + y3) * (x1**2 + x2**2 + x3**2)
         a2u[i, 0] = a2u[i, 0] / delt
         a2u[i, 1] = (x1**2 + x2**2 + x3**2) * y1 - (x1 * y1 + x2 * y2 + x3 * y3) * x1
         a2u[i, 1] = a2u[i, 1] / delt
