@@ -439,22 +439,24 @@ class FileReader(Domain):
 
     def __add__(self, fvcom, debug=False):
         """
-        This special method means we can stack two FileReader objects in time through a simple addition (e.g. fvcom1
-        += fvcom2)
+        This special method means we can stack two FileReader objects in time through a simple addition. For example:
+
+        >>> fvcom1 = PyFVCOM.read.FileReader('file1.nc')
+        >>> fvcom1 += PyFVCOM.read.FileReader('file2.nc')
 
         Parameters
         ----------
-        fvcom : PyFVCOM.FileReader
-            Previous time to which to add ourselves.
+        fvcom : PyFVCOM.read.FileReader
+            Subsequent time to add to ourselves.
 
         Returns
         -------
-        idem : PyFVCOM.FileReader
-            Concatenated (in time) `PyFVCOM.FileReader' class.
+        idem : PyFVCOM.read.FileReader
+            Concatenated (in time) `PyFVCOM.read.FileReader' class.
 
         Notes
         -----
-        - fvcom1 and fvcom2 have to cover the exact same spatial domain
+        - both objects must cover the exact same spatial domain
         - last time step of fvcom1 must be <= to the first time step of fvcom2
         - if variables have not been loaded, then subsequent loads will load only the data from the first netCDF.
         Make sure you load all your variables before you merge objects.
@@ -526,6 +528,46 @@ class FileReader(Domain):
 
         # Update dimensions accordingly.
         idem.dims.time = len(idem.time.time)
+
+        return idem
+
+    def __sub__(self, fvcom, debug=False):
+        """
+        Override the default special method to handle subtracting two objects to yield the differences in the data.
+
+        Parameters
+        ----------
+        fvcom : PyFVCOM.read.FileReader
+            Other data to subtract from the currently loaded data.
+
+        Returns
+        -------
+        idem : PyFVCOM.read.FileReader
+            Differences in loaded data as a `PyFVCOM.read.FileReader' class.
+
+        Notes
+        -----
+        - both objects must cover the exact same spatial domain
+        - both objects can have different dates but must have the same number of time steps.
+        - times are retained from the current object (i.e. `self', not `fvcom')
+
+        Example
+        -------
+        >>> file1 = PyFVCOM.read.FileReader('file1.nc', variables=['u', 'v', 'zeta'])
+        >>> file2 = PyFVCOM.read.FileReader('file2.nc', variables=['u', 'v', 'zeta'])
+        >>> diff = file1 - file2
+        # List the variables for which we now have a difference.
+        >>> [a for a in dir(diff.data) if not a.startswith('_')
+
+        """
+
+        idem = copy.copy(self)  # somewhere to store the differences
+
+        if dir(self.data) != dir(fvcom.data):
+            raise ValueError("Inconsistent variables in the currently loaded data and the supplied data (`fvcom')")
+
+        for var1, var2 in zip(self.data, fvcom.data):
+            setattr(idem.data, var1, getattr(self.data, var1) - getattr(fvcom.data, var2))
 
         return idem
 

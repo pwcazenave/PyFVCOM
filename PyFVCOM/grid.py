@@ -272,11 +272,11 @@ class GridReaderNetCDF(object):
                     print('Missing {} from the netCDF file. Trying to recreate it from other sources.'.format(var))
                 if self.nv.max() == len(self.x):
                     try:
-                        setattr(self, var, nodes2elems(getattr(self, var.split('_')[0]), self.triangles))
+                        setattr(self, var, self.to_elems(getattr(self, var.split('_')[0])))
                     except IndexError:
                         # Maybe the array's the wrong way around. Flip it and try again.
                         setattr(self, var,
-                                nodes2elems(getattr(self, var.split('_')[0]).T, self.triangles))
+                                self.to_elems(getattr(self, var.split('_')[0]).T))
                 else:
                     # The triangulation is invalid, so we can't properly move our existing data, so just set things
                     # to 0 but at least they're the right shape. Warn accordingly.
@@ -489,11 +489,11 @@ class _GridReader(object):
         self.types = types
         self.open_boundary_nodes = nodestrings
         # Make element-centred versions of everything.
-        self.xc = nodes2elems(self.x, self.triangles)
-        self.yc = nodes2elems(self.y, self.triangles)
-        self.lonc = nodes2elems(self.lon, self.triangles)
-        self.latc = nodes2elems(self.lat, self.triangles)
-        self.h_center = nodes2elems(self.h, self.triangles)
+        self.xc = self.to_elems(self.x)
+        self.yc = self.to_elems(self.y)
+        self.lonc = self.to_elems(self.lon)
+        self.latc = self.to_elems(self.lat)
+        self.h_center = self.to_elems(self.h)
 
         # Add the coordinate ranges too
         self.lon_range = np.ptp(self.lon)
@@ -768,17 +768,117 @@ class Domain(object):
 
         Provides
         --------
-        area : np.ndarray
+        self.grid.areas : np.ndarray
             The area of each triangular element in the grid.
+
+        Notes
+        -----
+        This differs from self.calculate_control_area_and_volume which provides what's needed for integrating fields
+        in the domain. This simply calculates the area of each triangle in the domain.
 
         """
 
         triangles = self.grid.triangles
         x = self.grid.x
         y = self.grid.y
-        self.area = get_area(np.asarray((x[triangles[:, 0]], y[triangles[:, 0]])).T,
-                             np.asarray((x[triangles[:, 1]], y[triangles[:, 1]])).T,
-                             np.asarray((x[triangles[:, 2]], y[triangles[:, 2]])).T)
+        self.grid.areas = get_area(np.asarray((x[triangles[:, 0]], y[triangles[:, 0]])).T,
+                                  np.asarray((x[triangles[:, 1]], y[triangles[:, 1]])).T,
+                                  np.asarray((x[triangles[:, 2]], y[triangles[:, 2]])).T)
+
+    def calculate_control_area_and_volume(self):
+        """
+        This calculates the surface area of individual control volumes consisted of triangles with a common node point.
+
+        Provides
+        --------
+        self.grid.art1 : np.ndarray
+            Area of interior control volume (for node value integration)
+        self.grid.art2 : np.ndarray
+            Sum area of all cells around each node.
+
+        Notes
+        -----
+
+        This is a python reimplementation of the FVCOM function CELL_AREA in cell_area.F. Whilst the reimplementation
+        is coded with efficiency in mind (the calculations occur in parallel), this is still slow for large grids.
+        Please be patient!
+
+        """
+
+        self.grid.art1, self.grid.art2 = control_volumes(self.x, self.y, self.triangles)
+
+    def calculate_element_lengths(self):
+        """
+        Calculate the length of each side of each triangle in the grid and return as an array of lengths (in metres).
+
+        Provides
+        --------
+        self.grid.lengths : np.ndarray
+            The lengths of each vertex in each element in the grid.
+
+        """
+
+        self.grid.lengths = element_side_lengths(self.triangles, self.x, self.y)
+
+    def gradient(self, field):
+        """
+        Returns the gradient of `field' defined on the model grid.
+
+        Parameters
+        ----------
+        field : np.ndarray
+            Array (on nodes) for which to calculate the gradient.
+
+        Returns
+        -------
+        dx, dy : np.ndarray
+            `dx' corresponds to the partial derivative dZ/dX, and `dy' corresponds to the partial derivative dZ/dY.
+        """
+
+        dx, dy = trigradient(self.x, self.y, field, self.triangles)
+
+        return dx, dy
+
+    def to_nodes(self, field):
+        """
+        Calculate a nodal value based on the average value for the elements
+        of which it is a part. This necessarily involves an average, so the
+        conversion from nodes2elems and elems2nodes is not reversible.
+
+        Parameters
+        ----------
+        field : np.ndarray
+            Array of unstructured grid element values to move to the grid
+            nodes.
+
+        Returns
+        -------
+        nodes : np.ndarray
+            Array of values at the grid nodes.
+
+        """
+
+        return elems2nodes(field, self.triangles)
+
+    def to_elements(self, field):
+        """
+        Calculate an element-centre value based on the average value for the
+        nodes from which it is formed. This involves an average, so the
+        conversion from nodes to elements cannot be reversed without smoothing.
+
+        Parameters
+        ----------
+        field : np.ndarray
+            Array of unstructured grid node values to move to the element centres.
+
+        Returns
+        -------
+        elems : np.ndarray
+            Array of values at the grid nodes.
+
+        """
+
+        return nodes2elems(field, self.triangles)
 
 
     def info(self):
@@ -1313,20 +1413,20 @@ class OpenBoundary(object):
 
         lats : np.ndarray
             Latitudes of the positions to predict.
-        times : ndarray
+        times : np.ndarray
             Array of matplotlib datenums (see `matplotlib.dates.num2date').
         coef : utide.utilities.Bunch
             Configuration options for utide.
-        amplitudes : ndarray
+        amplitudes : np.ndarray
             Amplitude of the relevant constituents shaped [nconst].
-        phases : ndarray
+        phases : np.ndarray
             Array of the phase of the relevant constituents shaped [nconst].
         noisy : bool
             Set to true to enable verbose output. Defaults to False (no output).
 
         Returns
         -------
-        zeta : ndarray
+        zeta : np.ndarray
             Time series of surface elevations.
 
         Notes
@@ -1515,6 +1615,7 @@ class OpenBoundary(object):
         self.nest.ua = zbar(self.nest.u, layer_thickness)
         self.nest.va = zbar(self.nest.v, layer_thickness)
 
+
 def read_sms_mesh(mesh, nodestrings=False):
     """
     Reads in the SMS unstructured grid format. Also creates IDs for output to
@@ -1529,16 +1630,16 @@ def read_sms_mesh(mesh, nodestrings=False):
 
     Returns
     -------
-    triangle : ndarray
+    triangle : np.ndarray
         Integer array of shape (nele, 3). Each triangle is composed of
         three points and this contains the three node numbers (stored in
         nodes) which refer to the coordinates in X and Y (see below). Values
         are python-indexed.
-    nodes : ndarray
+    nodes : np.ndarray
         Integer number assigned to each node.
-    X, Y, Z : ndarray
+    X, Y, Z : np.ndarray
         Coordinates of each grid node and any associated Z value.
-    types : ndarray
+    types : np.ndarray
         Classification for each node string based on the number of node
         strings + 2. This is mainly for use if converting from SMS .2dm
         grid format to DHI MIKE21 .mesh format since the latter requires
@@ -1632,13 +1733,13 @@ def read_fvcom_mesh(mesh):
 
     Returns
     -------
-    triangle : ndarray
+    triangle : np.ndarray
         Integer array of shape (ntri, 3). Each triangle is composed of
         three points and this contains the three node numbers (stored in
         nodes) which refer to the coordinates in X and Y (see below).
-    nodes : ndarray
+    nodes : np.ndarray
         Integer number assigned to each node.
-    X, Y, Z : ndarray
+    X, Y, Z : np.ndarray
         Coordinates of each grid node and any associated Z value.
 
     """
@@ -1695,15 +1796,15 @@ def read_mike_mesh(mesh, flipZ=True):
 
     Returns
     -------
-    triangle : ndarray
+    triangle : np.ndarray
         Integer array of shape (ntri, 3). Each triangle is composed of
         three points and this contains the three node numbers (stored in
         nodes) which refer to the coordinates in X and Y (see below).
-    nodes : ndarray
+    nodes : np.ndarray
         Integer number assigned to each node.
-    X, Y, Z : ndarray
+    X, Y, Z : np.ndarray
         Coordinates of each grid node and any associated Z value.
-    types : ndarray
+    types : np.ndarray
         Classification for each open boundary. DHI MIKE21 .mesh format
         requires unique IDs for each open boundary (with 0 and 1
         reserved for land and sea nodes).
@@ -1762,13 +1863,13 @@ def read_gmsh_mesh(mesh):
 
     Returns
     -------
-    triangle : ndarray
+    triangle : np.ndarray
         Integer array of shape (ntri, 3). Each triangle is composed of three
         points and this contains the three node numbers (stored in nodes) which
         refer to the coordinates in X and Y (see below).
-    nodes : ndarray
+    nodes : np.ndarray
         Integer number assigned to each node.
-    X, Y, Z : ndarray
+    X, Y, Z : np.ndarray
         Coordinates of each grid node and any associated Z value.
 
     """
@@ -1870,12 +1971,12 @@ def read_fvcom_obc(obc):
 
     Returns
     -------
-    nodes : ndarray
+    nodes : np.ndarray
         Node IDs (zero-indexed) for the open boundary.
-    types : ndarray
+    types : np.ndarray
         Open boundary node types (see the FVCOM manual for more information on
         what these values mean).
-    count : ndarray
+    count : np.ndarray
         Open boundary node number.
 
 
@@ -1962,15 +2063,15 @@ def write_sms_mesh(triangles, nodes, x, y, z, types, mesh):
 
     Parameters
     ----------
-    triangles : ndarray
+    triangles : np.ndarray
         Integer array of shape (ntri, 3). Each triangle is composed of
         three points and this contains the three node numbers (stored in
         nodes) which refer to the coordinates in X and Y (see below).
-    nodes : ndarray
+    nodes : np.ndarray
         Integer number assigned to each node.
-    x, y, z : ndarray
+    x, y, z : np.ndarray
         Coordinates of each grid node and any associated Z value.
-    types : ndarray
+    types : np.ndarray
         Classification for each open boundary. DHI MIKE21 .mesh format
         requires unique IDs for each open boundary (with 0 and 1
         reserved for land and sea nodes). Similar values can be used in
@@ -2082,13 +2183,13 @@ def write_sms_bathy(triangles, nodes, z, PTS):
 
     Parameters
     ----------
-    triangles : ndarray
+    triangles : np.ndarray
         Integer array of shape (ntri, 3). Each triangle is composed of
         three points and this contains the three node numbers (stored in
         nodes) which refer to the coordinates in X and Y (see below).
-    nodes : ndarray
+    nodes : np.ndarray
         Integer number assigned to each node.
-    z : ndarray
+    z : np.ndarray
         Z values at each node location.
     PTS : str
         Full path of the output file name.
@@ -2135,15 +2236,15 @@ def write_mike_mesh(triangles, nodes, x, y, z, types, mesh):
 
     Parameters
     ----------
-    triangles : ndarray
+    triangles : np.ndarray
         Integer array of shape (ntri, 3). Each triangle is composed of
         three points and this contains the three node numbers (stored in
         nodes) which refer to the coordinates in X and Y (see below).
-    nodes : ndarray
+    nodes : np.ndarray
         Integer number assigned to each node.
-    x, y, z : ndarray
+    x, y, z : np.ndarray
         Coordinates of each grid node and any associated Z value.
-    types : ndarray
+    types : np.ndarray
         Classification for each open boundary. DHI MIKE21 .mesh format
         requires unique IDs for each open boundary (with 0 and 1
         reserved for land and sea nodes).
@@ -2205,14 +2306,14 @@ def write_fvcom_mesh(triangles, nodes, x, y, z, mesh, extra_depth=None):
 
     Parameters
     ----------
-    triangles : ndarray
+    triangles : np.ndarray
         Integer array of shape (ntri, 3). Each triangle is composed of
         three points and this contains the three node numbers (stored in
         nodes) which refer to the coordinates in X and Y (see below). Give as
         a zero-indexed array.
-    nodes : ndarray
+    nodes : np.ndarray
         Integer number assigned to each node.
-    x, y, z : ndarray
+    x, y, z : np.ndarray
         Coordinates of each grid node and any associated Z value.
     mesh : str
         Full path to the output mesh file.
@@ -2263,7 +2364,7 @@ def find_nearest_point(grid_x, grid_y, x, y, maxDistance=np.inf):
     nearest_x, nearest_y : np.ndarray
         Coordinates from `grid_x' and `grid_y' which are within maxDistance (if given) and closest to the
         corresponding point in `x' and `y'.
-    distance : ndarray
+    distance : np.ndarray
         Distance between each point in `x' and `y' and the closest value in `grid_x' and `grid_y'. Even if
         maxDistance is given (and exceeded), the distance is reported here.
     index : np.ndarray
@@ -2313,16 +2414,16 @@ def element_side_lengths(triangles, x, y):
 
     Parameters
     ----------
-    triangles : ndarray
+    triangles : np.ndarray
         Integer array of shape (ntri, 3). Each triangle is composed of
         three points and this contains the three node numbers (stored in
         nodes) which refer to the coordinates in X and Y (see below).
-    x, y : ndarray
+    x, y : np.ndarray
         Coordinates of each grid node.
 
     Returns
     -------
-    elemSides : ndarray
+    elemSides : np.ndarray
         Length of each element described by triangles and x, y.
 
     """
@@ -2347,13 +2448,13 @@ def mesh2grid(meshX, meshY, meshZ, nx, ny, thresh=None, noisy=False):
 
     Parameters
     ----------
-    meshX, meshY : ndarray
+    meshX, meshY : np.ndarray
         Arrays of the unstructured grid (mesh) node positions.
-    meshZ : ndarray
+    meshZ : np.ndarray
         Array of values to be resampled onto the regular grid. The shape of the
         array should have the nodes as the first dimension. All subsequent
         dimensions will be propagated automatically.
-    nx, ny : int, ndarray
+    nx, ny : int, np.ndarray
         Number of samples in x and y onto which to sample the unstructured
         grid. If given as a list or array, the values within the arrays are
         assumed to be positions in x and y.
@@ -2365,10 +2466,10 @@ def mesh2grid(meshX, meshY, meshZ, nx, ny, thresh=None, noisy=False):
 
     Returns
     -------
-    xx, yy : ndarray
+    xx, yy : np.ndarray
         New position arrays (1D). Can be used with numpy.meshgrid to plot the
         resampled variables with matplotlib.pyplot.pcolor.
-    zz : ndarray
+    zz : np.ndarray
         Array of the resampled data from meshZ. The first dimension from the
         input is now replaced with two dimensions (x, y). All other input
         dimensions follow.
@@ -2874,25 +2975,25 @@ def connectivity(p, t):
 
     Parameters
     ----------
-    p : ndarray
+    p : np.ndarray
         Nx2 array of nodes coordinates, [[x1, y1], [x2, y2], etc.]
-    t : ndarray
+    t : np.ndarray
         Mx3 array of triangles as indices, [[n11, n12, n13], [n21, n22, n23],
         etc.]
 
     Returns
     -------
-    e : ndarray
+    e : np.ndarray
         Kx2 array of unique mesh edges - [[n11, n12], [n21, n22], etc.]
-    te : ndarray
+    te : np.ndarray
         Mx3 array of triangles as indices into e, [[e11, e12, e13], [e21, e22,
         e23], etc.]
-    e2t : ndarray
+    e2t : np.ndarray
         Kx2 array of triangle neighbours for unique mesh edges - [[t11, t12],
         [t21, t22], etc]. Each row has two entries corresponding to the
         triangle numbers associated with each edge in e. Boundary edges have
         e2t[i, 1] = -1.
-    bnd : ndarray, bool
+    bnd : np.ndarray, bool
         Nx1 logical array identifying boundary nodes. p[i, :] is a boundary
         node if bnd[i] = True.
 
@@ -2975,13 +3076,13 @@ def find_connected_nodes(n, triangles):
     ----------
     n : int
         Node ID around which to find the connected nodes.
-    triangles : ndarray
+    triangles : np.ndarray
         Triangulation matrix to find the connected nodes. Shape is [nele,
         3].
 
     Returns
     -------
-    surroundingidx : ndarray
+    surroundingidx : np.ndarray
         Indices of the surrounding nodes.
 
     See Also
@@ -3027,13 +3128,13 @@ def find_connected_elements(n, triangles):
         Node ID(s) around which to find the connected elements. If more than
         one node is given, the unique elements for all nodes are returned.
         Order of results is not maintained.
-    triangles : ndarray
+    triangles : np.ndarray
         Triangulation matrix to find the connected elements. Shape is [nele,
         3].
 
     Returns
     -------
-    surroundingidx : ndarray
+    surroundingidx : np.ndarray
         Indices of the surrounding elements.
 
     See Also
@@ -3066,7 +3167,7 @@ def get_area(v1, v2, v3):
 
     Returns
     -------
-    area : tuple, ndarray
+    area : tuple, np.ndarray
         Area of the triangle(s). Units of v0, v1 and v2.
 
     Examples
@@ -3104,7 +3205,7 @@ def get_area_heron(s1, s2, s3):
 
     Returns
     -------
-    area : tuple, ndarray
+    area : tuple, np.ndarray
         Area of the triangle(s). Units of v0, v1 and v2.
 
     """
@@ -3132,7 +3233,7 @@ def find_bad_node(nv, node_id):
 
     Parameters
     ----------
-    nv : ndarray
+    nv : np.ndarray
         Connectivity table for the grid.
     node_id : int
         Node ID to check.
@@ -3178,7 +3279,7 @@ def trigradient(x, y, z, t=None):
 
     Returns
     -------
-    dx, dy : ndarray
+    dx, dy : np.ndarray
         `dx' corresponds to the partial derivative dZ/dX, and `dy'
         corresponds to the partial derivative dZ/dY.
 
@@ -3232,16 +3333,16 @@ def rotate_points(x, y, origin, angle):
 
     Parameters
     ----------
-    x, y : ndarray
+    x, y : np.ndarray
         Coordinates to rotate.
-    origin : list, ndarray
+    origin : list, np.ndarray
         Point about which to rotate the grid (x, y).
     angle : float
         Angle (in degrees) by which to rotate the grid. Positive clockwise.
 
     Returns
     -------
-    xr, yr : ndarray
+    xr, yr : np.ndarray
         Rotated coordinates.
 
     """
@@ -3272,7 +3373,7 @@ def get_boundary_polygons(triangle, noisy=False):
 
     Parameters
     ----------
-    triangle : ndarray
+    triangle : np.ndarray
         The triangle connectivity matrix as produced by the read_fvcom_mesh
         function.
 
@@ -3327,12 +3428,12 @@ def get_attached_unique_nodes(this_node, trinodes):
     ----------
     this_node : int
         Node ID.
-    trinodes : ndarray
+    trinodes : np.ndarray
         Triangulation table for an unstructured grid.
 
     Returns
     -------
-    connected_nodes : ndarray
+    connected_nodes : np.ndarray
         IDs of the nodes connected to `this_node' on the boundary. If `this_node' is not on the boundary,
         `connected_nodes' is empty.
 
@@ -3350,25 +3451,25 @@ def grid_metrics(tri, noisy=False):
 
     Parameters
     ----------
-    tri : ndarray
+    tri : np.ndarray
         Triangulation table for the grid.
     noisy : bool
         Set to True to enable verbose output (default = False)
 
     Returns
     -------
-    ntve : ndarray
+    ntve : np.ndarray
         The number of neighboring elements of each grid node
-    nbve : ndarray
+    nbve : np.ndarray
         nbve(i,1->ntve(i)) = ntve elements containing node i
-    nbe : ndarray
+    nbe : np.ndarray
         Indices of tri for the elements connected to each element in the domain. To visualise:
             plt.plot(x[tri[1000, :], y[tri[1000, :], 'ro')
             plt.plot(x[tri[nbe[1000], :]] and y[tri[nbe[1000], :]], 'k.')
         plots the 999th element nodes with the nodes of the surrounding elements too.
-    isbce : ndarray
+    isbce : np.ndarray
         Flag if element is on the boundary (True = yes, False = no)
-    isonb : ndarray
+    isonb : np.ndarray
         Flag if node is on the boundary (True = yes, False = no)
 
     Notes
@@ -3440,9 +3541,9 @@ def control_volumes(x, y, tri, node_control=True, element_control=True, noisy=Fa
 
     Parameters
     ----------
-    x, y : ndarray
+    x, y : np.ndarray
         Node positions
-    tri : ndarray
+    tri : np.ndarray
         Triangulation table for the unstructured grid.
     node_control : bool
         Set to False to disable calculation of node control volumes. Defaults to True.
@@ -3453,9 +3554,9 @@ def control_volumes(x, y, tri, node_control=True, element_control=True, noisy=Fa
 
     Returns
     -------
-    art1 : ndarray
+    art1 : np.ndarray
         Area of interior control volume (for node value integration)
-    art2 : ndarray
+    art2 : np.ndarray
         Sum area of all cells around each node.
 
     Notes
@@ -3754,10 +3855,10 @@ def elems2nodes(elems, tri, nvert=None):
 
     Parameters
     ----------
-    elems : ndarray
+    elems : np.ndarray
         Array of unstructured grid element values to move to the element
         nodes.
-    tri : ndarray
+    tri : np.ndarray
         Array of shape (nelem, 3) comprising the list of connectivity
         for each element.
     nvert : int, optional
@@ -3765,7 +3866,7 @@ def elems2nodes(elems, tri, nvert=None):
 
     Returns
     -------
-    nodes : ndarray
+    nodes : np.ndarray
         Array of values at the grid nodes.
 
     """
@@ -3814,16 +3915,16 @@ def nodes2elems(nodes, tri):
 
     Parameters
     ----------
-    nodes : ndarray
+    nodes : np.ndarray
         Array of unstructured grid node values to move to the element
         centres.
-    tri : ndarray
+    tri : np.ndarray
         Array of shape (nelem, 3) comprising the list of connectivity
         for each element.
 
     Returns
     -------
-    elems : ndarray
+    elems : np.ndarray
         Array of values at the grid nodes.
 
     """
@@ -4225,6 +4326,7 @@ def isintriangle(tri_x, tri_y, point_x, point_y):
 
     return is_in
 
+
 class Graph(object):
     """
     Base class for graph theoretic functions. 
@@ -4441,7 +4543,7 @@ class GraphFVCOMdepth(Graph):
 
         Returns
         -------
-        node_list : ndarray
+        node_list : np.ndarray
             list of fvcom node numbers forming the predicted channel between the start and end points
             
         """
