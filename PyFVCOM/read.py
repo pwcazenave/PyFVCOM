@@ -704,7 +704,16 @@ class FileReader(Domain):
                                                         element_control=False, poolsize=poolsize))
 
         if not hasattr(self.data, 'zeta'):
-            self.load_data(['zeta'])
+            # Warn if we've got different number of zeta times from the other variable times. In that situation,
+            # we'll do non-time-varying volumes.
+            if self.ds.dimensions['time'].size != self.dims.time:
+                warn(f"Found a different length surface elevation time series from {var}. As such, we cannot load the "
+                     "relevant surface elevation so we are setting it to zero. If you are concatenating FileReader "
+                     f"objects, load `zeta' along with `{var}' to fix this.")
+                self.data.zeta = np.zeros((self.dims.time, self.dims.node))
+            else:
+                self.load_data(['zeta'])
+
         # Calculate depth-resolved and depth-integrated volume.
         self.grid_volume()
         self.grid.depth = self.data.zeta + self.grid.h
