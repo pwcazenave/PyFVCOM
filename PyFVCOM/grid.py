@@ -914,16 +914,16 @@ class OpenBoundary(object):
         -----
         These are the valid values as lifted from mod_obcs.F.
 
-        TYPE_OBC = 1: Surface Elevation Specified (Tidal Forcing) (ASL)             
-        TYPE_OBC = 2: As TYPE_OBC=1 and non-linear flux for current at open boundary
-        TYPE_OBC = 3: Zero Surface Elevation Boundary Condition (ASL_CLP)
-        TYPE_OBC = 4: As TYPE_OBC=3 and non-linear flux for current at open boundary
-        TYPE_OBC = 5: Gravity-wave radiation implicit open boundary condition (GWI)
-        TYPE_OBC = 6: As TYPE_OBC=5 and non-linear flux for current at open boundary
-        TYPE_OBC = 7: Blumberg and khanta implicit open boundary condition (BKI)
-        TYPE_OBC = 8: As TYPE_OBC=7 and non-linear flux for current at open boundary
-        TYPE_OBC = 9: Orlanski radiation explicit open boundary condition (ORE)
-        TYPE_OBC =10: As TYPE_OBC=9 and non-linear flux for current at open boundary
+        TYPE_OBC =  1: Surface Elevation Specified (Tidal Forcing) (ASL)
+        TYPE_OBC =  2: As TYPE_OBC=1 and non-linear flux for current at open boundary
+        TYPE_OBC =  3: Zero Surface Elevation Boundary Condition (ASL_CLP)
+        TYPE_OBC =  4: As TYPE_OBC=3 and non-linear flux for current at open boundary
+        TYPE_OBC =  5: Gravity-wave radiation implicit open boundary condition (GWI)
+        TYPE_OBC =  6: As TYPE_OBC=5 and non-linear flux for current at open boundary
+        TYPE_OBC =  7: Blumberg and khanta implicit open boundary condition (BKI)
+        TYPE_OBC =  8: As TYPE_OBC=7 and non-linear flux for current at open boundary
+        TYPE_OBC =  9: Orlanski radiation explicit open boundary condition (ORE)
+        TYPE_OBC = 10: As TYPE_OBC=9 and non-linear flux for current at open boundary
 
         """
 
