@@ -644,8 +644,15 @@ class Plotter(object):
         if self.title:
             self.axes.set_title(self.title)
 
-        # Add coordinate labels to the x and y axes.
-        if self.tick_inc and not self.cartesian:
+        # Check the values of tick_inc aren't bigger than the extents.
+        if self.tick_inc is not None:
+            if self.tick_inc[0] > self.extents[1] - self.extents[0]:
+                warn('The x-axis tick interval is larger than the plot x-axis extent.')
+            if self.tick_inc[1] > self.extents[3] - self.extents[2]:
+                warn('The y-axis tick interval is larger than the plot y-axis extent.')
+
+        # Add coordinate labels to the x and y axes (except if we're doing a cartesian plot).
+        if self.tick_inc is not None and not self.cartesian:
             meridians = np.arange(np.floor(np.min(self.extents[:2])), np.ceil(np.max(self.extents[:2])), self.tick_inc[0])
             parallels = np.arange(np.floor(np.min(self.extents[2:])), np.ceil(np.max(self.extents[2:])), self.tick_inc[1])
             self.m.drawparallels(parallels, labels=[1, 0, 0, 0], fontsize=self.fs, linewidth=0, ax=self.axes)
