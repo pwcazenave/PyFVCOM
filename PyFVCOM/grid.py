@@ -1507,6 +1507,10 @@ class OpenBoundary(object):
         return interpolated_data
 
     def avg_nest_force_vel(self):
+        """
+        Create depth-averaged velocities (`ua', `va') in the current self.nest data.
+
+        """
         layer_thickness = self.sigma.levels_center.T[0:-1,:] - self.sigma.levels_center.T[1:,:]
         self.nest.ua = zbar(self.nest.u, layer_thickness)
         self.nest.va = zbar(self.nest.v, layer_thickness)
