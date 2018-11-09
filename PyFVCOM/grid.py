@@ -880,6 +880,27 @@ class Domain(object):
 
         return nodes2elems(field, self.triangles)
 
+    def in_element(self, x, y, element):
+        """
+        Identify if a point (x, y) is in a given element.
+
+        Parameters
+        ----------
+        x, y : float
+            The position in spherical coordinates.
+        element : int
+            The element ID of interest.
+
+        Returns
+        -------
+        inside : bool
+            True if the given point is inside the specified element. False otherwise.
+
+        """
+        tri_x = self.grid.lon[element]
+        try_y = self.grid.lat[element]
+
+        return isintriangle(tri_x, tri_y, x, y)
 
     def info(self):
         """
