@@ -400,6 +400,9 @@ class FileReader(Domain):
             self.ds = Dataset(self._fvcom, 'r')
 
         self.dims = _MakeDimensions(self.ds)
+        # Store the dimensions of all the variables in the current file so we can use them when writing out with
+        # PyFVCOM.read.WriteFVCOM.
+        self._dims_variables = {var: self.ds.variables[var].dimensions for var in self.ds.variables}
 
         for dim in self._dims:
             dim_is_iterable = hasattr(self._dims[dim], '__iter__')
