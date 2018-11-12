@@ -572,7 +572,7 @@ class FileReader(Domain):
         return idem
 
     def _load_grid(self, fvcom):
-        self.grid = GridReaderNetCDF(fvcom, dims=self._dims, zone=self._zone, debug=self._debug, verbose=self._noisy)
+        self.grid = GridReaderNetCDF(self.ds, dims=self._dims, zone=self._zone, debug=self._debug, verbose=self._noisy)
     
     def _load_time(self):
         self.time = _TimeReader(self.ds, dims=self._dims)
@@ -619,7 +619,7 @@ class FileReader(Domain):
             self._dims = dims
             self.time = _TimeReader(self.ds, dims=self._dims)
             self.dims.time = len(self.time)
-            self.grid = _GridReaderNetCDF(self._fvcom, dims=self._dims, zone=self._zone, debug=self._debug,
+            self.grid = _GridReaderNetCDF(self.ds, dims=self._dims, zone=self._zone, debug=self._debug,
                                           verbose=self._noisy)
 
         # Check if we've got iterable variables and make one if not.
