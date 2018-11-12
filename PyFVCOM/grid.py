@@ -375,7 +375,7 @@ class GridReaderNetCDF(object):
         self.bounding_box = (np.min(self.lon), np.max(self.lon), np.min(self.lat), np.max(self.lat))
 
     def __iter__(self):
-        return (a for a in dir(self) if not a.startswith('__'))
+        return (a for a in dir(self) if not a.startswith('_'))
 
     def _update_dimensions(self, dims):
         """
