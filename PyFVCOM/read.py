@@ -3,8 +3,10 @@
 from __future__ import print_function, division
 
 import copy
+import inspect
 import sys
 from datetime import datetime, timedelta
+from pathlib import Path
 from warnings import warn
 
 import matplotlib.path as mpath
@@ -16,7 +18,7 @@ from shapely.geometry import Polygon
 
 from PyFVCOM.grid import Domain, control_volumes, get_area_heron
 from PyFVCOM.grid import unstructured_grid_volume, elems2nodes, GridReaderNetCDF
-from PyFVCOM.utilities.general import _passive_data_store
+from PyFVCOM.utilities.general import _passive_data_store, flatten_list
 
 
 class _TimeReader(object):
@@ -1984,3 +1986,207 @@ def get_river_config(file_name, noisy=False, zeroindex=False):
         rivers['RIVER_GRID_LOCATION'] = [int(i) - 1 for i in rivers['RIVER_GRID_LOCATION']]
 
     return rivers
+
+
+class WriteFVCOM(object):
+    """
+    Class to write an FVCOM-style netCDF file. Useful for dumping results into.
+
+    """
+
+    def __init__(self, ncfile, fvcom, title=None, type=None, affiliation=None, ncformat='NETCDF4',
+                 ncopts={'zlib': True, 'complevel': 7}):
+        """
+        Create a new FVCOM-formatted netCDF file for the given FileReader object.
+
+        Parameters
+        ----------
+        ncfile : str
+            Path to the netCDF to create.
+        fvcom : PyFVCOM.read.FileReader
+            Model data object.
+        title : str, optional
+            The contents of the `title' global attribute (omitted if empty or missing).
+        type : str, optional
+            The contents of the `type' global attribute (omitted if empty or missing).
+        affiliation : str, optional
+            The affiliation (name, institution etc.) of the creator saved in the `author' global attribute (omitted
+            if empty or missing).
+        ncformat : str, optional
+            The netCDF file type to create. If omitted, defaults to `NETCDF4'.
+        ncopts : dict, optional
+            Dictionary of additional arguments to pass when adding new variables (see
+            `netCDF4.Dataset.createVariable'). If omitted, defaults to compression on.
+
+        """
+
+        # Our data
+        self._fvcom = fvcom
+        self._variables = []  # where we'll hold the `Dataset.createVariable' objects.
+
+        # The output file
+        self._ncfile = ncfile
+        self._ncopts = ncopts
+        self._ncformat = ncformat
+
+        # Some extra pieces of information
+        self._title = title
+        self._type = type
+        self._affiliation = affiliation
+
+        # Some variables to skip
+        range_variables = [f'{i}_range' for i in ('lon', 'lat', 'lonc', 'latc', 'x', 'xc', 'y', 'yc')]
+        z_variables = [f'{i}_z' for i in ('siglay', 'siglev', 'siglay_center', 'siglev_center')]
+        self._custom_variables = ['bounding_box', 'triangles', 'ds', ] + range_variables + z_variables
+
+        self._nc = Dataset(self._ncfile, 'w', format=self._ncformat, clobber=True)
+
+        # Make the netCDF and populate the initial values (grid and time).
+        self._make_dims()
+
+        # Add the data we already have.
+        self._add_attributes()
+        self._create_variables()
+        self._add_variables()
+        if self._fvcom.dims.time != 0:
+            self.write_fvcom_time(self._fvcom.time.datetime)
+
+        # Close the netCDF handle.
+        self._nc.close()
+
+    def _make_dims(self):
+        for dim in self._fvcom.dims:
+            value = getattr(self._fvcom.dims, dim)
+            # Catch time and make unlimited if found and non-zero, otherwise don't make it.
+            if dim == 'time':
+                value = None
+                if getattr(self._fvcom.dims, dim) == 0:
+                    continue
+            self._nc.createDimension(dim, value)
+        # Add some of the hard-coded ones we'll probably need which we don't usually read in with FileReader.
+        if 'three' not in self._fvcom.dims:
+            self._nc.createDimension('three', 3)
+        if 'four' not in self._fvcom.dims:
+            self._nc.createDimension('four', 4)
+        if 'DateStrLen' not in self._fvcom.dims:
+            self._nc.createDimension('DateStrLen', 26)
+
+    def _add_attributes(self):
+        # Add any attributes we've got. We don't have as many global attributes as we don't really keep those in a
+        # FileReader object.
+        if self._type is not None:
+            self._nc.setncattr('type', self._type)
+        if self._title is not None:
+            self._nc.setncattr('title', self._title)
+        if self._affiliation is not None:
+            self._nc.setncattr('author', self._affiliation)
+        module_name = f'PyFVCOM.{Path(inspect.stack()[0][1]).stem}.{self.__class__.__name__}'
+        now = datetime.now().strftime('%Y-%m-%d at %H:%M:%S')
+        self._nc.setncattr('history', f'File created using {module_name} on {now}.')
+
+    def _create_variables(self):
+        # Create the variables from the self._fvcom.grid and self._fvcom.data objects.
+
+        # Assume f4 unless specified here. Time is handled by self.write_fvcom_time.
+        var_types = {'nv': 'i4', 'nbe': 'i4', 'ntsn': 'i4', 'nbsn': 'i4', 'ntve': 'i4', 'nbve': 'i4'}
+
+        self._variables = {}
+        for var in self._fvcom.grid:
+            if var in self._custom_variables:
+                continue
+
+            fmt = 'f4'
+            if var in var_types:
+                fmt = var_types[var]
+
+            dims = self._fvcom._dims_variables[var]
+            self._variables[var] = self._nc.createVariable(var, fmt, dims, **self._ncopts)
+            # Add any attributes we have.
+            var_atts = getattr(self._fvcom.atts, var)
+            for att in var_atts:
+                self._variables[var].setncattr(att, getattr(var_atts, att))
+
+        # self._fvcom.data. may be missing entirely (it's always present as I write this, but I think it may go away
+        # in the future - assume I've done that since it's relatively cheap to do so).
+
+        # We may also have completely custom variables here with no known dimensions in self._fvcom._dims_variables,
+        # in which case we'll have to guess what dimensions they have based on their .shape. This could be tricky.
+        dim_names = set(flatten_list([self._fvcom._dims_variables[i] for i in self._fvcom._dims_variables]))
+        dim_size = {i: getattr(self._fvcom.dims, i) for i in dim_names}
+        unlikely_dims = ['three', 'four', 'maxelem', 'maxnode']
+        if hasattr(self._fvcom, 'data'):
+            for var in self._fvcom.data:
+                if var in self._fvcom._dims_variables:
+                    dims = self._fvcom._dims_variables[var]
+                else:
+                    shape = getattr(self._fvcom.data, var).shape
+                    # Find candidate dimensions. If we have dimensions with duplicate sizes, this won't work (i.e. if
+                    # there are 4 time dimensions in the data, we'll likely pick up the dimension as `four' rather than
+                    # `time').
+                    dims = []
+                    for d in dim_size:
+                        # Skip unlikely dimensions.
+                        if d in unlikely_dims:
+                            continue
+                        if dim_size[d] in shape:
+                            dims.append(d)
+                    if len(dims) != len(shape):
+                        raise AttributeError(f'Unable to identify dimensions for non-standard variable {var}')
+
+                self._variables[var] = self._nc.createVariable(var, fmt, dims, **self._ncopts)
+
+                # Add any attributes we have.
+                var_atts = getattr(self._fvcom.atts, var)
+                for att in var_atts:
+                    self._variables[var].setncattr(att, getattr(var_atts, att))
+
+    def _add_variables(self):
+        # Add the data from the variables in self._fvcom.grid and self._fvcom.data.
+        for var in self._fvcom.grid:
+            # Skip custom variables as we haven't defined those in self._create_variables.
+            if var in self._custom_variables:
+                continue
+            self._variables[var][:] = getattr(self._fvcom.grid, var)
+        for var in self._fvcom.data:
+            self._variables[var][:] = getattr(self._fvcom.data, var)
+
+    def write_fvcom_time(self, time):
+        """
+        Write the four standard FVCOM time variables (time, Times, Itime, Itime2) for the given time series.
+
+        Parameters
+        ----------
+        time : np.ndarray, list, tuple
+            Times as datetime objects.
+
+        """
+
+        mjd = date2num(time, units='days since 1858-11-17 00:00:00')
+        Itime = np.floor(mjd)  # integer Modified Julian Days
+        Itime2 = (mjd - Itime) * 24 * 60 * 60 * 1000  # milliseconds since midnight
+        Times = [t.strftime('%Y-%m-%dT%H:%M:%S.%f') for t in time]
+
+        # Give greater precision for `time' than in a normal FVCOM file so we don't end up with weird truncated values.
+        if 'time' not in self._variables and 'time' in self._nc.dimensions:
+            self._variables['time'] = self._nc.createVariable('time', 'f8', ['time'], **self._ncopts)
+        self._variables['time'] .setncattr('units', 'days since 1858-11-17 00:00:00')
+        self._variables['time'] .setncattr('format', 'modified julian day (MJD)')
+        self._variables['time'] .setncattr('long_name', 'time')
+        self._variables['time'] .setncattr('time_zone', 'UTC')
+        if 'Itime' not in self._variables and 'time' in self._nc.dimensions:
+            self._variables['Itime'] = self._nc.createVariable('Itime', 'i', ['time'], **self._ncopts)
+        self._variables['Itime'] .setncattr('units', 'days since 1858-11-17 00:00:00')
+        self._variables['Itime'] .setncattr('format', 'modified julian day (MJD)')
+        self._variables['Itime'] .setncattr('time_zone', 'UTC')
+        self._variables['Itime'] [:] = Itime
+        if 'Itime2' not in self._variables and 'time' in self._nc.dimensions:
+            self._variables['Itime2'] = self._nc.createVariable('Itime2', 'i', ['time'], **self._ncopts)
+        self._variables['Itime2'] .setncattr('units', 'msec since 00:00:00')
+        self._variables['Itime2'] .setncattr('time_zone', 'UTC')
+        self._variables['Itime2'] [:] = Itime2
+        if 'Times' not in self._variables and 'time' in self._nc.dimensions:
+            self._variables['Times'] = self._nc.createVariable('Times', 'c', ['time', 'DateStrLen'], **self._ncopts)
+        self._variables['Times'] .setncattr('long_name', 'Calendar Date')
+        self._variables['Times'] .setncattr('format', 'String: Calendar Time')
+        self._variables['Times'] .setncattr('time_zone', 'UTC')
+        self._variables['Times'] [:] = Times
