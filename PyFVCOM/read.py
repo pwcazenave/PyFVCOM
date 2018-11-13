@@ -2051,6 +2051,7 @@ class WriteFVCOM(object):
         self._add_attributes()
         self._create_variables()
         self._add_variables()
+        self._add_ugrid_support()
         if self._fvcom.dims.time != 0:
             self._write_fvcom_time(self._fvcom.time.datetime)
 
@@ -2199,3 +2200,17 @@ class WriteFVCOM(object):
         self._variables['Times'] .setncattr('format', 'String: Calendar Time')
         self._variables['Times'] .setncattr('time_zone', 'UTC')
         self._variables['Times'] [:] = Times
+
+    def _add_ugrid_support(self):
+        """ Add support for the ugrid file convention. """
+
+        fvcom_mesh = self._nc.createVariable('fvcom_mesh', np.int32)
+        setattr(fvcom_mesh, 'cf_role', 'mesh_topology')
+        setattr(fvcom_mesh, 'topology_dimension', 2)
+        setattr(fvcom_mesh, 'node_coordinates', 'lon lat')
+        setattr(fvcom_mesh, 'face_coordinates', 'lonc latc')
+        setattr(fvcom_mesh, 'face_node_connectivity', 'nv')
+
+        # Add the global convention.
+        setattr(self._nc, 'Convention', 'UGRID-1.0')
+        setattr(self._nc, 'CoordinateProjection', 'none')
