@@ -2046,15 +2046,13 @@ class WriteFVCOM(object):
 
         self._nc = Dataset(self._ncfile, 'w', format=self._ncformat, clobber=True)
 
-        # Make the netCDF and populate the initial values (grid and time).
-        self._make_dims()
-
         # Add the data we already have.
+        self._make_dims()
         self._add_attributes()
         self._create_variables()
         self._add_variables()
         if self._fvcom.dims.time != 0:
-            self.write_fvcom_time(self._fvcom.time.datetime)
+            self._write_fvcom_time(self._fvcom.time.datetime)
 
         # Close the netCDF handle.
         self._nc.close()
@@ -2161,7 +2159,7 @@ class WriteFVCOM(object):
             if var in self._data_variables:
                 self._variables[var][:] = getattr(self._fvcom.data, var)
 
-    def write_fvcom_time(self, time):
+    def _write_fvcom_time(self, time):
         """
         Write the four standard FVCOM time variables (time, Times, Itime, Itime2) for the given time series.
 
