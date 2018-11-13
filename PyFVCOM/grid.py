@@ -103,7 +103,7 @@ class GridReaderNetCDF(object):
             # original triangulation used in the model run.
             if self._debug:
                 print("Creating new triangulation since we're missing one")
-            triangulation = tri.Triangulation(self.lon, self.lat)
+            triangulation = Triangulation(self.lon, self.lat)
             self.triangles = triangulation.triangles
             self.nv = copy.copy(self.triangles.T + 1)
             dims.nele = self.triangles.shape[0]
