@@ -2087,6 +2087,7 @@ class WriteFVCOM(object):
         module_name = f'PyFVCOM.{Path(inspect.stack()[0][1]).stem}.{self.__class__.__name__}'
         now = datetime.now().strftime('%Y-%m-%d at %H:%M:%S')
         self._nc.setncattr('history', f'File created using {module_name} on {now}.')
+        self._nc.setncattr('source', 'FVCOM_3.0')  # for ParaView compatibility
 
     def _create_variables(self):
         # Create the variables from the self._fvcom.grid and self._fvcom.data objects.
