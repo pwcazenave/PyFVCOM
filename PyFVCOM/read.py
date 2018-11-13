@@ -1994,7 +1994,7 @@ class WriteFVCOM(object):
 
     """
 
-    def __init__(self, ncfile, fvcom, title=None, type=None, affiliation=None, ncformat='NETCDF4',
+    def __init__(self, ncfile, fvcom, data_variables=None, title=None, type=None, affiliation=None, ncformat='NETCDF4',
                  ncopts={'zlib': True, 'complevel': 7}):
         """
         Create a new FVCOM-formatted netCDF file for the given FileReader object.
@@ -2005,6 +2005,8 @@ class WriteFVCOM(object):
             Path to the netCDF to create.
         fvcom : PyFVCOM.read.FileReader
             Model data object.
+        data_variables : list, optional.
+            The fvcom.dadta variables to write out. If omitted, write everything.
         title : str, optional
             The contents of the `title' global attribute (omitted if empty or missing).
         type : str, optional
@@ -2023,6 +2025,9 @@ class WriteFVCOM(object):
         # Our data
         self._fvcom = fvcom
         self._variables = []  # where we'll hold the `Dataset.createVariable' objects.
+        self._data_variables = data_variables
+        if self._data_variables is None:
+            self._data_variables = [i for i in self._fvcom.data if not i.startswith('_')]
 
         # The output file
         self._ncfile = ncfile
@@ -2116,6 +2121,10 @@ class WriteFVCOM(object):
         unlikely_dims = ['three', 'four', 'maxelem', 'maxnode']
         if hasattr(self._fvcom, 'data'):
             for var in self._fvcom.data:
+                # If we've been given a subset of variables to save, skip those not in that list.
+                if var not in self._data_variables:
+                    continue
+
                 if var in self._fvcom._dims_variables:
                     dims = self._fvcom._dims_variables[var]
                 else:
@@ -2147,8 +2156,10 @@ class WriteFVCOM(object):
             if var in self._custom_variables:
                 continue
             self._variables[var][:] = getattr(self._fvcom.grid, var)
+
         for var in self._fvcom.data:
-            self._variables[var][:] = getattr(self._fvcom.data, var)
+            if var in self._data_variables:
+                self._variables[var][:] = getattr(self._fvcom.data, var)
 
     def write_fvcom_time(self, time):
         """
