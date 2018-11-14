@@ -4061,6 +4061,7 @@ class RegularReader(FileReader):
             index = index[0]
         return np.unravel_index(index, (len(self.grid.lon), len(self.grid.lat)))
 
+
 class _TimeReaderReg(_TimeReader):
 
     def __init__(self, dataset, dims=None, verbose=False):
