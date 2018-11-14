@@ -2177,9 +2177,10 @@ class WriteFVCOM(object):
         Itime2 = (mjd - Itime) * 24 * 60 * 60 * 1000  # milliseconds since midnight
         Times = [t.strftime('%Y-%m-%dT%H:%M:%S.%f') for t in time]
 
-        # Give greater precision for `time' than in a normal FVCOM file so we don't end up with weird truncated values.
+        # It would be nice to support double precisions for time here, but ParaView segfaults if we try and open a file
+        # with `time' as doubles.
         if 'time' not in self._variables and 'time' in self._nc.dimensions:
-            self._variables['time'] = self._nc.createVariable('time', 'f8', ['time'], **self._ncopts)
+            self._variables['time'] = self._nc.createVariable('time', 'f4', ['time'], **self._ncopts)
         self._variables['time'].setncattr('units', 'days since 1858-11-17 00:00:00')
         self._variables['time'].setncattr('format', 'modified julian day (MJD)')
         self._variables['time'].setncattr('long_name', 'time')
