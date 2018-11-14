@@ -2184,6 +2184,7 @@ class WriteFVCOM(object):
         self._variables['time'].setncattr('format', 'modified julian day (MJD)')
         self._variables['time'].setncattr('long_name', 'time')
         self._variables['time'].setncattr('time_zone', 'UTC')
+        self._variables['time'][:] = mjd
         if 'Itime' not in self._variables and 'time' in self._nc.dimensions:
             self._variables['Itime'] = self._nc.createVariable('Itime', 'i', ['time'], **self._ncopts)
         self._variables['Itime'].setncattr('units', 'days since 1858-11-17 00:00:00')
