@@ -2180,27 +2180,27 @@ class WriteFVCOM(object):
         # Give greater precision for `time' than in a normal FVCOM file so we don't end up with weird truncated values.
         if 'time' not in self._variables and 'time' in self._nc.dimensions:
             self._variables['time'] = self._nc.createVariable('time', 'f8', ['time'], **self._ncopts)
-        self._variables['time'] .setncattr('units', 'days since 1858-11-17 00:00:00')
-        self._variables['time'] .setncattr('format', 'modified julian day (MJD)')
-        self._variables['time'] .setncattr('long_name', 'time')
-        self._variables['time'] .setncattr('time_zone', 'UTC')
+        self._variables['time'].setncattr('units', 'days since 1858-11-17 00:00:00')
+        self._variables['time'].setncattr('format', 'modified julian day (MJD)')
+        self._variables['time'].setncattr('long_name', 'time')
+        self._variables['time'].setncattr('time_zone', 'UTC')
         if 'Itime' not in self._variables and 'time' in self._nc.dimensions:
             self._variables['Itime'] = self._nc.createVariable('Itime', 'i', ['time'], **self._ncopts)
-        self._variables['Itime'] .setncattr('units', 'days since 1858-11-17 00:00:00')
-        self._variables['Itime'] .setncattr('format', 'modified julian day (MJD)')
-        self._variables['Itime'] .setncattr('time_zone', 'UTC')
-        self._variables['Itime'] [:] = Itime
+        self._variables['Itime'].setncattr('units', 'days since 1858-11-17 00:00:00')
+        self._variables['Itime'].setncattr('format', 'modified julian day (MJD)')
+        self._variables['Itime'].setncattr('time_zone', 'UTC')
+        self._variables['Itime'][:] = Itime
         if 'Itime2' not in self._variables and 'time' in self._nc.dimensions:
             self._variables['Itime2'] = self._nc.createVariable('Itime2', 'i', ['time'], **self._ncopts)
-        self._variables['Itime2'] .setncattr('units', 'msec since 00:00:00')
-        self._variables['Itime2'] .setncattr('time_zone', 'UTC')
-        self._variables['Itime2'] [:] = Itime2
+        self._variables['Itime2'].setncattr('units', 'msec since 00:00:00')
+        self._variables['Itime2'].setncattr('time_zone', 'UTC')
+        self._variables['Itime2'][:] = Itime2
         if 'Times' not in self._variables and 'time' in self._nc.dimensions:
             self._variables['Times'] = self._nc.createVariable('Times', 'c', ['time', 'DateStrLen'], **self._ncopts)
-        self._variables['Times'] .setncattr('long_name', 'Calendar Date')
-        self._variables['Times'] .setncattr('format', 'String: Calendar Time')
-        self._variables['Times'] .setncattr('time_zone', 'UTC')
-        self._variables['Times'] [:] = Times
+        self._variables['Times'].setncattr('long_name', 'Calendar Date')
+        self._variables['Times'].setncattr('format', 'String: Calendar Time')
+        self._variables['Times'].setncattr('time_zone', 'UTC')
+        self._variables['Times'][:] = Times
 
     def _add_ugrid_support(self):
         """ Add support for the ugrid file convention. """
