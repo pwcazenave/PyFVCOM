@@ -578,7 +578,7 @@ class FileReader(Domain):
 
     def _load_grid(self, fvcom):
         self.grid = GridReaderNetCDF(self.ds, dims=self._dims, zone=self._zone, debug=self._debug, verbose=self._noisy)
-    
+
     def _load_time(self):
         self.time = _TimeReader(self.ds, dims=self._dims)
 
@@ -947,7 +947,7 @@ class FileReader(Domain):
             self.river.river_nodes = np.argwhere(np.isin(self._dims['node'], river_node_raw))
             rivers_in_grid = np.isin(river_node_raw, self._dims['node'])
         else:
-            self.river.river_nodes = river_node_raw    
+            self.river.river_nodes = river_node_raw
             rivers_in_grid = np.ones(river_node_raw.shape, dtype=bool)
 
         river_flux_raw = river_nc.variables['river_flux'][:,rivers_in_grid]
@@ -1230,7 +1230,7 @@ class SubDomainReader(FileReader):
         else:
             v_openface = self.data.v[..., open_face_cells]
 
-        # Loop through each open boundary cell, get the normal component of the velocity, 
+        # Loop through each open boundary cell, get the normal component of the velocity,
         # calculate the (time-varying) area of the open face at each sigma layer, then add this to the flux dictionary
         if noisy:
             print('{} open boundary cells'.format(len(open_face_cells)))
@@ -1317,8 +1317,6 @@ class SubDomainReader(FileReader):
         var_to_int = getattr(self.data, var)
         if len(var_to_int) == len(self.grid.xc):
             var_to_int = elems2nodes(var, self.grid.triangles)
-        
-        
 
         return var_to_int
 
