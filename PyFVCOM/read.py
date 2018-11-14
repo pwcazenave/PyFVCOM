@@ -1117,26 +1117,7 @@ class FileReader(Domain):
         return idem
 
     def _load_grid(self, fvcom):
-        self.grid = GridReaderNetCDF(fvcom, dims=self._dims, zone=self._zone, debug=self._debug, verbose=self._noisy)
-        # Pull back the _get_data_pattern back out in case we've been subsetting.
-        if hasattr(self.grid, '_get_data_pattern'):
-            self._get_data_pattern = self.grid._get_data_pattern
-        # Grab the dimensions from the grid in case we've subset somewhere.
-        self._dims = self.grid._dims
-        delattr(self.grid, '_dims')
-
-        # Convert any dimension given as a slice to be a range of indices instead.
-        for dim in self._dims:
-            if isinstance(self._dims[dim], slice):
-                if self._debug:
-                    print(f'Converting {dim} indices from a slice to an array of indices')
-                self._dims[dim] = np.arange(self.ds.dimensions[dim].size)[self._dims[dim]]
-
-        # Make sure we set the grid dimensions correctly if we've been asked to subset in space. We do this here and
-        # in load_data because it's possible to supply no dimensions at invocation but supply them with load_data.
-        for dim in ('node', 'nele', 'siglay', 'siglev', 'time'):
-            if dim in self._dims:
-                setattr(self.dims, dim, len(self._dims[dim]))
+        self.grid = GridReaderNetCDF(self.ds, dims=self._dims, zone=self._zone, debug=self._debug, verbose=self._noisy)
 
     def _load_time(self):
         self.time = _TimeReader(self._fvcom, dims=self._dims)
@@ -1499,6 +1480,117 @@ class FileReader(Domain):
         Average the requested variable in time at the specified frequency. If the data for variable are not loaded,
         they will be before averaging. Averaging starts at the first midnight in the time series and ends at the last
         midnight in the time series (values outside those times are ignored).
+
+        The result is added to self.data as an attribute named '{}_{}'.format(variable, period).
+
+        Parameters
+        ----------
+        variable : str
+            A variable to average in time.
+        period : str
+            The period over which to average. Select from `daily', `weekly', `monthly' or `yearly' (`annual' is a
+            synonym). `Monthly' is actually 4-weekly rather than per calendar month.
+        return_times : bool, optional
+            Set to True to return the times of the averages as datetimes. Defaults to False.
+
+        Returns
+        -------
+        times : np.ndarray
+            If return_times is set to True, return an array of the datetimes which correspond to each average.
+
+        """
+
+        # TODO: the monthly and yearly averaging could be more robust by finding the unique complete months/years and
+        # TODO: averaging those rather than assuming 4 weekly months and 365 day years.
+        interval_seconds = np.unique([i.total_seconds() for i in np.diff(self.time.datetime)])
+        if len(interval_seconds) > 1:
+            raise ValueError('Cannot compute time average on irregularly sampled data.')
+        seconds_per_day = 60 * 60 * 24
+        if period == 'daily':
+            step = int(seconds_per_day / interval_seconds)
+        elif period == 'weekly':
+            step = int(seconds_per_day * 7 / interval_seconds)
+        elif period == 'monthly':
+            step = int(seconds_per_day * 7 * 4 / interval_seconds)
+        elif period == 'yearly' or period == 'annual':
+            step = int(seconds_per_day * 365 / interval_seconds)
+        else:
+            raise ValueError('Unsupported period {}'.format(period))
+
+        if not hasattr(self.data, variable):
+            if self._noisy:
+                print('Loading {} for time-averaging.'.format(variable))
+            self.load_data(variable)
+
+        # We're assuming time is the first dimension here since we're working with FVCOM data by and large. If that
+        # changes, we'll have to find the index of the time dimension and then do the reshape with that dimension
+        # first before reshaping back to the original order. You might be able to understand why I'm not bothering
+        # with all that right now.
+
+        # First, find the first midnight values as all periods average from midnight on the first day.
+        midnights = [_.hour == 0 for _ in self.time.datetime]
+        first_midnight = np.argwhere(midnights)[0][0]
+        last_midnight = np.argwhere(midnights)[-1][0]
+
+        if first_midnight == last_midnight:
+            raise IndexError('Too few data to average at {} frequency.'.format(period))
+
+        # For the averaging, reshape the time dimension into chunks which match the periods and then average along
+        # that reshaped dimension. Getting the new shape is a bit fiddly. We should always have at least two
+        # dimensions here (time, space) so this should always work.
+        other_dimensions = [_ for _ in getattr(self.data, variable).shape[1:]]
+
+        # Check that the maximum difference of the first day's data and the first averaged data is zero:
+        # (averaged[0] - getattr(self.data, variable)[first_midnight:first_midnight + step].mean(axis=0)).max() == 0
+        averaged = getattr(self.data, variable)[first_midnight:last_midnight, ...]
+        averaged = np.mean(averaged.reshape([-1, step] + other_dimensions), axis=1)
+
+        setattr(self.data, '{}_{}'.format(variable, period), averaged)
+
+        if return_times:
+            # For the arithmetic to be simple, we'll do this on `time'. This is possibly an issue as `time' is
+            # sometimes not sufficiently precise to resolve the actual times accurately. It would be better to do
+            # this on `datetime' instead, but then we have to fiddle around making things relative and it all gets a
+            # bit tiresome.
+            new_times = num2date(self.time.time[first_midnight:last_midnight].reshape(-1, step).mean(axis=1),
+                                 units=self.atts.time.units)
+            return new_times
+
+    def add_river_flow(self, river_nc_file, river_nml_file):
+        """
+        TODO: docstring.
+
+        """
+
+        nml_dict = get_river_config(river_nml_file)
+        river_node_raw = np.asarray(nml_dict['RIVER_GRID_LOCATION'], dtype=int) - 1
+        self.river = _passive_data_store()
+
+        river_nc = nc.Dataset(river_nc_file, 'r')
+        time_raw = river_nc.variables['Times'][:]
+        self.river.time_dt = [datetime.strptime(b''.join(this_time).decode('utf-8').rstrip(), '%Y/%m/%d %H:%M:%S') for this_time in time_raw]
+
+        ref_date = datetime(1900,1,1)
+        mod_time_sec = [(this_dt - ref_date).total_seconds() for this_dt in self.time.datetime]
+        self.river.river_time_sec = [(this_dt - ref_date).total_seconds() for this_dt in self.river.time_dt]
+
+        if 'node' in self._dims:
+            self.river.river_nodes = np.argwhere(np.isin(self._dims['node'], river_node_raw))
+            rivers_in_grid = np.isin(river_node_raw, self._dims['node'])
+        else:
+            self.river.river_nodes = river_node_raw
+            rivers_in_grid = np.ones(river_node_raw.shape, dtype=bool)
+
+        river_flux_raw = river_nc.variables['river_flux'][:,rivers_in_grid]
+        self.river.river_fluxes = np.asarray([np.interp(mod_time_sec, self.river.river_time_sec, this_col) for this_col in river_flux_raw.T]).T
+        self.river.total_flux = np.sum(self.river.river_fluxes, axis=1)
+
+        river_temp_raw = river_nc.variables['river_temp'][:,rivers_in_grid]
+        self.river.river_temp = np.asarray([np.interp(mod_time_sec, self.river.river_time_sec, this_col) for this_col in river_temp_raw.T]).T
+
+        river_salt_raw = river_nc.variables['river_salt'][:,rivers_in_grid]
+        self.river.river_salt = np.asarray([np.interp(mod_time_sec, self.river.river_time_sec, this_col) for this_col in river_salt_raw.T]).T
+
 
 def MFileReader(fvcom, noisy=False, *args, **kwargs):
     """ Wrapper around FileReader for loading multiple files at once.
