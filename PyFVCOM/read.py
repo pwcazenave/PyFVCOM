@@ -11,7 +11,6 @@ from warnings import warn
 
 import matplotlib.path as mpath
 import matplotlib.pyplot as plt
-import netCDF4 as nc
 import numpy as np
 from netCDF4 import Dataset, MFDataset, num2date, date2num
 from shapely.geometry import Polygon
@@ -955,7 +954,7 @@ class FileReader(Domain):
         river_node_raw = np.asarray(nml_dict['RIVER_GRID_LOCATION'], dtype=int) - 1
         self.river = _passive_data_store()
 
-        river_nc = nc.Dataset(river_nc_file, 'r')
+        river_nc = Dataset(river_nc_file, 'r')
         time_raw = river_nc.variables['Times'][:]
         self.river.time_dt = [datetime.strptime(b''.join(this_time).decode('utf-8').rstrip(), '%Y/%m/%d %H:%M:%S') for this_time in time_raw]
 
@@ -1261,7 +1260,7 @@ class SubDomainReader(FileReader):
         # Get only rivers which feature in the subdomain
         rivers_in_grid = np.isin(river_node_raw, self._dims['node'])
 
-        river_nc = nc.Dataset(river_nc_file, 'r')
+        river_nc = Dataset(river_nc_file, 'r')
         time_raw = river_nc.variables['Times'][:]
         time_dt = [datetime.strptime(b''.join(this_time).decode('utf-8'), '%Y-%m-%d %H:%M:%S') for this_time in time_raw]
 
