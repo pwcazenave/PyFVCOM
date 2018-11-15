@@ -23,14 +23,14 @@ from PyFVCOM.utilities.general import _passive_data_store, flatten_list
 
 class _TimeReader(object):
 
-    def __init__(self, dataset, dims=None, verbose=False):
+    def __init__(self, filename, dims=None, verbose=False):
         """
         Parse the time data from an FVCOM netCDF file Missing standard FVCOM time variables are automatically created.
 
         Parameters
         ----------
-        dataset : netCDF4.Dataset
-            The netCDF file Dataset object.
+        filename : str, pathlib.Path
+            The FVCOM netCDF file to read.
         dims : dict, optional
             Dictionary of dimension names along which to subsample e.g. dims={'time': [0, 100]}. Dimensions are
             specified as list of indices. Time can also be specified as either a time string (e.g. '2000-01-25
@@ -41,6 +41,7 @@ class _TimeReader(object):
 
         """
 
+        dataset = Dataset(filename, 'r')
         _noisy = verbose
         self._dims = copy.deepcopy(dims)
 
@@ -199,6 +200,8 @@ class _TimeReader(object):
                 for time in self:
                     setattr(self, time, getattr(self, time)[self._dims['time']])
 
+        dataset.close()
+
     def __iter__(self):
         return (a for a in dir(self) if not a.startswith('_'))
 
@@ -228,15 +231,15 @@ class _TimeReader(object):
 
 
 class _AttributeReader(object):
-    def __init__(self, dataset, variables=None, verbose=False):
+    def __init__(self, filename, variables=None, verbose=False):
         """
         Load the attributes for the variables in the dataset. Optionally limit the attributes to the variables in
         variables.
 
         Parameters
         ----------
-        dataset : netCDF4.Dataset
-            The netCDF file dataset object.
+        filename : str, pathlib.Path
+            The FVCOM netCDF file to read.
         variables : list, optional
             List of variables to extract. If omitted, only the grid, grid metrics and time variables are extracted.
         verbose : bool, optional
@@ -244,7 +247,11 @@ class _AttributeReader(object):
 
         """
 
-        self._ds = dataset
+        # We need the keep the file name if we've closed the dataset after initialisation. This is so we can use
+        # get_attribute after initialisation. This all boils down to not being able to pickle Dataset objects,
+        # so we can't leave Dataset objects hanging around open.
+        self._filename = filename
+        self._ds = Dataset(filename, 'r')
         self._noisy = verbose
 
         grid = ['a1u', 'a2u', 'art1', 'art2',
@@ -265,6 +272,9 @@ class _AttributeReader(object):
                     print(f'Getting attributes for {var}')
                 self.get_attribute(var)
 
+        self._ds.close()
+        delattr(self, '_ds')
+
     def get_attribute(self, variable):
         """
         Get the attributes for the given variable and add them to the relevant object.
@@ -276,12 +286,22 @@ class _AttributeReader(object):
 
         """
 
+        # We need to reopen the Dataset to support pickling FileReader objects.
+        close_on_finish = False
+        if not hasattr(self, '_ds'):
+            close_on_finish = True
+            self._ds = Dataset(self._filename, 'r')
+
         if not hasattr(self, variable):
             # Hmmm, don't like using _passive_data_store here...
             setattr(self, variable, _passive_data_store())
 
         for attribute in self._ds.variables[variable].ncattrs():
             setattr(getattr(self, variable), attribute, getattr(self._ds.variables[variable], attribute))
+
+        if close_on_finish:
+            self._ds.close()
+            delattr(self, '_ds')
 
     def __iter__(self):
         return (a for a in dir(self) if not a.startswith('__') and not a.endswith('__'))
@@ -416,7 +436,7 @@ class FileReader(Domain):
 
                 self._dims[dim] = [self._dims[dim]]
 
-        self._load_time()
+        self.time = _TimeReader(self._fvcom, dims=self._dims)
         self._dims = self.time._dims  # grab the updated dimensions from the _TimeReader object.
 
         # Update the time dimension no we've read in the time data (in case we did so with a specificed dimension
@@ -427,10 +447,10 @@ class FileReader(Domain):
             nt = 1
         self.dims.time = nt
 
-        self._load_grid(fvcom)
+        self.grid = GridReaderNetCDF(fvcom, dims=self._dims, zone=self._zone, debug=self._debug, verbose=self._noisy)
 
         # Load the attributes of anything we've been asked to load.
-        self.atts = _AttributeReader(self.ds, self._variables)
+        self.atts = _AttributeReader(self._fvcom, self._variables)
 
         if self._variables:
             self.load_data(self._variables)
@@ -576,12 +596,6 @@ class FileReader(Domain):
 
         return idem
 
-    def _load_grid(self, fvcom):
-        self.grid = GridReaderNetCDF(fvcom, dims=self._dims, zone=self._zone, debug=self._debug, verbose=self._noisy)
-
-    def _load_time(self):
-        self.time = _TimeReader(self.ds, dims=self._dims)
-
     def _update_dimensions(self, variables):
         # Update the dimensions based on variables we've been given. Construct a list of the unique dimensions in all
         # the given variables and use that to update self.dims.
@@ -622,7 +636,7 @@ class FileReader(Domain):
                 print('Updating existing data to match supplied dimensions when loading data')
             # Use the supplied dimensions as the new dimensions array.
             self._dims = dims
-            self.time = _TimeReader(self.ds, dims=self._dims)
+            self.time = _TimeReader(self._fvcom, dims=self._dims)
             self.dims.time = len(self.time)
             self.grid = _GridReaderNetCDF(self._fvcom, dims=self._dims, zone=self._zone, debug=self._debug,
                                           verbose=self._noisy)
@@ -1032,11 +1046,11 @@ class FileReaderFromDict(FileReader):
             self._fvcom = filename
             self.ds = Dataset(self._fvcom, 'r')
             self.dims = _MakeDimensions(self.ds)
-            self._load_time()
+            self.time = _TimeReader(self._fvcom)
             self._dims = self.time._dims  # grab the updated dimensions from the _TimeReader object.
-            self._load_grid(fvcom)
+            self.grid = GridReaderNetCDF(fvcom)
             # Load the attributes of anything we've been asked to load.
-            self.atts = _AttributeReader(self.ds, self._variables)
+            self.atts = _AttributeReader(self._fvcom, self._variables)
 
         grid_names = ('lon', 'lat', 'lonc', 'latc', 'nv',
                       'h', 'h_center',
@@ -1101,54 +1115,7 @@ class SubDomainReader(FileReader):
         self._bounding_box = True
         super().__init__(*args, **kwargs)
 
-    def _make_subset_dimensions(self):
-        """
-        If the 'wesn' keyword has been included in the supplied dimensions, interactively select a region if the
-        value of 'wesn' is not a shapely Polygon. If it is a shapely Polygon, use that for the subsetting.
 
-        This mimics the function of PyFVCOM.read.FileReader._make_subset_dimensions but with greater flexibility in
-        terms of the region to subset.
-
-        """
-
-        if 'wesn' in self._dims:
-            if isinstance(self._dims['wesn'], Polygon):
-                bounding_poly = np.asarray(self._dims['wesn'].exterior.coords)
-            # Drop the 'wesn' dimension now as it's not necessary for anything else.
-            self._dims.pop('wesn')
-        else:
-            fig = plt.figure()
-            ax = fig.add_subplot(111)
-            ax.scatter(self.grid.lon, self.grid.lat, c='lightgray')
-            plt.show()
-
-            keep_picking = True
-            while keep_picking:
-                n_pts = int(input('How many polygon points? '))
-                bounding_poly = np.full((n_pts, 2), np.nan)
-                poly_lin = []
-                for point in range(n_pts):
-                    bounding_poly[point, :] = plt.ginput(1)[0]
-                    poly_lin.append(ax.plot(np.hstack([bounding_poly[:, 0], bounding_poly[0, 0]]),
-                                       np.hstack([bounding_poly[:, 1], bounding_poly[0,1]]),
-                                       c='r', linewidth=2)[0])
-                    fig.canvas.draw()
-
-                happy = input('Is that polygon OK? Y/N: ')
-                if happy.lower() == 'y':
-                    keep_picking = False
-
-                for this_l in poly_lin:
-                    this_l.remove()
-
-            plt.close()
-
-        poly_path = mpath.Path(bounding_poly)
-
-        # Shouldn't need the np.asarray here, I think, but leaving it in as I'm not 100% sure.
-        self._dims['node'] = np.squeeze(np.argwhere(np.asarray(poly_path.contains_points(np.asarray([self.grid.lon, self.grid.lat]).T))))
-        self._dims['nele'] = np.squeeze(np.argwhere(np.all(np.isin(self.grid.triangles, self._dims['node']), axis=1)))
-        self._get_data_pattern == 'memory'
 
     def _find_open_faces(self):
         """

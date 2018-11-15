@@ -65,10 +65,11 @@ class GridReaderNetCDF(object):
         self._noisy = verbose
 
         ds = Dataset(filename, 'r')
-        _dims = copy.deepcopy(dims)
+        self._dims = copy.deepcopy(dims)
 
-        if not hasattr(self, '_bounding_box'):
-            self._bounding_box = False
+        self._bounding_box = False
+        if 'wesn' in self._dims:
+            self._bounding_box = True
 
         grid_metrics = {'ntsn': 'node', 'nbsn': 'node', 'ntve': 'node', 'nbve': 'node', 'art1': 'node', 'art2': 'node',
                         'a1u': 'nele', 'a2u': 'nele', 'nbe': 'nele'}
@@ -123,26 +124,26 @@ class GridReaderNetCDF(object):
             self._make_subset_dimensions()
 
         # If we've been given a spatial dimension to subsample in fix the triangulation.
-        if 'nele' in _dims or 'node' in _dims:
+        if 'nele' in self._dims or 'node' in self._dims:
             if self._debug:
                 print('Fix triangulation table as we have been asked for only specific nodes/elements.')
 
-            if 'node' in _dims:
-                new_tri, new_ele = reduce_triangulation(self.triangles, _dims['node'], return_elements=True)
-                if not new_ele.size and 'nele' not in _dims:
+            if 'node' in self._dims:
+                new_tri, new_ele = reduce_triangulation(self.triangles, self._dims['node'], return_elements=True)
+                if not new_ele.size and 'nele' not in self._dims:
                     if self._noisy:
                         print(
                             'Nodes selected cannot produce new triangulation and no elements specified so including all element of which the nodes are members')
-                    _dims['nele'] = np.squeeze(
-                        np.argwhere(np.any(np.isin(self.triangles, _dims['node']), axis=1)))
-                    if _dims['nele'].size == 1:  # Annoying error for the differnce between array(n) and array([n])
-                        _dims['nele'] = np.asarray([_dims['nele']])
-                elif 'nele' not in _dims:
+                    self._dims['nele'] = np.squeeze(
+                        np.argwhere(np.any(np.isin(self.triangles, self._dims['node']), axis=1)))
+                    if self._dims['nele'].size == 1:  # Annoying error for the differnce between array(n) and array([n])
+                        self._dims['nele'] = np.asarray([self._dims['nele']])
+                elif 'nele' not in self._dims:
                     if self._noisy:
                         print(
                             'Elements not specified but reducing to only those within the triangulation of selected nodes')
-                    _dims['nele'] = new_ele
-                elif not np.array_equal(np.sort(new_ele), np.sort(_dims['nele'])):
+                    self._dims['nele'] = new_ele
+                elif not np.array_equal(np.sort(new_ele), np.sort(self._dims['nele'])):
                     if self._noisy:
                         print(
                             'Mismatch between given elements and nodes for triangulation, retaining original elements')
@@ -150,39 +151,39 @@ class GridReaderNetCDF(object):
                 if self._noisy:
                     print(
                         'Nodes not specified but reducing to only those within the triangulation of selected elements')
-                _dims['node'] = np.unique(self.triangles[_dims['nele'], :])
-                new_tri = reduce_triangulation(self.triangles, _dims['node'])
+                self._dims['node'] = np.unique(self.triangles[self._dims['nele'], :])
+                new_tri = reduce_triangulation(self.triangles, self._dims['node'])
 
             self.nv = new_tri.T + 1
             self.triangles = new_tri
 
-        if 'node' in _dims:
-            nodes = len(_dims['node'])
+        if 'node' in self._dims:
+            nodes = len(self._dims['node'])
             for var in 'x', 'y', 'lon', 'lat', 'h', 'siglay', 'siglev':
                 try:
                     node_index = ds.variables[var].dimensions.index('node')
                     var_shape = [i for i in np.shape(ds.variables[var])]
                     var_shape[node_index] = nodes
 
-                    if 'siglay' in _dims and 'siglay' in ds.variables[var].dimensions:
+                    if 'siglay' in self._dims and 'siglay' in ds.variables[var].dimensions:
                         var_shape[ds.variables[var].dimensions.index('siglay')] = ds.dimensions['siglay'].size
-                    elif 'siglev' in _dims and 'siglev' in ds.variables[var].dimensions:
+                    elif 'siglev' in self._dims and 'siglev' in ds.variables[var].dimensions:
                         var_shape[ds.variables[var].dimensions.index('siglev')] = ds.dimensions['siglev'].size
                     _temp = np.empty(var_shape)
                     if 'siglay' in ds.variables[var].dimensions:
-                        for ni, node in enumerate(_dims['node']):
-                            if 'siglay' in _dims:
-                                _temp[..., ni] = ds.variables[var][_dims['siglay'], node]
+                        for ni, node in enumerate(self._dims['node']):
+                            if 'siglay' in self._dims:
+                                _temp[..., ni] = ds.variables[var][self._dims['siglay'], node]
                             else:
                                 _temp[..., ni] = ds.variables[var][:, node]
                     elif 'siglev' in ds.variables[var].dimensions:
-                        for ni, node in enumerate(_dims['node']):
-                            if 'siglev' in _dims:
-                                _temp[..., ni] = ds.variables[var][_dims['siglev'], node]
+                        for ni, node in enumerate(self._dims['node']):
+                            if 'siglev' in self._dims:
+                                _temp[..., ni] = ds.variables[var][self._dims['siglev'], node]
                             else:
                                 _temp[..., ni] = ds.variables[var][:, node]
                     else:
-                        for ni, node in enumerate(_dims['node']):
+                        for ni, node in enumerate(self._dims['node']):
                             _temp[..., ni] = ds.variables[var][..., node]
                 except KeyError:
                     if 'siglay' in var:
@@ -193,32 +194,32 @@ class GridReaderNetCDF(object):
                         _temp = np.empty(nodes)
                 setattr(self, var, _temp)
 
-        if 'nele' in _dims:
-            nele = len(_dims['nele'])
+        if 'nele' in self._dims:
+            nele = len(self._dims['nele'])
             for var in 'xc', 'yc', 'lonc', 'latc', 'h_center', 'siglay_center', 'siglev_center':
                 try:
                     nele_index = ds.variables[var].dimensions.index('nele')
                     var_shape = [i for i in np.shape(ds.variables[var])]
                     var_shape[nele_index] = nele
-                    if 'siglay' in _dims and 'siglay' in ds.variables[var].dimensions:
+                    if 'siglay' in self._dims and 'siglay' in ds.variables[var].dimensions:
                         var_shape[ds.variables[var].dimensions.index('siglay')] = ds.dimensions['siglay'].size
-                    elif 'siglev' in _dims and 'siglev' in ds.variables[var].dimensions:
+                    elif 'siglev' in self._dims and 'siglev' in ds.variables[var].dimensions:
                         var_shape[ds.variables[var].dimensions.index('siglev')] = ds.dimensions['siglev'].size
                     _temp = np.full(var_shape, np.nan)
                     if 'siglay' in ds.variables[var].dimensions:
-                        for ni, current_nele in enumerate(_dims['nele']):
-                            if 'siglay' in _dims:
-                                _temp[..., ni] = ds.variables[var][_dims['siglay'], current_nele]
+                        for ni, current_nele in enumerate(self._dims['nele']):
+                            if 'siglay' in self._dims:
+                                _temp[..., ni] = ds.variables[var][self._dims['siglay'], current_nele]
                             else:
                                 _temp[..., ni] = ds.variables[var][:, current_nele]
                     elif 'siglev' in ds.variables[var].dimensions:
-                        for ni, current_nele in enumerate(_dims['nele']):
-                            if 'siglev' in _dims:
-                                _temp[..., ni] = ds.variables[var][_dims['siglev'], current_nele]
+                        for ni, current_nele in enumerate(self._dims['nele']):
+                            if 'siglev' in self._dims:
+                                _temp[..., ni] = ds.variables[var][self._dims['siglev'], current_nele]
                             else:
                                 _temp[..., ni] = ds.variables[var][:, current_nele]
                     else:
-                        for ni, current_nele in enumerate(_dims['nele']):
+                        for ni, current_nele in enumerate(self._dims['nele']):
                             _temp[..., ni] = ds.variables[var][..., current_nele]
                 except KeyError:
                     # FVCOM3 files don't have h_center, siglay_center and siglev_center, so make var_shape manually.
@@ -236,9 +237,9 @@ class GridReaderNetCDF(object):
         # Load the grid metrics data separately as we don't want to set a bunch of zeros for missing data.
         for metric, grid_pos in grid_metrics.items():
             if metric in ds.variables:
-                if grid_pos in _dims:
+                if grid_pos in self._dims:
                     metric_raw = ds.variables[metric][:]
-                    setattr(self, metric, metric_raw[..., _dims[grid_pos]])
+                    setattr(self, metric, metric_raw[..., self._dims[grid_pos]])
                 else:
                     setattr(self, metric, ds.variables[metric][:])
                 # Save the attributes.
@@ -257,9 +258,9 @@ class GridReaderNetCDF(object):
         # reason (e.g. testing). We don't add attributes for the data if we've created it as doing so is a pain.
         for var in 'h_center', 'siglay_center', 'siglev_center':
             try:
-                if 'nele' in _dims:
+                if 'nele' in self._dims:
                     var_raw = ds.variables[var][:]
-                    setattr(self, var, var_raw[..., _dims['nele']])
+                    setattr(self, var, var_raw[..., self._dims['nele']])
                 else:
                     setattr(self, var, ds.variables[var][:])
                 # Save the attributes.
@@ -327,18 +328,18 @@ class GridReaderNetCDF(object):
             if var not in ds.variables:
                 continue
             short_dim = copy.copy(var)
-            # Assume we need to subset this one unless 'node' or 'nele' are missing from _dims. If they're in
-            # _dims, we've already subsetted in the 'node' and 'nele' sections above, so doing it again here
+            # Assume we need to subset this one unless 'node' or 'nele' are missing from self._dims. If they're in
+            # self._dims, we've already subsetted in the 'node' and 'nele' sections above, so doing it again here
             # would fail.
             subset_variable = True
-            if 'node' in _dims or 'nele' in _dims:
+            if 'node' in self._dims or 'nele' in self._dims:
                 subset_variable = False
             # Strip off the _center to match the dimension name.
             if short_dim.endswith('_center'):
                 short_dim = short_dim.split('_')[0]
-            if short_dim in _dims:
+            if short_dim in self._dims:
                 if short_dim in ds.variables[var].dimensions and subset_variable:
-                    _temp = getattr(self, var)[_dims[short_dim], ...]
+                    _temp = getattr(self, var)[self._dims[short_dim], ...]
                     setattr(self, var, _temp)
 
         # Check ranges and if zero assume we're missing that particular type, so convert from the other accordingly.
