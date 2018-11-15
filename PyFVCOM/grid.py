@@ -353,7 +353,14 @@ class GridReaderNetCDF(object):
         self.yc_range = np.ptp(self.yc)
 
         # Only do the conversions when we have more than a single point since the relevant ranges will be zero with
-        # only one position.
+        # only one position. If we've got zeros for lon and lat, then we know our native coordinate type is cartesian.
+        # Otherwise, it might be spherical.
+        self.native_coordinates = 'not specified'
+        if self.lon_range == 0 and self.x_range != 0:
+            self.native_coordinates = 'cartesian'
+        elif self.lon_range != 0 and self.x_range == 0:
+            self.native_coordinates = 'spherical'
+
         if len(self.lon) > 1:
             if self.lon_range == 0 and self.lat_range == 0:
                 self.lon, self.lat = lonlat_from_utm(self.x, self.y, zone=zone)
