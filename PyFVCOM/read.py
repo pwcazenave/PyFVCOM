@@ -427,6 +427,9 @@ class FileReader(Domain):
         self._dims_variables = {var: self.ds.variables[var].dimensions for var in self.ds.variables}
 
         for dim in self._dims:
+            # Skip the special 'wesn' key.
+            if dim == 'wesn':
+                continue
             dim_is_iterable = hasattr(self._dims[dim], '__iter__')
             dim_is_string = isinstance(self._dims[dim], str)  # for date ranges
             dim_is_slice = isinstance(self._dims[dim], slice)
@@ -448,6 +451,9 @@ class FileReader(Domain):
         self.dims.time = nt
 
         self.grid = GridReaderNetCDF(fvcom, dims=self._dims, zone=self._zone, debug=self._debug, verbose=self._noisy)
+        # Grab the dimensions from the grid in case we've subset somewhere.
+        self._dims = self.grid._dims
+        delattr(self.grid, '_dims')
 
         # Load the attributes of anything we've been asked to load.
         self.atts = _AttributeReader(self._fvcom, self._variables)
