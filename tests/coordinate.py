@@ -83,7 +83,7 @@ class CoordinateToolsTest(TestCase):
     def test_british_national_grid_to_lonlat(self):
         # Make up some fairly realistic coordinates.
         x, y = [10000, 20000], [50000, 60000]
-        test_lon, test_lat = [-7.46963128, -7.34010597], [50.22103197, 50.31708046]
+        test_lon, test_lat = [-7.469631317662015, -7.34010600918183], [50.22103338565389, 50.31708181071903]
         lon, lat = british_national_grid_to_lonlat(x, y)
         test.assert_almost_equal(lon, test_lon)
         test.assert_almost_equal(lat, test_lat)
