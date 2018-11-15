@@ -35,7 +35,7 @@ from PyFVCOM.ocean import zbar
 
 class GridReaderNetCDF(object):
 
-    def __init__(self, ds, dims=None, zone='30N', debug=False, verbose=False):
+    def __init__(self, filename, dims=None, zone='30N', debug=False, verbose=False):
         """
         Load the grid data.
 
@@ -43,8 +43,8 @@ class GridReaderNetCDF(object):
 
         Parameters
         ----------
-        ds : netCDF4.Dataset
-            The FVCOM netCDF object from which to load.
+        filename : str, pathlib.Path
+            The FVCOM netCDF file to read.
         dims : dict, optional
             Dictionary of dimension names along which to subsample e.g. dims={'nele': [0, 10, 100], 'node': 100}.
             All netCDF variable dimensions are specified as list of indices.
@@ -64,6 +64,7 @@ class GridReaderNetCDF(object):
         self._debug = debug
         self._noisy = verbose
 
+        ds = Dataset(filename, 'r')
         _dims = copy.deepcopy(dims)
 
         if not hasattr(self, '_bounding_box'):
