@@ -28,9 +28,9 @@ from utide import reconstruct, ut_constants
 from utide.utilities import Bunch
 
 from PyFVCOM.coordinate import utm_from_lonlat, lonlat_from_utm
-from PyFVCOM.utilities.time import date_range
-from PyFVCOM.utilities.general import _passive_data_store, fix_range
 from PyFVCOM.ocean import zbar
+from PyFVCOM.utilities.general import _passive_data_store, fix_range
+from PyFVCOM.utilities.time import date_range
 
 
 class GridReaderNetCDF(object):
