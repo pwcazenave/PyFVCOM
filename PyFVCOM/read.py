@@ -423,7 +423,7 @@ class FileReader(Domain):
         self.dims = _MakeDimensions(self.ds)
         # Store the dimensions of all the variables in the current file so we can use them when writing out with
         # PyFVCOM.read.WriteFVCOM.
-        self._dims_variables = {var: self.ds.variables[var].dimensions for var in self.ds.variables}
+        self.variable_dimension_names = {var: self.ds.variables[var].dimensions for var in self.ds.variables}
 
         for dim in self._dims:
             # Skip the special 'wesn' key.
@@ -2074,7 +2074,7 @@ class WriteFVCOM(object):
             if var in var_types:
                 fmt = var_types[var]
 
-            dims = self._fvcom._dims_variables[var]
+            dims = self._fvcom.variable_dimension_names[var]
             self._variables[var] = self._nc.createVariable(var, fmt, dims, **self._ncopts)
             # Add any attributes we have.
             var_atts = getattr(self._fvcom.atts, var)
@@ -2084,9 +2084,9 @@ class WriteFVCOM(object):
         # self._fvcom.data. may be missing entirely (it's always present as I write this, but I think it may go away
         # in the future - assume I've done that since it's relatively cheap to do so).
 
-        # We may also have completely custom variables here with no known dimensions in self._fvcom._dims_variables,
+        # We may also have completely custom variables here with no known dimensions in self._fvcom.variable_dimension_names,
         # in which case we'll have to guess what dimensions they have based on their .shape. This could be tricky.
-        dim_names = set(flatten_list([self._fvcom._dims_variables[i] for i in self._fvcom._dims_variables]))
+        dim_names = set(flatten_list([self._fvcom.variable_dimension_names[i] for i in self._fvcom.variable_dimension_names]))
         dim_size = {i: getattr(self._fvcom.dims, i) for i in dim_names}
         unlikely_dims = ['three', 'four', 'maxelem', 'maxnode']
         if hasattr(self._fvcom, 'data'):
@@ -2095,8 +2095,8 @@ class WriteFVCOM(object):
                 if var not in self._data_variables:
                     continue
 
-                if var in self._fvcom._dims_variables:
-                    dims = self._fvcom._dims_variables[var]
+                if var in self._fvcom.variable_dimension_names:
+                    dims = self._fvcom.variable_dimension_names[var]
                 else:
                     shape = getattr(self._fvcom.data, var).shape
                     # Find candidate dimensions. If we have dimensions with duplicate sizes, this won't work (i.e. if
