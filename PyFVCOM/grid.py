@@ -375,6 +375,8 @@ class GridReaderNetCDF(object):
         # Make a bounding box variable too (spherical coordinates): W/E/S/N
         self.bounding_box = (np.min(self.lon), np.max(self.lon), np.min(self.lat), np.max(self.lat))
 
+        ds.close()
+
     def __iter__(self):
         return (a for a in dir(self) if not a.startswith('_'))
 
