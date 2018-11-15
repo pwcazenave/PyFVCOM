@@ -98,8 +98,7 @@ class GridReaderNetCDF(object):
 
         # And the triangulation
         try:
-            self.nv = ds.variables['nv'][:].astype(
-                int)  #  force integers even though they should already be so
+            self.nv = ds.variables['nv'][:].astype(int)  # force integers even though they should already be so
             self.triangles = copy.copy(self.nv.T - 1)  # zero-indexed for python
         except KeyError:
             # If we don't have a triangulation, make one. Warn that if we've made one, it might not match the
