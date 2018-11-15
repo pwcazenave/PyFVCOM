@@ -967,7 +967,8 @@ class Domain(object):
         """
         print(f'Nodes: {self.dims.node}')
         print(f'Elements: {self.dims.nele}')
-        print(f'Open boundaries: {len(self.grid.open_boundary)}')
+        if hasattr(self.grid, 'open_boundary'):
+            print(f'Open boundaries: {len(self.grid.open_boundary)}')
         print(f'Native grid coordinates: {self.grid.native_coordinates}')
         if self.grid.native_coordinates == 'cartesian':
             print(f'Native grid zone: {self.grid.zone}')
