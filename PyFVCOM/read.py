@@ -1120,8 +1120,6 @@ class SubDomainReader(FileReader):
         self._bounding_box = True
         super().__init__(*args, **kwargs)
 
-
-
     def _find_open_faces(self):
         """
         TODO: docstring.
