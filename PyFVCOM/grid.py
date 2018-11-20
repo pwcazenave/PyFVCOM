@@ -298,21 +298,35 @@ class GridReaderNetCDF(object):
                 else:
                     z = self.h
 
+                if self._debug:
+                    print(f'Making water depth vertical grid: {var}_z')
+
+                current_names = ds.variables[var].dimensions
+                current_dims = [slice(None) for _ in current_names]
+                for dim in current_names:
+                    # We haven't handled the vertical yet, so do so here. The node/element stuff has been done above.
+                    if dim.startswith('sig'):
+                        current_dims[current_names.index(dim)] = self._dims[dim]
+
+                _original_sig = getattr(self, var)[current_dims]
+
                 # Set the sigma data to the 0-1 range for siglay so that the maximum depth value is equal to the
                 # actual depth. This may be a problem.
-                _fixed_sig = fix_range(getattr(self, var), 0, 1)
+                _fixed_sig = fix_range(_original_sig, 0, 1)
 
                 # h_center can have a time dimension (when running with sediment transport and morphological
                 # update enabled). As such, we need to account for that in the creation of the _z arrays.
                 if np.ndim(z) > 1:
                     z = z[:, np.newaxis, :]
-                    _fixed_sig = fix_range(getattr(self, var), 0, 1)[np.newaxis, ...]
+                    _fixed_sig = fix_range(_original_sig, 0, 1)[np.newaxis, ...]
                 try:
-                    setattr(self, '{}_z'.format(var), fix_range(getattr(self, var), 0, 1) * z)
+                    setattr(self, '{}_z'.format(var), fix_range(_original_sig, 0, 1) * z)
                 except ValueError:
                     # The arrays might be the wrong shape for broadcasting to work, so transpose and retranspose
                     # accordingly. This is less than ideal.
                     setattr(self, '{}_z'.format(var), (_fixed_sig.T * z).T)
+                # Update the original data with the subsetted data.
+                setattr(self, var, _original_sig)
 
         # Check if we've been given vertical dimensions to subset in too, and if so, do that. Check we haven't
         # already done this if the 'node' and 'nele' sections above first.
