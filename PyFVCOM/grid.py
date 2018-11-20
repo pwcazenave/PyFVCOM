@@ -134,7 +134,7 @@ class GridReaderNetCDF(object):
                     if self._noisy:
                         print('Nodes selected cannot produce new triangulation and no elements specified so including all element of which the nodes are members')
                     self._dims['nele'] = np.squeeze(np.argwhere(np.any(np.isin(self.triangles, self._dims['node']), axis=1)))
-                    if self._dims['nele'].size == 1:  # Annoying error for the differnce between array(n) and array([n])
+                    if self._dims['nele'].size == 1:  # Annoying error for the difference between array(n) and array([n])
                         self._dims['nele'] = np.asarray([self._dims['nele']])
                 elif 'nele' not in self._dims:
                     if self._noisy:
