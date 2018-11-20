@@ -132,16 +132,13 @@ class GridReaderNetCDF(object):
                 new_tri, new_ele = reduce_triangulation(self.triangles, self._dims['node'], return_elements=True)
                 if not new_ele.size and 'nele' not in self._dims:
                     if self._noisy:
-                        print(
-                            'Nodes selected cannot produce new triangulation and no elements specified so including all element of which the nodes are members')
-                    self._dims['nele'] = np.squeeze(
-                        np.argwhere(np.any(np.isin(self.triangles, self._dims['node']), axis=1)))
+                        print('Nodes selected cannot produce new triangulation and no elements specified so including all element of which the nodes are members')
+                    self._dims['nele'] = np.squeeze(np.argwhere(np.any(np.isin(self.triangles, self._dims['node']), axis=1)))
                     if self._dims['nele'].size == 1:  # Annoying error for the differnce between array(n) and array([n])
                         self._dims['nele'] = np.asarray([self._dims['nele']])
                 elif 'nele' not in self._dims:
                     if self._noisy:
-                        print(
-                            'Elements not specified but reducing to only those within the triangulation of selected nodes')
+                        print('Elements not specified but reducing to only those within the triangulation of selected nodes')
                     self._dims['nele'] = new_ele
                 elif not np.array_equal(np.sort(new_ele), np.sort(self._dims['nele'])):
                     if self._noisy:
@@ -149,8 +146,7 @@ class GridReaderNetCDF(object):
                             'Mismatch between given elements and nodes for triangulation, retaining original elements')
             else:
                 if self._noisy:
-                    print(
-                        'Nodes not specified but reducing to only those within the triangulation of selected elements')
+                    print('Nodes not specified but reducing to only those within the triangulation of selected elements')
                 self._dims['node'] = np.unique(self.triangles[self._dims['nele'], :])
                 new_tri = reduce_triangulation(self.triangles, self._dims['node'])
 
@@ -276,15 +272,13 @@ class GridReaderNetCDF(object):
                         setattr(self, var, nodes2elems(getattr(self, var.split('_')[0]), self.triangles))
                     except IndexError:
                         # Maybe the array's the wrong way around. Flip it and try again.
-                        setattr(self, var,
-                                nodes2elems(getattr(self, var.split('_')[0]).T, self.triangles))
+                        setattr(self, var, nodes2elems(getattr(self, var.split('_')[0]).T, self.triangles))
                 else:
                     # The triangulation is invalid, so we can't properly move our existing data, so just set things
                     # to 0 but at least they're the right shape. Warn accordingly.
                     if self._noisy:
                         print(
-                            '{} cannot be migrated to element centres (invalid triangulation). Setting to zero.'.format(
-                                var))
+                            '{} cannot be migrated to element centres (invalid triangulation). Setting to zero.'.format(var))
                     if var is 'siglev_center':
                         setattr(self, var, np.zeros((ds.dimensions['siglev'].size, nele)))
                     elif var is 'siglay_center':
