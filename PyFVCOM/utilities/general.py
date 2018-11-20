@@ -26,6 +26,8 @@ def fix_range(a, nmin, nmax):
     Given an array of values `a', scale the values within in to the range
     specified by `nmin' and `nmax'.
 
+    In the case where all the values are identical, the values are returned unchanged.
+
     Parameters
     ----------
     a : ndarray
@@ -45,7 +47,11 @@ def fix_range(a, nmin, nmax):
     C = nmin
     D = nmax
 
-    b = (((D - C) * (a - A)) / (B - A)) + C
+    # In the case where all the values are the same, just return the original values.
+    if A != B:
+        b = (((D - C) * (a - A)) / (B - A)) + C
+    else:
+        b = a
 
     return b
 
