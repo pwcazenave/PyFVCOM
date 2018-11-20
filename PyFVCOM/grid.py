@@ -288,25 +288,20 @@ class GridReaderNetCDF(object):
                     else:
                         raise ValueError('Inexplicably, we have a variable not in the loop we have defined.')
 
-        # Check if we've been given vertical dimensions to subset in too, and if so, do that. Check we haven't
-        # already done this if the 'node' and 'nele' sections above first.
+        # Check if we've been given vertical dimensions to subset in too, and if so, do that.
         for var in 'siglay', 'siglev', 'siglay_center', 'siglev_center':
             # Only carry on if we have this variable in the output file with which we're working (mainly this
             # is for compatibility with FVCOM 3 outputs which do not have the _center variables).
             if var not in ds.variables:
                 continue
             short_dim = copy.copy(var)
-            # Assume we need to subset this one unless 'node' or 'nele' are missing from self._dims. If they're in
-            # self._dims, we've already subsetted in the 'node' and 'nele' sections above, so doing it again here
-            # would fail.
-            subset_variable = True
-            if 'node' in self._dims or 'nele' in self._dims:
-                subset_variable = False
             # Strip off the _center to match the dimension name.
             if short_dim.endswith('_center'):
                 short_dim = short_dim.split('_')[0]
             if short_dim in self._dims:
-                if short_dim in ds.variables[var].dimensions and subset_variable:
+                if short_dim in ds.variables[var].dimensions:
+                    if self._debug:
+                        print(f'Subsetting {var} in the vertical ({short_dim} = {self._dims[short_dim]}')
                     _temp = getattr(self, var)[self._dims[short_dim], ...]
                     setattr(self, var, _temp)
 
