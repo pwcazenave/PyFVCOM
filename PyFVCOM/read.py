@@ -41,6 +41,7 @@ class _TimeReader(object):
         dataset = Dataset(filename, 'r')
         _noisy = verbose
         self._dims = copy.deepcopy(dims)
+        self._mjd_origin = 'days since 1858-11-17 00:00:00'
 
         time_variables = ('time', 'Itime', 'Itime2', 'Times')
         got_time, missing_time = [], []
@@ -147,10 +148,10 @@ class _TimeReader(object):
                     raise ValueError('Missing sufficient time information to make the relevant time data.')
 
                 # We're making Modified Julian Days here to replicate FVCOM's 'time' variable.
-                self.time = date2num(_dates, units='days since 1858-11-17 00:00:00')
+                self.time = date2num(_dates, units=self._mjd_origin)
                 # Add the relevant attributes for the time variable.
                 attributes = _passive_data_store()
-                setattr(attributes, 'units', 'days since 1858-11-17 00:00:00')
+                setattr(attributes, 'units', self._mjd_origin)
                 setattr(attributes, 'long_name', 'time')
                 setattr(attributes, 'format', 'modified julian day (MJD)')
                 setattr(attributes, 'time_zone', 'UTC')
@@ -172,11 +173,11 @@ class _TimeReader(object):
                     raise ValueError('Missing sufficient time information to make the relevant time data.')
 
                 # We're making Modified Julian Days here to replicate FVCOM's 'time' variable.
-                _datenum = date2num(_dates, units='days since 1858-11-17 00:00:00')
+                _datenum = date2num(_dates, units=self._mjd_origin)
                 self.Itime = np.floor(_datenum)
                 self.Itime2 = (_datenum - np.floor(_datenum)) * 1000 * 60 * 60 * 24  # microseconds since midnight
                 attributes = _passive_data_store()
-                setattr(attributes, 'units', 'days since 1858-11-17 00:00:00')
+                setattr(attributes, 'units', self._mjd_origin)
                 setattr(attributes, 'format', 'modified julian day (MJD)')
                 setattr(attributes, 'time_zone', 'UTC')
                 # setattr(self.atts, 'Itime', attributes)
@@ -2009,6 +2010,8 @@ class WriteFVCOM(object):
 
         """
 
+        self._mjd_origin = 'days since 1858-11-17 00:00:00'
+
         # Our data
         self._fvcom = fvcom
         self._variables = []  # where we'll hold the `Dataset.createVariable' objects.
@@ -2159,7 +2162,7 @@ class WriteFVCOM(object):
 
         """
 
-        mjd = date2num(time, units='days since 1858-11-17 00:00:00')
+        mjd = date2num(time, units=self._mjd_origin)
         Itime = np.floor(mjd)  # integer Modified Julian Days
         Itime2 = (mjd - Itime) * 24 * 60 * 60 * 1000  # milliseconds since midnight
         Times = [t.strftime('%Y-%m-%dT%H:%M:%S.%f') for t in time]
@@ -2168,14 +2171,14 @@ class WriteFVCOM(object):
         # with `time' as doubles.
         if 'time' not in self._variables and 'time' in self._nc.dimensions:
             self._variables['time'] = self._nc.createVariable('time', 'f4', ['time'], **self._ncopts)
-        self._variables['time'].setncattr('units', 'days since 1858-11-17 00:00:00')
+        self._variables['time'].setncattr('units', self._mjd_origin)
         self._variables['time'].setncattr('format', 'modified julian day (MJD)')
         self._variables['time'].setncattr('long_name', 'time')
         self._variables['time'].setncattr('time_zone', 'UTC')
         self._variables['time'][:] = mjd
         if 'Itime' not in self._variables and 'time' in self._nc.dimensions:
             self._variables['Itime'] = self._nc.createVariable('Itime', 'i', ['time'], **self._ncopts)
-        self._variables['Itime'].setncattr('units', 'days since 1858-11-17 00:00:00')
+        self._variables['Itime'].setncattr('units', self._mjd_origin)
         self._variables['Itime'].setncattr('format', 'modified julian day (MJD)')
         self._variables['Itime'].setncattr('time_zone', 'UTC')
         self._variables['Itime'][:] = Itime
