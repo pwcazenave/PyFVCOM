@@ -1201,12 +1201,12 @@ class SubDomainReader(FileReader):
 
         if not hasattr(self.grid, 'depth'):
             if noisy:
-                print('Time varying depth not preloaded, fetching')
+                print('Time varying depth not loaded, fetching')
             self._get_cv_volumes()
 
         if not hasattr(self.data, 'u'):
             if noisy:
-                print('U data not preloaded, fetching')
+                print('u data not loaded, fetching')
             self.load_data(['u'])
             u_openface = self.data.u[..., open_face_cells]
             delattr(self.data, 'u')
@@ -1215,7 +1215,7 @@ class SubDomainReader(FileReader):
 
         if not hasattr(self.data, 'v'):
             if noisy:
-                print('V data not preloaded, fetching')
+                print('v data not loaded, fetching')
             self.load_data(['v'])
             v_openface = self.data.v[..., open_face_cells]
             delattr(self.data, 'v')
