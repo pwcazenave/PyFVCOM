@@ -750,12 +750,12 @@ class FileReader(Domain):
 
         """
 
+        surface_elevation = np.zeros((self.dims.time, self.dims.node))
         if hasattr(self.data, 'zeta'):
             surface_elevation = self.data.zeta
         elif load_zeta:
             self.load_data(['zeta'])
-        else:
-            surface_elevation = np.zeros((self.dims.time, self.dims.node))
+            surface_elevation = self.data.zeta
 
         volumes = unstructured_grid_volume(self.grid.art1, self.grid.h, surface_elevation, self.grid.siglev,
                                            depth_integrated=True)
