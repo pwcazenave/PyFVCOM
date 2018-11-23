@@ -144,8 +144,7 @@ class GridReaderNetCDF(object):
                     self._dims['nele'] = new_ele
                 elif not np.array_equal(np.sort(new_ele), np.sort(self._dims['nele'])):
                     if self._noisy:
-                        print(
-                            'Mismatch between given elements and nodes for triangulation, retaining original elements')
+                        print('Mismatch between given elements and nodes for triangulation, retaining original elements')
             else:
                 if self._noisy:
                     print('Nodes not specified but reducing to only those within the triangulation of selected elements')
@@ -279,8 +278,7 @@ class GridReaderNetCDF(object):
                     # The triangulation is invalid, so we can't properly move our existing data, so just set things
                     # to 0 but at least they're the right shape. Warn accordingly.
                     if self._noisy:
-                        print(
-                            '{} cannot be migrated to element centres (invalid triangulation). Setting to zero.'.format(var))
+                        print('{} cannot be migrated to element centres (invalid triangulation). Setting to zero.'.format(var))
                     if var is 'siglev_center':
                         setattr(self, var, np.zeros((ds.dimensions['siglev'].size, nele)))
                     elif var is 'siglay_center':
