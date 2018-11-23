@@ -10,10 +10,8 @@ from pathlib import Path
 from warnings import warn
 
 import matplotlib.path as mpath
-import matplotlib.pyplot as plt
 import numpy as np
 from netCDF4 import Dataset, MFDataset, num2date, date2num
-from shapely.geometry import Polygon
 
 from PyFVCOM.grid import Domain, control_volumes, get_area_heron
 from PyFVCOM.grid import unstructured_grid_volume, elems2nodes, GridReaderNetCDF
