@@ -399,7 +399,7 @@ class GridReaderNetCDF(object):
             if dim != 'time':
                 if self._noisy:
                     print('Resetting {} dimension length from {} to {}'.format(dim, getattr(dims, dim), len(dims[dim])))
-                setattr(self.dims, dim, len(dims[dim]))
+                setattr(self._dims, dim, len(dims[dim]))
 
     def _make_subset_dimensions(self):
         """
