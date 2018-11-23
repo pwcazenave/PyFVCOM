@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 
+""" Functions related to handling FVCOM outputs. """
+
 from __future__ import print_function, division
 
 import copy
@@ -1269,9 +1271,14 @@ class SubDomainReader(FileReader):
         self.open_side_flux = open_side_flux_dict
 
     def add_evap_precip(self):
+        """ Load precipitation and evaporation data. """
         self.load_data(['precip', 'evap'])
 
-    def add_river_data(self):
+    def add_river_data(self, river_nml_file):
+        """
+        TODO: docstring.
+
+        """
         nml_dict = get_river_config(river_nml_file)
         river_node_raw = np.asarray(nml_dict['RIVER_GRID_LOCATION'], dtype=int) - 1
 
