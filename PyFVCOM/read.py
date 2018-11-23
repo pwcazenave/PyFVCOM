@@ -1195,7 +1195,7 @@ class SubDomainReader(FileReader):
                 print('Open faces not identified yet, running _find_open_faces()')
             self._find_open_faces()
         open_face_cells = np.asarray(list(self.open_side_dict.keys()))
-        open_face_vel = {}  # currently unused
+        # open_face_vel = {}  # currently unused
 
         if not hasattr(self.grid, 'depth'):
             if noisy:
