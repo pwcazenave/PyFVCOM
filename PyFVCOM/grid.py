@@ -427,8 +427,8 @@ class GridReaderNetCDF(object):
                 for point in range(n_pts):
                     bounding_poly[point, :] = plt.ginput(1)[0]
                     poly_lin.append(ax.plot(np.hstack([bounding_poly[:, 0], bounding_poly[0, 0]]),
-                                       np.hstack([bounding_poly[:, 1], bounding_poly[0,1]]),
-                                       c='r', linewidth=2)[0])
+                                            np.hstack([bounding_poly[:, 1], bounding_poly[0, 1]]),
+                                            c='r', linewidth=2)[0])
                     fig.canvas.draw()
 
                 happy = input('Is that polygon OK? Y/N: ')
@@ -836,8 +836,8 @@ class Domain(object):
         x = self.grid.x
         y = self.grid.y
         self.grid.areas = get_area(np.asarray((x[triangles[:, 0]], y[triangles[:, 0]])).T,
-                                  np.asarray((x[triangles[:, 1]], y[triangles[:, 1]])).T,
-                                  np.asarray((x[triangles[:, 2]], y[triangles[:, 2]])).T)
+                                   np.asarray((x[triangles[:, 1]], y[triangles[:, 1]])).T,
+                                   np.asarray((x[triangles[:, 2]], y[triangles[:, 2]])).T)
 
     def calculate_control_area_and_volume(self):
         """
@@ -1629,8 +1629,8 @@ class OpenBoundary(object):
             boundary_grid = np.array((np.tile(self.nest.time.time, [nx, 1]).T.ravel(),
                                       np.tile(y, [nt, 1]).transpose(0, 1).ravel(),
                                       np.tile(x, [nt, 1]).transpose(0, 1).ravel())).T
-            ft = RegularGridInterpolator((coarse.time.time, coarse.grid.lat, coarse.grid.lon), 
-                                             getattr(coarse.data, coarse_name), method='linear', fill_value=np.nan)
+            ft = RegularGridInterpolator((coarse.time.time, coarse.grid.lat, coarse.grid.lon),
+                                         getattr(coarse.data, coarse_name), method='linear', fill_value=np.nan)
             # Reshape the results to match the un-ravelled boundary_grid array.
             interpolated_coarse_data = ft(boundary_grid).reshape([nt, -1])
             # Drop the interpolated data into the nest object.
@@ -1640,7 +1640,8 @@ class OpenBoundary(object):
                                       np.tile(y, [nz, nt, 1]).transpose(1, 0, 2).ravel(),
                                       np.tile(x, [nz, nt, 1]).transpose(1, 0, 2).ravel())).T
             ft = RegularGridInterpolator((coarse.time.time, coarse.grid.depth, coarse.grid.lat, coarse.grid.lon),
-                                             np.ma.filled(getattr(coarse.data, coarse_name), np.nan), method='linear', fill_value=np.nan)
+                                         np.ma.filled(getattr(coarse.data, coarse_name), np.nan), method='linear',
+                                         fill_value=np.nan)
             # Reshape the results to match the un-ravelled boundary_grid array.
             interpolated_coarse_data = ft(boundary_grid).reshape([nt, nz, -1])
             # Drop the interpolated data into the nest object.
@@ -2739,18 +2740,12 @@ def line_sample(x, y, positions, num=0, return_distance=False, noisy=False):
             # Closest node index.
             tidx = sdist.argmin().astype(int)
             # Distance from the start point.
-            fdist = np.sqrt((start[0] - xx[tidx])**2 +
-                            (start[1] - yy[tidx])**2
-                            ).min()
+            fdist = np.sqrt((start[0] - xx[tidx])**2 + (start[1] - yy[tidx])**2).min()
             # Distance to the end point.
-            tdist = np.sqrt((end[0] - xx[tidx])**2 +
-                            (end[1] - yy[tidx])**2
-                            ).min()
+            tdist = np.sqrt((end[0] - xx[tidx])**2 + (end[1] - yy[tidx])**2).min()
             # Last node's distance to the end point.
             if len(sidx) >= 1:
-                oldtdist = np.sqrt((end[0] - xx[sidx[-1]])**2 +
-                                   (end[1] - yy[sidx[-1]])**2
-                                   ).min()
+                oldtdist = np.sqrt((end[0] - xx[sidx[-1]])**2 + (end[1] - yy[sidx[-1]])**2).min()
             else:
                 # Haven't found any points yet.
                 oldtdist = tdist
@@ -2771,9 +2766,7 @@ def line_sample(x, y, positions, num=0, return_distance=False, noisy=False):
                 while True:
                     try:
                         tidx = sdistidx[c]
-                        tdist = np.sqrt((end[0] - xx[tidx])**2 +
-                                        (end[1] - yy[tidx])**2
-                                        ).min()
+                        tdist = np.sqrt((end[0] - xx[tidx])**2 + (end[1] - yy[tidx])**2).min()
                         c += 1
                     except IndexError:
                         # Eh, we've run out of indices for some reason. Let's
@@ -2879,11 +2872,7 @@ def line_sample(x, y, positions, num=0, return_distance=False, noisy=False):
                                            (y - end[1])**2))[:6])
             # Use the larger of the two lengths to be on the safe side.
             bb = 2 * np.max((bstart, bend))
-            ss = np.where((x >= (ll[0] - bb)) *
-                          (x <= (ur[0] + bb)) *
-                          (y >= (ll[1] - bb)) *
-                          (y <= (ur[1] + bb))
-                          )[0]
+            ss = np.where((x >= (ll[0] - bb)) * (x <= (ur[0] + bb)) * (y >= (ll[1] - bb)) * (y <= (ur[1] + bb)))[0]
             xs = x[ss]
             ys = y[ss]
 
@@ -4298,7 +4287,7 @@ def getcrossectiontriangles(cross_section_pnts, trinodes, X, Y, dist_res):
     tri_Y = Y[trinodes]
 
     tri_cross_log_1_1 = np.logical_or(np.logical_and(tri_X.min(1) < min(cross_section_x), tri_X.max(1) > max(cross_section_x)),
-                            np.logical_and(tri_Y.min(1) < min(cross_section_y), tri_Y.max(1) > max(cross_section_y)))
+                                      np.logical_and(tri_Y.min(1) < min(cross_section_y), tri_Y.max(1) > max(cross_section_y)))
 
     tri_cross_log_1_2 = np.any(np.logical_and(np.logical_and(tri_X < max(cross_section_x), tri_X > min(cross_section_x)), np.logical_and(tri_Y < max(cross_section_y), tri_Y > min(cross_section_y))), axis = 1)
     tri_cross_log_1 = np.logical_or(tri_cross_log_1_1, tri_cross_log_1_2)
