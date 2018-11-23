@@ -1124,7 +1124,7 @@ class FileReaderFromDict(FileReader):
                     # Assume we've got a single position
                     self.dims.time = getattr(self.data, obj).shape[0]
                     self.dims.node = 1
-            elif obj in ('Times'):
+            elif obj in ['Times']:
                 self.dims.time, self.dims.DateStrLen = getattr(self.time, obj).shape
             elif obj in ('time', 'Itime', 'Itime2', 'datetime'):
                 self.dims.time = getattr(self.time, obj).shape
