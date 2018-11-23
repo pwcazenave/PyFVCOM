@@ -1603,7 +1603,7 @@ class OpenBoundary(object):
             # The depth data work differently as we need to squeeze each FVCOM water column into the available coarse
             # data. The only way to do this is to adjust each FVCOM water column in turn by comparing with the
             # closest coarse depth.
-            if not mode == 'surface':
+            if mode != 'surface':
                 coarse_depths = np.tile(coarse.grid.depth, [coarse.dims.lat, coarse.dims.lon, 1]).transpose(2, 0, 1)
                 coarse_depths = np.ma.masked_array(coarse_depths, mask=getattr(coarse.data, coarse_name)[0, ...].mask)
                 coarse_depths = np.max(coarse_depths, axis=0)
