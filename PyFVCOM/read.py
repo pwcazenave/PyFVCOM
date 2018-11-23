@@ -1013,7 +1013,7 @@ def MFileReader(fvcom, noisy=False, *args, **kwargs):
 
     Returns
     -------
-    FVCOM : PyFVCOM.read.FileReader
+    fvcom : PyFVCOM.read.FileReader
         Concatenated data from the files in `fvcom'.
 
     """
@@ -1021,17 +1021,17 @@ def MFileReader(fvcom, noisy=False, *args, **kwargs):
     if isinstance(fvcom, str):
         if noisy:
             print('Loading {}'.format(fvcom))
-        FVCOM = FileReader(fvcom, *args, **kwargs)
+        fvcom = FileReader(fvcom, *args, **kwargs)
     else:
         for file in fvcom:
             if noisy:
                 print('Loading {}'.format(file))
             if file == fvcom[0]:
-                FVCOM = FileReader(file, *args, **kwargs)
+                fvcom = FileReader(file, *args, **kwargs)
             else:
-                FVCOM += FileReader(file, *args, **kwargs)
+                fvcom += FileReader(file, *args, **kwargs)
 
-    return FVCOM
+    return fvcom
 
 
 class FileReaderFromDict(FileReader):
