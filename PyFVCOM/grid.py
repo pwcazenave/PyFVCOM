@@ -1519,7 +1519,7 @@ class OpenBoundary(object):
         coef['g'] = phase
         coef['A_ci'] = np.zeros(amplitude.shape)
         coef['g_ci'] = np.zeros(phase.shape)
-        pred = reconstruct(times, coef, verbose=False)
+        pred = reconstruct(times, coef, verbose=noisy)
         zeta = pred['h']
 
         return zeta
