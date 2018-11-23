@@ -519,7 +519,7 @@ class _GridReader(object):
         elif extension == '.m21fm':
             if self._noisy:
                 print('Loading MIKE21 grid: {}'.format(self.filename))
-            triangle, nodes, x, y, z = read_mike_mesh(self.filename)
+            triangle, nodes, x, y, z, grid_type = read_mike_mesh(self.filename)
         else:
             raise ValueError('Unknown file format ({}) for file: {}'.format(extension, self.filename))
 
