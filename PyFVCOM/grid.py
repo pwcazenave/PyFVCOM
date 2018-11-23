@@ -37,6 +37,7 @@ from PyFVCOM.utilities.time import date_range
 
 
 class GridReaderNetCDF(object):
+    """ Read in and store a given FVCOM grid in our data format. """
 
     def __init__(self, filename, dims=None, zone='30N', debug=False, verbose=False):
         """
