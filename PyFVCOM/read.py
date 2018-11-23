@@ -976,7 +976,7 @@ class FileReader(Domain):
         time_raw = river_nc.variables['Times'][:]
         self.river.time_dt = [datetime.strptime(b''.join(this_time).decode('utf-8').rstrip(), '%Y/%m/%d %H:%M:%S') for this_time in time_raw]
 
-        ref_date = datetime(1900,1,1)
+        ref_date = datetime(1900, 1, 1)
         mod_time_sec = [(this_dt - ref_date).total_seconds() for this_dt in self.time.datetime]
         self.river.river_time_sec = [(this_dt - ref_date).total_seconds() for this_dt in self.river.time_dt]
 
@@ -987,14 +987,14 @@ class FileReader(Domain):
             self.river.river_nodes = river_node_raw
             rivers_in_grid = np.ones(river_node_raw.shape, dtype=bool)
 
-        river_flux_raw = river_nc.variables['river_flux'][:,rivers_in_grid]
+        river_flux_raw = river_nc.variables['river_flux'][:, rivers_in_grid]
         self.river.river_fluxes = np.asarray([np.interp(mod_time_sec, self.river.river_time_sec, this_col) for this_col in river_flux_raw.T]).T
         self.river.total_flux = np.sum(self.river.river_fluxes, axis=1)
 
-        river_temp_raw = river_nc.variables['river_temp'][:,rivers_in_grid]
+        river_temp_raw = river_nc.variables['river_temp'][:, rivers_in_grid]
         self.river.river_temp = np.asarray([np.interp(mod_time_sec, self.river.river_time_sec, this_col) for this_col in river_temp_raw.T]).T
 
-        river_salt_raw = river_nc.variables['river_salt'][:,rivers_in_grid]
+        river_salt_raw = river_nc.variables['river_salt'][:, rivers_in_grid]
         self.river.river_salt = np.asarray([np.interp(mod_time_sec, self.river.river_time_sec, this_col) for this_col in river_salt_raw.T]).T
 
 
@@ -1282,7 +1282,7 @@ class SubDomainReader(FileReader):
         time_raw = river_nc.variables['Times'][:]
         time_dt = [datetime.strptime(b''.join(this_time).decode('utf-8'), '%Y-%m-%d %H:%M:%S') for this_time in time_raw]
 
-        ref_date = datetime(1900,1,1)
+        ref_date = datetime(1900, 1, 1)
         mod_time_sec = [(this_dt - ref_date).total_seconds() for this_dt in self.time.datetime]
         river_time_sec = [(this_dt - ref_date).total_seconds() for this_dt in time_dt]
 
@@ -1510,8 +1510,8 @@ class ncwrite(object):
                     try:
                         var[:] = data
                     except IndexError:
-                        raise(IndexError(('Supplied data shape {} does not match the specified'
-                        ' dimensions {}, for variable \'{}\'.'.format(data.shape, var.shape, k))))
+                        raise IndexError('Supplied data shape {} does not match the specified '
+                                         'dimensions {}, for variable \'{}\'.'.format(data.shape, var.shape, k))
                 else:
                     if not self.quiet:
                         print('Problem in the number of dimensions')
@@ -1519,8 +1519,8 @@ class ncwrite(object):
                 try:
                     var[:] = data
                 except IndexError:
-                    raise(IndexError(('Supplied data shape {} does not match the specified'
-                    ' dimensions {}, for variable \'{}\'.'.format(data.shape, var.shape, k))))
+                    raise IndexError('Supplied data shape {} does not match the specified '
+                                     'dimensions {}, for variable \'{}\'.'.format(data.shape, var.shape, k))
 
             # Create attributes for variables
             if 'attributes' in self.input_dict['variables'][k]:
@@ -1540,11 +1540,11 @@ def ncread(file, vars=None, dims=False, noisy=False, atts=False, datetimes=False
     ranges or lists of indices. For example, to extract the first hundred time
     steps, supply dims as:
 
-        dims = {'time':'0:100'}
+        dims = {'time': '0:100'}
 
     To extract the first, 400th and 10,000th values of any array with nodes:
 
-        dims = {'node':'[0, 3999, 9999]'}
+        dims = {'node': '[0, 3999, 9999]'}
 
     Any dimension not given in dims will be extracted in full.
 
@@ -1730,7 +1730,7 @@ def ncread(file, vars=None, dims=False, noisy=False, atts=False, datetimes=False
                     print('(extracted given indices)')
 
         elif noisy:
-                print()
+            print()
 
     # If: 1. we haven't got datetime in the output 2. we've been asked to get it and 3. we've got both Itime and
     # Itime2, then make datetime from those.
