@@ -279,11 +279,11 @@ class GridReaderNetCDF(object):
                     # to 0 but at least they're the right shape. Warn accordingly.
                     if self._noisy:
                         print('{} cannot be migrated to element centres (invalid triangulation). Setting to zero.'.format(var))
-                    if var is 'siglev_center':
+                    if var == 'siglev_center':
                         setattr(self, var, np.zeros((ds.dimensions['siglev'].size, nele)))
-                    elif var is 'siglay_center':
+                    elif var == 'siglay_center':
                         setattr(self, var, np.zeros((ds.dimensions['siglay'].size, nele)))
-                    elif var is 'h_center':
+                    elif var == 'h_center':
                         setattr(self, var, np.zeros((nele)))
                     else:
                         raise ValueError('Inexplicably, we have a variable not in the loop we have defined.')
