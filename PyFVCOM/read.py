@@ -1328,7 +1328,7 @@ class SubDomainReader(FileReader):
             var_to_int = elems2nodes(var, self.grid.triangles)
 
         if not hasattr(self, 'volume'):
-            self.get_cv_volumes()
+            self._get_cv_volumes()
 
         if not hasattr(self.data, var):
             self._get_variable(var)
