@@ -605,7 +605,7 @@ class FileReader(Domain):
         >>> file1 = PyFVCOM.read.FileReader('file1.nc', variables=['u', 'v', 'zeta'])
         >>> file2 = PyFVCOM.read.FileReader('file2.nc', variables=['u', 'v', 'zeta'])
         >>> diff = file1 - file2
-        # List the variables for which we now have a difference.
+        >>> # List the variables for which we now have a difference.
         >>> [a for a in dir(diff.data) if not a.startswith('_')
 
         """
@@ -1191,7 +1191,6 @@ class SubDomainReader(FileReader):
         """
 
         # Get a bunch of stuff if not already calculated
-
         if not hasattr(self, 'open_side_dict'):
             if noisy:
                 print('Open faces not identified yet, running _find_open_faces()')
