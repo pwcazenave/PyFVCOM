@@ -1359,7 +1359,7 @@ class OpenBoundary(object):
         is_matched = np.zeros(len(pts_1), dtype=bool)
         match_indices = np.ones(len(pts_1))*-1
         for i, this_pt in enumerate(pts_1):
-            dists_m = haversine_distance(this_pt, pts_2.T) * 1000 
+            dists_m = haversine_distance(this_pt, pts_2.T) * 1000
             if np.min(dists_m) < epsilon:
                 is_matched[i] = True
                 match_indices[i] = np.argmin(dists_m)
@@ -1551,7 +1551,7 @@ class OpenBoundary(object):
         tide_adjust : bool, optional
             Some nested forcing doesn't include tidal components and these have to be added from predictions using harmonics.
             With this set to true the interpolated forcing has the tidal component (required to already exist in self.tide) added
-            to the final data. 
+            to the final data.
         """
 
         # Check we have what we need.
@@ -4269,7 +4269,6 @@ def getcrossectiontriangles(cross_section_pnts, trinodes, X, Y, dist_res):
     Example
     -------
 
-
     TO DO
     -----
 
@@ -4395,7 +4394,7 @@ def isintriangle(tri_x, tri_y, point_x, point_y):
 
 class Graph(object):
     """
-    Base class for graph theoretic functions. 
+    Base class for graph theoretic functions.
 
     """
 
@@ -4470,10 +4469,10 @@ class ReducedFVCOMdist(Graph):
 
     def __init__(self, nodes_sel, triangle, edge_weights):
         super(ReducedFVCOMdist, self).__init__()
- 
+
         for this_node in nodes_sel:
             self.add_node(this_node)
-        
+
         self.node_index = nodes_sel
 
         tri_inds = [[0, 1], [1, 2], [2, 0]]
@@ -4523,7 +4522,7 @@ class GraphFVCOMdepth(Graph):
         bounding_box : list 2x2, optional
             To reduce computation times can subset the grid, the bounding box expects [[x_min, x_max], [y_min, y_max]]
             format.
-        
+
         """
 
         super(GraphFVCOMdepth, self).__init__()
@@ -4579,7 +4578,7 @@ class GraphFVCOMdepth(Graph):
         Parameters
         ----------
         near_xy : list-like
-            x and y coordinates of the point 
+            x and y coordinates of the point
 
         Returns
         -------
@@ -4588,11 +4587,11 @@ class GraphFVCOMdepth(Graph):
 
         """
 
-        dists = (self.X - near_xy[0])**2 + (self.Y - near_xy[1])**2
+        dists = (self.x - near_xy[0])**2 + (self.y - near_xy[1])**2
         return self.node_index[dists.argmin()]
 
     def get_channel_between_points(self, start_xy, end_xy, refine_channel=False):
-        """        
+        """
         Find the shortest path between two points according to depth weighted distance (hopefully the channel...)
 
         Parameters
@@ -4605,13 +4604,13 @@ class GraphFVCOMdepth(Graph):
 
         refine_channel : bool, optional
             Apply a refinement step, this might help in cases if extreme depth scalings cause the path to take two
-            sides of a triangle when it should take just one    
+            sides of a triangle when it should take just one
 
         Returns
         -------
         node_list : np.ndarray
             list of fvcom node numbers forming the predicted channel between the start and end points
-            
+
         """
         start_node_ind = self.get_nearest_node_ind(start_xy)
         end_node_ind = self.get_nearest_node_ind(end_xy)
@@ -4634,6 +4633,6 @@ class GraphFVCOMdepth(Graph):
         end_node = np.where(self.node_index == node_list[-1])[0][0]
 
         red_graph = ReducedFVCOMdist(nodes_sel, self.triangle, self.elem_sides)
-        _, red_node_list = red_graph.shortest_path(start_node, end_node)    
+        _, red_node_list = red_graph.shortest_path(start_node, end_node)
 
         return np.asarray(self.node_index[np.asarray(red_node_list)])
