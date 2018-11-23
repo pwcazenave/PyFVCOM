@@ -83,16 +83,22 @@ class _TimeReader(object):
                 # happens if you stop a model part way through a run. We check for masked arrays at this point
                 # because the netCDF library only returns masked arrays when we have NaNs in the results.
                 if isinstance(dataset.variables['Times'][:], np.ma.core.MaskedArray):
-                    bad_times = np.argwhere(np.any(dataset.variables['Times'][:].data == ([b''] * dataset.dimensions['DateStrLen'].size), axis=1)).ravel()
-                    if np.any(bad_times):
+                    time_data = dataset.variables['Times'][:].data
+                    bad_time_string = ([b''] * dataset.dimensions['DateStrLen'].size)
+                    bad_indices = np.argwhere(np.any(time_data == bad_time_string, axis=1)).ravel()
+                    if np.any(bad_indices):
                         if 'time' in got_time:
-                            for bad_time in bad_times:
+                            for bad_time in bad_indices:
                                 if self.time[bad_time]:
-                                    self.Times[bad_time] = list(datetime.strftime(num2date(self.time[bad_time], units='days since 1858-11-17 00:00:00'), '%Y-%m-%dT%H:%M:%S.%f'))
+                                    bad_date = num2date(self.time[bad_time], units=self._mjd_origin)
+                                    self.Times[bad_time] = list(datetime.strftime(bad_date, '%Y-%m-%dT%H:%M:%S.%f'))
                         elif 'Itime' in got_time and 'Itime2' in got_time:
-                            for bad_time in bad_times:
+                            for bad_time in bad_indices:
                                 if self.Itime[bad_time] and self.Itime2[bad_time]:
-                                    self.Times[bad_time] = list(datetime.strftime(num2date(self.Itime[bad_time] + self.Itime2[bad_time] / 1000.0 / 60 / 60, units=getattr(dataset.variables['Itime'], 'units')), '%Y-%m-%dT%H:%M:%S.%f'))
+                                    bad_time_days = self.Itime[bad_time] + self.Itime2[bad_time] / 1000.0 / 60 / 60
+                                    itime_units = getattr(dataset.variables['Itime'], 'units')
+                                    bad_date = num2date(bad_time_days, units=itime_units)
+                                    self.Times[bad_time] = list(datetime.strftime(bad_date), '%Y-%m-%dT%H:%M:%S.%f')
 
                 # Overwrite the existing Times array with a more sensibly shaped one.
                 try:
@@ -107,7 +113,8 @@ class _TimeReader(object):
                 if 'time' in got_time:
                     _dates = num2date(self.time, units=getattr(dataset.variables['time'], 'units'))
                 elif 'Itime' in got_time and 'Itime2' in got_time:
-                    _dates = num2date(self.Itime + self.Itime2 / 1000.0 / 60 / 60 / 24, units=getattr(dataset.variables['Itime'], 'units'))
+                    itime_units = getattr(dataset.variables['Itime'], 'units')
+                    _dates = num2date(self.Itime + self.Itime2 / 1000.0 / 60 / 60 / 24, units=itime_units)
                 else:
                     raise ValueError('Missing sufficient time information to make the relevant time data.')
 
@@ -126,11 +133,16 @@ class _TimeReader(object):
             if 'time' not in got_time:
                 if 'Times' in got_time:
                     try:
-                        _dates = np.array([datetime.strptime(''.join(t.astype(str)).strip(), '%Y-%m-%dT%H:%M:%S.%f') for t in self.Times])
+                        # First format
+                        fmt = '%Y-%m-%dT%H:%M:%S.%f'
+                        _dates = np.array([datetime.strptime(''.join(t.astype(str)).strip(), fmt) for t in self.Times])
                     except ValueError:
-                        _dates = np.array([datetime.strptime(''.join(t.astype(str)).strip(), '%Y/%m/%d %H:%M:%S.%f') for t in self.Times])
+                        # Alternative format
+                        fmt = '%Y/%m/%d %H:%M:%S.%f'
+                        _dates = np.array([datetime.strptime(''.join(t.astype(str)).strip(), fmt) for t in self.Times])
                 elif 'Itime' in got_time and 'Itime2' in got_time:
-                    _dates = num2date(self.Itime + self.Itime2 / 1000.0 / 60 / 60 / 24, units=getattr(dataset.variables['Itime'], 'units'))
+                    itime_units = getattr(dataset.variables['Itime'], 'units')
+                    _dates = num2date(self.Itime + self.Itime2 / 1000.0 / 60 / 60 / 24, units=itime_units)
                 else:
                     raise ValueError('Missing sufficient time information to make the relevant time data.')
 
@@ -147,9 +159,13 @@ class _TimeReader(object):
             if 'Itime' not in got_time and 'Itime2' not in got_time:
                 if 'Times' in got_time:
                     try:
-                        _dates = np.array([datetime.strptime(''.join(t.astype(str)).strip(), '%Y-%m-%dT%H:%M:%S.%f') for t in self.Times])
+                        # First format
+                        fmt = '%Y-%m-%dT%H:%M:%S.%f'
+                        _dates = np.array([datetime.strptime(''.join(t.astype(str)).strip(), fmt) for t in self.Times])
                     except ValueError:
-                        _dates = np.array([datetime.strptime(''.join(t.astype(str)).strip(), '%Y/%m/%d %H:%M:%S.%f') for t in self.Times])
+                        # Alternative format
+                        fmt = '%Y/%m/%d %H:%M:%S.%f'
+                        _dates = np.array([datetime.strptime(''.join(t.astype(str)).strip(), fmt) for t in self.Times])
                 elif 'time' in got_time:
                     _dates = num2date(self.time, units=getattr(dataset.variables['time'], 'units'))
                 else:
@@ -187,7 +203,8 @@ class _TimeReader(object):
 
             # Clip everything to the time indices if we've been given them. Update the time dimension too.
             if 'time' in self._dims:
-                if not isinstance(self._dims['time'], slice) and all([isinstance(i, (datetime, str)) for i in self._dims['time']]):
+                is_datetimes_or_str = all([isinstance(i, (datetime, str)) for i in self._dims['time']])
+                if not isinstance(self._dims['time'], slice) and is_datetimes_or_str:
                     # Convert datetime dimensions to indices in the currently loaded data. Assume we've got a list
                     # and if that fails, we've probably got a single index, so convert it accordingly.
                     try:
@@ -736,7 +753,9 @@ class FileReader(Domain):
         else:
             surface_elevation = np.zeros((self.dims.time, self.dims.node))
 
-        self.grid.depth_volume, self.grid.depth_integrated_volume = unstructured_grid_volume(self.grid.art1, self.grid.h, surface_elevation, self.grid.siglev, depth_integrated=True)
+        volumes = unstructured_grid_volume(self.grid.art1, self.grid.h, surface_elevation, self.grid.siglev,
+                                           depth_integrated=True)
+        self.grid.depth_volume, self.grid.depth_integrated_volume = volumes
 
     def _get_cv_volumes(self, poolsize=None):
         """
@@ -1145,8 +1164,10 @@ class SubDomainReader(FileReader):
                           self.grid.y[this_cell_nodes[0]] - self.grid.y[this_cell_nodes[1]]]
             vector_nml = np.asarray([vector_pll[1], -vector_pll[0]]) / np.sqrt(vector_pll[0]**2 + vector_pll[1]**2)
             epsilon = 0.0001
-            mid_point = np.asarray([self.grid.x[this_cell_nodes[0]] + 0.5 * (self.grid.x[this_cell_nodes[1]] - self.grid.x[this_cell_nodes[0]]),
-                                    self.grid.y[this_cell_nodes[0]] + 0.5 * (self.grid.y[this_cell_nodes[1]] - self.grid.y[this_cell_nodes[0]])])
+            x_width = (self.grid.x[this_cell_nodes[1]] - self.grid.x[this_cell_nodes[0]])
+            y_width = (self.grid.y[this_cell_nodes[1]] - self.grid.y[this_cell_nodes[0]])
+            mid_point = np.asarray([self.grid.x[this_cell_nodes[0]] + 0.5 * x_width,
+                                    self.grid.y[this_cell_nodes[0]] + 0.5 * y_width])
 
             cell_path = mpath.Path(np.asarray([self.grid.x[this_cell_all_nodes], self.grid.y[this_cell_all_nodes]]).T)
 
