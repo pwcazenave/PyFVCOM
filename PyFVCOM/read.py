@@ -427,6 +427,7 @@ class FileReader(Domain):
         # should be created by a separate class (in the same style as _MakeDimensions et al.), but I haven't got
         # around to it yet.
         self.data = _passive_data_store()
+        self.river = _passive_data_store()
 
         if isinstance(self._fvcom, Dataset):
             self.ds = self._fvcom
@@ -970,7 +971,6 @@ class FileReader(Domain):
 
         nml_dict = get_river_config(river_nml_file)
         river_node_raw = np.asarray(nml_dict['RIVER_GRID_LOCATION'], dtype=int) - 1
-        self.river = _passive_data_store()
 
         river_nc = Dataset(river_nc_file, 'r')
         time_raw = river_nc.variables['Times'][:]
