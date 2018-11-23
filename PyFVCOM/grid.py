@@ -2159,43 +2159,43 @@ def write_sms_mesh(triangles, nodes, x, y, z, types, mesh):
 
     """
 
-    fileWrite = open(mesh, 'w')
+    file_write = open(mesh, 'w')
     # Add a header
-    fileWrite.write('MESH2D\n')
+    file_write.write('MESH2D\n')
 
     # Write out the connectivity table (triangles)
-    currentNode = 0
+    current_node = 0
     for line in triangles:
 
         # Bump the numbers by one to correct for Python indexing from zero
         line += 1
-        strLine = []
+        line_string = []
         # Convert the numpy array to a string array
         for value in line:
-            strLine.append(str(value))
+            line_string.append(str(value))
 
-        currentNode += 1
+        current_node += 1
         # Build the output string for the connectivity table
-        output = ['E3T'] + [str(currentNode)] + strLine + ['1']
+        output = ['E3T'] + [str(current_node)] + line_string + ['1']
         output = ' '.join(output)
 
-        fileWrite.write(output + '\n')
+        file_write.write(output + '\n')
 
     # Add the node information (nodes)
     for count, line in enumerate(nodes):
 
         # Convert the numpy array to a string array
-        strLine = str(line)
+        line_string = str(line)
 
         # Format output correctly
         output = ['ND'] + \
-                [strLine] + \
+                [line_string] + \
                 ['{:.8e}'.format(x[count])] + \
                 ['{:.8e}'.format(y[count])] + \
                 ['{:.8e}'.format(z[count])]
         output = ' '.join(output)
 
-        fileWrite.write(output + '\n')
+        file_write.write(output + '\n')
 
     # Convert MIKE boundary types to node strings. The format requires a prefix
     # NS, and then a maximum of 10 node IDs per line. The node string tail is
@@ -2204,32 +2204,32 @@ def write_sms_mesh(triangles, nodes, x, y, z, types, mesh):
     # Iterate through the unique boundary types to get a new node string for
     # each boundary type (ignore types of less than 2 which are not open
     # boundaries in MIKE).
-    for boundaryType in np.unique(types[types > 1]):
+    for boundary_type in np.unique(types[types > 1]):
 
         # Find the nodes for the boundary type which are greater than 1 (i.e.
         # not 0 or 1).
-        nodeBoundaries = nodes[types == boundaryType]
+        node_boundaries = nodes[types == boundary_type]
 
-        nodeStrings = 0
-        for counter, node in enumerate(nodeBoundaries):
-            if counter + 1 == len(nodeBoundaries) and node > 0:
+        node_strings = 0
+        for counter, node in enumerate(node_boundaries):
+            if counter + 1 == len(node_boundaries) and node > 0:
                 node = -node
 
-            nodeStrings += 1
-            if nodeStrings == 1:
+            node_strings += 1
+            if node_strings == 1:
                 output = 'NS  {:d} '.format(int(node))
-                fileWrite.write(output)
-            elif nodeStrings != 0 and nodeStrings < 10:
+                file_write.write(output)
+            elif node_strings != 0 and node_strings < 10:
                 output = '{:d} '.format(int(node))
-                fileWrite.write(output)
-            elif nodeStrings == 10:
+                file_write.write(output)
+            elif node_strings == 10:
                 output = '{:d} '.format(int(node))
-                fileWrite.write(output + '\n')
-                nodeStrings = 0
+                file_write.write(output + '\n')
+                node_strings = 0
 
         # Add a new line at the end of each block. Not sure why the new line
         # above doesn't work...
-        fileWrite.write('\n')
+        file_write.write('\n')
 
     # Add all the blurb at the end of the file.
     #
@@ -2248,12 +2248,12 @@ def write_sms_mesh(triangles, nodes, x, y, z, types, mesh):
     # END2DMBC = End of the model assignments
     footer = 'BEGPARAMDEF\nGM  "Mesh"\nSI  0\nDY  0\nTU  ""\nTD  0  0\nNUME  3\nBCPGC  0\nBEDISP  0 0 0 0 1 0 1 0 0 0 0 1\nBEFONT  0 2\nBEDISP  1 0 0 0 1 0 1 0 0 0 0 1\nBEFONT  1 2\nBEDISP  2 0 0 0 1 0 1 0 0 0 0 1\nBEFONT  2 2\nENDPARAMDEF\nBEG2DMBC\nMAT  1 "material 01"\nEND2DMBC\n'
 
-    fileWrite.write(footer)
+    file_write.write(footer)
 
-    fileWrite.close()
+    file_write.close()
 
 
-def write_sms_bathy(triangles, nodes, z, PTS):
+def write_sms_bathy(triangles, nodes, z, filename):
     """
     Writes out the additional bathymetry file sometimes output by SMS. Not sure
     why this is necessary as it's possible to put the depths in the other file,
@@ -2269,16 +2269,16 @@ def write_sms_bathy(triangles, nodes, z, PTS):
         Integer number assigned to each node.
     z : np.ndarray
         Z values at each node location.
-    PTS : str
+    filename : str
         Full path of the output file name.
 
     """
 
-    filePTS = open(PTS, 'w')
+    fname = open(filename, 'w')
 
     # Get some information needed for the metadata side of things
-    nodeNumber = len(nodes)
-    elementNumber = len(triangles[:, 0])
+    node_number = len(nodes)
+    element_number = len(triangles[:, 0])
 
     # Header format (see:
     #     http://wikis.aquaveo.com/xms/index.php?title=GMS:Data_Set_Files)
@@ -2289,18 +2289,18 @@ def write_sms_bathy(triangles, nodes, z, PTS):
     # NC = Number of elements
     # NAME = Freeform data set name
     # TS = Time step of the data
-    header = 'DATASET\nOBJTYEP = "mesh2d"\nBEGSCL\nND  {:<6d}\nNC  {:<6d}\nNAME "Z_interp"\nTS 0 0\n'.format(int(nodeNumber), int(elementNumber))
-    filePTS.write(header)
+    header = 'DATASET\nOBJTYEP = "mesh2d"\nBEGSCL\nND  {:<6d}\nNC  {:<6d}\nNAME "Z_interp"\nTS 0 0\n'.format(int(node_number), int(element_number))
+    fname.write(header)
 
     # Now just iterate through all the z values. This process assumes the z
     # values are in the same order as the nodes. If they're not, this will
     # make a mess of your data.
     for depth in z:
-        filePTS.write('{:.5f}\n'.format(float(depth)))
+        fname.write('{:.5f}\n'.format(float(depth)))
 
     # Close the file with the footer
-    filePTS.write('ENDDS\n')
-    filePTS.close()
+    fname.write('ENDDS\n')
+    fname.close()
 
 
 def write_mike_mesh(triangles, nodes, x, y, z, types, mesh):
@@ -2330,10 +2330,10 @@ def write_mike_mesh(triangles, nodes, x, y, z, types, mesh):
         Full path to the output mesh file.
 
     """
-    fileWrite = open(mesh, 'w')
+    file_write = open(mesh, 'w')
     # Add a header
     output = '{}  LONG/LAT'.format(int(len(nodes)))
-    fileWrite.write(output + '\n')
+    file_write.write(output + '\n')
 
     if len(types) == 0:
         types = np.zeros(shape=(len(nodes), 1))
@@ -2342,40 +2342,40 @@ def write_mike_mesh(triangles, nodes, x, y, z, types, mesh):
     for count, line in enumerate(nodes):
 
         # Convert the numpy array to a string array
-        strLine = str(line)
+        line_string = str(line)
 
         output = \
-            [strLine] + \
+            [line_string] + \
             ['{}'.format(x[count])] + \
             ['{}'.format(y[count])] + \
             ['{}'.format(z[count])] + \
             ['{}'.format(int(types[count]))]
         output = ' '.join(output)
 
-        fileWrite.write(output + '\n')
+        file_write.write(output + '\n')
 
     # Now for the connectivity
 
     # Little header. No idea what the 3 and 21 are all about (version perhaps?)
     output = '{} {} {}'.format(int(len(triangles)), '3', '21')
-    fileWrite.write(output + '\n')
+    file_write.write(output + '\n')
 
     for count, line in enumerate(triangles):
 
         # Bump the numbers by one to correct for Python indexing from zero
         line = line + 1
-        strLine = []
+        line_string = []
         # Convert the numpy array to a string array
         for value in line:
-            strLine.append(str(value))
+            line_string.append(str(value))
 
         # Build the output string for the connectivity table
-        output = [str(count + 1)] + strLine
+        output = [str(count + 1)] + line_string
         output = ' '.join(output)
 
-        fileWrite.write(output + '\n')
+        file_write.write(output + '\n')
 
-    fileWrite.close()
+    file_write.close()
 
 
 def write_fvcom_mesh(triangles, nodes, x, y, z, mesh, extra_depth=None):
@@ -2501,34 +2501,34 @@ def element_side_lengths(triangles, x, y):
 
     Returns
     -------
-    elemSides : np.ndarray
+    element_sides : np.ndarray
         Length of each element described by triangles and x, y.
 
     """
 
-    elemSides = np.zeros([np.shape(triangles)[0], 3])
+    element_sides = np.zeros([np.shape(triangles)[0], 3])
     for it, tri in enumerate(triangles):
         pos1x, pos2x, pos3x = x[tri]
         pos1y, pos2y, pos3y = y[tri]
 
-        elemSides[it, 0] = np.sqrt((pos1x - pos2x)**2 + (pos1y - pos2y)**2)
-        elemSides[it, 1] = np.sqrt((pos2x - pos3x)**2 + (pos2y - pos3y)**2)
-        elemSides[it, 2] = np.sqrt((pos3x - pos1x)**2 + (pos3y - pos1y)**2)
+        element_sides[it, 0] = np.sqrt((pos1x - pos2x)**2 + (pos1y - pos2y)**2)
+        element_sides[it, 1] = np.sqrt((pos2x - pos3x)**2 + (pos2y - pos3y)**2)
+        element_sides[it, 2] = np.sqrt((pos3x - pos1x)**2 + (pos3y - pos1y)**2)
 
-    return elemSides
+    return element_sides
 
 
-def mesh2grid(meshX, meshY, meshZ, nx, ny, thresh=None, noisy=False):
+def mesh2grid(mesh_x, mesh_y, mesh_z, nx, ny, thresh=None, noisy=False):
     """
-    Resample the unstructured grid in meshX and meshY onto a regular grid whose
+    Resample the unstructured grid in mesh_x and mesh_y onto a regular grid whose
     size is nx by ny or which is specified by the arrays nx, ny. Optionally
     specify dist to control the proximity of a value considered valid.
 
     Parameters
     ----------
-    meshX, meshY : np.ndarray
+    mesh_x, mesh_y : np.ndarray
         Arrays of the unstructured grid (mesh) node positions.
-    meshZ : np.ndarray
+    mesh_z : np.ndarray
         Array of values to be resampled onto the regular grid. The shape of the
         array should have the nodes as the first dimension. All subsequent
         dimensions will be propagated automatically.
@@ -2548,7 +2548,7 @@ def mesh2grid(meshX, meshY, meshZ, nx, ny, thresh=None, noisy=False):
         New position arrays (1D). Can be used with numpy.meshgrid to plot the
         resampled variables with matplotlib.pyplot.pcolor.
     zz : np.ndarray
-        Array of the resampled data from meshZ. The first dimension from the
+        Array of the resampled data from mesh_z. The first dimension from the
         input is now replaced with two dimensions (x, y). All other input
         dimensions follow.
 
@@ -2558,7 +2558,7 @@ def mesh2grid(meshX, meshY, meshZ, nx, ny, thresh=None, noisy=False):
         thresh = np.inf
 
     # Get the extents of the input data.
-    xmin, xmax, ymin, ymax = meshX.min(), meshX.max(), meshY.min(), meshY.max()
+    xmin, xmax, ymin, ymax = mesh_x.min(), mesh_x.max(), mesh_y.min(), mesh_y.max()
 
     if isinstance(nx, int) and isinstance(ny, int):
         xx = np.linspace(xmin, xmax, nx)
@@ -2573,9 +2573,9 @@ def mesh2grid(meshX, meshY, meshZ, nx, ny, thresh=None, noisy=False):
     # leave us with the right shape. This even works for 1D inputs (i.e. a
     # single value at each unstructured grid location).
     if isinstance(nx, int) and isinstance(ny, int):
-        zz = np.empty((nx, ny) + meshZ.shape[1:]) * np.nan
+        zz = np.empty((nx, ny) + mesh_z.shape[1:]) * np.nan
     else:
-        zz = np.empty((nx.shape) + meshZ.shape[1:]) * np.nan
+        zz = np.empty((nx.shape) + mesh_z.shape[1:]) * np.nan
 
     if noisy:
         if isinstance(nx, int) and isinstance(ny, int):
@@ -2595,7 +2595,7 @@ def mesh2grid(meshX, meshY, meshZ, nx, ny, thresh=None, noisy=False):
                 # Find the nearest node in the unstructured grid data and grab
                 # its u and v values. If it's beyond some threshold distance,
                 # leave the z value as NaN.
-                dist = np.sqrt((meshX - xpos)**2 + (meshY - ypos)**2)
+                dist = np.sqrt((mesh_x - xpos)**2 + (mesh_y - ypos)**2)
 
                 # Get the index of the minimum and extract the values only if
                 # the nearest point is within the threshold distance (thresh).
@@ -2606,7 +2606,7 @@ def mesh2grid(meshX, meshY, meshZ, nx, ny, thresh=None, noisy=False):
                     # asked for our input array to have the nodes as the first
                     # dimension, this means we can just get all the others when
                     # using the node index.
-                    zz[xi, yi, ...] = meshZ[idx, ...]
+                    zz[xi, yi, ...] = mesh_z[idx, ...]
     else:
         # We've been given positions, so run through those instead of our
         # regularly sampled grid.
@@ -2622,11 +2622,11 @@ def mesh2grid(meshX, meshY, meshZ, nx, ny, thresh=None, noisy=False):
                 c += 1
 
                 dist = np.sqrt(
-                    (meshX - xx[ri, ci])**2 + (meshY - yy[ri, ci])**2
+                    (mesh_x - xx[ri, ci])**2 + (mesh_y - yy[ri, ci])**2
                 )
                 if dist.min() < thresh:
                     idx = dist.argmin()
-                    zz[ri, ci, ...] = meshZ[idx, ...]
+                    zz[ri, ci, ...] = mesh_z[idx, ...]
 
     if noisy:
         print('done.')
@@ -4005,10 +4005,8 @@ def nodes2elems(nodes, tri):
 
 def vincenty_distance(point1, point2, miles=False):
     """
-    Author Maurycy Pietrzak (https://github.com/maurycyp/vincenty)
-
     Vincenty's formula (inverse method) to calculate the distance (in
-    kilometers or miles) between two points on the surface of a spheroid
+    kilometres or miles) between two points on the surface of a spheroid
 
     Parameters
     ----------
@@ -4024,68 +4022,68 @@ def vincenty_distance(point1, point2, miles=False):
     distance : float
         Distance between point1 and point2 in kilometres.
 
+    Notes
+    -----
+    Author Maurycy Pietrzak (https://github.com/maurycyp/vincenty)
+
     """
 
-    a = 6378137  # meters
+    a = 6378137  # metres
     f = 1 / 298.257223563
-    b = 6356752.314245  # meters; b = (1 - f)a
+    b = 6356752.314245  # metres; b = (1 - f)a
 
-    MILES_PER_KILOMETER = 0.621371
+    miles_per_kilometre = 0.621371
 
-    MAX_ITERATIONS = 200
-    CONVERGENCE_THRESHOLD = 1e-12  # .000,000,000,001
+    max_iterations = 200
+    convergence_threshold = 1e-12  # .000,000,000,001
 
-
-    # short-circuit coincident points
+    # Short-circuit coincident points
     if point1[0] == point2[0] and point1[1] == point2[1]:
         return 0.0
 
-    U1 = math.atan((1 - f) * math.tan(math.radians(point1[0])))
-    U2 = math.atan((1 - f) * math.tan(math.radians(point2[0])))
-    L = math.radians(point2[1] - point1[1])
-    Lambda = L
+    u1 = math.atan((1 - f) * math.tan(math.radians(point1[0])))
+    u2 = math.atan((1 - f) * math.tan(math.radians(point2[0])))
+    lambda_initial = math.radians(point2[1] - point1[1])
+    lambda_current = copy.copy(lambda_initial)
 
-    sinU1 = math.sin(U1)
-    cosU1 = math.cos(U1)
-    sinU2 = math.sin(U2)
-    cosU2 = math.cos(U2)
+    sin_u1 = math.sin(u1)
+    cos_u1 = math.cos(u1)
+    sin_u2 = math.sin(u2)
+    cos_u2 = math.cos(u2)
 
-    for iteration in range(MAX_ITERATIONS):
-        sinLambda = math.sin(Lambda)
-        cosLambda = math.cos(Lambda)
-        sinSigma = math.sqrt((cosU2 * sinLambda) ** 2 +
-                             (cosU1 * sinU2 - sinU1 * cosU2 * cosLambda) ** 2)
-        if sinSigma == 0:
+    for iteration in range(max_iterations):
+        sin_lambda = math.sin(lambda_current)
+        cos_lambda = math.cos(lambda_current)
+        sin_sigma = math.sqrt((cos_u2 * sin_lambda) ** 2 + (cos_u1 * sin_u2 - sin_u1 * cos_u2 * cos_lambda) ** 2)
+        if sin_sigma == 0:
             return 0.0  # coincident points
-        cosSigma = sinU1 * sinU2 + cosU1 * cosU2 * cosLambda
-        sigma = math.atan2(sinSigma, cosSigma)
-        sinAlpha = cosU1 * cosU2 * sinLambda / sinSigma
-        cosSqAlpha = 1 - sinAlpha ** 2
+        cos_sigma = sin_u1 * sin_u2 + cos_u1 * cos_u2 * cos_lambda
+        sigma = math.atan2(sin_sigma, cos_sigma)
+        sin_alpha = cos_u1 * cos_u2 * sin_lambda / sin_sigma
+        cos_sq_alpha = 1 - sin_alpha ** 2
         try:
-            cos2SigmaM = cosSigma - 2 * sinU1 * sinU2 / cosSqAlpha
+            cos2sigma_m = cos_sigma - 2 * sin_u1 * sin_u2 / cos_sq_alpha
         except ZeroDivisionError:
-            cos2SigmaM = 0
-        C = f / 16 * cosSqAlpha * (4 + f * (4 - 3 * cosSqAlpha))
-        LambdaPrev = Lambda
-        Lambda = L + (1 - C) * f * sinAlpha * (sigma + C * sinSigma *
-                                               (cos2SigmaM + C * cosSigma *
-                                                (-1 + 2 * cos2SigmaM ** 2)))
-        if abs(Lambda - LambdaPrev) < CONVERGENCE_THRESHOLD:
+            cos2sigma_m = 0
+        C = f / 16 * cos_sq_alpha * (4 + f * (4 - 3 * cos_sq_alpha))
+        lambda_prev = copy.copy(lambda_current)
+        lambda_current = lambda_initial + (1 - C) * f * sin_alpha * (sigma + C * sin_sigma * (cos2sigma_m + C * cos_sigma * (-1 + 2 * cos2sigma_m**2)))
+        if abs(lambda_current - lambda_prev) < convergence_threshold:
             break  # successful convergence
     else:
         return None  # failure to converge
 
-    uSq = cosSqAlpha * (a ** 2 - b ** 2) / (b ** 2)
-    A = 1 + uSq / 16384 * (4096 + uSq * (-768 + uSq * (320 - 175 * uSq)))
-    B = uSq / 1024 * (256 + uSq * (-128 + uSq * (74 - 47 * uSq)))
-    deltaSigma = B * sinSigma * (cos2SigmaM + B / 4 * (cosSigma *
-                 (-1 + 2 * cos2SigmaM ** 2) - B / 6 * cos2SigmaM *
-                 (-3 + 4 * sinSigma ** 2) * (-3 + 4 * cos2SigmaM ** 2)))
-    s = b * A * (sigma - deltaSigma)
+    u_sq = cos_sq_alpha * (a ** 2 - b ** 2) / (b ** 2)
+    A = 1 + u_sq / 16384 * (4096 + u_sq * (-768 + u_sq * (320 - 175 * u_sq)))
+    B = u_sq / 1024 * (256 + u_sq * (-128 + u_sq * (74 - 47 * u_sq)))
+    delta_sigma = B * sin_sigma * (cos2sigma_m + B / 4 * (cos_sigma * (-1 + 2 * cos2sigma_m ** 2) - B / 6 *
+                                                          cos2sigma_m * (-3 + 4 * sin_sigma ** 2) *
+                                                          (-3 + 4 * cos2sigma_m ** 2)))
+    s = b * A * (sigma - delta_sigma)
 
-    s /= 1000  # meters to kilometers
+    s /= 1000  # metres to kilometres
     if miles:
-        s *= MILES_PER_KILOMETER  # kilometers to miles
+        s *= miles_per_kilometre  # kilometres to miles
 
     return round(s, 6)
 
