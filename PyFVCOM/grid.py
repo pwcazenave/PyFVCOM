@@ -1167,7 +1167,7 @@ class OpenBoundary(object):
         # Dump the results into the object.
         setattr(self.tide, predict, np.asarray(results).T)  # put the time dimension first, space last.
 
-    def add_fvcom_tides(self, fvcom_harmonics, predict='zeta', interval=1 / 24, constituents=['M2'], serial=False, pool_size=None, noisy=False):
+    def add_fvcom_tides(self, fvcom_harmonics, predict='zeta', interval=1/24, constituents=['M2'], serial=False, pool_size=None, noisy=False):
         """
         Add FVCOM-derived tides at the open boundary nodes.
 
@@ -1228,8 +1228,8 @@ class OpenBoundary(object):
                                                                                                         constituents,
                                                                                                         names)
         if predict in ['zeta', 'ua', 'va']:
-            amplitudes = amplitudes[:,np.newaxis,:]
-            phases = phases[:,np.newaxis,:]
+            amplitudes = amplitudes[:, np.newaxis, :]
+            phases = phases[:, np.newaxis, :]
 
         results = []
         for i in np.arange(amplitudes.shape[1]):
@@ -1237,8 +1237,8 @@ class OpenBoundary(object):
             if locations_match:
                 if noisy:
                     print('Coords match, skipping interpolation')
-                interpolated_amplitudes = amplitudes[:,i,match_indices].T
-                interpolated_phases = phases[:,i,match_indices].T
+                interpolated_amplitudes = amplitudes[:, i, match_indices].T
+                interpolated_phases = phases[:, i, match_indices].T
             else:
                 interpolated_amplitudes, interpolated_phases = self._interpolate_fvcom_harmonics(x, y,
                                                                                                  amplitudes[:, i, :],
@@ -1689,7 +1689,7 @@ class OpenBoundary(object):
         Create depth-averaged velocities (`ua', `va') in the current self.nest data.
 
         """
-        layer_thickness = self.sigma.levels_center.T[0:-1,:] - self.sigma.levels_center.T[1:,:]
+        layer_thickness = self.sigma.levels_center.T[0:-1, :] - self.sigma.levels_center.T[1:, :]
         self.nest.ua = zbar(self.nest.u, layer_thickness)
         self.nest.va = zbar(self.nest.v, layer_thickness)
 
@@ -2086,7 +2086,7 @@ def parse_obc_sections(obc_node_array, triangle):
 
     """
 
-    all_edges = np.vstack([triangle[:,0:2], triangle[:,1:], triangle[:,[0,2]]])
+    all_edges = np.vstack([triangle[:, 0:2], triangle[:, 1:], triangle[:, [0, 2]]])
     boundary_edges = all_edges[np.all(np.isin(all_edges, obc_node_array), axis=1), :]
     u_nodes, bdry_counts = np.unique(boundary_edges, return_counts=True)
     start_end_nodes = list(u_nodes[bdry_counts == 1])
@@ -2100,7 +2100,7 @@ def parse_obc_sections(obc_node_array, triangle):
         nodes_to_add = True
 
         while nodes_to_add:
-            possible_nodes = np.unique(boundary_edges[np.any(np.isin(boundary_edges, this_obc_section_nodes), axis=1),:])
+            possible_nodes = np.unique(boundary_edges[np.any(np.isin(boundary_edges, this_obc_section_nodes), axis=1), :])
             nodes_to_add = list(possible_nodes[~np.isin(possible_nodes, this_obc_section_nodes)])
             if nodes_to_add:
                 this_obc_section_nodes.append(nodes_to_add[0])
@@ -3282,7 +3282,7 @@ def get_area_heron(s1, s2, s3):
 
     p = 0.5 * (s1 + s2 + s3)
 
-    area = np.sqrt(p * (p -s1) * (p - s2) * (p - s3)) 
+    area = np.sqrt(p * (p - s1) * (p - s2) * (p - s3))
 
     return abs(area)
 
@@ -4290,14 +4290,14 @@ def getcrossectiontriangles(cross_section_pnts, trinodes, X, Y, dist_res):
     tri_cross_log_1_1 = np.logical_or(np.logical_and(tri_X.min(1) < min(cross_section_x), tri_X.max(1) > max(cross_section_x)),
                                       np.logical_and(tri_Y.min(1) < min(cross_section_y), tri_Y.max(1) > max(cross_section_y)))
 
-    tri_cross_log_1_2 = np.any(np.logical_and(np.logical_and(tri_X < max(cross_section_x), tri_X > min(cross_section_x)), np.logical_and(tri_Y < max(cross_section_y), tri_Y > min(cross_section_y))), axis = 1)
+    tri_cross_log_1_2 = np.any(np.logical_and(np.logical_and(tri_X < max(cross_section_x), tri_X > min(cross_section_x)), np.logical_and(tri_Y < max(cross_section_y), tri_Y > min(cross_section_y))), axis=1)
     tri_cross_log_1 = np.logical_or(tri_cross_log_1_1, tri_cross_log_1_2)
 
-    tri_cross_log_1_2 = np.any(np.logical_and(np.logical_and(tri_X < max(cross_section_x), tri_X > min(cross_section_x)), np.logical_and(tri_Y < max(cross_section_y), tri_Y > min(cross_section_y))), axis = 1)
+    tri_cross_log_1_2 = np.any(np.logical_and(np.logical_and(tri_X < max(cross_section_x), tri_X > min(cross_section_x)), np.logical_and(tri_Y < max(cross_section_y), tri_Y > min(cross_section_y))), axis=1)
     tri_cross_log_1 = np.logical_or(tri_cross_log_1_1, tri_cross_log_1_2)
 
     # and add a buffer of one attached triangle
-    tri_cross_log_1 = np.any(np.isin(trinodes, np.unique(trinodes[tri_cross_log_1,:])), axis=1)
+    tri_cross_log_1 = np.any(np.isin(trinodes, np.unique(trinodes[tri_cross_log_1, :])), axis=1)
 
     # and reduce further by requiring every node to be within 1 line length + 10%
     line_len = np.sqrt((cross_section_x[0] - cross_section_x[1])**2 + (cross_section_y[0] - cross_section_y[1])**2)
@@ -4314,7 +4314,7 @@ def getcrossectiontriangles(cross_section_pnts, trinodes, X, Y, dist_res):
     tri_cross_log = np.logical_or(tri_cross_log, tri_cross_log_3)
 
     # and add a buffer of one attached triangle
-    tri_cross_log_1 = np.any(np.isin(trinodes, np.unique(trinodes[tri_cross_log,:])), axis=1)
+    tri_cross_log_1 = np.any(np.isin(trinodes, np.unique(trinodes[tri_cross_log, :])), axis=1)
     tri_cross_log = np.logical_or(tri_cross_log, tri_cross_log_1)
 
 
@@ -4328,7 +4328,7 @@ def getcrossectiontriangles(cross_section_pnts, trinodes, X, Y, dist_res):
         this_tri_ind = 0
         while in_this_tri is False:
             this_tri = red_tri_list_ind[this_tri_ind]
-            is_in = isintriangle(tri_X[this_tri,:], tri_Y[this_tri,:], this_point[0], this_point[1])
+            is_in = isintriangle(tri_X[this_tri, :], tri_Y[this_tri, :], this_point[0], this_point[1])
 
             if is_in:
                 sample_cells[this_ind] = this_tri
@@ -4337,18 +4337,18 @@ def getcrossectiontriangles(cross_section_pnts, trinodes, X, Y, dist_res):
                 sample_cells[this_ind] = -1
                 in_this_tri = True
             else:
-                this_tri_ind +=1
+                this_tri_ind += 1
 
     # for node properties now need the weight the nearest nodes to the sample point
     sample_nodes = np.zeros(len(sub_samp))
-    red_node_ind = np.unique(trinodes[red_tri_list_ind,:])
+    red_node_ind = np.unique(trinodes[red_tri_list_ind, :])
 
     for this_ind, this_point in enumerate(sub_samp):
         if sample_cells[this_ind] == -1:
             sample_nodes[this_ind] = -1
         else:
             all_dist = np.sqrt((X[red_node_ind] - this_point[0])**2 + (Y[red_node_ind] - this_point[1])**2)
-            sample_nodes[this_ind] = red_node_ind[np.where(all_dist==all_dist.min())[0][0]]
+            sample_nodes[this_ind] = red_node_ind[np.where(all_dist == all_dist.min())[0][0]]
 
     return sub_samp, sample_cells, sample_nodes
 
@@ -4476,7 +4476,7 @@ class ReducedFVCOMdist(Graph):
         
         self.node_index = nodes_sel
 
-        tri_inds = [[0,1], [1,2], [2,0]]
+        tri_inds = [[0, 1], [1, 2], [2, 0]]
 
         for this_tri, this_sides in zip(triangle, edge_weights):
             for these_inds in tri_inds:
@@ -4565,7 +4565,7 @@ class GraphFVCOMdepth(Graph):
         for this_node in nodes:
             self.add_node(this_node)
 
-        tri_inds = [[0,1], [1,2], [2,0]]
+        tri_inds = [[0, 1], [1, 2], [2, 0]]
 
         for this_tri, this_sides in zip(self.triangle, edge_weights):
             for these_inds in tri_inds:
