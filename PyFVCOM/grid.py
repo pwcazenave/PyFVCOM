@@ -14,6 +14,7 @@ from collections import defaultdict, deque
 from functools import partial
 from warnings import warn
 
+import matplotlib.pyplot as plt
 import matplotlib.path as mpath
 import networkx
 import numpy as np
@@ -25,6 +26,7 @@ from matplotlib.tri import CubicTriInterpolator
 from matplotlib.tri.triangulation import Triangulation
 from netCDF4 import Dataset, date2num
 from scipy.interpolate import RegularGridInterpolator, LinearNDInterpolator
+from scipy.spatial.qhull import QhullError
 from utide import reconstruct, ut_constants
 from utide.utilities import Bunch
 
