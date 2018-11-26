@@ -3453,6 +3453,7 @@ def get_boundary_polygons(triangle, noisy=False):
     nodes_lt_4 = np.asarray(uc[uc[:, 1] < 4, 0], dtype=int)
     boundary_polygon_list = []
 
+    # Pretty certain we can use `while np.any(nodes_lt_4)` below instead.
     while len(nodes_lt_4) > 0:
 
         start_node = nodes_lt_4[0]
