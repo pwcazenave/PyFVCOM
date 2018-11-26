@@ -1711,7 +1711,7 @@ def read_sms_mesh(mesh, nodestrings=False):
     triangle : np.ndarray
         Integer array of shape (nele, 3). Each triangle is composed of
         three points and this contains the three node numbers (stored in
-        nodes) which refer to the coordinates in X and Y (see below). Values
+        nodes) which refer to the coordinates in `x' and `y' (see below). Values
         are python-indexed.
     nodes : np.ndarray
         Integer number assigned to each node.
@@ -1814,7 +1814,7 @@ def read_fvcom_mesh(mesh):
     triangle : np.ndarray
         Integer array of shape (ntri, 3). Each triangle is composed of
         three points and this contains the three node numbers (stored in
-        nodes) which refer to the coordinates in X and Y (see below).
+        nodes) which refer to the coordinates in `x' and `y' (see below).
     nodes : np.ndarray
         Integer number assigned to each node.
     X, Y, Z : np.ndarray
@@ -1877,7 +1877,8 @@ def read_mike_mesh(mesh, flipZ=True):
     triangle : np.ndarray
         Integer array of shape (ntri, 3). Each triangle is composed of
         three points and this contains the three node numbers (stored in
-        nodes) which refer to the coordinates in X and Y (see below).
+    nodes) which refer to the coordinates in `x' and `y' (see below). Give as
+        a zero-indexed array.
     nodes : np.ndarray
         Integer number assigned to each node.
     X, Y, Z : np.ndarray
@@ -1944,7 +1945,7 @@ def read_gmsh_mesh(mesh):
     triangle : np.ndarray
         Integer array of shape (ntri, 3). Each triangle is composed of three
         points and this contains the three node numbers (stored in nodes) which
-        refer to the coordinates in X and Y (see below).
+        refer to the coordinates in `x' and `y' (see below).
     nodes : np.ndarray
         Integer number assigned to each node.
     X, Y, Z : np.ndarray
@@ -2144,7 +2145,8 @@ def write_sms_mesh(triangles, nodes, x, y, z, types, mesh):
     triangles : np.ndarray
         Integer array of shape (ntri, 3). Each triangle is composed of
         three points and this contains the three node numbers (stored in
-        nodes) which refer to the coordinates in X and Y (see below).
+        nodes) which refer to the coordinates in `x' and `y' (see below). Give as
+        a zero-indexed array.
     nodes : np.ndarray
         Integer number assigned to each node.
     x, y, z : np.ndarray
@@ -2264,11 +2266,12 @@ def write_sms_bathy(triangles, nodes, z, filename):
     triangles : np.ndarray
         Integer array of shape (ntri, 3). Each triangle is composed of
         three points and this contains the three node numbers (stored in
-        nodes) which refer to the coordinates in X and Y (see below).
+    nodes) which refer to the coordinates in `x' and `y' (see below). Give as
+        a zero-indexed array.
     nodes : np.ndarray
         Integer number assigned to each node.
     z : np.ndarray
-        Z values at each node location.
+        Depth values at each node location.
     filename : str
         Full path of the output file name.
 
@@ -2317,7 +2320,8 @@ def write_mike_mesh(triangles, nodes, x, y, z, types, mesh):
     triangles : np.ndarray
         Integer array of shape (ntri, 3). Each triangle is composed of
         three points and this contains the three node numbers (stored in
-        nodes) which refer to the coordinates in X and Y (see below).
+    nodes) which refer to the coordinates in `x' and `y' (see below). Give as
+        a zero-indexed array.
     nodes : np.ndarray
         Integer number assigned to each node.
     x, y, z : np.ndarray
@@ -2387,7 +2391,7 @@ def write_fvcom_mesh(triangles, nodes, x, y, z, mesh, extra_depth=None):
     triangles : np.ndarray
         Integer array of shape (ntri, 3). Each triangle is composed of
         three points and this contains the three node numbers (stored in
-        nodes) which refer to the coordinates in X and Y (see below). Give as
+        nodes) which refer to the coordinates in `x' and `y' (see below). Give as
         a zero-indexed array.
     nodes : np.ndarray
         Integer number assigned to each node.
@@ -2451,7 +2455,7 @@ def find_nearest_point(grid_x, grid_y, x, y, maxDistance=np.inf):
     """
 
     if np.ndim(x) != np.ndim(y):
-        raise Exception('Number of points in X and Y do not match')
+        raise Exception("Number of points in `x' and `y' do not match")
 
     grid_xy = np.array((grid_x, grid_y)).T
 
@@ -2495,7 +2499,8 @@ def element_side_lengths(triangles, x, y):
     triangles : np.ndarray
         Integer array of shape (ntri, 3). Each triangle is composed of
         three points and this contains the three node numbers (stored in
-        nodes) which refer to the coordinates in X and Y (see below).
+        nodes) which refer to the coordinates in `x' and `y' (see below). Give as
+        a zero-indexed array.
     x, y : np.ndarray
         Coordinates of each grid node.
 
@@ -4524,37 +4529,37 @@ class GraphFVCOMdepth(Graph):
         """
 
         super(GraphFVCOMdepth, self).__init__()
-        triangle, nodes, X, Y, Z = read_fvcom_mesh(fvcom_grid_file)
+        triangle, nodes, x, y, z = read_fvcom_mesh(fvcom_grid_file)
         # Only offset the nodes by 1 if we've got 1-based indexing.
         if np.min(nodes) == 1:
             nodes -= 1
-        elem_sides = element_side_lengths(triangle, X, Y)
+        elem_sides = element_side_lengths(triangle, x, y)
 
         if bounding_box is not None:
             x_lim = bounding_box[0]
             y_lim = bounding_box[1]
-            nodes_in_box = np.logical_and(np.logical_and(X > x_lim[0], X < x_lim[1]),
-                                          np.logical_and(Y > y_lim[0], Y < y_lim[1]))
+            nodes_in_box = np.logical_and(np.logical_and(x > x_lim[0], x < x_lim[1]),
+                                          np.logical_and(y > y_lim[0], y < y_lim[1]))
 
             nodes = nodes[nodes_in_box]
-            X = X[nodes_in_box]
-            Y = Y[nodes_in_box]
-            Z = Z[nodes_in_box]
+            x = x[nodes_in_box]
+            y = y[nodes_in_box]
+            z = z[nodes_in_box]
 
             elem_sides = elem_sides[np.all(np.isin(triangle, nodes), axis=1), :]
             triangle = reduce_triangulation(triangle, nodes)
 
-        Z = np.mean(Z[triangle], axis=1)  # adjust to cell depths rather than nodes, could use FVCOM output depths instead
-        Z = Z - np.min(Z)  # make it so depths are all >= 0
-        Z = np.max(Z) - Z  # and flip so deeper areas have lower numbers
-        
-        depth_weighted = (Z * depth_weight)**depth_power
+        z = np.mean(z[triangle], axis=1)  # adjust to cell depths rather than nodes, could use FVCOM output depths instead
+        z = z - np.min(z)  # make it so depths are all >= 0
+        z = np.max(z) - z  # and flip so deeper areas have lower numbers
+
+        depth_weighted = (z * depth_weight)**depth_power
         edge_weights = elem_sides * np.tile(depth_weighted, [3, 1]).T
 
         self.elem_sides = elem_sides
-        self.X = X
-        self.Y = Y
-        self.Z = Z
+        self.x = x
+        self.y = y
+        self.z = z
         self.node_index = nodes
         self.triangle = triangle
         self.edge_weights = edge_weights
