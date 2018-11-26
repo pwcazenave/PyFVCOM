@@ -972,7 +972,7 @@ class FileReader(Domain):
             folded_time = self.time.datetime[first_midnight:last_midnight].reshape(-1, step)
             nt = folded_time.shape[1]
             day_origin = self.time.datetime[first_midnight:last_midnight:step]
-            new_times = day_origin + ((np.sum((folded_time.T - day_origin).T, axis=1)) / (nt - 1))
+            new_times = day_origin + (np.sum((folded_time.T - day_origin).T, axis=1) / (nt - 1))
 
             return new_times
 
