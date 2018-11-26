@@ -895,7 +895,7 @@ class FileReader(Domain):
         they will be before averaging. Averaging starts at the first midnight in the time series and ends at the last
         midnight in the time series (values outside those times are ignored).
 
-        The result is added to self.data as an attribute named '{}_{}'.format(variable, period).
+        The result is added to self.data as an attribute named f'{variable}_{period}'.
 
         Parameters
         ----------
