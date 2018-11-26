@@ -847,12 +847,20 @@ class FileReader(Domain):
 
     def avg_volume_var(self, var):
         """
-        TODO: Add docstring.
+        Return the cumulative depth-average of the given variable in space, returning a time series.
 
-        :param var:
-        :return:
+        Parameters
+        ----------
+        var : str
+            The name of the variable to load. Must be a depth-resolved array.
+
+        Provides
+        --------
+        {var}_total : np.ndarray
+            Adds a new array which is a time series of the depth-average cumulative sum.
 
         """
+
         if not hasattr(self, 'volume'):
             self._get_cv_volumes()
 
