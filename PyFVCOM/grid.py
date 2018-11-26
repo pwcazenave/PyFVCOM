@@ -4281,6 +4281,7 @@ def getcrossectiontriangles(cross_section_pnts, trinodes, X, Y, dist_res):
     tri_X = X[trinodes]
     tri_Y = Y[trinodes]
 
+    # This section needs tidying up and making easier to understand!
     tri_cross_log_1_1 = np.logical_or(np.logical_and(tri_X.min(1) < min(cross_section_x), tri_X.max(1) > max(cross_section_x)),
                                       np.logical_and(tri_Y.min(1) < min(cross_section_y), tri_Y.max(1) > max(cross_section_y)))
 
