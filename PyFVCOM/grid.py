@@ -2168,7 +2168,6 @@ def write_sms_mesh(triangles, nodes, x, y, z, types, mesh):
     # Write out the connectivity table (triangles)
     current_node = 0
     for line in triangles:
-
         # Bump the numbers by one to correct for Python indexing from zero
         line += 1
         line_string = []
@@ -2178,26 +2177,13 @@ def write_sms_mesh(triangles, nodes, x, y, z, types, mesh):
 
         current_node += 1
         # Build the output string for the connectivity table
-        output = ['E3T'] + [str(current_node)] + line_string + ['1']
-        output = ' '.join(output)
+        output = f'E3T {current_node} {" ".join(line_string)} 1\n'
+        file_write.write(output)
 
-        file_write.write(output + '\n')
-
-    # Add the node information (nodes)
     for count, line in enumerate(nodes):
+        output = f'ND {line} {x[count]:.8e} {y[count]:.8e} {z[count]:.8e}\n'
 
-        # Convert the numpy array to a string array
-        line_string = str(line)
-
-        # Format output correctly
-        output = ['ND'] + \
-                [line_string] + \
-                ['{:.8e}'.format(x[count])] + \
-                ['{:.8e}'.format(y[count])] + \
-                ['{:.8e}'.format(z[count])]
-        output = ' '.join(output)
-
-        file_write.write(output + '\n')
+        file_write.write(output)
 
     # Convert MIKE boundary types to node strings. The format requires a prefix
     # NS, and then a maximum of 10 node IDs per line. The node string tail is
@@ -2210,28 +2196,13 @@ def write_sms_mesh(triangles, nodes, x, y, z, types, mesh):
 
         # Find the nodes for the boundary type which are greater than 1 (i.e.
         # not 0 or 1).
-        node_boundaries = nodes[types == boundary_type]
+        node_boundaries = nodes[types == boundary_type].astype(int)
 
-        node_strings = 0
-        for counter, node in enumerate(node_boundaries):
-            if counter + 1 == len(node_boundaries) and node > 0:
-                node = -node
-
-            node_strings += 1
-            if node_strings == 1:
-                output = 'NS  {:d} '.format(int(node))
-                file_write.write(output)
-            elif node_strings != 0 and node_strings < 10:
-                output = '{:d} '.format(int(node))
-                file_write.write(output)
-            elif node_strings == 10:
-                output = '{:d} '.format(int(node))
-                file_write.write(output + '\n')
-                node_strings = 0
-
-        # Add a new line at the end of each block. Not sure why the new line
-        # above doesn't work...
-        file_write.write('\n')
+        node_strings = [node_boundaries[i:i+10] for i in range(0, len(node_boundaries), 10)]
+        node_strings[-1][-1] = -node_strings[-1][-1]  # flip sign of the last node
+        joined_string = [f"NS  {' '.join(section.astype(str))}\n" for section in node_strings]
+        for section in joined_string:
+            file_write.write(section)
 
     # Add all the blurb at the end of the file.
     #
