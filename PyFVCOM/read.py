@@ -204,6 +204,11 @@ class _TimeReader(object):
             setattr(attributes, 'long_name', 'MATLAB datenum')
             # setattr(self.atts, 'matlabtime', attributes)
 
+            # Remake 'time' from 'datetime' because the former can suffer from precision issues when read in directly
+            # from the netCDF variable. Generally, 'datetime' is made from the 'Times' strings, which means it
+            # usually has sufficient precision.
+            setattr(self, 'time', np.asarray([date2num(time, units=self._mjd_origin) for time in self.datetime]))
+
             # Clip everything to the time indices if we've been given them. Update the time dimension too.
             if 'time' in self._dims:
                 is_datetimes_or_str = all([isinstance(i, (datetime, str)) for i in self._dims['time']])
