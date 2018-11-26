@@ -965,12 +965,15 @@ class FileReader(Domain):
         setattr(self.data, '{}_{}'.format(variable, period), averaged)
 
         if return_times:
-            # For the arithmetic to be simple, we'll do this on `time'. This is possibly an issue as `time' is
-            # sometimes not sufficiently precise to resolve the actual times accurately. It would be better to do
-            # this on `datetime' instead, but then we have to fiddle around making things relative and it all gets a
-            # bit tiresome.
-            new_times = num2date(self.time.time[first_midnight:last_midnight].reshape(-1, step).mean(axis=1),
-                                 units=self.atts.time.units)
+            # Two options here: either return the arithmetic mean of self.time.time[first_midnight:last_midnight]
+            # with an extra delta t at the start, or (as is done here), divide by nt + 1. The end result is the same.
+            # This has the added advantage of not needing to work with self.time.time (we can work on datetimes
+            # directly).
+            folded_time = self.time.datetime[first_midnight:last_midnight].reshape(-1, step)
+            nt = folded_time.shape[1]
+            day_origin = self.time.datetime[first_midnight:last_midnight:step]
+            new_times = day_origin + ((np.sum((folded_time.T - day_origin).T, axis=1)) / (nt - 1))
+
             return new_times
 
     def add_river_flow(self, river_nc_file, river_nml_file):
