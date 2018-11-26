@@ -2159,6 +2159,26 @@ def write_sms_mesh(triangles, nodes, x, y, z, types, mesh):
     mesh : str
         Full path to the output file name.
 
+    Notes
+    -----
+
+    The footer contains some information which is largely ignored here, but
+    which is included in case it's critical.
+
+    BEGPARAMDEF = Marks end of mesh data/beginning of mesh model definition
+    GM = Mesh name (enclosed in "")
+    SI = use SI units y/n = 1/0
+    DY = Dynamic model y/n = 1/0
+    TU = Time units
+    TD = Dynamic time data (?)
+    NUME = Number of entities available (nodes, node strings, elements)
+    BGPGC = Boundary group parameter group correlation y/n = 1/0
+    BEDISP/BEFONT = Format controls on display of boundary labels.
+    ENDPARAMDEF = End of the mesh model definition
+    BEG2DMBC = Beginning of the model assignments
+    MAT = Material assignment
+    END2DMBC = End of the model assignments
+
     """
 
     file_write = open(mesh, 'w')
