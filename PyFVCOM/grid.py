@@ -1800,6 +1800,68 @@ def read_sms_mesh(mesh, nodestrings=False):
         return triangle, nodes, X, Y, Z, types
 
 
+def read_sms_map(map_file):
+    """
+    Reads in the SMS map file format.
+
+    Parameters
+    ----------
+    map_file : str
+        Full path to an SMS map (.map) file.
+    noisy : bool, optional
+        Set to True to enable verbose messages.
+
+    Returns
+    -------
+    arcs : list
+        List of the coordinate pairs and elevation for the polygons defined in the map file.
+
+    Notes
+    -----
+    This is inspired by and partially based on the MATLAB fvcom-toolbox function read_sms_map.m.
+
+    This could also (additionally) return a shapely.MultiPolygon, but I've not done that for now as it's trivial to
+    convert these arcs into a MultiPolygon after the fact.
+
+    """
+
+    x, y, z, arc_id, arc_elevation = [], [], [], [], []
+    arcs = []
+    with open(map_file) as f:
+        for line in f:
+            line = line.strip()
+            print(line, flush=True)
+            if line == 'NODE':
+                line = next(f).strip()
+                _, node_x, node_y, node_z = line.split()
+                x.append(float(node_x))
+                y.append(float(node_y))
+                z.append(float(node_z))
+            elif line == 'ARC':
+                # Skip the arc ID.
+                next(f)
+                # Skip the arc elevation.
+                next(f)
+                # Next line doesn't seem to be used for anything...
+                next(f)
+                # The number of nodes in the current arc.
+                line = next(f).strip()
+                number_of_nodes = int(line.split()[-1])
+                # Read in the coordinates and elevation for the current arc. Start with the appropriate coordinate
+                # from `x', `y' and its `z' value too (the 'node' in SMS parlance) before appending the arc vertices
+                # (in SMS parlance).
+                current_arc_id = len(arcs)
+                arcs.append([[x[current_arc_id], y[current_arc_id], z[current_arc_id]]])
+                for next_line in range(number_of_nodes):
+                    line = next(f).strip()
+                    arcs[-1].append([float(i) for i in line.split()])
+
+    # Make the arcs a list of numpy arrays.
+    arcs = [np.asarray(arc) for arc in arcs]
+
+    return arcs
+
+
 def read_fvcom_mesh(mesh):
     """
     Reads in the FVCOM unstructured grid format.
