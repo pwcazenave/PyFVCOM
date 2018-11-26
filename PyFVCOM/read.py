@@ -900,7 +900,8 @@ class FileReader(Domain):
         Parameters
         ----------
         variable : str
-            A variable to average in time.
+            A variable to average in time. Can have no spatial dimension (i.e. a time series of some data across a
+            region).
         period : str
             The period over which to average. Select from `daily', `weekly', `monthly' or `yearly' (`annual' is a
             synonym). `Monthly' is actually 4-weekly rather than per calendar month.
@@ -952,7 +953,9 @@ class FileReader(Domain):
         # For the averaging, reshape the time dimension into chunks which match the periods and then average along
         # that reshaped dimension. Getting the new shape is a bit fiddly. We should always have at least two
         # dimensions here (time, space) so this should always work.
-        other_dimensions = [_ for _ in getattr(self.data, variable).shape[1:]]
+        other_dimensions = []
+        if len(getattr(self.data, variable).shape) > 1:
+            other_dimensions = [_ for _ in getattr(self.data, variable).shape[1:]]
 
         # Check that the maximum difference of the first day's data and the first averaged data is zero:
         # (averaged[0] - getattr(self.data, variable)[first_midnight:first_midnight + step].mean(axis=0)).max() == 0
