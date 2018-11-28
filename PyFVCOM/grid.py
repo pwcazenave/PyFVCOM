@@ -1411,8 +1411,11 @@ class OpenBoundary(object):
 
             # Internal landmasses also need to be dealt with, so test if a point lies within the mask of the grid and move it to the nearest in grid
             # point if so.            
+            if not mode == 'surface':
+                land_mask = getattr(coarse.data, coarse_name)[0, ...].mask[0,:,:]
+            else:
+                land_mask = getattr(coarse.data, coarse_name)[0, ...].mask
 
-            land_mask = getattr(coarse.data, coarse_name)[0, ...].mask[0,:,:]
             sea_points = np.ones(land_mask.shape)
             sea_points[land_mask] = np.nan
 
