@@ -16,7 +16,7 @@ from PyFVCOM.grid import grid_metrics, shape_coefficients
 from PyFVCOM.utilities.time import common_time
 
 
-class Residuals:
+class Residuals(object):
 
     def __init__(self, fvcom, predicted, periods=None, max_speed=None, noisy=False):
         """

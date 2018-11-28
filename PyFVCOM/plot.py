@@ -410,7 +410,7 @@ class Time(object):
         if not self.surface_plot:
             self.surface_plot = self.axes.pcolormesh(np.tile(self.time, [depth.shape[-1], 1]).T,
                                                      depth,
-                                                     np.fliplr(time_series),
+                                                     np.fliplr(time_series),  # TODO: fix as this is wrong, I think.
                                                      cmap=self.cmap,
                                                      **kwargs)
 
@@ -440,6 +440,7 @@ class Plotter(object):
     plot_lines
     plot_scatter
     remove_line_plots (N.B., this is mostly specific to PyLag-tools)
+    add_scale
 
     Author(s)
     ---------
@@ -644,8 +645,15 @@ class Plotter(object):
         if self.title:
             self.axes.set_title(self.title)
 
-        # Add coordinate labels to the x and y axes.
-        if self.tick_inc and not self.cartesian:
+        # Check the values of tick_inc aren't bigger than the extents.
+        if self.tick_inc is not None:
+            if self.tick_inc[0] > self.extents[1] - self.extents[0]:
+                warn('The x-axis tick interval is larger than the plot x-axis extent.')
+            if self.tick_inc[1] > self.extents[3] - self.extents[2]:
+                warn('The y-axis tick interval is larger than the plot y-axis extent.')
+
+        # Add coordinate labels to the x and y axes (except if we're doing a cartesian plot).
+        if self.tick_inc is not None and not self.cartesian:
             meridians = np.arange(np.floor(np.min(self.extents[:2])), np.ceil(np.max(self.extents[:2])), self.tick_inc[0])
             parallels = np.arange(np.floor(np.min(self.extents[2:])), np.ceil(np.max(self.extents[2:])), self.tick_inc[1])
             self.m.drawparallels(parallels, labels=[1, 0, 0, 0], fontsize=self.fs, linewidth=0, ax=self.axes)
@@ -839,6 +847,25 @@ class Plotter(object):
     def set_title(self, title):
         """ Set the title for the current axis. """
         self.axes.set_title(title, fontsize=self.fs)
+
+    def add_scale(self, x, y, ref_lon, ref_lat, length, **kwargs):
+        """
+        Add a Basemap scale to the plot.
+
+        Parameters
+        ----------
+        x, y : float
+            The position (in map units).
+        ref_lon, ref_lat : float
+            The reference longitude and latitude for the scale length.
+        length : float
+            The length of the scale (in kilometres).
+
+        Additional keyword arguments are passed to self.m.drawmapscale.
+
+        """
+
+        self.m.drawmapscale(x, y, ref_lon, ref_lat, length, ax=self.axes, **kwargs)
 
     def close(self):
         """ Close the current figure. """

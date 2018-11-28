@@ -440,7 +440,7 @@ class HarmonicOutput(object):
         self.Itime2.setncattr('time_zone', 'UTC')
         self.Itime2[:] = Itime2
         # Times
-        self.Times = self._nc.createVariable('Itime2', 'c', ['time', 'DateStrLen'], **self._ncopts)
+        self.Times = self._nc.createVariable('Times', 'c', ['time', 'DateStrLen'], **self._ncopts)
         self.Times.setncattr('long_name', 'Calendar Date')
         self.Times.setncattr('format', 'String: Calendar Time')
         self.Times.setncattr('time_zone', 'UTC')

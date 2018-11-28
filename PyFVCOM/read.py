@@ -1,34 +1,35 @@
 # -*- coding: utf-8 -*-
 
+""" Functions related to handling FVCOM outputs. """
+
 from __future__ import print_function, division
 
 import copy
+import inspect
 import sys
 from datetime import datetime, timedelta
+from pathlib import Path
 from warnings import warn
 
 import matplotlib.path as mpath
-import matplotlib.pyplot as plt
-import netCDF4 as nc
 import numpy as np
 from netCDF4 import Dataset, MFDataset, num2date, date2num
-from shapely.geometry import Polygon
 
 from PyFVCOM.grid import Domain, control_volumes, get_area_heron
 from PyFVCOM.grid import unstructured_grid_volume, elems2nodes, GridReaderNetCDF
-from PyFVCOM.utilities.general import _passive_data_store
+from PyFVCOM.utilities.general import _passive_data_store, flatten_list
 
 
 class _TimeReader(object):
 
-    def __init__(self, dataset, dims=None, verbose=False):
+    def __init__(self, filename, dims=None, verbose=False):
         """
         Parse the time data from an FVCOM netCDF file Missing standard FVCOM time variables are automatically created.
 
         Parameters
         ----------
-        dataset : netCDF4.Dataset
-            The netCDF file Dataset object.
+        filename : str, pathlib.Path
+            The FVCOM netCDF file to read.
         dims : dict, optional
             Dictionary of dimension names along which to subsample e.g. dims={'time': [0, 100]}. Dimensions are
             specified as list of indices. Time can also be specified as either a time string (e.g. '2000-01-25
@@ -39,8 +40,10 @@ class _TimeReader(object):
 
         """
 
+        dataset = Dataset(filename, 'r')
         _noisy = verbose
         self._dims = copy.deepcopy(dims)
+        self._mjd_origin = 'days since 1858-11-17 00:00:00'
 
         time_variables = ('time', 'Itime', 'Itime2', 'Times')
         got_time, missing_time = [], []
@@ -83,16 +86,22 @@ class _TimeReader(object):
                 # happens if you stop a model part way through a run. We check for masked arrays at this point
                 # because the netCDF library only returns masked arrays when we have NaNs in the results.
                 if isinstance(dataset.variables['Times'][:], np.ma.core.MaskedArray):
-                    bad_times = np.argwhere(np.any(dataset.variables['Times'][:].data == ([b''] * dataset.dimensions['DateStrLen'].size), axis=1)).ravel()
-                    if np.any(bad_times):
+                    time_data = dataset.variables['Times'][:].data
+                    bad_time_string = ([b''] * dataset.dimensions['DateStrLen'].size)
+                    bad_indices = np.argwhere(np.any(time_data == bad_time_string, axis=1)).ravel()
+                    if np.any(bad_indices):
                         if 'time' in got_time:
-                            for bad_time in bad_times:
+                            for bad_time in bad_indices:
                                 if self.time[bad_time]:
-                                    self.Times[bad_time] = list(datetime.strftime(num2date(self.time[bad_time], units='days since 1858-11-17 00:00:00'), '%Y-%m-%dT%H:%M:%S.%f'))
+                                    bad_date = num2date(self.time[bad_time], units=self._mjd_origin)
+                                    self.Times[bad_time] = list(datetime.strftime(bad_date, '%Y-%m-%dT%H:%M:%S.%f'))
                         elif 'Itime' in got_time and 'Itime2' in got_time:
-                            for bad_time in bad_times:
+                            for bad_time in bad_indices:
                                 if self.Itime[bad_time] and self.Itime2[bad_time]:
-                                    self.Times[bad_time] = list(datetime.strftime(num2date(self.Itime[bad_time] + self.Itime2[bad_time] / 1000.0 / 60 / 60, units=getattr(dataset.variables['Itime'], 'units')), '%Y-%m-%dT%H:%M:%S.%f'))
+                                    bad_time_days = self.Itime[bad_time] + self.Itime2[bad_time] / 1000.0 / 60 / 60
+                                    itime_units = getattr(dataset.variables['Itime'], 'units')
+                                    bad_date = num2date(bad_time_days, units=itime_units)
+                                    self.Times[bad_time] = list(datetime.strftime(bad_date), '%Y-%m-%dT%H:%M:%S.%f')
 
                 # Overwrite the existing Times array with a more sensibly shaped one.
                 try:
@@ -107,7 +116,8 @@ class _TimeReader(object):
                 if 'time' in got_time:
                     _dates = num2date(self.time, units=getattr(dataset.variables['time'], 'units'))
                 elif 'Itime' in got_time and 'Itime2' in got_time:
-                    _dates = num2date(self.Itime + self.Itime2 / 1000.0 / 60 / 60 / 24, units=getattr(dataset.variables['Itime'], 'units'))
+                    itime_units = getattr(dataset.variables['Itime'], 'units')
+                    _dates = num2date(self.Itime + self.Itime2 / 1000.0 / 60 / 60 / 24, units=itime_units)
                 else:
                     raise ValueError('Missing sufficient time information to make the relevant time data.')
 
@@ -126,19 +136,24 @@ class _TimeReader(object):
             if 'time' not in got_time:
                 if 'Times' in got_time:
                     try:
-                        _dates = np.array([datetime.strptime(''.join(t.astype(str)).strip(), '%Y-%m-%dT%H:%M:%S.%f') for t in self.Times])
+                        # First format
+                        fmt = '%Y-%m-%dT%H:%M:%S.%f'
+                        _dates = np.array([datetime.strptime(''.join(t.astype(str)).strip(), fmt) for t in self.Times])
                     except ValueError:
-                        _dates = np.array([datetime.strptime(''.join(t.astype(str)).strip(), '%Y/%m/%d %H:%M:%S.%f') for t in self.Times])
+                        # Alternative format
+                        fmt = '%Y/%m/%d %H:%M:%S.%f'
+                        _dates = np.array([datetime.strptime(''.join(t.astype(str)).strip(), fmt) for t in self.Times])
                 elif 'Itime' in got_time and 'Itime2' in got_time:
-                    _dates = num2date(self.Itime + self.Itime2 / 1000.0 / 60 / 60 / 24, units=getattr(dataset.variables['Itime'], 'units'))
+                    itime_units = getattr(dataset.variables['Itime'], 'units')
+                    _dates = num2date(self.Itime + self.Itime2 / 1000.0 / 60 / 60 / 24, units=itime_units)
                 else:
                     raise ValueError('Missing sufficient time information to make the relevant time data.')
 
                 # We're making Modified Julian Days here to replicate FVCOM's 'time' variable.
-                self.time = date2num(_dates, units='days since 1858-11-17 00:00:00')
+                self.time = date2num(_dates, units=self._mjd_origin)
                 # Add the relevant attributes for the time variable.
                 attributes = _passive_data_store()
-                setattr(attributes, 'units', 'days since 1858-11-17 00:00:00')
+                setattr(attributes, 'units', self._mjd_origin)
                 setattr(attributes, 'long_name', 'time')
                 setattr(attributes, 'format', 'modified julian day (MJD)')
                 setattr(attributes, 'time_zone', 'UTC')
@@ -147,20 +162,24 @@ class _TimeReader(object):
             if 'Itime' not in got_time and 'Itime2' not in got_time:
                 if 'Times' in got_time:
                     try:
-                        _dates = np.array([datetime.strptime(''.join(t.astype(str)).strip(), '%Y-%m-%dT%H:%M:%S.%f') for t in self.Times])
+                        # First format
+                        fmt = '%Y-%m-%dT%H:%M:%S.%f'
+                        _dates = np.array([datetime.strptime(''.join(t.astype(str)).strip(), fmt) for t in self.Times])
                     except ValueError:
-                        _dates = np.array([datetime.strptime(''.join(t.astype(str)).strip(), '%Y/%m/%d %H:%M:%S.%f') for t in self.Times])
+                        # Alternative format
+                        fmt = '%Y/%m/%d %H:%M:%S.%f'
+                        _dates = np.array([datetime.strptime(''.join(t.astype(str)).strip(), fmt) for t in self.Times])
                 elif 'time' in got_time:
                     _dates = num2date(self.time, units=getattr(dataset.variables['time'], 'units'))
                 else:
                     raise ValueError('Missing sufficient time information to make the relevant time data.')
 
                 # We're making Modified Julian Days here to replicate FVCOM's 'time' variable.
-                _datenum = date2num(_dates, units='days since 1858-11-17 00:00:00')
+                _datenum = date2num(_dates, units=self._mjd_origin)
                 self.Itime = np.floor(_datenum)
                 self.Itime2 = (_datenum - np.floor(_datenum)) * 1000 * 60 * 60 * 24  # microseconds since midnight
                 attributes = _passive_data_store()
-                setattr(attributes, 'units', 'days since 1858-11-17 00:00:00')
+                setattr(attributes, 'units', self._mjd_origin)
                 setattr(attributes, 'format', 'modified julian day (MJD)')
                 setattr(attributes, 'time_zone', 'UTC')
                 # setattr(self.atts, 'Itime', attributes)
@@ -185,9 +204,15 @@ class _TimeReader(object):
             setattr(attributes, 'long_name', 'MATLAB datenum')
             # setattr(self.atts, 'matlabtime', attributes)
 
+            # Remake 'time' from 'datetime' because the former can suffer from precision issues when read in directly
+            # from the netCDF variable. Generally, 'datetime' is made from the 'Times' strings, which means it
+            # usually has sufficient precision.
+            setattr(self, 'time', np.asarray([date2num(time, units=self._mjd_origin) for time in self.datetime]))
+
             # Clip everything to the time indices if we've been given them. Update the time dimension too.
             if 'time' in self._dims:
-                if not isinstance(self._dims['time'], slice) and all([isinstance(i, (datetime, str)) for i in self._dims['time']]):
+                is_datetimes_or_str = all([isinstance(i, (datetime, str)) for i in self._dims['time']])
+                if not isinstance(self._dims['time'], slice) and is_datetimes_or_str:
                     # Convert datetime dimensions to indices in the currently loaded data. Assume we've got a list
                     # and if that fails, we've probably got a single index, so convert it accordingly.
                     try:
@@ -196,6 +221,8 @@ class _TimeReader(object):
                         self._dims['time'] = np.arange(*[self._time_to_index(self._dims['time'])])  # make iterable
                 for time in self:
                     setattr(self, time, getattr(self, time)[self._dims['time']])
+
+        dataset.close()
 
     def __iter__(self):
         return (a for a in dir(self) if not a.startswith('_'))
@@ -224,16 +251,17 @@ class _TimeReader(object):
 
         return time_idx
 
+
 class _AttributeReader(object):
-    def __init__(self, dataset, variables=None, verbose=False):
+    def __init__(self, filename, variables=None, verbose=False):
         """
         Load the attributes for the variables in the dataset. Optionally limit the attributes to the variables in
         variables.
 
         Parameters
         ----------
-        dataset : netCDF4.Dataset
-            The netCDF file dataset object.
+        filename : str, pathlib.Path
+            The FVCOM netCDF file to read.
         variables : list, optional
             List of variables to extract. If omitted, only the grid, grid metrics and time variables are extracted.
         verbose : bool, optional
@@ -241,7 +269,11 @@ class _AttributeReader(object):
 
         """
 
-        self._ds = dataset
+        # We need the keep the file name if we've closed the dataset after initialisation. This is so we can use
+        # get_attribute after initialisation. This all boils down to not being able to pickle Dataset objects,
+        # so we can't leave Dataset objects hanging around open.
+        self._filename = filename
+        self._ds = Dataset(filename, 'r')
         self._noisy = verbose
 
         grid = ['a1u', 'a2u', 'art1', 'art2',
@@ -262,6 +294,9 @@ class _AttributeReader(object):
                     print(f'Getting attributes for {var}')
                 self.get_attribute(var)
 
+        self._ds.close()
+        delattr(self, '_ds')
+
     def get_attribute(self, variable):
         """
         Get the attributes for the given variable and add them to the relevant object.
@@ -273,12 +308,22 @@ class _AttributeReader(object):
 
         """
 
+        # We need to reopen the Dataset to support pickling FileReader objects.
+        close_on_finish = False
+        if not hasattr(self, '_ds'):
+            close_on_finish = True
+            self._ds = Dataset(self._filename, 'r')
+
         if not hasattr(self, variable):
             # Hmmm, don't like using _passive_data_store here...
             setattr(self, variable, _passive_data_store())
 
         for attribute in self._ds.variables[variable].ncattrs():
             setattr(getattr(self, variable), attribute, getattr(self._ds.variables[variable], attribute))
+
+        if close_on_finish:
+            self._ds.close()
+            delattr(self, '_ds')
 
     def __iter__(self):
         return (a for a in dir(self) if not a.startswith('__') and not a.endswith('__'))
@@ -389,6 +434,7 @@ class FileReader(Domain):
         # should be created by a separate class (in the same style as _MakeDimensions et al.), but I haven't got
         # around to it yet.
         self.data = _passive_data_store()
+        self.river = _passive_data_store()
 
         if isinstance(self._fvcom, Dataset):
             self.ds = self._fvcom
@@ -399,8 +445,14 @@ class FileReader(Domain):
             self.ds = Dataset(self._fvcom, 'r')
 
         self.dims = _MakeDimensions(self.ds)
+        # Store the dimensions of all the variables in the current file so we can use them when writing out with
+        # PyFVCOM.read.WriteFVCOM.
+        self.variable_dimension_names = {var: self.ds.variables[var].dimensions for var in self.ds.variables}
 
         for dim in self._dims:
+            # Skip the special 'wesn' key.
+            if dim == 'wesn':
+                continue
             dim_is_iterable = hasattr(self._dims[dim], '__iter__')
             dim_is_string = isinstance(self._dims[dim], str)  # for date ranges
             dim_is_slice = isinstance(self._dims[dim], slice)
@@ -410,7 +462,7 @@ class FileReader(Domain):
 
                 self._dims[dim] = [self._dims[dim]]
 
-        self._load_time()
+        self.time = _TimeReader(self._fvcom, dims=self._dims)
         self._dims = self.time._dims  # grab the updated dimensions from the _TimeReader object.
 
         # Update the time dimension no we've read in the time data (in case we did so with a specificed dimension
@@ -421,10 +473,13 @@ class FileReader(Domain):
             nt = 1
         self.dims.time = nt
 
-        self._load_grid(fvcom)
+        self.grid = GridReaderNetCDF(fvcom, dims=self._dims, zone=self._zone, debug=self._debug, verbose=self._noisy)
+        # Grab the dimensions from the grid in case we've subset somewhere.
+        self._dims = self.grid._dims
+        delattr(self.grid, '_dims')
 
         # Load the attributes of anything we've been asked to load.
-        self.atts = _AttributeReader(self.ds, self._variables)
+        self.atts = _AttributeReader(self._fvcom, self._variables)
 
         if self._variables:
             self.load_data(self._variables)
@@ -438,22 +493,24 @@ class FileReader(Domain):
 
     def __add__(self, fvcom, debug=False):
         """
-        This special method means we can stack two FileReader objects in time through a simple addition (e.g. fvcom1
-        += fvcom2)
+        This special method means we can stack two FileReader objects in time through a simple addition. For example:
+
+        >>> fvcom1 = PyFVCOM.read.FileReader('file1.nc')
+        >>> fvcom1 += PyFVCOM.read.FileReader('file2.nc')
 
         Parameters
         ----------
-        fvcom : PyFVCOM.FileReader
-            Previous time to which to add ourselves.
+        fvcom : PyFVCOM.read.FileReader
+            Subsequent time to add to ourselves.
 
         Returns
         -------
-        idem : PyFVCOM.FileReader
-            Concatenated (in time) `PyFVCOM.FileReader' class.
+        idem : PyFVCOM.read.FileReader
+            Concatenated (in time) `PyFVCOM.read.FileReader' class.
 
         Notes
         -----
-        - fvcom1 and fvcom2 have to cover the exact same spatial domain
+        - both objects must cover the exact same spatial domain
         - last time step of fvcom1 must be <= to the first time step of fvcom2
         - if variables have not been loaded, then subsequent loads will load only the data from the first netCDF.
         Make sure you load all your variables before you merge objects.
@@ -528,11 +585,45 @@ class FileReader(Domain):
 
         return idem
 
-    def _load_grid(self, fvcom):
-        self.grid = GridReaderNetCDF(fvcom, dims=self._dims, zone=self._zone, debug=self._debug, verbose=self._noisy)
-    
-    def _load_time(self):
-        self.time = _TimeReader(self.ds, dims=self._dims)
+    def __sub__(self, fvcom, debug=False):
+        """
+        Override the default special method to handle subtracting two objects to yield the differences in the data.
+
+        Parameters
+        ----------
+        fvcom : PyFVCOM.read.FileReader
+            Other data to subtract from the currently loaded data.
+
+        Returns
+        -------
+        idem : PyFVCOM.read.FileReader
+            Differences in loaded data as a `PyFVCOM.read.FileReader' class.
+
+        Notes
+        -----
+        - both objects must cover the exact same spatial domain
+        - both objects can have different dates but must have the same number of time steps.
+        - times are retained from the current object (i.e. `self', not `fvcom')
+
+        Example
+        -------
+        >>> file1 = PyFVCOM.read.FileReader('file1.nc', variables=['u', 'v', 'zeta'])
+        >>> file2 = PyFVCOM.read.FileReader('file2.nc', variables=['u', 'v', 'zeta'])
+        >>> diff = file1 - file2
+        >>> # List the variables for which we now have a difference.
+        >>> [a for a in dir(diff.data) if not a.startswith('_')
+
+        """
+
+        idem = copy.copy(self)  # somewhere to store the differences
+
+        if dir(self.data) != dir(fvcom.data):
+            raise ValueError("Inconsistent variables in the currently loaded data and the supplied data (`fvcom')")
+
+        for var1, var2 in zip(self.data, fvcom.data):
+            setattr(idem.data, var1, getattr(self.data, var1) - getattr(fvcom.data, var2))
+
+        return idem
 
     def _update_dimensions(self, variables):
         # Update the dimensions based on variables we've been given. Construct a list of the unique dimensions in all
@@ -574,8 +665,8 @@ class FileReader(Domain):
                 print('Updating existing data to match supplied dimensions when loading data')
             # Use the supplied dimensions as the new dimensions array.
             self._dims = dims
-            self.time = _TimeReader(self.ds, dims=self._dims)
-            self.dims.time = len(self.time)
+            self.time = _TimeReader(self._fvcom, dims=self._dims)
+            self.dims.time = len(self.time.time)
             self.grid = _GridReaderNetCDF(self._fvcom, dims=self._dims, zone=self._zone, debug=self._debug,
                                           verbose=self._noisy)
 
@@ -664,14 +755,16 @@ class FileReader(Domain):
 
         """
 
+        surface_elevation = np.zeros((self.dims.time, self.dims.node))
         if hasattr(self.data, 'zeta'):
             surface_elevation = self.data.zeta
         elif load_zeta:
             self.load_data(['zeta'])
-        else:
-            surface_elevation = np.zeros((self.dims.time, self.dims.node))
+            surface_elevation = self.data.zeta
 
-        self.grid.depth_volume, self.grid.depth_integrated_volume = unstructured_grid_volume(self.grid.art1, self.grid.h, surface_elevation, self.grid.siglev, depth_integrated=True)
+        volumes = unstructured_grid_volume(self.grid.art1, self.grid.h, surface_elevation, self.grid.siglev,
+                                           depth_integrated=True)
+        self.grid.depth_volume, self.grid.depth_integrated_volume = volumes
 
     def _get_cv_volumes(self, poolsize=None):
         """
@@ -703,7 +796,16 @@ class FileReader(Domain):
                                                         element_control=False, poolsize=poolsize))
 
         if not hasattr(self.data, 'zeta'):
-            self.load_data(['zeta'])
+            # Warn if we've got different number of zeta times from the other variable times. In that situation,
+            # we'll do non-time-varying volumes.
+            if self.ds.dimensions['time'].size != self.dims.time:
+                warn(f"Found a different length surface elevation time series from {var}. As such, we cannot load the "
+                     "relevant surface elevation so we are setting it to zero. If you are concatenating FileReader "
+                     f"objects, load `zeta' along with `{var}' to fix this.")
+                self.data.zeta = np.zeros((self.dims.time, self.dims.node))
+            else:
+                self.load_data(['zeta'])
+
         # Calculate depth-resolved and depth-integrated volume.
         self.grid_volume()
         self.grid.depth = self.data.zeta + self.grid.h
@@ -745,12 +847,20 @@ class FileReader(Domain):
 
     def avg_volume_var(self, var):
         """
-        TODO: Add docstring.
+        Return the cumulative depth-average of the given variable in space, returning a time series.
 
-        :param var:
-        :return:
+        Parameters
+        ----------
+        var : str
+            The name of the variable to load. Must be a depth-resolved array.
+
+        Provides
+        --------
+        {var}_total : np.ndarray
+            Adds a new array which is a time series of the depth-average cumulative sum.
 
         """
+
         if not hasattr(self, 'volume'):
             self._get_cv_volumes()
 
@@ -793,12 +903,13 @@ class FileReader(Domain):
         they will be before averaging. Averaging starts at the first midnight in the time series and ends at the last
         midnight in the time series (values outside those times are ignored).
 
-        The result is added to self.data as an attribute named '{}_{}'.format(variable, period).
+        The result is added to self.data as an attribute named f'{variable}_{period}'.
 
         Parameters
         ----------
         variable : str
-            A variable to average in time.
+            A variable to average in time. Can have no spatial dimension (i.e. a time series of some data across a
+            region).
         period : str
             The period over which to average. Select from `daily', `weekly', `monthly' or `yearly' (`annual' is a
             synonym). `Monthly' is actually 4-weekly rather than per calendar month.
@@ -850,7 +961,9 @@ class FileReader(Domain):
         # For the averaging, reshape the time dimension into chunks which match the periods and then average along
         # that reshaped dimension. Getting the new shape is a bit fiddly. We should always have at least two
         # dimensions here (time, space) so this should always work.
-        other_dimensions = [_ for _ in getattr(self.data, variable).shape[1:]]
+        other_dimensions = []
+        if len(getattr(self.data, variable).shape) > 1:
+            other_dimensions = [_ for _ in getattr(self.data, variable).shape[1:]]
 
         # Check that the maximum difference of the first day's data and the first averaged data is zero:
         # (averaged[0] - getattr(self.data, variable)[first_midnight:first_midnight + step].mean(axis=0)).max() == 0
@@ -860,12 +973,15 @@ class FileReader(Domain):
         setattr(self.data, '{}_{}'.format(variable, period), averaged)
 
         if return_times:
-            # For the arithmetic to be simple, we'll do this on `time'. This is possibly an issue as `time' is
-            # sometimes not sufficiently precise to resolve the actual times accurately. It would be better to do
-            # this on `datetime' instead, but then we have to fiddle around making things relative and it all gets a
-            # bit tiresome.
-            new_times = num2date(self.time.time[first_midnight:last_midnight].reshape(-1, step).mean(axis=1),
-                                 units=self.atts.time.units)
+            # Two options here: either return the arithmetic mean of self.time.time[first_midnight:last_midnight]
+            # with an extra delta t at the start, or (as is done here), divide by nt + 1. The end result is the same.
+            # This has the added advantage of not needing to work with self.time.time (we can work on datetimes
+            # directly).
+            folded_time = self.time.datetime[first_midnight:last_midnight].reshape(-1, step)
+            nt = folded_time.shape[1]
+            day_origin = self.time.datetime[first_midnight:last_midnight:step]
+            new_times = day_origin + (np.sum((folded_time.T - day_origin).T, axis=1) / (nt - 1))
+
             return new_times
 
     def add_river_flow(self, river_nc_file, river_nml_file):
@@ -876,13 +992,12 @@ class FileReader(Domain):
 
         nml_dict = get_river_config(river_nml_file)
         river_node_raw = np.asarray(nml_dict['RIVER_GRID_LOCATION'], dtype=int) - 1
-        self.river = _passive_data_store()
 
-        river_nc = nc.Dataset(river_nc_file, 'r')
+        river_nc = Dataset(river_nc_file, 'r')
         time_raw = river_nc.variables['Times'][:]
         self.river.time_dt = [datetime.strptime(b''.join(this_time).decode('utf-8').rstrip(), '%Y/%m/%d %H:%M:%S') for this_time in time_raw]
 
-        ref_date = datetime(1900,1,1)
+        ref_date = datetime(1900, 1, 1)
         mod_time_sec = [(this_dt - ref_date).total_seconds() for this_dt in self.time.datetime]
         self.river.river_time_sec = [(this_dt - ref_date).total_seconds() for this_dt in self.river.time_dt]
 
@@ -890,17 +1005,17 @@ class FileReader(Domain):
             self.river.river_nodes = np.argwhere(np.isin(self._dims['node'], river_node_raw))
             rivers_in_grid = np.isin(river_node_raw, self._dims['node'])
         else:
-            self.river.river_nodes = river_node_raw    
+            self.river.river_nodes = river_node_raw
             rivers_in_grid = np.ones(river_node_raw.shape, dtype=bool)
 
-        river_flux_raw = river_nc.variables['river_flux'][:,rivers_in_grid]
+        river_flux_raw = river_nc.variables['river_flux'][:, rivers_in_grid]
         self.river.river_fluxes = np.asarray([np.interp(mod_time_sec, self.river.river_time_sec, this_col) for this_col in river_flux_raw.T]).T
         self.river.total_flux = np.sum(self.river.river_fluxes, axis=1)
 
-        river_temp_raw = river_nc.variables['river_temp'][:,rivers_in_grid]
+        river_temp_raw = river_nc.variables['river_temp'][:, rivers_in_grid]
         self.river.river_temp = np.asarray([np.interp(mod_time_sec, self.river.river_time_sec, this_col) for this_col in river_temp_raw.T]).T
 
-        river_salt_raw = river_nc.variables['river_salt'][:,rivers_in_grid]
+        river_salt_raw = river_nc.variables['river_salt'][:, rivers_in_grid]
         self.river.river_salt = np.asarray([np.interp(mod_time_sec, self.river.river_time_sec, this_col) for this_col in river_salt_raw.T]).T
 
 
@@ -919,7 +1034,7 @@ def MFileReader(fvcom, noisy=False, *args, **kwargs):
 
     Returns
     -------
-    FVCOM : PyFVCOM.read.FileReader
+    fvcom : PyFVCOM.read.FileReader
         Concatenated data from the files in `fvcom'.
 
     """
@@ -927,17 +1042,17 @@ def MFileReader(fvcom, noisy=False, *args, **kwargs):
     if isinstance(fvcom, str):
         if noisy:
             print('Loading {}'.format(fvcom))
-        FVCOM = FileReader(fvcom, *args, **kwargs)
+        fvcom = FileReader(fvcom, *args, **kwargs)
     else:
         for file in fvcom:
             if noisy:
                 print('Loading {}'.format(file))
             if file == fvcom[0]:
-                FVCOM = FileReader(file, *args, **kwargs)
+                fvcom = FileReader(file, *args, **kwargs)
             else:
-                FVCOM += FileReader(file, *args, **kwargs)
+                fvcom += FileReader(file, *args, **kwargs)
 
-    return FVCOM
+    return fvcom
 
 
 class FileReaderFromDict(FileReader):
@@ -975,11 +1090,11 @@ class FileReaderFromDict(FileReader):
             self._fvcom = filename
             self.ds = Dataset(self._fvcom, 'r')
             self.dims = _MakeDimensions(self.ds)
-            self._load_time()
+            self.time = _TimeReader(self._fvcom)
             self._dims = self.time._dims  # grab the updated dimensions from the _TimeReader object.
-            self._load_grid(fvcom)
+            self.grid = GridReaderNetCDF(fvcom)
             # Load the attributes of anything we've been asked to load.
-            self.atts = _AttributeReader(self.ds, self._variables)
+            self.atts = _AttributeReader(self._fvcom, self._variables)
 
         grid_names = ('lon', 'lat', 'lonc', 'latc', 'nv',
                       'h', 'h_center',
@@ -1028,7 +1143,7 @@ class FileReaderFromDict(FileReader):
                     # Assume we've got a single position
                     self.dims.time = getattr(self.data, obj).shape[0]
                     self.dims.node = 1
-            elif obj in ('Times'):
+            elif obj in ['Times']:
                 self.dims.time, self.dims.DateStrLen = getattr(self.time, obj).shape
             elif obj in ('time', 'Itime', 'Itime2', 'datetime'):
                 self.dims.time = getattr(self.time, obj).shape
@@ -1043,55 +1158,6 @@ class SubDomainReader(FileReader):
         # Automatically inherits the FileReader docstring.
         self._bounding_box = True
         super().__init__(*args, **kwargs)
-
-    def _make_subset_dimensions(self):
-        """
-        If the 'wesn' keyword has been included in the supplied dimensions, interactively select a region if the
-        value of 'wesn' is not a shapely Polygon. If it is a shapely Polygon, use that for the subsetting.
-
-        This mimics the function of PyFVCOM.read.FileReader._make_subset_dimensions but with greater flexibility in
-        terms of the region to subset.
-
-        """
-
-        if 'wesn' in self._dims:
-            if isinstance(self._dims['wesn'], Polygon):
-                bounding_poly = np.asarray(self._dims['wesn'].exterior.coords)
-            # Drop the 'wesn' dimension now as it's not necessary for anything else.
-            self._dims.pop('wesn')
-        else:
-            fig = plt.figure()
-            ax = fig.add_subplot(111)
-            ax.scatter(self.grid.lon, self.grid.lat, c='lightgray')
-            plt.show()
-
-            keep_picking = True
-            while keep_picking:
-                n_pts = int(input('How many polygon points? '))
-                bounding_poly = np.full((n_pts, 2), np.nan)
-                poly_lin = []
-                for point in range(n_pts):
-                    bounding_poly[point, :] = plt.ginput(1)[0]
-                    poly_lin.append(ax.plot(np.hstack([bounding_poly[:, 0], bounding_poly[0, 0]]),
-                                       np.hstack([bounding_poly[:, 1], bounding_poly[0,1]]),
-                                       c='r', linewidth=2)[0])
-                    fig.canvas.draw()
-
-                happy = input('Is that polygon OK? Y/N: ')
-                if happy.lower() == 'y':
-                    keep_picking = False
-
-                for this_l in poly_lin:
-                    this_l.remove()
-
-            plt.close()
-
-        poly_path = mpath.Path(bounding_poly)
-
-        # Shouldn't need the np.asarray here, I think, but leaving it in as I'm not 100% sure.
-        self._dims['node'] = np.squeeze(np.argwhere(np.asarray(poly_path.contains_points(np.asarray([self.grid.lon, self.grid.lat]).T))))
-        self._dims['nele'] = np.squeeze(np.argwhere(np.all(np.isin(self.grid.triangles, self._dims['node']), axis=1)))
-        self._get_data_pattern == 'memory'
 
     def _find_open_faces(self):
         """
@@ -1120,8 +1186,10 @@ class SubDomainReader(FileReader):
                           self.grid.y[this_cell_nodes[0]] - self.grid.y[this_cell_nodes[1]]]
             vector_nml = np.asarray([vector_pll[1], -vector_pll[0]]) / np.sqrt(vector_pll[0]**2 + vector_pll[1]**2)
             epsilon = 0.0001
-            mid_point = np.asarray([self.grid.x[this_cell_nodes[0]] + 0.5 * (self.grid.x[this_cell_nodes[1]] - self.grid.x[this_cell_nodes[0]]),
-                                    self.grid.y[this_cell_nodes[0]] + 0.5 * (self.grid.y[this_cell_nodes[1]] - self.grid.y[this_cell_nodes[0]])])
+            x_width = (self.grid.x[this_cell_nodes[1]] - self.grid.x[this_cell_nodes[0]])
+            y_width = (self.grid.y[this_cell_nodes[1]] - self.grid.y[this_cell_nodes[0]])
+            mid_point = np.asarray([self.grid.x[this_cell_nodes[0]] + 0.5 * x_width,
+                                    self.grid.y[this_cell_nodes[0]] + 0.5 * y_width])
 
             cell_path = mpath.Path(np.asarray([self.grid.x[this_cell_all_nodes], self.grid.y[this_cell_all_nodes]]).T)
 
@@ -1142,22 +1210,21 @@ class SubDomainReader(FileReader):
         """
 
         # Get a bunch of stuff if not already calculated
-
         if not hasattr(self, 'open_side_dict'):
             if noisy:
                 print('Open faces not identified yet, running _find_open_faces()')
             self._find_open_faces()
         open_face_cells = np.asarray(list(self.open_side_dict.keys()))
-        open_face_vel = {}  # currently unused
+        # open_face_vel = {}  # currently unused
 
         if not hasattr(self.grid, 'depth'):
             if noisy:
-                print('Time varying depth not preloaded, fetching')
+                print('Time varying depth not loaded, fetching')
             self._get_cv_volumes()
 
         if not hasattr(self.data, 'u'):
             if noisy:
-                print('U data not preloaded, fetching')
+                print('u data not loaded, fetching')
             self.load_data(['u'])
             u_openface = self.data.u[..., open_face_cells]
             delattr(self.data, 'u')
@@ -1166,14 +1233,14 @@ class SubDomainReader(FileReader):
 
         if not hasattr(self.data, 'v'):
             if noisy:
-                print('V data not preloaded, fetching')
+                print('v data not loaded, fetching')
             self.load_data(['v'])
             v_openface = self.data.v[..., open_face_cells]
             delattr(self.data, 'v')
         else:
             v_openface = self.data.v[..., open_face_cells]
 
-        # Loop through each open boundary cell, get the normal component of the velocity, 
+        # Loop through each open boundary cell, get the normal component of the velocity,
         # calculate the (time-varying) area of the open face at each sigma layer, then add this to the flux dictionary
         if noisy:
             print('{} open boundary cells'.format(len(open_face_cells)))
@@ -1222,20 +1289,25 @@ class SubDomainReader(FileReader):
         self.open_side_flux = open_side_flux_dict
 
     def add_evap_precip(self):
+        """ Load precipitation and evaporation data. """
         self.load_data(['precip', 'evap'])
 
-    def add_river_data(self):
+    def add_river_data(self, river_nml_file):
+        """
+        TODO: docstring.
+
+        """
         nml_dict = get_river_config(river_nml_file)
         river_node_raw = np.asarray(nml_dict['RIVER_GRID_LOCATION'], dtype=int) - 1
 
         # Get only rivers which feature in the subdomain
         rivers_in_grid = np.isin(river_node_raw, self._dims['node'])
 
-        river_nc = nc.Dataset(river_nc_file, 'r')
+        river_nc = Dataset(river_nc_file, 'r')
         time_raw = river_nc.variables['Times'][:]
         time_dt = [datetime.strptime(b''.join(this_time).decode('utf-8'), '%Y-%m-%d %H:%M:%S') for this_time in time_raw]
 
-        ref_date = datetime(1900,1,1)
+        ref_date = datetime(1900, 1, 1)
         mod_time_sec = [(this_dt - ref_date).total_seconds() for this_dt in self.time.datetime]
         river_time_sec = [(this_dt - ref_date).total_seconds() for this_dt in time_dt]
 
@@ -1260,8 +1332,6 @@ class SubDomainReader(FileReader):
         var_to_int = getattr(self.data, var)
         if len(var_to_int) == len(self.grid.xc):
             var_to_int = elems2nodes(var, self.grid.triangles)
-        
-        
 
         return var_to_int
 
@@ -1276,7 +1346,7 @@ class SubDomainReader(FileReader):
             var_to_int = elems2nodes(var, self.grid.triangles)
 
         if not hasattr(self, 'volume'):
-            self.get_cv_volumes()
+            self._get_cv_volumes()
 
         if not hasattr(self.data, var):
             self._get_variable(var)
@@ -1465,8 +1535,8 @@ class ncwrite(object):
                     try:
                         var[:] = data
                     except IndexError:
-                        raise(IndexError(('Supplied data shape {} does not match the specified'
-                        ' dimensions {}, for variable \'{}\'.'.format(data.shape, var.shape, k))))
+                        raise IndexError('Supplied data shape {} does not match the specified '
+                                         'dimensions {}, for variable \'{}\'.'.format(data.shape, var.shape, k))
                 else:
                     if not self.quiet:
                         print('Problem in the number of dimensions')
@@ -1474,8 +1544,8 @@ class ncwrite(object):
                 try:
                     var[:] = data
                 except IndexError:
-                    raise(IndexError(('Supplied data shape {} does not match the specified'
-                    ' dimensions {}, for variable \'{}\'.'.format(data.shape, var.shape, k))))
+                    raise IndexError('Supplied data shape {} does not match the specified '
+                                     'dimensions {}, for variable \'{}\'.'.format(data.shape, var.shape, k))
 
             # Create attributes for variables
             if 'attributes' in self.input_dict['variables'][k]:
@@ -1495,11 +1565,11 @@ def ncread(file, vars=None, dims=False, noisy=False, atts=False, datetimes=False
     ranges or lists of indices. For example, to extract the first hundred time
     steps, supply dims as:
 
-        dims = {'time':'0:100'}
+        dims = {'time': '0:100'}
 
     To extract the first, 400th and 10,000th values of any array with nodes:
 
-        dims = {'node':'[0, 3999, 9999]'}
+        dims = {'node': '[0, 3999, 9999]'}
 
     Any dimension not given in dims will be extracted in full.
 
@@ -1685,7 +1755,7 @@ def ncread(file, vars=None, dims=False, noisy=False, atts=False, datetimes=False
                     print('(extracted given indices)')
 
         elif noisy:
-                print()
+            print()
 
     # If: 1. we haven't got datetime in the output 2. we've been asked to get it and 3. we've got both Itime and
     # Itime2, then make datetime from those.
@@ -1929,3 +1999,236 @@ def get_river_config(file_name, noisy=False, zeroindex=False):
         rivers['RIVER_GRID_LOCATION'] = [int(i) - 1 for i in rivers['RIVER_GRID_LOCATION']]
 
     return rivers
+
+
+class WriteFVCOM(object):
+    """
+    Class to write an FVCOM-style netCDF file. Useful for dumping results into.
+
+    """
+
+    def __init__(self, ncfile, fvcom, data_variables=None, title=None, type=None, affiliation=None, ncformat='NETCDF4',
+                 ncopts={'zlib': True, 'complevel': 7}):
+        """
+        Create a new FVCOM-formatted netCDF file for the given FileReader object.
+
+        Parameters
+        ----------
+        ncfile : str
+            Path to the netCDF to create.
+        fvcom : PyFVCOM.read.FileReader
+            Model data object.
+        data_variables : list, optional.
+            The fvcom.dadta variables to write out. If omitted, write everything.
+        title : str, optional
+            The contents of the `title' global attribute (omitted if empty or missing).
+        type : str, optional
+            The contents of the `type' global attribute (omitted if empty or missing).
+        affiliation : str, optional
+            The affiliation (name, institution etc.) of the creator saved in the `author' global attribute (omitted
+            if empty or missing).
+        ncformat : str, optional
+            The netCDF file type to create. If omitted, defaults to `NETCDF4'.
+        ncopts : dict, optional
+            Dictionary of additional arguments to pass when adding new variables (see
+            `netCDF4.Dataset.createVariable'). If omitted, defaults to compression on.
+
+        """
+
+        self._mjd_origin = 'days since 1858-11-17 00:00:00'
+
+        # Our data
+        self._fvcom = fvcom
+        self._variables = []  # where we'll hold the `Dataset.createVariable' objects.
+        self._data_variables = data_variables
+        if self._data_variables is None:
+            self._data_variables = [i for i in self._fvcom.data if not i.startswith('_')]
+
+        # The output file
+        self._ncfile = ncfile
+        self._ncopts = ncopts
+        self._ncformat = ncformat
+
+        # Some extra pieces of information
+        self._title = title
+        self._type = type
+        self._affiliation = affiliation
+
+        # Some variables to skip
+        range_variables = [f'{i}_range' for i in ('lon', 'lat', 'lonc', 'latc', 'x', 'xc', 'y', 'yc')]
+        z_variables = [f'{i}_z' for i in ('siglay', 'siglev', 'siglay_center', 'siglev_center')]
+        self._custom_variables = ['bounding_box', 'triangles', 'ds', ] + range_variables + z_variables
+
+        self._nc = Dataset(self._ncfile, 'w', format=self._ncformat, clobber=True)
+
+        # Add the data we already have.
+        self._make_dims()
+        self._add_attributes()
+        self._create_variables()
+        self._add_variables()
+        self._add_ugrid_support()
+        if self._fvcom.dims.time != 0:
+            self._write_fvcom_time(self._fvcom.time.datetime)
+
+        # Close the netCDF handle.
+        self._nc.close()
+
+    def _make_dims(self):
+        for dim in self._fvcom.dims:
+            value = getattr(self._fvcom.dims, dim)
+            # Catch time and make unlimited if found and non-zero, otherwise don't make it.
+            if dim == 'time':
+                value = None
+                if getattr(self._fvcom.dims, dim) == 0:
+                    continue
+            self._nc.createDimension(dim, value)
+        # Add some of the hard-coded ones we'll probably need which we don't usually read in with FileReader.
+        if 'three' not in self._fvcom.dims:
+            self._nc.createDimension('three', 3)
+        if 'four' not in self._fvcom.dims:
+            self._nc.createDimension('four', 4)
+        if 'DateStrLen' not in self._fvcom.dims:
+            self._nc.createDimension('DateStrLen', 26)
+
+    def _add_attributes(self):
+        # Add any attributes we've got. We don't have as many global attributes as we don't really keep those in a
+        # FileReader object.
+        if self._type is not None:
+            self._nc.setncattr('type', self._type)
+        if self._title is not None:
+            self._nc.setncattr('title', self._title)
+        if self._affiliation is not None:
+            self._nc.setncattr('author', self._affiliation)
+        module_name = f'PyFVCOM.{Path(inspect.stack()[0][1]).stem}.{self.__class__.__name__}'
+        now = datetime.now().strftime('%Y-%m-%d at %H:%M:%S')
+        self._nc.setncattr('history', f'File created using {module_name} on {now}.')
+        self._nc.setncattr('source', 'FVCOM_3.0')  # for ParaView compatibility
+
+    def _create_variables(self):
+        # Create the variables from the self._fvcom.grid and self._fvcom.data objects.
+
+        # Assume f4 unless specified here. Time is handled by self.write_fvcom_time.
+        var_types = {'nv': 'i4', 'nbe': 'i4', 'ntsn': 'i4', 'nbsn': 'i4', 'ntve': 'i4', 'nbve': 'i4'}
+
+        self._variables = {}
+        for var in self._fvcom.grid:
+            if var in self._custom_variables:
+                continue
+
+            fmt = 'f4'
+            if var in var_types:
+                fmt = var_types[var]
+
+            dims = self._fvcom.variable_dimension_names[var]
+            self._variables[var] = self._nc.createVariable(var, fmt, dims, **self._ncopts)
+            # Add any attributes we have.
+            var_atts = getattr(self._fvcom.atts, var)
+            for att in var_atts:
+                self._variables[var].setncattr(att, getattr(var_atts, att))
+
+        # self._fvcom.data. may be missing entirely (it's always present as I write this, but I think it may go away
+        # in the future - assume I've done that since it's relatively cheap to do so).
+
+        # We may also have completely custom variables here with no known dimensions in self._fvcom.variable_dimension_names,
+        # in which case we'll have to guess what dimensions they have based on their .shape. This could be tricky.
+        dim_names = set(flatten_list([self._fvcom.variable_dimension_names[i] for i in self._fvcom.variable_dimension_names]))
+        dim_size = {i: getattr(self._fvcom.dims, i) for i in dim_names}
+        unlikely_dims = ['three', 'four', 'maxelem', 'maxnode']
+        if hasattr(self._fvcom, 'data'):
+            for var in self._fvcom.data:
+                # If we've been given a subset of variables to save, skip those not in that list.
+                if var not in self._data_variables:
+                    continue
+
+                if var in self._fvcom.variable_dimension_names:
+                    dims = self._fvcom.variable_dimension_names[var]
+                else:
+                    shape = getattr(self._fvcom.data, var).shape
+                    # Find candidate dimensions. If we have dimensions with duplicate sizes, this won't work (i.e. if
+                    # there are 4 time dimensions in the data, we'll likely pick up the dimension as `four' rather than
+                    # `time').
+                    dims = []
+                    for d in dim_size:
+                        # Skip unlikely dimensions.
+                        if d in unlikely_dims:
+                            continue
+                        if dim_size[d] in shape:
+                            dims.append(d)
+                    if len(dims) != len(shape):
+                        raise AttributeError(f'Unable to identify dimensions for non-standard variable {var}')
+
+                self._variables[var] = self._nc.createVariable(var, fmt, dims, **self._ncopts)
+
+                # Add any attributes we have.
+                var_atts = getattr(self._fvcom.atts, var)
+                for att in var_atts:
+                    self._variables[var].setncattr(att, getattr(var_atts, att))
+
+    def _add_variables(self):
+        # Add the data from the variables in self._fvcom.grid and self._fvcom.data.
+        for var in self._fvcom.grid:
+            # Skip custom variables as we haven't defined those in self._create_variables.
+            if var in self._custom_variables:
+                continue
+            self._variables[var][:] = getattr(self._fvcom.grid, var)
+
+        for var in self._fvcom.data:
+            if var in self._data_variables:
+                self._variables[var][:] = getattr(self._fvcom.data, var)
+
+    def _write_fvcom_time(self, time):
+        """
+        Write the four standard FVCOM time variables (time, Times, Itime, Itime2) for the given time series.
+
+        Parameters
+        ----------
+        time : np.ndarray, list, tuple
+            Times as datetime objects.
+
+        """
+
+        mjd = date2num(time, units=self._mjd_origin)
+        Itime = np.floor(mjd)  # integer Modified Julian Days
+        Itime2 = (mjd - Itime) * 24 * 60 * 60 * 1000  # milliseconds since midnight
+        Times = [t.strftime('%Y-%m-%dT%H:%M:%S.%f') for t in time]
+
+        # It would be nice to support double precisions for time here, but ParaView segfaults if we try and open a file
+        # with `time' as doubles.
+        if 'time' not in self._variables and 'time' in self._nc.dimensions:
+            self._variables['time'] = self._nc.createVariable('time', 'f4', ['time'], **self._ncopts)
+        self._variables['time'].setncattr('units', self._mjd_origin)
+        self._variables['time'].setncattr('format', 'modified julian day (MJD)')
+        self._variables['time'].setncattr('long_name', 'time')
+        self._variables['time'].setncattr('time_zone', 'UTC')
+        self._variables['time'][:] = mjd
+        if 'Itime' not in self._variables and 'time' in self._nc.dimensions:
+            self._variables['Itime'] = self._nc.createVariable('Itime', 'i', ['time'], **self._ncopts)
+        self._variables['Itime'].setncattr('units', self._mjd_origin)
+        self._variables['Itime'].setncattr('format', 'modified julian day (MJD)')
+        self._variables['Itime'].setncattr('time_zone', 'UTC')
+        self._variables['Itime'][:] = Itime
+        if 'Itime2' not in self._variables and 'time' in self._nc.dimensions:
+            self._variables['Itime2'] = self._nc.createVariable('Itime2', 'i', ['time'], **self._ncopts)
+        self._variables['Itime2'].setncattr('units', 'msec since 00:00:00')
+        self._variables['Itime2'].setncattr('time_zone', 'UTC')
+        self._variables['Itime2'][:] = Itime2
+        if 'Times' not in self._variables and 'time' in self._nc.dimensions:
+            self._variables['Times'] = self._nc.createVariable('Times', 'c', ['time', 'DateStrLen'], **self._ncopts)
+        self._variables['Times'].setncattr('long_name', 'Calendar Date')
+        self._variables['Times'].setncattr('format', 'String: Calendar Time')
+        self._variables['Times'].setncattr('time_zone', 'UTC')
+        self._variables['Times'][:] = Times
+
+    def _add_ugrid_support(self):
+        """ Add support for the ugrid file convention. """
+
+        fvcom_mesh = self._nc.createVariable('fvcom_mesh', np.int32)
+        setattr(fvcom_mesh, 'cf_role', 'mesh_topology')
+        setattr(fvcom_mesh, 'topology_dimension', 2)
+        setattr(fvcom_mesh, 'node_coordinates', 'lon lat')
+        setattr(fvcom_mesh, 'face_coordinates', 'lonc latc')
+        setattr(fvcom_mesh, 'face_node_connectivity', 'nv')
+
+        # Add the global convention.
+        setattr(self._nc, 'Convention', 'UGRID-1.0')
+        setattr(self._nc, 'CoordinateProjection', 'none')

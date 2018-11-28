@@ -14,6 +14,8 @@ from collections import defaultdict, deque
 from functools import partial
 from warnings import warn
 
+import matplotlib.pyplot as plt
+import matplotlib.path as mpath
 import networkx
 import numpy as np
 import scipy.spatial
@@ -24,16 +26,18 @@ from matplotlib.tri import CubicTriInterpolator
 from matplotlib.tri.triangulation import Triangulation
 from netCDF4 import Dataset, date2num
 from scipy.interpolate import RegularGridInterpolator, LinearNDInterpolator
+from scipy.spatial.qhull import QhullError
 from utide import reconstruct, ut_constants
 from utide.utilities import Bunch
 
 from PyFVCOM.coordinate import utm_from_lonlat, lonlat_from_utm
-from PyFVCOM.utilities.time import date_range
-from PyFVCOM.utilities.general import _passive_data_store, fix_range
 from PyFVCOM.ocean import zbar
+from PyFVCOM.utilities.general import _passive_data_store, fix_range
+from PyFVCOM.utilities.time import date_range
 
 
 class GridReaderNetCDF(object):
+    """ Read in and store a given FVCOM grid in our data format. """
 
     def __init__(self, filename, dims=None, zone='30N', debug=False, verbose=False):
         """
@@ -64,11 +68,12 @@ class GridReaderNetCDF(object):
         self._debug = debug
         self._noisy = verbose
 
-        self.ds = Dataset(filename, 'r')
-        _dims = copy.deepcopy(dims)
+        ds = Dataset(filename, 'r')
+        self._dims = copy.deepcopy(dims)
 
-        if not hasattr(self, '_bounding_box'):
-            self._bounding_box = False
+        self._bounding_box = False
+        if 'wesn' in self._dims:
+            self._bounding_box = True
 
         grid_metrics = {'ntsn': 'node', 'nbsn': 'node', 'ntve': 'node', 'nbve': 'node', 'art1': 'node', 'art2': 'node',
                         'a1u': 'nele', 'a2u': 'nele', 'nbe': 'nele'}
@@ -77,34 +82,33 @@ class GridReaderNetCDF(object):
         # Get the grid data.
         for grid in grid_variables:
             try:
-                setattr(self, grid, self.ds.variables[grid][:])
+                setattr(self, grid, ds.variables[grid][:])
                 # Save the attributes.
                 attributes = _passive_data_store()
-                for attribute in self.ds.variables[grid].ncattrs():
-                    setattr(attributes, attribute, getattr(self.ds.variables[grid], attribute))
+                for attribute in ds.variables[grid].ncattrs():
+                    setattr(attributes, attribute, getattr(ds.variables[grid], attribute))
                 # setattr(self.atts, grid, attributes)
             except KeyError:
                 # Make zeros for this missing variable so we can convert from the non-missing data below.
                 if grid.endswith('c'):
-                    setattr(self, grid, np.zeros(self.ds.dimensions['nele'].size).T)
+                    setattr(self, grid, np.zeros(ds.dimensions['nele'].size).T)
                 else:
-                    setattr(self, grid, np.zeros(self.ds.dimensions['node'].size).T)
+                    setattr(self, grid, np.zeros(ds.dimensions['node'].size).T)
             except ValueError as value_error_message:
                 warn('Variable {} has a problem with the data. Setting value as all zeros.'.format(grid))
                 print(value_error_message)
-                setattr(self, grid, np.zeros(self.ds.variables[grid].shape))
+                setattr(self, grid, np.zeros(ds.variables[grid].shape))
 
         # And the triangulation
         try:
-            self.nv = self.ds.variables['nv'][:].astype(
-                int)  #  force integers even though they should already be so
+            self.nv = ds.variables['nv'][:].astype(int)  # force integers even though they should already be so
             self.triangles = copy.copy(self.nv.T - 1)  # zero-indexed for python
         except KeyError:
             # If we don't have a triangulation, make one. Warn that if we've made one, it might not match the
             # original triangulation used in the model run.
             if self._debug:
                 print("Creating new triangulation since we're missing one")
-            triangulation = tri.Triangulation(self.lon, self.lat)
+            triangulation = Triangulation(self.lon, self.lat)
             self.triangles = triangulation.triangles
             self.nv = copy.copy(self.triangles.T + 1)
             dims.nele = self.triangles.shape[0]
@@ -115,7 +119,7 @@ class GridReaderNetCDF(object):
             if self._debug:
                 print('Fixing broken triangulation. Current minimum for nv is {} and for triangles is {} but they '
                       'should be 1 and 0, respectively.'.format(self.nv.min(), self.triangles.min()))
-            self.nv = (self.ds.variables['nv'][:].astype(int) - self.ds.variables['nv'][:].astype(int).min()) + 1
+            self.nv = (ds.variables['nv'][:].astype(int) - ds.variables['nv'][:].astype(int).min()) + 1
             self.triangles = copy.copy(self.nv.T) - 1
 
         # Convert the given W/E/S/N coordinates into node and element IDs to subset.
@@ -123,111 +127,106 @@ class GridReaderNetCDF(object):
             self._make_subset_dimensions()
 
         # If we've been given a spatial dimension to subsample in fix the triangulation.
-        if 'nele' in _dims or 'node' in _dims:
+        if 'nele' in self._dims or 'node' in self._dims:
             if self._debug:
                 print('Fix triangulation table as we have been asked for only specific nodes/elements.')
 
-            if 'node' in _dims:
-                new_tri, new_ele = reduce_triangulation(self.triangles, _dims['node'], return_elements=True)
-                if not new_ele.size and 'nele' not in _dims:
+            if 'node' in self._dims:
+                new_tri, new_ele = reduce_triangulation(self.triangles, self._dims['node'], return_elements=True)
+                if not new_ele.size and 'nele' not in self._dims:
                     if self._noisy:
-                        print(
-                            'Nodes selected cannot produce new triangulation and no elements specified so including all element of which the nodes are members')
-                    _dims['nele'] = np.squeeze(
-                        np.argwhere(np.any(np.isin(self.triangles, _dims['node']), axis=1)))
-                    if _dims['nele'].size == 1:  # Annoying error for the differnce between array(n) and array([n])
-                        _dims['nele'] = np.asarray([_dims['nele']])
-                elif 'nele' not in _dims:
+                        print('Nodes selected cannot produce new triangulation and no elements specified so including all element of which the nodes are members')
+                    self._dims['nele'] = np.squeeze(np.argwhere(np.any(np.isin(self.triangles, self._dims['node']), axis=1)))
+                    if self._dims['nele'].size == 1:  # Annoying error for the difference between array(n) and array([n])
+                        self._dims['nele'] = np.asarray([self._dims['nele']])
+                elif 'nele' not in self._dims:
                     if self._noisy:
-                        print(
-                            'Elements not specified but reducing to only those within the triangulation of selected nodes')
-                    _dims['nele'] = new_ele
-                elif not np.array_equal(np.sort(new_ele), np.sort(_dims['nele'])):
+                        print('Elements not specified but reducing to only those within the triangulation of selected nodes')
+                    self._dims['nele'] = new_ele
+                elif not np.array_equal(np.sort(new_ele), np.sort(self._dims['nele'])):
                     if self._noisy:
-                        print(
-                            'Mismatch between given elements and nodes for triangulation, retaining original elements')
+                        print('Mismatch between given elements and nodes for triangulation, retaining original elements')
             else:
                 if self._noisy:
-                    print(
-                        'Nodes not specified but reducing to only those within the triangulation of selected elements')
-                _dims['node'] = np.unique(self.triangles[_dims['nele'], :])
-                new_tri = reduce_triangulation(self.triangles, _dims['node'])
+                    print('Nodes not specified but reducing to only those within the triangulation of selected elements')
+                self._dims['node'] = np.unique(self.triangles[self._dims['nele'], :])
+                new_tri = reduce_triangulation(self.triangles, self._dims['node'])
 
             self.nv = new_tri.T + 1
             self.triangles = new_tri
 
-        if 'node' in _dims:
-            nodes = len(_dims['node'])
+        if 'node' in self._dims:
+            nodes = len(self._dims['node'])
             for var in 'x', 'y', 'lon', 'lat', 'h', 'siglay', 'siglev':
                 try:
-                    node_index = self.ds.variables[var].dimensions.index('node')
-                    var_shape = [i for i in np.shape(self.ds.variables[var])]
+                    node_index = ds.variables[var].dimensions.index('node')
+                    var_shape = [i for i in np.shape(ds.variables[var])]
                     var_shape[node_index] = nodes
 
-                    if 'siglay' in _dims and 'siglay' in self.ds.variables[var].dimensions:
-                        var_shape[self.ds.variables[var].dimensions.index('siglay')] = self.ds.dimensions['siglay'].size
-                    elif 'siglev' in _dims and 'siglev' in self.ds.variables[var].dimensions:
-                        var_shape[self.ds.variables[var].dimensions.index('siglev')] = self.ds.dimensions['siglev'].size
+                    if 'siglay' in self._dims and 'siglay' in ds.variables[var].dimensions:
+                        var_shape[ds.variables[var].dimensions.index('siglay')] = ds.dimensions['siglay'].size
+                    elif 'siglev' in self._dims and 'siglev' in ds.variables[var].dimensions:
+                        var_shape[ds.variables[var].dimensions.index('siglev')] = ds.dimensions['siglev'].size
                     _temp = np.empty(var_shape)
-                    if 'siglay' in self.ds.variables[var].dimensions:
-                        for ni, node in enumerate(_dims['node']):
-                            if 'siglay' in _dims:
-                                _temp[..., ni] = self.ds.variables[var][_dims['siglay'], node]
+                    if 'siglay' in ds.variables[var].dimensions:
+                        for ni, node in enumerate(self._dims['node']):
+                            if 'siglay' in self._dims:
+                                _temp[..., ni] = ds.variables[var][self._dims['siglay'], node]
                             else:
-                                _temp[..., ni] = self.ds.variables[var][:, node]
-                    elif 'siglev' in self.ds.variables[var].dimensions:
-                        for ni, node in enumerate(_dims['node']):
-                            if 'siglev' in _dims:
-                                _temp[..., ni] = self.ds.variables[var][_dims['siglev'], node]
+                                _temp[..., ni] = ds.variables[var][:, node]
+                    elif 'siglev' in ds.variables[var].dimensions:
+                        for ni, node in enumerate(self._dims['node']):
+                            if 'siglev' in self._dims:
+                                _temp[..., ni] = ds.variables[var][self._dims['siglev'], node]
                             else:
-                                _temp[..., ni] = self.ds.variables[var][:, node]
+                                _temp[..., ni] = ds.variables[var][:, node]
                     else:
-                        for ni, node in enumerate(_dims['node']):
-                            _temp[..., ni] = self.ds.variables[var][..., node]
+                        for ni, node in enumerate(self._dims['node']):
+                            _temp[..., ni] = ds.variables[var][..., node]
                 except KeyError:
                     if 'siglay' in var:
-                        _temp = np.empty((self.ds.dimensions['siglay'].size, nodes))
+                        _temp = np.empty((ds.dimensions['siglay'].size, nodes))
                     elif 'siglev' in var:
-                        _temp = np.empty((self.ds.dimensions['siglev'].size, nodes))
+                        _temp = np.empty((ds.dimensions['siglev'].size, nodes))
                     else:
                         _temp = np.empty(nodes)
                 setattr(self, var, _temp)
 
-        if 'nele' in _dims:
-            nele = len(_dims['nele'])
+        if 'nele' in self._dims:
+            nele = len(self._dims['nele'])
             for var in 'xc', 'yc', 'lonc', 'latc', 'h_center', 'siglay_center', 'siglev_center':
                 try:
-                    nele_index = self.ds.variables[var].dimensions.index('nele')
-                    var_shape = [i for i in np.shape(self.ds.variables[var])]
+                    nele_index = ds.variables[var].dimensions.index('nele')
+                    var_shape = [i for i in np.shape(ds.variables[var])]
                     var_shape[nele_index] = nele
-                    if 'siglay' in _dims and 'siglay' in self.ds.variables[var].dimensions:
-                        var_shape[self.ds.variables[var].dimensions.index('siglay')] = self.ds.dimensions['siglay'].size
-                    elif 'siglev' in _dims and 'siglev' in self.ds.variables[var].dimensions:
-                        var_shape[self.ds.variables[var].dimensions.index('siglev')] = self.ds.dimensions['siglev'].size
+                    if 'siglay' in self._dims and 'siglay' in ds.variables[var].dimensions:
+                        var_shape[ds.variables[var].dimensions.index('siglay')] = ds.dimensions['siglay'].size
+                    elif 'siglev' in self._dims and 'siglev' in ds.variables[var].dimensions:
+                        var_shape[ds.variables[var].dimensions.index('siglev')] = ds.dimensions['siglev'].size
                     _temp = np.full(var_shape, np.nan)
-                    if 'siglay' in self.ds.variables[var].dimensions:
-                        for ni, current_nele in enumerate(_dims['nele']):
-                            if 'siglay' in _dims:
-                                _temp[..., ni] = self.ds.variables[var][_dims['siglay'], current_nele]
+                    if 'siglay' in ds.variables[var].dimensions:
+                        for ni, current_nele in enumerate(self._dims['nele']):
+                            if 'siglay' in self._dims:
+                                _temp[..., ni] = ds.variables[var][self._dims['siglay'], current_nele]
                             else:
-                                _temp[..., ni] = self.ds.variables[var][:, current_nele]
-                    elif 'siglev' in self.ds.variables[var].dimensions:
-                        for ni, current_nele in enumerate(_dims['nele']):
-                            if 'siglev' in _dims:
-                                _temp[..., ni] = self.ds.variables[var][_dims['siglev'], current_nele]
+                                _temp[..., ni] = ds.variables[var][:, current_nele]
+                    elif 'siglev' in ds.variables[var].dimensions:
+                        for ni, current_nele in enumerate(self._dims['nele']):
+                            if 'siglev' in self._dims:
+                                _temp[..., ni] = ds.variables[var][self._dims['siglev'], current_nele]
                             else:
-                                _temp[..., ni] = self.ds.variables[var][:, current_nele]
+                                _temp[..., ni] = ds.variables[var][:, current_nele]
                     else:
-                        for ni, current_nele in enumerate(_dims['nele']):
-                            _temp[..., ni] = self.ds.variables[var][..., current_nele]
+                        for ni, current_nele in enumerate(self._dims['nele']):
+                            _temp[..., ni] = ds.variables[var][..., current_nele]
                 except KeyError:
                     # FVCOM3 files don't have h_center, siglay_center and siglev_center, so make var_shape manually.
                     if self._noisy:
                         print('Adding element-centred {} for compatibility.'.format(var))
                     if var.startswith('siglev'):
-                        var_shape = [self.ds.dimensions['siglev'].size, nele]
+                        var_shape = [ds.dimensions['siglev'].size, nele]
                     elif var.startswith('siglay'):
-                        var_shape = [self.ds.dimensions['siglay'].size, nele]
+                        var_shape = [ds.dimensions['siglay'].size, nele]
                     else:
                         var_shape = nele
                     _temp = np.zeros(var_shape)
@@ -235,16 +234,16 @@ class GridReaderNetCDF(object):
 
         # Load the grid metrics data separately as we don't want to set a bunch of zeros for missing data.
         for metric, grid_pos in grid_metrics.items():
-            if metric in self.ds.variables:
-                if grid_pos in _dims:
-                    metric_raw = self.ds.variables[metric][:]
-                    setattr(self, metric, metric_raw[..., _dims[grid_pos]])
+            if metric in ds.variables:
+                if grid_pos in self._dims:
+                    metric_raw = ds.variables[metric][:]
+                    setattr(self, metric, metric_raw[..., self._dims[grid_pos]])
                 else:
-                    setattr(self, metric, self.ds.variables[metric][:])
+                    setattr(self, metric, ds.variables[metric][:])
                 # Save the attributes.
                 attributes = _passive_data_store()
-                for attribute in self.ds.variables[metric].ncattrs():
-                    setattr(attributes, attribute, getattr(self.ds.variables[metric], attribute))
+                for attribute in ds.variables[metric].ncattrs():
+                    setattr(attributes, attribute, getattr(ds.variables[metric], attribute))
                 # setattr(self.atts, metric, attributes)
 
                 # Fix the indexing and shapes of the grid metrics variables. Only transpose and offset indexing for nbe.
@@ -257,15 +256,15 @@ class GridReaderNetCDF(object):
         # reason (e.g. testing). We don't add attributes for the data if we've created it as doing so is a pain.
         for var in 'h_center', 'siglay_center', 'siglev_center':
             try:
-                if 'nele' in _dims:
-                    var_raw = self.ds.variables[var][:]
-                    setattr(self, var, var_raw[..., _dims['nele']])
+                if 'nele' in self._dims:
+                    var_raw = ds.variables[var][:]
+                    setattr(self, var, var_raw[..., self._dims['nele']])
                 else:
-                    setattr(self, var, self.ds.variables[var][:])
+                    setattr(self, var, ds.variables[var][:])
                 # Save the attributes.
                 attributes = _passive_data_store()
-                for attribute in self.ds.variables[var].ncattrs():
-                    setattr(attributes, attribute, getattr(self.ds.variables[var], attribute))
+                for attribute in ds.variables[var].ncattrs():
+                    setattr(attributes, attribute, getattr(ds.variables[var], attribute))
                 # setattr(self.atts, var, attributes)
             except KeyError:
                 if self._noisy:
@@ -275,23 +274,37 @@ class GridReaderNetCDF(object):
                         setattr(self, var, nodes2elems(getattr(self, var.split('_')[0]), self.triangles))
                     except IndexError:
                         # Maybe the array's the wrong way around. Flip it and try again.
-                        setattr(self, var,
-                                nodes2elems(getattr(self, var.split('_')[0]).T, self.triangles))
+                        setattr(self, var, nodes2elems(getattr(self, var.split('_')[0]).T, self.triangles))
                 else:
                     # The triangulation is invalid, so we can't properly move our existing data, so just set things
                     # to 0 but at least they're the right shape. Warn accordingly.
                     if self._noisy:
-                        print(
-                            '{} cannot be migrated to element centres (invalid triangulation). Setting to zero.'.format(
-                                var))
-                    if var is 'siglev_center':
-                        setattr(self, var, np.zeros((self.ds.dimensions['siglev'].size, nele)))
-                    elif var is 'siglay_center':
-                        setattr(self, var, np.zeros((self.ds.dimensions['siglay'].size, nele)))
-                    elif var is 'h_center':
+                        print('{} cannot be migrated to element centres (invalid triangulation). Setting to zero.'.format(var))
+                    if var == 'siglev_center':
+                        setattr(self, var, np.zeros((ds.dimensions['siglev'].size, nele)))
+                    elif var == 'siglay_center':
+                        setattr(self, var, np.zeros((ds.dimensions['siglay'].size, nele)))
+                    elif var == 'h_center':
                         setattr(self, var, np.zeros((nele)))
                     else:
                         raise ValueError('Inexplicably, we have a variable not in the loop we have defined.')
+
+        # Check if we've been given vertical dimensions to subset in too, and if so, do that.
+        for var in 'siglay', 'siglev', 'siglay_center', 'siglev_center':
+            # Only carry on if we have this variable in the output file with which we're working (mainly this
+            # is for compatibility with FVCOM 3 outputs which do not have the _center variables).
+            if var not in ds.variables:
+                continue
+            short_dim = copy.copy(var)
+            # Strip off the _center to match the dimension name.
+            if short_dim.endswith('_center'):
+                short_dim = short_dim.split('_')[0]
+            if short_dim in self._dims:
+                if short_dim in ds.variables[var].dimensions:
+                    if self._debug:
+                        print(f'Subsetting {var} in the vertical ({short_dim} = {self._dims[short_dim]}')
+                    _temp = getattr(self, var)[self._dims[short_dim], ...]
+                    setattr(self, var, _temp)
 
         # Make depth-resolved sigma data. This is useful for plotting things.
         for var in self:
@@ -303,43 +316,28 @@ class GridReaderNetCDF(object):
                 else:
                     z = self.h
 
+                if self._debug:
+                    print(f'Making water depth vertical grid: {var}_z')
+
+                _original_sig = getattr(self, var)
+
                 # Set the sigma data to the 0-1 range for siglay so that the maximum depth value is equal to the
                 # actual depth. This may be a problem.
-                _fixed_sig = fix_range(getattr(self, var), 0, 1)
+                _fixed_sig = fix_range(_original_sig, 0, 1)
 
                 # h_center can have a time dimension (when running with sediment transport and morphological
                 # update enabled). As such, we need to account for that in the creation of the _z arrays.
                 if np.ndim(z) > 1:
                     z = z[:, np.newaxis, :]
-                    _fixed_sig = fix_range(getattr(self, var), 0, 1)[np.newaxis, ...]
+                    _fixed_sig = fix_range(_original_sig, 0, 1)[np.newaxis, ...]
                 try:
-                    setattr(self, '{}_z'.format(var), fix_range(getattr(self, var), 0, 1) * z)
+                    setattr(self, '{}_z'.format(var), fix_range(_original_sig, 0, 1) * z)
                 except ValueError:
                     # The arrays might be the wrong shape for broadcasting to work, so transpose and retranspose
                     # accordingly. This is less than ideal.
                     setattr(self, '{}_z'.format(var), (_fixed_sig.T * z).T)
-
-        # Check if we've been given vertical dimensions to subset in too, and if so, do that. Check we haven't
-        # already done this if the 'node' and 'nele' sections above first.
-        for var in 'siglay', 'siglev', 'siglay_center', 'siglev_center':
-            # Only carry on if we have this variable in the output file with which we're working (mainly this
-            # is for compatibility with FVCOM 3 outputs which do not have the _center variables).
-            if var not in self.ds.variables:
-                continue
-            short_dim = copy.copy(var)
-            # Assume we need to subset this one unless 'node' or 'nele' are missing from _dims. If they're in
-            # _dims, we've already subsetted in the 'node' and 'nele' sections above, so doing it again here
-            # would fail.
-            subset_variable = True
-            if 'node' in _dims or 'nele' in _dims:
-                subset_variable = False
-            # Strip off the _center to match the dimension name.
-            if short_dim.endswith('_center'):
-                short_dim = short_dim.split('_')[0]
-            if short_dim in _dims:
-                if short_dim in self.ds.variables[var].dimensions and subset_variable:
-                    _temp = getattr(self, var)[_dims[short_dim], ...]
-                    setattr(self, var, _temp)
+                # Update the original data with the subsetted data.
+                setattr(self, var, _original_sig)
 
         # Check ranges and if zero assume we're missing that particular type, so convert from the other accordingly.
         self.lon_range = np.ptp(self.lon)
@@ -352,7 +350,14 @@ class GridReaderNetCDF(object):
         self.yc_range = np.ptp(self.yc)
 
         # Only do the conversions when we have more than a single point since the relevant ranges will be zero with
-        # only one position.
+        # only one position. If we've got zeros for lon and lat, then we know our native coordinate type is cartesian.
+        # Otherwise, it might be spherical.
+        self.native_coordinates = 'not specified'
+        if self.lon_range == 0 and self.x_range != 0:
+            self.native_coordinates = 'cartesian'
+        elif self.lon_range != 0 and self.x_range == 0:
+            self.native_coordinates = 'spherical'
+
         if len(self.lon) > 1:
             if self.lon_range == 0 and self.lat_range == 0:
                 self.lon, self.lat = lonlat_from_utm(self.x, self.y, zone=zone)
@@ -375,8 +380,10 @@ class GridReaderNetCDF(object):
         # Make a bounding box variable too (spherical coordinates): W/E/S/N
         self.bounding_box = (np.min(self.lon), np.max(self.lon), np.min(self.lat), np.max(self.lat))
 
+        ds.close()
+
     def __iter__(self):
-        return (a for a in dir(self) if not a.startswith('__'))
+        return (a for a in dir(self) if not a.startswith('_'))
 
     def _update_dimensions(self, dims):
         """
@@ -393,7 +400,55 @@ class GridReaderNetCDF(object):
             if dim != 'time':
                 if self._noisy:
                     print('Resetting {} dimension length from {} to {}'.format(dim, getattr(dims, dim), len(dims[dim])))
-                setattr(self.dims, dim, len(dims[dim]))
+                setattr(self._dims, dim, len(dims[dim]))
+
+    def _make_subset_dimensions(self):
+        """
+        If the 'wesn' keyword has been included in the supplied dimensions, interactively select a region if the
+        value of 'wesn' is not a shapely Polygon. If it is a shapely Polygon, use that for the subsetting.
+
+        Eventually this functionality should just be folded into FileReader.
+
+        """
+
+        if 'wesn' in self._dims:
+            if isinstance(self._dims['wesn'], shapely.geometry.Polygon):
+                bounding_poly = np.asarray(self._dims['wesn'].exterior.coords)
+        else:
+            fig = plt.figure()
+            ax = fig.add_subplot(111)
+            ax.scatter(self.lon, self.lat, c='lightgray')
+            plt.show()
+
+            keep_picking = True
+            while keep_picking:
+                n_pts = int(input('How many polygon points? '))
+                bounding_poly = np.full((n_pts, 2), np.nan)
+                poly_lin = []
+                for point in range(n_pts):
+                    bounding_poly[point, :] = plt.ginput(1)[0]
+                    poly_lin.append(ax.plot(np.hstack([bounding_poly[:, 0], bounding_poly[0, 0]]),
+                                            np.hstack([bounding_poly[:, 1], bounding_poly[0, 1]]),
+                                            c='r', linewidth=2)[0])
+                    fig.canvas.draw()
+
+                happy = input('Is that polygon OK? Y/N: ')
+                if happy.lower() == 'y':
+                    keep_picking = False
+
+                for this_l in poly_lin:
+                    this_l.remove()
+
+            plt.close()
+
+        poly_path = mpath.Path(bounding_poly)
+
+        # Shouldn't need the np.asarray here, I think, but leaving it in as I'm not 100% sure.
+        self._dims['node'] = np.squeeze(np.argwhere(np.asarray(poly_path.contains_points(np.asarray([self.lon, self.lat]).T))))
+        self._dims['nele'] = np.squeeze(np.argwhere(np.all(np.isin(self.triangles, self._dims['node']), axis=1)))
+        self._get_data_pattern = 'memory'
+        # Remove the now useless 'wesn' dimension.
+        self._dims.pop('wesn')
 
 
 class _GridReader(object):
@@ -464,7 +519,7 @@ class _GridReader(object):
         elif extension == '.m21fm':
             if self._noisy:
                 print('Loading MIKE21 grid: {}'.format(self.filename))
-            triangle, nodes, x, y, z = read_mike_mesh(self.filename)
+            triangle, nodes, x, y, z, grid_type = read_mike_mesh(self.filename)
         else:
             raise ValueError('Unknown file format ({}) for file: {}'.format(extension, self.filename))
 
@@ -768,17 +823,153 @@ class Domain(object):
 
         Provides
         --------
-        area : np.ndarray
+        self.grid.areas : np.ndarray
             The area of each triangular element in the grid.
+
+        Notes
+        -----
+        This differs from self.calculate_control_area_and_volume which provides what's needed for integrating fields
+        in the domain. This simply calculates the area of each triangle in the domain.
 
         """
 
         triangles = self.grid.triangles
         x = self.grid.x
         y = self.grid.y
-        self.area = get_area(np.asarray((x[triangles[:, 0]], y[triangles[:, 0]])).T,
-                             np.asarray((x[triangles[:, 1]], y[triangles[:, 1]])).T,
-                             np.asarray((x[triangles[:, 2]], y[triangles[:, 2]])).T)
+        self.grid.areas = get_area(np.asarray((x[triangles[:, 0]], y[triangles[:, 0]])).T,
+                                   np.asarray((x[triangles[:, 1]], y[triangles[:, 1]])).T,
+                                   np.asarray((x[triangles[:, 2]], y[triangles[:, 2]])).T)
+
+    def calculate_control_area_and_volume(self):
+        """
+        This calculates the surface area of individual control volumes consisted of triangles with a common node point.
+
+        Provides
+        --------
+        self.grid.art1 : np.ndarray
+            Area of interior control volume (for node value integration)
+        self.grid.art2 : np.ndarray
+            Sum area of all cells around each node.
+
+        Notes
+        -----
+
+        This is a python reimplementation of the FVCOM function CELL_AREA in cell_area.F. Whilst the reimplementation
+        is coded with efficiency in mind (the calculations occur in parallel), this is still slow for large grids.
+        Please be patient!
+
+        """
+
+        self.grid.art1, self.grid.art2 = control_volumes(self.x, self.y, self.triangles)
+
+    def calculate_element_lengths(self):
+        """
+        Calculate the length of each side of each triangle in the grid and return as an array of lengths (in metres).
+
+        Provides
+        --------
+        self.grid.lengths : np.ndarray
+            The lengths of each vertex in each element in the grid.
+
+        """
+
+        self.grid.lengths = element_side_lengths(self.triangles, self.x, self.y)
+
+    def gradient(self, field):
+        """
+        Returns the gradient of `field' defined on the model grid.
+
+        Parameters
+        ----------
+        field : np.ndarray
+            Array (on nodes) for which to calculate the gradient.
+
+        Returns
+        -------
+        dx, dy : np.ndarray
+            `dx' corresponds to the partial derivative dZ/dX, and `dy' corresponds to the partial derivative dZ/dY.
+        """
+
+        dx, dy = trigradient(self.x, self.y, field, self.triangles)
+
+        return dx, dy
+
+    def to_nodes(self, field):
+        """
+        Calculate a nodal value based on the average value for the elements
+        of which it is a part. This necessarily involves an average, so the
+        conversion from nodes2elems and elems2nodes is not reversible.
+
+        Parameters
+        ----------
+        field : np.ndarray
+            Array of unstructured grid element values to move to the grid
+            nodes.
+
+        Returns
+        -------
+        nodes : np.ndarray
+            Array of values at the grid nodes.
+
+        """
+
+        return elems2nodes(field, self.triangles)
+
+    def to_elements(self, field):
+        """
+        Calculate an element-centre value based on the average value for the
+        nodes from which it is formed. This involves an average, so the
+        conversion from nodes to elements cannot be reversed without smoothing.
+
+        Parameters
+        ----------
+        field : np.ndarray
+            Array of unstructured grid node values to move to the element centres.
+
+        Returns
+        -------
+        elems : np.ndarray
+            Array of values at the grid nodes.
+
+        """
+
+        return nodes2elems(field, self.triangles)
+
+    def in_element(self, x, y, element):
+        """
+        Identify if a point (x, y) is in a given element.
+
+        Parameters
+        ----------
+        x, y : float
+            The position in spherical coordinates.
+        element : int
+            The element ID of interest.
+
+        Returns
+        -------
+        inside : bool
+            True if the given point is inside the specified element. False otherwise.
+
+        """
+        tri_x = self.grid.lon[element]
+        try_y = self.grid.lat[element]
+
+        return isintriangle(tri_x, tri_y, x, y)
+
+    def info(self):
+        """
+        Print out some salient information on the currently loaded grid.
+
+        """
+        print(f'Nodes: {self.dims.node}')
+        print(f'Elements: {self.dims.nele}')
+        if hasattr(self.grid, 'open_boundary'):
+            print(f'Open boundaries: {len(self.grid.open_boundary)}')
+        print(f'Native grid coordinates: {self.grid.native_coordinates}')
+        if self.grid.native_coordinates == 'cartesian':
+            print(f'Native grid zone: {self.grid.zone}')
+        print(f'West/east/south/north: {"/".join(map(str, self.grid.bounding_box))}')
 
 
 def mp_interp_func(input):
@@ -900,16 +1091,16 @@ class OpenBoundary(object):
         -----
         These are the valid values as lifted from mod_obcs.F.
 
-        TYPE_OBC = 1: Surface Elevation Specified (Tidal Forcing) (ASL)             
-        TYPE_OBC = 2: As TYPE_OBC=1 and non-linear flux for current at open boundary
-        TYPE_OBC = 3: Zero Surface Elevation Boundary Condition (ASL_CLP)
-        TYPE_OBC = 4: As TYPE_OBC=3 and non-linear flux for current at open boundary
-        TYPE_OBC = 5: Gravity-wave radiation implicit open boundary condition (GWI)
-        TYPE_OBC = 6: As TYPE_OBC=5 and non-linear flux for current at open boundary
-        TYPE_OBC = 7: Blumberg and khanta implicit open boundary condition (BKI)
-        TYPE_OBC = 8: As TYPE_OBC=7 and non-linear flux for current at open boundary
-        TYPE_OBC = 9: Orlanski radiation explicit open boundary condition (ORE)
-        TYPE_OBC =10: As TYPE_OBC=9 and non-linear flux for current at open boundary
+        TYPE_OBC =  1: Surface Elevation Specified (Tidal Forcing) (ASL)
+        TYPE_OBC =  2: As TYPE_OBC=1 and non-linear flux for current at open boundary
+        TYPE_OBC =  3: Zero Surface Elevation Boundary Condition (ASL_CLP)
+        TYPE_OBC =  4: As TYPE_OBC=3 and non-linear flux for current at open boundary
+        TYPE_OBC =  5: Gravity-wave radiation implicit open boundary condition (GWI)
+        TYPE_OBC =  6: As TYPE_OBC=5 and non-linear flux for current at open boundary
+        TYPE_OBC =  7: Blumberg and khanta implicit open boundary condition (BKI)
+        TYPE_OBC =  8: As TYPE_OBC=7 and non-linear flux for current at open boundary
+        TYPE_OBC =  9: Orlanski radiation explicit open boundary condition (ORE)
+        TYPE_OBC = 10: As TYPE_OBC=9 and non-linear flux for current at open boundary
 
         """
 
@@ -976,7 +1167,7 @@ class OpenBoundary(object):
         # Dump the results into the object.
         setattr(self.tide, predict, np.asarray(results).T)  # put the time dimension first, space last.
 
-    def add_fvcom_tides(self, fvcom_harmonics, predict='zeta', interval=1 / 24, constituents=['M2'], serial=False, pool_size=None, noisy=False):
+    def add_fvcom_tides(self, fvcom_harmonics, predict='zeta', interval=1/24, constituents=['M2'], serial=False, pool_size=None, noisy=False):
         """
         Add FVCOM-derived tides at the open boundary nodes.
 
@@ -1037,8 +1228,8 @@ class OpenBoundary(object):
                                                                                                         constituents,
                                                                                                         names)
         if predict in ['zeta', 'ua', 'va']:
-            amplitudes = amplitudes[:,np.newaxis,:]
-            phases = phases[:,np.newaxis,:]
+            amplitudes = amplitudes[:, np.newaxis, :]
+            phases = phases[:, np.newaxis, :]
 
         results = []
         for i in np.arange(amplitudes.shape[1]):
@@ -1046,8 +1237,8 @@ class OpenBoundary(object):
             if locations_match:
                 if noisy:
                     print('Coords match, skipping interpolation')
-                interpolated_amplitudes = amplitudes[:,i,match_indices].T
-                interpolated_phases = phases[:,i,match_indices].T
+                interpolated_amplitudes = amplitudes[:, i, match_indices].T
+                interpolated_phases = phases[:, i, match_indices].T
             else:
                 interpolated_amplitudes, interpolated_phases = self._interpolate_fvcom_harmonics(x, y,
                                                                                                  amplitudes[:, i, :],
@@ -1168,7 +1359,7 @@ class OpenBoundary(object):
         is_matched = np.zeros(len(pts_1), dtype=bool)
         match_indices = np.ones(len(pts_1))*-1
         for i, this_pt in enumerate(pts_1):
-            dists_m = haversine_distance(this_pt, pts_2.T) * 1000 
+            dists_m = haversine_distance(this_pt, pts_2.T) * 1000
             if np.min(dists_m) < epsilon:
                 is_matched[i] = True
                 match_indices[i] = np.argmin(dists_m)
@@ -1299,20 +1490,20 @@ class OpenBoundary(object):
 
         lats : np.ndarray
             Latitudes of the positions to predict.
-        times : ndarray
+        times : np.ndarray
             Array of matplotlib datenums (see `matplotlib.dates.num2date').
         coef : utide.utilities.Bunch
             Configuration options for utide.
-        amplitudes : ndarray
+        amplitudes : np.ndarray
             Amplitude of the relevant constituents shaped [nconst].
-        phases : ndarray
+        phases : np.ndarray
             Array of the phase of the relevant constituents shaped [nconst].
         noisy : bool
             Set to true to enable verbose output. Defaults to False (no output).
 
         Returns
         -------
-        zeta : ndarray
+        zeta : np.ndarray
             Time series of surface elevations.
 
         Notes
@@ -1328,7 +1519,7 @@ class OpenBoundary(object):
         coef['g'] = phase
         coef['A_ci'] = np.zeros(amplitude.shape)
         coef['g_ci'] = np.zeros(phase.shape)
-        pred = reconstruct(times, coef, verbose=False)
+        pred = reconstruct(times, coef, verbose=noisy)
         zeta = pred['h']
 
         return zeta
@@ -1360,7 +1551,7 @@ class OpenBoundary(object):
         tide_adjust : bool, optional
             Some nested forcing doesn't include tidal components and these have to be added from predictions using harmonics.
             With this set to true the interpolated forcing has the tidal component (required to already exist in self.tide) added
-            to the final data. 
+            to the final data.
         """
 
         # Check we have what we need.
@@ -1433,7 +1624,7 @@ class OpenBoundary(object):
             # The depth data work differently as we need to squeeze each FVCOM water column into the available coarse
             # data. The only way to do this is to adjust each FVCOM water column in turn by comparing with the
             # closest coarse depth.
-            if not mode == 'surface':
+            if mode != 'surface':
                 coarse_depths = np.tile(coarse.grid.depth, [coarse.dims.lat, coarse.dims.lon, 1]).transpose(2, 0, 1)
                 coarse_depths = np.ma.masked_array(coarse_depths, mask=getattr(coarse.data, coarse_name)[0, ...].mask)
                 coarse_depths = np.max(coarse_depths, axis=0)
@@ -1475,8 +1666,8 @@ class OpenBoundary(object):
             boundary_grid = np.array((np.tile(self.nest.time.time, [nx, 1]).T.ravel(),
                                       np.tile(y, [nt, 1]).transpose(0, 1).ravel(),
                                       np.tile(x, [nt, 1]).transpose(0, 1).ravel())).T
-            ft = RegularGridInterpolator((coarse.time.time, coarse.grid.lat, coarse.grid.lon), 
-                                             getattr(coarse.data, coarse_name), method='linear', fill_value=np.nan)
+            ft = RegularGridInterpolator((coarse.time.time, coarse.grid.lat, coarse.grid.lon),
+                                         getattr(coarse.data, coarse_name), method='linear', fill_value=np.nan)
             # Reshape the results to match the un-ravelled boundary_grid array.
             interpolated_coarse_data = ft(boundary_grid).reshape([nt, -1])
             # Drop the interpolated data into the nest object.
@@ -1486,7 +1677,8 @@ class OpenBoundary(object):
                                       np.tile(y, [nz, nt, 1]).transpose(1, 0, 2).ravel(),
                                       np.tile(x, [nz, nt, 1]).transpose(1, 0, 2).ravel())).T
             ft = RegularGridInterpolator((coarse.time.time, coarse.grid.depth, coarse.grid.lat, coarse.grid.lon),
-                                             np.ma.filled(getattr(coarse.data, coarse_name), np.nan), method='linear', fill_value=np.nan)
+                                         np.ma.filled(getattr(coarse.data, coarse_name), np.nan), method='linear',
+                                         fill_value=np.nan)
             # Reshape the results to match the un-ravelled boundary_grid array.
             interpolated_coarse_data = ft(boundary_grid).reshape([nt, nz, -1])
             # Drop the interpolated data into the nest object.
@@ -1529,9 +1721,14 @@ class OpenBoundary(object):
         return interpolated_data
 
     def avg_nest_force_vel(self):
-        layer_thickness = self.sigma.levels_center.T[0:-1,:] - self.sigma.levels_center.T[1:,:]
+        """
+        Create depth-averaged velocities (`ua', `va') in the current self.nest data.
+
+        """
+        layer_thickness = self.sigma.levels_center.T[0:-1, :] - self.sigma.levels_center.T[1:, :]
         self.nest.ua = zbar(self.nest.u, layer_thickness)
         self.nest.va = zbar(self.nest.v, layer_thickness)
+
 
 def read_sms_mesh(mesh, nodestrings=False):
     """
@@ -1547,16 +1744,16 @@ def read_sms_mesh(mesh, nodestrings=False):
 
     Returns
     -------
-    triangle : ndarray
+    triangle : np.ndarray
         Integer array of shape (nele, 3). Each triangle is composed of
         three points and this contains the three node numbers (stored in
-        nodes) which refer to the coordinates in X and Y (see below). Values
+        nodes) which refer to the coordinates in `x' and `y' (see below). Values
         are python-indexed.
-    nodes : ndarray
+    nodes : np.ndarray
         Integer number assigned to each node.
-    X, Y, Z : ndarray
+    X, Y, Z : np.ndarray
         Coordinates of each grid node and any associated Z value.
-    types : ndarray
+    types : np.ndarray
         Classification for each node string based on the number of node
         strings + 2. This is mainly for use if converting from SMS .2dm
         grid format to DHI MIKE21 .mesh format since the latter requires
@@ -1639,6 +1836,68 @@ def read_sms_mesh(mesh, nodestrings=False):
         return triangle, nodes, X, Y, Z, types
 
 
+def read_sms_map(map_file):
+    """
+    Reads in the SMS map file format.
+
+    Parameters
+    ----------
+    map_file : str
+        Full path to an SMS map (.map) file.
+    noisy : bool, optional
+        Set to True to enable verbose messages.
+
+    Returns
+    -------
+    arcs : list
+        List of the coordinate pairs and elevation for the polygons defined in the map file.
+
+    Notes
+    -----
+    This is inspired by and partially based on the MATLAB fvcom-toolbox function read_sms_map.m.
+
+    This could also (additionally) return a shapely.MultiPolygon, but I've not done that for now as it's trivial to
+    convert these arcs into a MultiPolygon after the fact.
+
+    """
+
+    x, y, z, arc_id, arc_elevation = [], [], [], [], []
+    arcs = []
+    with open(map_file) as f:
+        for line in f:
+            line = line.strip()
+            print(line, flush=True)
+            if line == 'NODE':
+                line = next(f).strip()
+                _, node_x, node_y, node_z = line.split()
+                x.append(float(node_x))
+                y.append(float(node_y))
+                z.append(float(node_z))
+            elif line == 'ARC':
+                # Skip the arc ID.
+                next(f)
+                # Skip the arc elevation.
+                next(f)
+                # Next line doesn't seem to be used for anything...
+                next(f)
+                # The number of nodes in the current arc.
+                line = next(f).strip()
+                number_of_nodes = int(line.split()[-1])
+                # Read in the coordinates and elevation for the current arc. Start with the appropriate coordinate
+                # from `x', `y' and its `z' value too (the 'node' in SMS parlance) before appending the arc vertices
+                # (in SMS parlance).
+                current_arc_id = len(arcs)
+                arcs.append([[x[current_arc_id], y[current_arc_id], z[current_arc_id]]])
+                for next_line in range(number_of_nodes):
+                    line = next(f).strip()
+                    arcs[-1].append([float(i) for i in line.split()])
+
+    # Make the arcs a list of numpy arrays.
+    arcs = [np.asarray(arc) for arc in arcs]
+
+    return arcs
+
+
 def read_fvcom_mesh(mesh):
     """
     Reads in the FVCOM unstructured grid format.
@@ -1650,13 +1909,13 @@ def read_fvcom_mesh(mesh):
 
     Returns
     -------
-    triangle : ndarray
+    triangle : np.ndarray
         Integer array of shape (ntri, 3). Each triangle is composed of
         three points and this contains the three node numbers (stored in
-        nodes) which refer to the coordinates in X and Y (see below).
-    nodes : ndarray
+        nodes) which refer to the coordinates in `x' and `y' (see below).
+    nodes : np.ndarray
         Integer number assigned to each node.
-    X, Y, Z : ndarray
+    X, Y, Z : np.ndarray
         Coordinates of each grid node and any associated Z value.
 
     """
@@ -1713,15 +1972,16 @@ def read_mike_mesh(mesh, flipZ=True):
 
     Returns
     -------
-    triangle : ndarray
+    triangle : np.ndarray
         Integer array of shape (ntri, 3). Each triangle is composed of
         three points and this contains the three node numbers (stored in
-        nodes) which refer to the coordinates in X and Y (see below).
-    nodes : ndarray
+    nodes) which refer to the coordinates in `x' and `y' (see below). Give as
+        a zero-indexed array.
+    nodes : np.ndarray
         Integer number assigned to each node.
-    X, Y, Z : ndarray
+    X, Y, Z : np.ndarray
         Coordinates of each grid node and any associated Z value.
-    types : ndarray
+    types : np.ndarray
         Classification for each open boundary. DHI MIKE21 .mesh format
         requires unique IDs for each open boundary (with 0 and 1
         reserved for land and sea nodes).
@@ -1780,13 +2040,13 @@ def read_gmsh_mesh(mesh):
 
     Returns
     -------
-    triangle : ndarray
+    triangle : np.ndarray
         Integer array of shape (ntri, 3). Each triangle is composed of three
         points and this contains the three node numbers (stored in nodes) which
-        refer to the coordinates in X and Y (see below).
-    nodes : ndarray
+        refer to the coordinates in `x' and `y' (see below).
+    nodes : np.ndarray
         Integer number assigned to each node.
-    X, Y, Z : ndarray
+    X, Y, Z : np.ndarray
         Coordinates of each grid node and any associated Z value.
 
     """
@@ -1888,12 +2148,12 @@ def read_fvcom_obc(obc):
 
     Returns
     -------
-    nodes : ndarray
+    nodes : np.ndarray
         Node IDs (zero-indexed) for the open boundary.
-    types : ndarray
+    types : np.ndarray
         Open boundary node types (see the FVCOM manual for more information on
         what these values mean).
-    count : ndarray
+    count : np.ndarray
         Open boundary node number.
 
 
@@ -1925,7 +2185,7 @@ def parse_obc_sections(obc_node_array, triangle):
 
     """
 
-    all_edges = np.vstack([triangle[:,0:2], triangle[:,1:], triangle[:,[0,2]]])
+    all_edges = np.vstack([triangle[:, 0:2], triangle[:, 1:], triangle[:, [0, 2]]])
     boundary_edges = all_edges[np.all(np.isin(all_edges, obc_node_array), axis=1), :]
     u_nodes, bdry_counts = np.unique(boundary_edges, return_counts=True)
     start_end_nodes = list(u_nodes[bdry_counts == 1])
@@ -1939,7 +2199,7 @@ def parse_obc_sections(obc_node_array, triangle):
         nodes_to_add = True
 
         while nodes_to_add:
-            possible_nodes = np.unique(boundary_edges[np.any(np.isin(boundary_edges, this_obc_section_nodes), axis=1),:])
+            possible_nodes = np.unique(boundary_edges[np.any(np.isin(boundary_edges, this_obc_section_nodes), axis=1), :])
             nodes_to_add = list(possible_nodes[~np.isin(possible_nodes, this_obc_section_nodes)])
             if nodes_to_add:
                 this_obc_section_nodes.append(nodes_to_add[0])
@@ -1980,15 +2240,16 @@ def write_sms_mesh(triangles, nodes, x, y, z, types, mesh):
 
     Parameters
     ----------
-    triangles : ndarray
+    triangles : np.ndarray
         Integer array of shape (ntri, 3). Each triangle is composed of
         three points and this contains the three node numbers (stored in
-        nodes) which refer to the coordinates in X and Y (see below).
-    nodes : ndarray
+        nodes) which refer to the coordinates in `x' and `y' (see below). Give as
+        a zero-indexed array.
+    nodes : np.ndarray
         Integer number assigned to each node.
-    x, y, z : ndarray
+    x, y, z : np.ndarray
         Coordinates of each grid node and any associated Z value.
-    types : ndarray
+    types : np.ndarray
         Classification for each open boundary. DHI MIKE21 .mesh format
         requires unique IDs for each open boundary (with 0 and 1
         reserved for land and sea nodes). Similar values can be used in
@@ -1996,45 +2257,51 @@ def write_sms_mesh(triangles, nodes, x, y, z, types, mesh):
     mesh : str
         Full path to the output file name.
 
+    Notes
+    -----
+
+    The footer contains some information which is largely ignored here, but
+    which is included in case it's critical.
+
+    BEGPARAMDEF = Marks end of mesh data/beginning of mesh model definition
+    GM = Mesh name (enclosed in "")
+    SI = use SI units y/n = 1/0
+    DY = Dynamic model y/n = 1/0
+    TU = Time units
+    TD = Dynamic time data (?)
+    NUME = Number of entities available (nodes, node strings, elements)
+    BGPGC = Boundary group parameter group correlation y/n = 1/0
+    BEDISP/BEFONT = Format controls on display of boundary labels.
+    ENDPARAMDEF = End of the mesh model definition
+    BEG2DMBC = Beginning of the model assignments
+    MAT = Material assignment
+    END2DMBC = End of the model assignments
+
     """
 
-    fileWrite = open(mesh, 'w')
+    file_write = open(mesh, 'w')
     # Add a header
-    fileWrite.write('MESH2D\n')
+    file_write.write('MESH2D\n')
 
     # Write out the connectivity table (triangles)
-    currentNode = 0
+    current_node = 0
     for line in triangles:
-
         # Bump the numbers by one to correct for Python indexing from zero
         line += 1
-        strLine = []
+        line_string = []
         # Convert the numpy array to a string array
         for value in line:
-            strLine.append(str(value))
+            line_string.append(str(value))
 
-        currentNode += 1
+        current_node += 1
         # Build the output string for the connectivity table
-        output = ['E3T'] + [str(currentNode)] + strLine + ['1']
-        output = ' '.join(output)
+        output = f'E3T {current_node} {" ".join(line_string)} 1\n'
+        file_write.write(output)
 
-        fileWrite.write(output + '\n')
-
-    # Add the node information (nodes)
     for count, line in enumerate(nodes):
+        output = f'ND {line} {x[count]:.8e} {y[count]:.8e} {z[count]:.8e}\n'
 
-        # Convert the numpy array to a string array
-        strLine = str(line)
-
-        # Format output correctly
-        output = ['ND'] + \
-                [strLine] + \
-                ['{:.8e}'.format(x[count])] + \
-                ['{:.8e}'.format(y[count])] + \
-                ['{:.8e}'.format(z[count])]
-        output = ' '.join(output)
-
-        fileWrite.write(output + '\n')
+        file_write.write(output)
 
     # Convert MIKE boundary types to node strings. The format requires a prefix
     # NS, and then a maximum of 10 node IDs per line. The node string tail is
@@ -2043,32 +2310,17 @@ def write_sms_mesh(triangles, nodes, x, y, z, types, mesh):
     # Iterate through the unique boundary types to get a new node string for
     # each boundary type (ignore types of less than 2 which are not open
     # boundaries in MIKE).
-    for boundaryType in np.unique(types[types > 1]):
+    for boundary_type in np.unique(types[types > 1]):
 
         # Find the nodes for the boundary type which are greater than 1 (i.e.
         # not 0 or 1).
-        nodeBoundaries = nodes[types == boundaryType]
+        node_boundaries = nodes[types == boundary_type].astype(int)
 
-        nodeStrings = 0
-        for counter, node in enumerate(nodeBoundaries):
-            if counter + 1 == len(nodeBoundaries) and node > 0:
-                node = -node
-
-            nodeStrings += 1
-            if nodeStrings == 1:
-                output = 'NS  {:d} '.format(int(node))
-                fileWrite.write(output)
-            elif nodeStrings != 0 and nodeStrings < 10:
-                output = '{:d} '.format(int(node))
-                fileWrite.write(output)
-            elif nodeStrings == 10:
-                output = '{:d} '.format(int(node))
-                fileWrite.write(output + '\n')
-                nodeStrings = 0
-
-        # Add a new line at the end of each block. Not sure why the new line
-        # above doesn't work...
-        fileWrite.write('\n')
+        node_strings = [node_boundaries[i:i+10] for i in range(0, len(node_boundaries), 10)]
+        node_strings[-1][-1] = -node_strings[-1][-1]  # flip sign of the last node
+        joined_string = [f"NS  {' '.join(section.astype(str))}\n" for section in node_strings]
+        for section in joined_string:
+            file_write.write(section)
 
     # Add all the blurb at the end of the file.
     #
@@ -2087,12 +2339,12 @@ def write_sms_mesh(triangles, nodes, x, y, z, types, mesh):
     # END2DMBC = End of the model assignments
     footer = 'BEGPARAMDEF\nGM  "Mesh"\nSI  0\nDY  0\nTU  ""\nTD  0  0\nNUME  3\nBCPGC  0\nBEDISP  0 0 0 0 1 0 1 0 0 0 0 1\nBEFONT  0 2\nBEDISP  1 0 0 0 1 0 1 0 0 0 0 1\nBEFONT  1 2\nBEDISP  2 0 0 0 1 0 1 0 0 0 0 1\nBEFONT  2 2\nENDPARAMDEF\nBEG2DMBC\nMAT  1 "material 01"\nEND2DMBC\n'
 
-    fileWrite.write(footer)
+    file_write.write(footer)
 
-    fileWrite.close()
+    file_write.close()
 
 
-def write_sms_bathy(triangles, nodes, z, PTS):
+def write_sms_bathy(triangles, nodes, z, filename):
     """
     Writes out the additional bathymetry file sometimes output by SMS. Not sure
     why this is necessary as it's possible to put the depths in the other file,
@@ -2100,24 +2352,25 @@ def write_sms_bathy(triangles, nodes, z, PTS):
 
     Parameters
     ----------
-    triangles : ndarray
+    triangles : np.ndarray
         Integer array of shape (ntri, 3). Each triangle is composed of
         three points and this contains the three node numbers (stored in
-        nodes) which refer to the coordinates in X and Y (see below).
-    nodes : ndarray
+    nodes) which refer to the coordinates in `x' and `y' (see below). Give as
+        a zero-indexed array.
+    nodes : np.ndarray
         Integer number assigned to each node.
-    z : ndarray
-        Z values at each node location.
-    PTS : str
+    z : np.ndarray
+        Depth values at each node location.
+    filename : str
         Full path of the output file name.
 
     """
 
-    filePTS = open(PTS, 'w')
+    fname = open(filename, 'w')
 
     # Get some information needed for the metadata side of things
-    nodeNumber = len(nodes)
-    elementNumber = len(triangles[:, 0])
+    node_number = len(nodes)
+    element_number = len(triangles[:, 0])
 
     # Header format (see:
     #     http://wikis.aquaveo.com/xms/index.php?title=GMS:Data_Set_Files)
@@ -2128,18 +2381,18 @@ def write_sms_bathy(triangles, nodes, z, PTS):
     # NC = Number of elements
     # NAME = Freeform data set name
     # TS = Time step of the data
-    header = 'DATASET\nOBJTYEP = "mesh2d"\nBEGSCL\nND  {:<6d}\nNC  {:<6d}\nNAME "Z_interp"\nTS 0 0\n'.format(int(nodeNumber), int(elementNumber))
-    filePTS.write(header)
+    header = 'DATASET\nOBJTYEP = "mesh2d"\nBEGSCL\nND  {:<6d}\nNC  {:<6d}\nNAME "Z_interp"\nTS 0 0\n'.format(int(node_number), int(element_number))
+    fname.write(header)
 
     # Now just iterate through all the z values. This process assumes the z
     # values are in the same order as the nodes. If they're not, this will
     # make a mess of your data.
     for depth in z:
-        filePTS.write('{:.5f}\n'.format(float(depth)))
+        fname.write('{:.5f}\n'.format(float(depth)))
 
     # Close the file with the footer
-    filePTS.write('ENDDS\n')
-    filePTS.close()
+    fname.write('ENDDS\n')
+    fname.close()
 
 
 def write_mike_mesh(triangles, nodes, x, y, z, types, mesh):
@@ -2153,15 +2406,16 @@ def write_mike_mesh(triangles, nodes, x, y, z, types, mesh):
 
     Parameters
     ----------
-    triangles : ndarray
+    triangles : np.ndarray
         Integer array of shape (ntri, 3). Each triangle is composed of
         three points and this contains the three node numbers (stored in
-        nodes) which refer to the coordinates in X and Y (see below).
-    nodes : ndarray
+    nodes) which refer to the coordinates in `x' and `y' (see below). Give as
+        a zero-indexed array.
+    nodes : np.ndarray
         Integer number assigned to each node.
-    x, y, z : ndarray
+    x, y, z : np.ndarray
         Coordinates of each grid node and any associated Z value.
-    types : ndarray
+    types : np.ndarray
         Classification for each open boundary. DHI MIKE21 .mesh format
         requires unique IDs for each open boundary (with 0 and 1
         reserved for land and sea nodes).
@@ -2169,10 +2423,10 @@ def write_mike_mesh(triangles, nodes, x, y, z, types, mesh):
         Full path to the output mesh file.
 
     """
-    fileWrite = open(mesh, 'w')
+    file_write = open(mesh, 'w')
     # Add a header
     output = '{}  LONG/LAT'.format(int(len(nodes)))
-    fileWrite.write(output + '\n')
+    file_write.write(output + '\n')
 
     if len(types) == 0:
         types = np.zeros(shape=(len(nodes), 1))
@@ -2181,40 +2435,40 @@ def write_mike_mesh(triangles, nodes, x, y, z, types, mesh):
     for count, line in enumerate(nodes):
 
         # Convert the numpy array to a string array
-        strLine = str(line)
+        line_string = str(line)
 
         output = \
-            [strLine] + \
+            [line_string] + \
             ['{}'.format(x[count])] + \
             ['{}'.format(y[count])] + \
             ['{}'.format(z[count])] + \
             ['{}'.format(int(types[count]))]
         output = ' '.join(output)
 
-        fileWrite.write(output + '\n')
+        file_write.write(output + '\n')
 
     # Now for the connectivity
 
     # Little header. No idea what the 3 and 21 are all about (version perhaps?)
     output = '{} {} {}'.format(int(len(triangles)), '3', '21')
-    fileWrite.write(output + '\n')
+    file_write.write(output + '\n')
 
     for count, line in enumerate(triangles):
 
         # Bump the numbers by one to correct for Python indexing from zero
         line = line + 1
-        strLine = []
+        line_string = []
         # Convert the numpy array to a string array
         for value in line:
-            strLine.append(str(value))
+            line_string.append(str(value))
 
         # Build the output string for the connectivity table
-        output = [str(count + 1)] + strLine
+        output = [str(count + 1)] + line_string
         output = ' '.join(output)
 
-        fileWrite.write(output + '\n')
+        file_write.write(output + '\n')
 
-    fileWrite.close()
+    file_write.close()
 
 
 def write_fvcom_mesh(triangles, nodes, x, y, z, mesh, extra_depth=None):
@@ -2223,14 +2477,14 @@ def write_fvcom_mesh(triangles, nodes, x, y, z, mesh, extra_depth=None):
 
     Parameters
     ----------
-    triangles : ndarray
+    triangles : np.ndarray
         Integer array of shape (ntri, 3). Each triangle is composed of
         three points and this contains the three node numbers (stored in
-        nodes) which refer to the coordinates in X and Y (see below). Give as
+        nodes) which refer to the coordinates in `x' and `y' (see below). Give as
         a zero-indexed array.
-    nodes : ndarray
+    nodes : np.ndarray
         Integer number assigned to each node.
-    x, y, z : ndarray
+    x, y, z : np.ndarray
         Coordinates of each grid node and any associated Z value.
     mesh : str
         Full path to the output mesh file.
@@ -2281,7 +2535,7 @@ def find_nearest_point(grid_x, grid_y, x, y, maxDistance=np.inf):
     nearest_x, nearest_y : np.ndarray
         Coordinates from `grid_x' and `grid_y' which are within maxDistance (if given) and closest to the
         corresponding point in `x' and `y'.
-    distance : ndarray
+    distance : np.ndarray
         Distance between each point in `x' and `y' and the closest value in `grid_x' and `grid_y'. Even if
         maxDistance is given (and exceeded), the distance is reported here.
     index : np.ndarray
@@ -2290,7 +2544,7 @@ def find_nearest_point(grid_x, grid_y, x, y, maxDistance=np.inf):
     """
 
     if np.ndim(x) != np.ndim(y):
-        raise Exception('Number of points in X and Y do not match')
+        raise Exception("Number of points in `x' and `y' do not match")
 
     grid_xy = np.array((grid_x, grid_y)).T
 
@@ -2331,47 +2585,48 @@ def element_side_lengths(triangles, x, y):
 
     Parameters
     ----------
-    triangles : ndarray
+    triangles : np.ndarray
         Integer array of shape (ntri, 3). Each triangle is composed of
         three points and this contains the three node numbers (stored in
-        nodes) which refer to the coordinates in X and Y (see below).
-    x, y : ndarray
+        nodes) which refer to the coordinates in `x' and `y' (see below). Give as
+        a zero-indexed array.
+    x, y : np.ndarray
         Coordinates of each grid node.
 
     Returns
     -------
-    elemSides : ndarray
+    element_sides : np.ndarray
         Length of each element described by triangles and x, y.
 
     """
 
-    elemSides = np.zeros([np.shape(triangles)[0], 3])
+    element_sides = np.zeros([np.shape(triangles)[0], 3])
     for it, tri in enumerate(triangles):
         pos1x, pos2x, pos3x = x[tri]
         pos1y, pos2y, pos3y = y[tri]
 
-        elemSides[it, 0] = np.sqrt((pos1x - pos2x)**2 + (pos1y - pos2y)**2)
-        elemSides[it, 1] = np.sqrt((pos2x - pos3x)**2 + (pos2y - pos3y)**2)
-        elemSides[it, 2] = np.sqrt((pos3x - pos1x)**2 + (pos3y - pos1y)**2)
+        element_sides[it, 0] = np.sqrt((pos1x - pos2x)**2 + (pos1y - pos2y)**2)
+        element_sides[it, 1] = np.sqrt((pos2x - pos3x)**2 + (pos2y - pos3y)**2)
+        element_sides[it, 2] = np.sqrt((pos3x - pos1x)**2 + (pos3y - pos1y)**2)
 
-    return elemSides
+    return element_sides
 
 
-def mesh2grid(meshX, meshY, meshZ, nx, ny, thresh=None, noisy=False):
+def mesh2grid(mesh_x, mesh_y, mesh_z, nx, ny, thresh=None, noisy=False):
     """
-    Resample the unstructured grid in meshX and meshY onto a regular grid whose
+    Resample the unstructured grid in mesh_x and mesh_y onto a regular grid whose
     size is nx by ny or which is specified by the arrays nx, ny. Optionally
     specify dist to control the proximity of a value considered valid.
 
     Parameters
     ----------
-    meshX, meshY : ndarray
+    mesh_x, mesh_y : np.ndarray
         Arrays of the unstructured grid (mesh) node positions.
-    meshZ : ndarray
+    mesh_z : np.ndarray
         Array of values to be resampled onto the regular grid. The shape of the
         array should have the nodes as the first dimension. All subsequent
         dimensions will be propagated automatically.
-    nx, ny : int, ndarray
+    nx, ny : int, np.ndarray
         Number of samples in x and y onto which to sample the unstructured
         grid. If given as a list or array, the values within the arrays are
         assumed to be positions in x and y.
@@ -2383,11 +2638,11 @@ def mesh2grid(meshX, meshY, meshZ, nx, ny, thresh=None, noisy=False):
 
     Returns
     -------
-    xx, yy : ndarray
+    xx, yy : np.ndarray
         New position arrays (1D). Can be used with numpy.meshgrid to plot the
         resampled variables with matplotlib.pyplot.pcolor.
-    zz : ndarray
-        Array of the resampled data from meshZ. The first dimension from the
+    zz : np.ndarray
+        Array of the resampled data from mesh_z. The first dimension from the
         input is now replaced with two dimensions (x, y). All other input
         dimensions follow.
 
@@ -2397,7 +2652,7 @@ def mesh2grid(meshX, meshY, meshZ, nx, ny, thresh=None, noisy=False):
         thresh = np.inf
 
     # Get the extents of the input data.
-    xmin, xmax, ymin, ymax = meshX.min(), meshX.max(), meshY.min(), meshY.max()
+    xmin, xmax, ymin, ymax = mesh_x.min(), mesh_x.max(), mesh_y.min(), mesh_y.max()
 
     if isinstance(nx, int) and isinstance(ny, int):
         xx = np.linspace(xmin, xmax, nx)
@@ -2412,9 +2667,9 @@ def mesh2grid(meshX, meshY, meshZ, nx, ny, thresh=None, noisy=False):
     # leave us with the right shape. This even works for 1D inputs (i.e. a
     # single value at each unstructured grid location).
     if isinstance(nx, int) and isinstance(ny, int):
-        zz = np.empty((nx, ny) + meshZ.shape[1:]) * np.nan
+        zz = np.empty((nx, ny) + mesh_z.shape[1:]) * np.nan
     else:
-        zz = np.empty((nx.shape) + meshZ.shape[1:]) * np.nan
+        zz = np.empty((nx.shape) + mesh_z.shape[1:]) * np.nan
 
     if noisy:
         if isinstance(nx, int) and isinstance(ny, int):
@@ -2434,7 +2689,7 @@ def mesh2grid(meshX, meshY, meshZ, nx, ny, thresh=None, noisy=False):
                 # Find the nearest node in the unstructured grid data and grab
                 # its u and v values. If it's beyond some threshold distance,
                 # leave the z value as NaN.
-                dist = np.sqrt((meshX - xpos)**2 + (meshY - ypos)**2)
+                dist = np.sqrt((mesh_x - xpos)**2 + (mesh_y - ypos)**2)
 
                 # Get the index of the minimum and extract the values only if
                 # the nearest point is within the threshold distance (thresh).
@@ -2445,7 +2700,7 @@ def mesh2grid(meshX, meshY, meshZ, nx, ny, thresh=None, noisy=False):
                     # asked for our input array to have the nodes as the first
                     # dimension, this means we can just get all the others when
                     # using the node index.
-                    zz[xi, yi, ...] = meshZ[idx, ...]
+                    zz[xi, yi, ...] = mesh_z[idx, ...]
     else:
         # We've been given positions, so run through those instead of our
         # regularly sampled grid.
@@ -2461,11 +2716,11 @@ def mesh2grid(meshX, meshY, meshZ, nx, ny, thresh=None, noisy=False):
                 c += 1
 
                 dist = np.sqrt(
-                    (meshX - xx[ri, ci])**2 + (meshY - yy[ri, ci])**2
+                    (mesh_x - xx[ri, ci])**2 + (mesh_y - yy[ri, ci])**2
                 )
                 if dist.min() < thresh:
                     idx = dist.argmin()
-                    zz[ri, ci, ...] = meshZ[idx, ...]
+                    zz[ri, ci, ...] = mesh_z[idx, ...]
 
     if noisy:
         print('done.')
@@ -2580,18 +2835,12 @@ def line_sample(x, y, positions, num=0, return_distance=False, noisy=False):
             # Closest node index.
             tidx = sdist.argmin().astype(int)
             # Distance from the start point.
-            fdist = np.sqrt((start[0] - xx[tidx])**2 +
-                            (start[1] - yy[tidx])**2
-                            ).min()
+            fdist = np.sqrt((start[0] - xx[tidx])**2 + (start[1] - yy[tidx])**2).min()
             # Distance to the end point.
-            tdist = np.sqrt((end[0] - xx[tidx])**2 +
-                            (end[1] - yy[tidx])**2
-                            ).min()
+            tdist = np.sqrt((end[0] - xx[tidx])**2 + (end[1] - yy[tidx])**2).min()
             # Last node's distance to the end point.
             if len(sidx) >= 1:
-                oldtdist = np.sqrt((end[0] - xx[sidx[-1]])**2 +
-                                   (end[1] - yy[sidx[-1]])**2
-                                   ).min()
+                oldtdist = np.sqrt((end[0] - xx[sidx[-1]])**2 + (end[1] - yy[sidx[-1]])**2).min()
             else:
                 # Haven't found any points yet.
                 oldtdist = tdist
@@ -2612,9 +2861,7 @@ def line_sample(x, y, positions, num=0, return_distance=False, noisy=False):
                 while True:
                     try:
                         tidx = sdistidx[c]
-                        tdist = np.sqrt((end[0] - xx[tidx])**2 +
-                                        (end[1] - yy[tidx])**2
-                                        ).min()
+                        tdist = np.sqrt((end[0] - xx[tidx])**2 + (end[1] - yy[tidx])**2).min()
                         c += 1
                     except IndexError:
                         # Eh, we've run out of indices for some reason. Let's
@@ -2699,7 +2946,7 @@ def line_sample(x, y, positions, num=0, return_distance=False, noisy=False):
             # For each position in the line array, find the nearest indices in
             # the supplied unstructured grid. We'll use our existing function
             # findNearestPoint for this.
-            _, _, _, tidx = find_nearest_point(x, y, xx, yy, noisy=noisy)
+            _, _, _, tidx = find_nearest_point(x, y, xx, yy)
             [idx.append(i) for i in tidx.tolist()]
 
         else:
@@ -2720,11 +2967,7 @@ def line_sample(x, y, positions, num=0, return_distance=False, noisy=False):
                                            (y - end[1])**2))[:6])
             # Use the larger of the two lengths to be on the safe side.
             bb = 2 * np.max((bstart, bend))
-            ss = np.where((x >= (ll[0] - bb)) *
-                          (x <= (ur[0] + bb)) *
-                          (y >= (ll[1] - bb)) *
-                          (y <= (ur[1] + bb))
-                          )[0]
+            ss = np.where((x >= (ll[0] - bb)) * (x <= (ur[0] + bb)) * (y >= (ll[1] - bb)) * (y <= (ur[1] + bb)))[0]
             xs = x[ss]
             ys = y[ss]
 
@@ -2892,25 +3135,25 @@ def connectivity(p, t):
 
     Parameters
     ----------
-    p : ndarray
+    p : np.ndarray
         Nx2 array of nodes coordinates, [[x1, y1], [x2, y2], etc.]
-    t : ndarray
+    t : np.ndarray
         Mx3 array of triangles as indices, [[n11, n12, n13], [n21, n22, n23],
         etc.]
 
     Returns
     -------
-    e : ndarray
+    e : np.ndarray
         Kx2 array of unique mesh edges - [[n11, n12], [n21, n22], etc.]
-    te : ndarray
+    te : np.ndarray
         Mx3 array of triangles as indices into e, [[e11, e12, e13], [e21, e22,
         e23], etc.]
-    e2t : ndarray
+    e2t : np.ndarray
         Kx2 array of triangle neighbours for unique mesh edges - [[t11, t12],
         [t21, t22], etc]. Each row has two entries corresponding to the
         triangle numbers associated with each edge in e. Boundary edges have
         e2t[i, 1] = -1.
-    bnd : ndarray, bool
+    bnd : np.ndarray, bool
         Nx1 logical array identifying boundary nodes. p[i, :] is a boundary
         node if bnd[i] = True.
 
@@ -2993,13 +3236,13 @@ def find_connected_nodes(n, triangles):
     ----------
     n : int
         Node ID around which to find the connected nodes.
-    triangles : ndarray
+    triangles : np.ndarray
         Triangulation matrix to find the connected nodes. Shape is [nele,
         3].
 
     Returns
     -------
-    surroundingidx : ndarray
+    surroundingidx : np.ndarray
         Indices of the surrounding nodes.
 
     See Also
@@ -3045,13 +3288,13 @@ def find_connected_elements(n, triangles):
         Node ID(s) around which to find the connected elements. If more than
         one node is given, the unique elements for all nodes are returned.
         Order of results is not maintained.
-    triangles : ndarray
+    triangles : np.ndarray
         Triangulation matrix to find the connected elements. Shape is [nele,
         3].
 
     Returns
     -------
-    surroundingidx : ndarray
+    surroundingidx : np.ndarray
         Indices of the surrounding elements.
 
     See Also
@@ -3084,7 +3327,7 @@ def get_area(v1, v2, v3):
 
     Returns
     -------
-    area : tuple, ndarray
+    area : tuple, np.ndarray
         Area of the triangle(s). Units of v0, v1 and v2.
 
     Examples
@@ -3122,7 +3365,7 @@ def get_area_heron(s1, s2, s3):
 
     Returns
     -------
-    area : tuple, ndarray
+    area : tuple, np.ndarray
         Area of the triangle(s). Units of v0, v1 and v2.
 
     """
@@ -3133,7 +3376,7 @@ def get_area_heron(s1, s2, s3):
 
     p = 0.5 * (s1 + s2 + s3)
 
-    area = np.sqrt(p * (p -s1) * (p - s2) * (p - s3)) 
+    area = np.sqrt(p * (p - s1) * (p - s2) * (p - s3))
 
     return abs(area)
 
@@ -3150,7 +3393,7 @@ def find_bad_node(nv, node_id):
 
     Parameters
     ----------
-    nv : ndarray
+    nv : np.ndarray
         Connectivity table for the grid.
     node_id : int
         Node ID to check.
@@ -3196,7 +3439,7 @@ def trigradient(x, y, z, t=None):
 
     Returns
     -------
-    dx, dy : ndarray
+    dx, dy : np.ndarray
         `dx' corresponds to the partial derivative dZ/dX, and `dy'
         corresponds to the partial derivative dZ/dY.
 
@@ -3250,16 +3493,16 @@ def rotate_points(x, y, origin, angle):
 
     Parameters
     ----------
-    x, y : ndarray
+    x, y : np.ndarray
         Coordinates to rotate.
-    origin : list, ndarray
+    origin : list, np.ndarray
         Point about which to rotate the grid (x, y).
     angle : float
         Angle (in degrees) by which to rotate the grid. Positive clockwise.
 
     Returns
     -------
-    xr, yr : ndarray
+    xr, yr : np.ndarray
         Rotated coordinates.
 
     """
@@ -3290,7 +3533,7 @@ def get_boundary_polygons(triangle, noisy=False):
 
     Parameters
     ----------
-    triangle : ndarray
+    triangle : np.ndarray
         The triangle connectivity matrix as produced by the read_fvcom_mesh
         function.
 
@@ -3308,6 +3551,7 @@ def get_boundary_polygons(triangle, noisy=False):
     nodes_lt_4 = np.asarray(uc[uc[:, 1] < 4, 0], dtype=int)
     boundary_polygon_list = []
 
+    # Pretty certain we can use `while np.any(nodes_lt_4)` below instead.
     while len(nodes_lt_4) > 0:
 
         start_node = nodes_lt_4[0]
@@ -3345,12 +3589,12 @@ def get_attached_unique_nodes(this_node, trinodes):
     ----------
     this_node : int
         Node ID.
-    trinodes : ndarray
+    trinodes : np.ndarray
         Triangulation table for an unstructured grid.
 
     Returns
     -------
-    connected_nodes : ndarray
+    connected_nodes : np.ndarray
         IDs of the nodes connected to `this_node' on the boundary. If `this_node' is not on the boundary,
         `connected_nodes' is empty.
 
@@ -3368,25 +3612,25 @@ def grid_metrics(tri, noisy=False):
 
     Parameters
     ----------
-    tri : ndarray
+    tri : np.ndarray
         Triangulation table for the grid.
     noisy : bool
         Set to True to enable verbose output (default = False)
 
     Returns
     -------
-    ntve : ndarray
+    ntve : np.ndarray
         The number of neighboring elements of each grid node
-    nbve : ndarray
+    nbve : np.ndarray
         nbve(i,1->ntve(i)) = ntve elements containing node i
-    nbe : ndarray
+    nbe : np.ndarray
         Indices of tri for the elements connected to each element in the domain. To visualise:
             plt.plot(x[tri[1000, :], y[tri[1000, :], 'ro')
             plt.plot(x[tri[nbe[1000], :]] and y[tri[nbe[1000], :]], 'k.')
         plots the 999th element nodes with the nodes of the surrounding elements too.
-    isbce : ndarray
+    isbce : np.ndarray
         Flag if element is on the boundary (True = yes, False = no)
-    isonb : ndarray
+    isonb : np.ndarray
         Flag if node is on the boundary (True = yes, False = no)
 
     Notes
@@ -3458,9 +3702,9 @@ def control_volumes(x, y, tri, node_control=True, element_control=True, noisy=Fa
 
     Parameters
     ----------
-    x, y : ndarray
+    x, y : np.ndarray
         Node positions
-    tri : ndarray
+    tri : np.ndarray
         Triangulation table for the unstructured grid.
     node_control : bool
         Set to False to disable calculation of node control volumes. Defaults to True.
@@ -3471,9 +3715,9 @@ def control_volumes(x, y, tri, node_control=True, element_control=True, noisy=Fa
 
     Returns
     -------
-    art1 : ndarray
+    art1 : np.ndarray
         Area of interior control volume (for node value integration)
-    art2 : ndarray
+    art2 : np.ndarray
         Sum area of all cells around each node.
 
     Notes
@@ -3772,10 +4016,10 @@ def elems2nodes(elems, tri, nvert=None):
 
     Parameters
     ----------
-    elems : ndarray
+    elems : np.ndarray
         Array of unstructured grid element values to move to the element
         nodes.
-    tri : ndarray
+    tri : np.ndarray
         Array of shape (nelem, 3) comprising the list of connectivity
         for each element.
     nvert : int, optional
@@ -3783,7 +4027,7 @@ def elems2nodes(elems, tri, nvert=None):
 
     Returns
     -------
-    nodes : ndarray
+    nodes : np.ndarray
         Array of values at the grid nodes.
 
     """
@@ -3832,16 +4076,16 @@ def nodes2elems(nodes, tri):
 
     Parameters
     ----------
-    nodes : ndarray
+    nodes : np.ndarray
         Array of unstructured grid node values to move to the element
         centres.
-    tri : ndarray
+    tri : np.ndarray
         Array of shape (nelem, 3) comprising the list of connectivity
         for each element.
 
     Returns
     -------
-    elems : ndarray
+    elems : np.ndarray
         Array of values at the grid nodes.
 
     """
@@ -3856,10 +4100,8 @@ def nodes2elems(nodes, tri):
 
 def vincenty_distance(point1, point2, miles=False):
     """
-    Author Maurycy Pietrzak (https://github.com/maurycyp/vincenty)
-
     Vincenty's formula (inverse method) to calculate the distance (in
-    kilometers or miles) between two points on the surface of a spheroid
+    kilometres or miles) between two points on the surface of a spheroid
 
     Parameters
     ----------
@@ -3875,68 +4117,68 @@ def vincenty_distance(point1, point2, miles=False):
     distance : float
         Distance between point1 and point2 in kilometres.
 
+    Notes
+    -----
+    Author Maurycy Pietrzak (https://github.com/maurycyp/vincenty)
+
     """
 
-    a = 6378137  # meters
+    a = 6378137  # metres
     f = 1 / 298.257223563
-    b = 6356752.314245  # meters; b = (1 - f)a
+    b = 6356752.314245  # metres; b = (1 - f)a
 
-    MILES_PER_KILOMETER = 0.621371
+    miles_per_kilometre = 0.621371
 
-    MAX_ITERATIONS = 200
-    CONVERGENCE_THRESHOLD = 1e-12  # .000,000,000,001
+    max_iterations = 200
+    convergence_threshold = 1e-12  # .000,000,000,001
 
-
-    # short-circuit coincident points
+    # Short-circuit coincident points
     if point1[0] == point2[0] and point1[1] == point2[1]:
         return 0.0
 
-    U1 = math.atan((1 - f) * math.tan(math.radians(point1[0])))
-    U2 = math.atan((1 - f) * math.tan(math.radians(point2[0])))
-    L = math.radians(point2[1] - point1[1])
-    Lambda = L
+    u1 = math.atan((1 - f) * math.tan(math.radians(point1[0])))
+    u2 = math.atan((1 - f) * math.tan(math.radians(point2[0])))
+    lambda_initial = math.radians(point2[1] - point1[1])
+    lambda_current = copy.copy(lambda_initial)
 
-    sinU1 = math.sin(U1)
-    cosU1 = math.cos(U1)
-    sinU2 = math.sin(U2)
-    cosU2 = math.cos(U2)
+    sin_u1 = math.sin(u1)
+    cos_u1 = math.cos(u1)
+    sin_u2 = math.sin(u2)
+    cos_u2 = math.cos(u2)
 
-    for iteration in range(MAX_ITERATIONS):
-        sinLambda = math.sin(Lambda)
-        cosLambda = math.cos(Lambda)
-        sinSigma = math.sqrt((cosU2 * sinLambda) ** 2 +
-                             (cosU1 * sinU2 - sinU1 * cosU2 * cosLambda) ** 2)
-        if sinSigma == 0:
+    for iteration in range(max_iterations):
+        sin_lambda = math.sin(lambda_current)
+        cos_lambda = math.cos(lambda_current)
+        sin_sigma = math.sqrt((cos_u2 * sin_lambda) ** 2 + (cos_u1 * sin_u2 - sin_u1 * cos_u2 * cos_lambda) ** 2)
+        if sin_sigma == 0:
             return 0.0  # coincident points
-        cosSigma = sinU1 * sinU2 + cosU1 * cosU2 * cosLambda
-        sigma = math.atan2(sinSigma, cosSigma)
-        sinAlpha = cosU1 * cosU2 * sinLambda / sinSigma
-        cosSqAlpha = 1 - sinAlpha ** 2
+        cos_sigma = sin_u1 * sin_u2 + cos_u1 * cos_u2 * cos_lambda
+        sigma = math.atan2(sin_sigma, cos_sigma)
+        sin_alpha = cos_u1 * cos_u2 * sin_lambda / sin_sigma
+        cos_sq_alpha = 1 - sin_alpha ** 2
         try:
-            cos2SigmaM = cosSigma - 2 * sinU1 * sinU2 / cosSqAlpha
+            cos2sigma_m = cos_sigma - 2 * sin_u1 * sin_u2 / cos_sq_alpha
         except ZeroDivisionError:
-            cos2SigmaM = 0
-        C = f / 16 * cosSqAlpha * (4 + f * (4 - 3 * cosSqAlpha))
-        LambdaPrev = Lambda
-        Lambda = L + (1 - C) * f * sinAlpha * (sigma + C * sinSigma *
-                                               (cos2SigmaM + C * cosSigma *
-                                                (-1 + 2 * cos2SigmaM ** 2)))
-        if abs(Lambda - LambdaPrev) < CONVERGENCE_THRESHOLD:
+            cos2sigma_m = 0
+        C = f / 16 * cos_sq_alpha * (4 + f * (4 - 3 * cos_sq_alpha))
+        lambda_prev = copy.copy(lambda_current)
+        lambda_current = lambda_initial + (1 - C) * f * sin_alpha * (sigma + C * sin_sigma * (cos2sigma_m + C * cos_sigma * (-1 + 2 * cos2sigma_m**2)))
+        if abs(lambda_current - lambda_prev) < convergence_threshold:
             break  # successful convergence
     else:
         return None  # failure to converge
 
-    uSq = cosSqAlpha * (a ** 2 - b ** 2) / (b ** 2)
-    A = 1 + uSq / 16384 * (4096 + uSq * (-768 + uSq * (320 - 175 * uSq)))
-    B = uSq / 1024 * (256 + uSq * (-128 + uSq * (74 - 47 * uSq)))
-    deltaSigma = B * sinSigma * (cos2SigmaM + B / 4 * (cosSigma *
-                 (-1 + 2 * cos2SigmaM ** 2) - B / 6 * cos2SigmaM *
-                 (-3 + 4 * sinSigma ** 2) * (-3 + 4 * cos2SigmaM ** 2)))
-    s = b * A * (sigma - deltaSigma)
+    u_sq = cos_sq_alpha * (a ** 2 - b ** 2) / (b ** 2)
+    A = 1 + u_sq / 16384 * (4096 + u_sq * (-768 + u_sq * (320 - 175 * u_sq)))
+    B = u_sq / 1024 * (256 + u_sq * (-128 + u_sq * (74 - 47 * u_sq)))
+    delta_sigma = B * sin_sigma * (cos2sigma_m + B / 4 * (cos_sigma * (-1 + 2 * cos2sigma_m ** 2) - B / 6 *
+                                                          cos2sigma_m * (-3 + 4 * sin_sigma ** 2) *
+                                                          (-3 + 4 * cos2sigma_m ** 2)))
+    s = b * A * (sigma - delta_sigma)
 
-    s /= 1000  # meters to kilometers
+    s /= 1000  # metres to kilometres
     if miles:
-        s *= MILES_PER_KILOMETER  # kilometers to miles
+        s *= miles_per_kilometre  # kilometres to miles
 
     return round(s, 6)
 
@@ -4028,7 +4270,7 @@ def shape_coefficients(xc, yc, nbe, isbce):
 
         delt = ((x1 * y2 - x2 * y1)**2 + (x1 * y3 - x3 * y1)**2 + (x2 * y3 - x3 * y2)**2) * 1000
 
-        a1u[i, 0] = (y1 + y2 + y3) * (x1 * y1 + x2 * y2+x3 * y3)- (x1 + x2 + x3) * (y1**2 + y2**2 + y3**2)
+        a1u[i, 0] = (y1 + y2 + y3) * (x1 * y1 + x2 * y2 + x3 * y3)- (x1 + x2 + x3) * (y1**2 + y2**2 + y3**2)
         a1u[i, 0] = a1u[i, 0] / delt
         a1u[i, 1] = (y1**2 + y2**2 + y3**2) * x1 - (x1 * y1 + x2 * y2 + x3 * y3) * y1
         a1u[i, 1] = a1u[i, 1] / delt
@@ -4037,7 +4279,7 @@ def shape_coefficients(xc, yc, nbe, isbce):
         a1u[i, 3] = (y1**2 + y2**2 + y3**2) * x3 - (x1 * y1 + x2 * y2 + x3 * y3) * y3
         a1u[i, 3] = a1u[i, 3] / delt
 
-        a2u[i, 0] = (x1 + x2 + x3) * (x1 * y1 + x2 * y2+x3 * y3)- (y1 + y2 + y3) * (x1**2 + x2**2 + x3**2)
+        a2u[i, 0] = (x1 + x2 + x3) * (x1 * y1 + x2 * y2 + x3 * y3)- (y1 + y2 + y3) * (x1**2 + x2**2 + x3**2)
         a2u[i, 0] = a2u[i, 0] / delt
         a2u[i, 1] = (x1**2 + x2**2 + x3**2) * y1 - (x1 * y1 + x2 * y2 + x3 * y3) * x1
         a2u[i, 1] = a2u[i, 1] / delt
@@ -4120,7 +4362,6 @@ def getcrossectiontriangles(cross_section_pnts, trinodes, X, Y, dist_res):
     Example
     -------
 
-
     TO DO
     -----
 
@@ -4138,17 +4379,18 @@ def getcrossectiontriangles(cross_section_pnts, trinodes, X, Y, dist_res):
     tri_X = X[trinodes]
     tri_Y = Y[trinodes]
 
+    # This section needs tidying up and making easier to understand!
     tri_cross_log_1_1 = np.logical_or(np.logical_and(tri_X.min(1) < min(cross_section_x), tri_X.max(1) > max(cross_section_x)),
-                            np.logical_and(tri_Y.min(1) < min(cross_section_y), tri_Y.max(1) > max(cross_section_y)))
+                                      np.logical_and(tri_Y.min(1) < min(cross_section_y), tri_Y.max(1) > max(cross_section_y)))
 
-    tri_cross_log_1_2 = np.any(np.logical_and(np.logical_and(tri_X < max(cross_section_x), tri_X > min(cross_section_x)), np.logical_and(tri_Y < max(cross_section_y), tri_Y > min(cross_section_y))), axis = 1)
+    tri_cross_log_1_2 = np.any(np.logical_and(np.logical_and(tri_X < max(cross_section_x), tri_X > min(cross_section_x)), np.logical_and(tri_Y < max(cross_section_y), tri_Y > min(cross_section_y))), axis=1)
     tri_cross_log_1 = np.logical_or(tri_cross_log_1_1, tri_cross_log_1_2)
 
-    tri_cross_log_1_2 = np.any(np.logical_and(np.logical_and(tri_X < max(cross_section_x), tri_X > min(cross_section_x)), np.logical_and(tri_Y < max(cross_section_y), tri_Y > min(cross_section_y))), axis = 1)
+    tri_cross_log_1_2 = np.any(np.logical_and(np.logical_and(tri_X < max(cross_section_x), tri_X > min(cross_section_x)), np.logical_and(tri_Y < max(cross_section_y), tri_Y > min(cross_section_y))), axis=1)
     tri_cross_log_1 = np.logical_or(tri_cross_log_1_1, tri_cross_log_1_2)
 
     # and add a buffer of one attached triangle
-    tri_cross_log_1 = np.any(np.isin(trinodes, np.unique(trinodes[tri_cross_log_1,:])), axis=1)
+    tri_cross_log_1 = np.any(np.isin(trinodes, np.unique(trinodes[tri_cross_log_1, :])), axis=1)
 
     # and reduce further by requiring every node to be within 1 line length + 10%
     line_len = np.sqrt((cross_section_x[0] - cross_section_x[1])**2 + (cross_section_y[0] - cross_section_y[1])**2)
@@ -4165,7 +4407,7 @@ def getcrossectiontriangles(cross_section_pnts, trinodes, X, Y, dist_res):
     tri_cross_log = np.logical_or(tri_cross_log, tri_cross_log_3)
 
     # and add a buffer of one attached triangle
-    tri_cross_log_1 = np.any(np.isin(trinodes, np.unique(trinodes[tri_cross_log,:])), axis=1)
+    tri_cross_log_1 = np.any(np.isin(trinodes, np.unique(trinodes[tri_cross_log, :])), axis=1)
     tri_cross_log = np.logical_or(tri_cross_log, tri_cross_log_1)
 
 
@@ -4179,7 +4421,7 @@ def getcrossectiontriangles(cross_section_pnts, trinodes, X, Y, dist_res):
         this_tri_ind = 0
         while in_this_tri is False:
             this_tri = red_tri_list_ind[this_tri_ind]
-            is_in = isintriangle(tri_X[this_tri,:], tri_Y[this_tri,:], this_point[0], this_point[1])
+            is_in = isintriangle(tri_X[this_tri, :], tri_Y[this_tri, :], this_point[0], this_point[1])
 
             if is_in:
                 sample_cells[this_ind] = this_tri
@@ -4188,18 +4430,18 @@ def getcrossectiontriangles(cross_section_pnts, trinodes, X, Y, dist_res):
                 sample_cells[this_ind] = -1
                 in_this_tri = True
             else:
-                this_tri_ind +=1
+                this_tri_ind += 1
 
     # for node properties now need the weight the nearest nodes to the sample point
     sample_nodes = np.zeros(len(sub_samp))
-    red_node_ind = np.unique(trinodes[red_tri_list_ind,:])
+    red_node_ind = np.unique(trinodes[red_tri_list_ind, :])
 
     for this_ind, this_point in enumerate(sub_samp):
         if sample_cells[this_ind] == -1:
             sample_nodes[this_ind] = -1
         else:
             all_dist = np.sqrt((X[red_node_ind] - this_point[0])**2 + (Y[red_node_ind] - this_point[1])**2)
-            sample_nodes[this_ind] = red_node_ind[np.where(all_dist==all_dist.min())[0][0]]
+            sample_nodes[this_ind] = red_node_ind[np.where(all_dist == all_dist.min())[0][0]]
 
     return sub_samp, sample_cells, sample_nodes
 
@@ -4243,9 +4485,10 @@ def isintriangle(tri_x, tri_y, point_x, point_y):
 
     return is_in
 
+
 class Graph(object):
     """
-    Base class for graph theoretic functions. 
+    Base class for graph theoretic functions.
 
     """
 
@@ -4320,13 +4563,13 @@ class ReducedFVCOMdist(Graph):
 
     def __init__(self, nodes_sel, triangle, edge_weights):
         super(ReducedFVCOMdist, self).__init__()
- 
+
         for this_node in nodes_sel:
             self.add_node(this_node)
-        
+
         self.node_index = nodes_sel
 
-        tri_inds = [[0,1], [1,2], [2,0]]
+        tri_inds = [[0, 1], [1, 2], [2, 0]]
 
         for this_tri, this_sides in zip(triangle, edge_weights):
             for these_inds in tri_inds:
@@ -4373,41 +4616,41 @@ class GraphFVCOMdepth(Graph):
         bounding_box : list 2x2, optional
             To reduce computation times can subset the grid, the bounding box expects [[x_min, x_max], [y_min, y_max]]
             format.
-        
+
         """
 
         super(GraphFVCOMdepth, self).__init__()
-        triangle, nodes, X, Y, Z = read_fvcom_mesh(fvcom_grid_file)
+        triangle, nodes, x, y, z = read_fvcom_mesh(fvcom_grid_file)
         # Only offset the nodes by 1 if we've got 1-based indexing.
         if np.min(nodes) == 1:
             nodes -= 1
-        elem_sides = element_side_lengths(triangle, X, Y)
+        elem_sides = element_side_lengths(triangle, x, y)
 
         if bounding_box is not None:
             x_lim = bounding_box[0]
             y_lim = bounding_box[1]
-            nodes_in_box = np.logical_and(np.logical_and(X > x_lim[0], X < x_lim[1]),
-                                          np.logical_and(Y > y_lim[0], Y < y_lim[1]))
+            nodes_in_box = np.logical_and(np.logical_and(x > x_lim[0], x < x_lim[1]),
+                                          np.logical_and(y > y_lim[0], y < y_lim[1]))
 
             nodes = nodes[nodes_in_box]
-            X = X[nodes_in_box]
-            Y = Y[nodes_in_box]
-            Z = Z[nodes_in_box]
+            x = x[nodes_in_box]
+            y = y[nodes_in_box]
+            z = z[nodes_in_box]
 
             elem_sides = elem_sides[np.all(np.isin(triangle, nodes), axis=1), :]
             triangle = reduce_triangulation(triangle, nodes)
 
-        Z = np.mean(Z[triangle], axis=1)  # adjust to cell depths rather than nodes, could use FVCOM output depths instead
-        Z = Z - np.min(Z)  # make it so depths are all >= 0
-        Z = np.max(Z) - Z  # and flip so deeper areas have lower numbers
-        
-        depth_weighted = (Z * depth_weight)**depth_power
+        z = np.mean(z[triangle], axis=1)  # adjust to cell depths rather than nodes, could use FVCOM output depths instead
+        z = z - np.min(z)  # make it so depths are all >= 0
+        z = np.max(z) - z  # and flip so deeper areas have lower numbers
+
+        depth_weighted = (z * depth_weight)**depth_power
         edge_weights = elem_sides * np.tile(depth_weighted, [3, 1]).T
 
         self.elem_sides = elem_sides
-        self.X = X
-        self.Y = Y
-        self.Z = Z
+        self.x = x
+        self.y = y
+        self.z = z
         self.node_index = nodes
         self.triangle = triangle
         self.edge_weights = edge_weights
@@ -4415,7 +4658,7 @@ class GraphFVCOMdepth(Graph):
         for this_node in nodes:
             self.add_node(this_node)
 
-        tri_inds = [[0,1], [1,2], [2,0]]
+        tri_inds = [[0, 1], [1, 2], [2, 0]]
 
         for this_tri, this_sides in zip(self.triangle, edge_weights):
             for these_inds in tri_inds:
@@ -4429,7 +4672,7 @@ class GraphFVCOMdepth(Graph):
         Parameters
         ----------
         near_xy : list-like
-            x and y coordinates of the point 
+            x and y coordinates of the point
 
         Returns
         -------
@@ -4438,11 +4681,11 @@ class GraphFVCOMdepth(Graph):
 
         """
 
-        dists = (self.X - near_xy[0])**2 + (self.Y - near_xy[1])**2
+        dists = (self.x - near_xy[0])**2 + (self.y - near_xy[1])**2
         return self.node_index[dists.argmin()]
 
     def get_channel_between_points(self, start_xy, end_xy, refine_channel=False):
-        """        
+        """
         Find the shortest path between two points according to depth weighted distance (hopefully the channel...)
 
         Parameters
@@ -4455,13 +4698,13 @@ class GraphFVCOMdepth(Graph):
 
         refine_channel : bool, optional
             Apply a refinement step, this might help in cases if extreme depth scalings cause the path to take two
-            sides of a triangle when it should take just one    
+            sides of a triangle when it should take just one
 
         Returns
         -------
-        node_list : ndarray
+        node_list : np.ndarray
             list of fvcom node numbers forming the predicted channel between the start and end points
-            
+
         """
         start_node_ind = self.get_nearest_node_ind(start_xy)
         end_node_ind = self.get_nearest_node_ind(end_xy)
@@ -4484,6 +4727,6 @@ class GraphFVCOMdepth(Graph):
         end_node = np.where(self.node_index == node_list[-1])[0][0]
 
         red_graph = ReducedFVCOMdist(nodes_sel, self.triangle, self.elem_sides)
-        _, red_node_list = red_graph.shortest_path(start_node, end_node)    
+        _, red_node_list = red_graph.shortest_path(start_node, end_node)
 
         return np.asarray(self.node_index[np.asarray(red_node_list)])

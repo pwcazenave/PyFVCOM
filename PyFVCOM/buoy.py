@@ -160,7 +160,7 @@ def get_buoy_data(db, table, fields, noisy=False):
 class Buoy(object):
     """ Generic class for buoy data (i.e. surface time series). """
 
-    def __init__(self, filename, position=(np.nan, np.nan), station=None, missing_value=None, noisy=False):
+    def __init__(self, filename, position=(np.nan, np.nan), station=None, name=None, missing_value=None, verbose=False):
         """
         Create a buoy object from the given file name.
 
@@ -172,9 +172,11 @@ class Buoy(object):
             Longitude/latitude of the current buoy. If omitted, position is np.nan/np.nan.
         station : str, optional
             The name of the current buoy. If omitted, set to None.
+        name : str, optional
+            Identical to station. For compatibility with the WCO tools only.
         missing_value : float
             Supply a value which is the missing value for this buoy time series.
-        noisy : bool, optional
+        verbose : bool, optional
             If True, verbose output is printed to screen. Defaults to False.
 
         """
@@ -182,9 +184,14 @@ class Buoy(object):
         self._file = Path(filename)
 
         self._debug = False
-        self._noisy = noisy
+        self._noisy = verbose
         self._locations = position
-        self._site = station
+        if station is not None:
+            self._site = station
+        elif name is not None:
+            self._site = name
+        if station is not None and name is not None and station != name:
+            raise ValueError("Both `station' and `name' given. Supply only one.")
         self._missing = missing_value
         self._time_header = ['Year', 'Serial', 'Jd', 'Time', 'Time_GMT', 'Date_YYMMDD', 'Time_HHMMSS', 'Date/Time_GMT']
         self.data = None
@@ -202,7 +209,7 @@ class Buoy(object):
         Provides
         --------
         self._lines : list
-            The lines in the file, stripped of newlines and leading/trailing whitespace and split based on a trying a
+            The lines in the file, stripped of newlines and leading/trailing whitespace and split based on trying a
             few common delimiters.
 
         """

@@ -1,21 +1,3 @@
-import numpy as np
-import sqlite3 as sq
-import datetime as dt
-import subprocess as sp
-import glob as gb
-import os
-from pandas import read_hdf,DataFrame
-import matplotlib.path as mplPath
-
-import matplotlib.pyplot as plt
-
-from PyFVCOM.grid import get_boundary_polygons, vincenty_distance
-from PyFVCOM.read import FileReader
-from PyFVCOM.plot import Time, Plotter
-from PyFVCOM.stats import calculate_coefficient, rmse
-
-SQL_UNIX_EPOCH = dt.datetime(1970, 1, 1, 0, 0, 0)
-
 """
 Validation of model outputs against in situ data stored and extracted from a database.
 
@@ -23,7 +5,26 @@ This also includes the code to build the databases of time series data sets.
 
 """
 
-class validation_db(object):
+import datetime as dt
+import glob as gb
+import os
+import sqlite3 as sq
+import subprocess as sp
+
+import matplotlib.path as mplPath
+import matplotlib.pyplot as plt
+import numpy as np
+from pandas import read_hdf
+
+from PyFVCOM.grid import get_boundary_polygons, vincenty_distance
+from PyFVCOM.plot import Time, Plotter
+from PyFVCOM.read import FileReader
+from PyFVCOM.stats import calculate_coefficient, rmse
+
+SQL_UNIX_EPOCH = dt.datetime(1970, 1, 1, 0, 0, 0)
+
+
+class ValidationDB(object):
     """ Work with an SQLite database. """
 
     def __init__(self, db_name):
@@ -167,7 +168,6 @@ class validation_db(object):
         self.conn.close()
 
 
-
 def dt_to_epochsec(time_to_convert):
     """
     Convert a datetime to our SQL database epoch.
@@ -228,7 +228,7 @@ def plot_map(fvcom, tide_db_path, threshold=np.inf, legend=False, **kwargs):
 
     """
 
-    tide_db = db_tide(tide_db_path)
+    tide_db = TideDB(tide_db_path)
     gauge_names, gauge_locations = tide_db.get_gauge_locations(long_names=True)
 
     gauges_in_domain = []
@@ -286,7 +286,7 @@ def plot_tides(fvcom, db_name, threshold=500, figsize=(10, 10), **kwargs):
 
     """
 
-    tide_db = db_tide(db_name)
+    tide_db = TideDB(db_name)
 
     # Get all the gauges in the database and find the corresponding model nodes.
     gauge_names, gauge_locations = tide_db.get_gauge_locations(long_names=True)
@@ -361,7 +361,7 @@ def _make_normal_tide_series(h_series):
     return height_series
 
 
-class db_tide(validation_db):
+class TideDB(ValidationDB):
     """ Create a time series database and query it. """
 
     def make_bodc_tables(self):
@@ -387,7 +387,7 @@ class db_tide(validation_db):
         """
         for this_file in file_list:
             print('Inserting data from file: ' + this_file)
-            this_file_obj = bodc_annual_tide_file(this_file)
+            this_file_obj = BODCAnnualTideFile(this_file)
             try:
                 site_id = self.select_qry('sites', "site_tla == '" + this_file_obj.site_tla + "'", 'site_id')[0][0]
             except:
@@ -524,21 +524,26 @@ class db_tide(validation_db):
                        'error_flags': ['flag_id integer NOT NULL', 'flag_code text', 'flag_description text']}
 
 
-class bodc_annual_tide_file(object):
+class BODCAnnualTideFile(object):
+    """
+    TODO: Add docstring
+
+    """
+
     def __init__(self, file_name, header_length=11):
         """
         Assumptions: file name of the form yearTLA.txt
 
         """
-        bodc_annual_tide_file._clean_tide_file(file_name, header_length)
+        self._clean_tide_file(file_name, header_length)
         with open(file_name) as f:
-            header_lines = [next(f) for this_line in range(header_length)]
+            header_lines = [next(f) for _ in range(header_length)]
 
         for this_line in header_lines:
             if 'ongitude' in this_line:
-                self.lon = [float(s) for s in this_line.split() if bodc_annual_tide_file._is_number(s)][0]
+                self.lon = [float(s) for s in this_line.split() if self._is_number(s)][0]
             if 'atitude' in this_line:
-                self.lat = [float(s) for s in this_line.split() if bodc_annual_tide_file._is_number(s)][0]
+                self.lat = [float(s) for s in this_line.split() if self._is_number(s)][0]
             if 'Site' in this_line:
                 site_str_raw = this_line.split()[1:]
                 if len(site_str_raw) == 1:
@@ -564,10 +569,10 @@ class bodc_annual_tide_file(object):
         residual_data = []
         residual_flag = []
         for this_row in raw_data:
-            meas, error_code = bodc_annual_tide_file._parse_tide_obs(this_row[3])
+            meas, error_code = self._parse_tide_obs(this_row[3])
             elevation_data.append(meas)
             elevation_flag.append(error_code)
-            meas, error_code = bodc_annual_tide_file._parse_tide_obs(this_row[4])
+            meas, error_code = self._parse_tide_obs(this_row[4])
             residual_data.append(meas)
             residual_flag.append(error_code)
         self.elevation_data = elevation_data
@@ -577,6 +582,10 @@ class bodc_annual_tide_file(object):
 
     @staticmethod
     def _parse_tide_obs(in_str):
+        """
+        TODO: Add docstring
+
+        """
         error_code_dict = {'M':1, 'N':2, 'T':3}
         try:
             int(in_str[-1])
@@ -594,6 +603,10 @@ class bodc_annual_tide_file(object):
 
     @staticmethod
     def _is_number(s):
+        """
+        TODO: Add docstring
+
+        """
         try:
             float(s)
             return True
@@ -602,14 +615,15 @@ class bodc_annual_tide_file(object):
 
     @staticmethod
     def _clean_tide_file(file_name, header_length):
+        """
+        TODO: Add docstring
+
+        """
         sed_str = "sed -i '"+ str(header_length + 1) + ",$ {/^ *[0-9]/!d}' " + file_name
         sp.call([sed_str], shell=True)
 
 
-#################################################################################################################
 """
-
-
 Validation against L4 and E1 CTD and buoy data
 
 observations_meta_data = {'buoy_name':'E1', 'year':'2006', 'ctd_new_file_type': False,
@@ -623,12 +637,10 @@ model_filestr_lambda = lambda m: '/data/euryale4/backup/mbe/Models/FVCOM/tamar_v
 available_months = np.arange(1,13)
 model_file_list = [model_filestr_lambda(this_month) for this_month in available_months]
 
-
-
-
 """
 
-class db_wco(validation_db):
+
+class WCODB(ValidationDB):
     """ Work with an SQL database of data from PML's Western Channel Observatory. """
 
     def make_wco_tables(self):
@@ -648,12 +660,20 @@ class db_wco(validation_db):
         self.execute_sql('create index date_index on obs (time_int);')
 
     def _add_sql_strings(self):
+        """
+        TODO: Add docstring
+
+        """
         self.wco_tables = {'sites':['buoy_id integer NOT NULL', 'buoy_name text', 'lon real', 'lat real',
                                     'other_stuff text', 'PRIMARY KEY (buoy_id)'],
                            'measurement_types':['measurement_flag integer NOT NULL', 'measurement_description text',
                                     'PRIMARY KEY (measurement_flag)']}
     
     def _add_new_variable_table(self, variable):
+        """
+        TODO: Add docstring
+
+        """
         this_table_sql = ['buoy_id integer NOT NULL', 'time_int integer NOT NULL',
                                     'depth real NOT NULL', variable + ' real', 'measurement_flag integer NOT NULL',
                                     'PRIMARY KEY (buoy_id, depth, measurement_flag, time_int)', 'FOREIGN KEY (buoy_id) REFERENCES sites(buoy_id)',
@@ -661,22 +681,42 @@ class db_wco(validation_db):
         self.create_table(variable, this_variable_table_sql)
 
     def insert_CTD_file(self, filestr, buoy_id):
-        file_obj = WCO_obs_file(filestr)
+        """
+        TODO: Add docstring
+
+        """
+        file_obj = WCOObsFile(filestr)
         self._insert_obs(file_obj, buoy_id, 0.0)
 
     def insert_buoy_file(self, filestr, buoy_id):
-        file_obj = WCO_obs_file(filestr, depth=0)
+        """
+        TODO: Add docstring
+
+        """
+        file_obj = WCOObsFile(filestr, depth=0)
         self._insert_obs(file_obj, buoy_id, 1.0)
 
     def insert_CTD_dir(self, dirstr, buoy_id):
-        file_obj = CTD_dir(dirstr)
+        """
+        TODO: Add docstring
+
+        """
+        file_obj = WCOParseFile(dirstr)
         self._insert_obs(file_obj, buoy_id, 0.0)
 
     def insert_csv_file(self, filestr, buoy_id):
-        file_obj = csv_formatted(filstr)
+        """
+        TODO: Add docstring
+
+        """
+        file_obj = CSVFormatter(filstr)
         self._insert_obs(file_obj, buoy_id)
 
     def _insert_obs(self, file_obj, buoy_id, measurement_id):
+        """
+        TODO: Add docstring
+
+        """
         epoch_sec_timelist = []
         for this_time in file_obj.observation_dict['dt_time']:
             epoch_sec_timelist.append(dt_to_epochsec(this_time))
@@ -688,6 +728,10 @@ class db_wco(validation_db):
         self.insert_into_table('obs', table_data)
 
     def get_observations(self, buoy_name, start_date_dt=None, end_date_dt=None, measurement_id=None):
+        """
+        TODO: Add docstring
+
+        """
         select_str = "time_int, depth, temp, salinity"
         table_name = "obs as go"
         inner_join_str = "sites as st on st.buoy_id = go.buoy_id"
@@ -715,14 +759,22 @@ class db_wco(validation_db):
         return dates, data
 
 
-class WCO_obs_file(object):
+class WCOObsFile(object):
     def __init__(self, filename, depth=None):
+        """
+        TODO: Add docstring
+
+        """
         self._setup_possible_vars()
         self.observation_dict = self._add_file(filename)
         if depth is not None:
             self.observation_dict['depth'] = np.tile(depth, len(self.observation_dict['dt_time']))
 
     def _add_file(self,filename,remove_undated=True):
+        """
+        TODO: Add docstring
+
+        """
         # remove duff lines
         sed_str = "sed '/^-9.990e/d' " + filename + " > temp_file.txt"
         sp.call(sed_str, shell=True)
@@ -742,6 +794,10 @@ class WCO_obs_file(object):
         return {this_key:np.hstack([this_dict[this_key] for this_dict in obs_dict_list]) for this_key in obs_dict_list[0]}
 
     def _add_file_part(self, filename):
+        """
+        TODO: Add docstring
+
+        """
         # seperate header and clean out non numeric lines
         head_str ="head -1 " + filename + " > temp_header_file.txt"
         sed_str = "sed '/^[!0-9]/!d' " + filename + " > temp_file.txt"
@@ -780,12 +836,20 @@ class WCO_obs_file(object):
         return observation_dict
 
     def _setup_possible_vars(self):
+        """
+        TODO: Add docstring
+
+        """
         self.possible_vars = {'temp':np.asarray(['Tv290C', 'SST', ' Mean SST (degC)']), 'salinity':np.asarray(['Sal00', 'Sal', ' Mean SST (degC)']),
                         'depth':np.asarray(['DepSM']),    'date':np.asarray(['mm/dd/yyyy', 'Year', ' Date (YYMMDD)']),
                         'julian_day':np.asarray(['Jd']), 'time':np.asarray(['hh:mm:ss', 'Time', ' Time (HHMMSS)'])}
 
     @staticmethod
     def _parse_dates_to_dt(obs_dict, time_vars):
+        """
+        TODO: Add docstring
+
+        """
         dt_list = []
         if np.any(np.isin('mm/dd/yyyy', time_vars)):
             for this_time, this_date in zip(obs_dict['time'], obs_dict['date']):
@@ -804,8 +868,16 @@ class WCO_obs_file(object):
         return np.asarray(dt_list)
 
 
-class CTD_dir(WCO_obs_file):
+class WCOParseFile(WCOObsFile):
+    """
+    TODO: Add docstring
+
+    """
     def __init__(self, dirname):
+        """
+        TODO: Add docstring
+
+        """
         all_files = os.listdir(dirname)
         dt_list = []
         observation_dict_list = []
@@ -826,17 +898,26 @@ class CTD_dir(WCO_obs_file):
         self.observation_dict['dt_time'] = np.hstack(dt_list)
 
 
-class csv_formatted(object):
+class CSVFormatter(object):
+    """
+    TODO: Add docstring and code!
+
+    """
+
     def __init__(self, filename):
+        """
+        TODO: Add docstring and code!
+
+        """
         pass
 
-"""
-Do the comparison
 
+class CompareData(object):
+    """
+    Compare the WCO data.
 
-"""
+    """
 
-class comp_data(object):
     def __init__(self, buoy_list, model_ident, wco_database, max_time_threshold=dt.timedelta(hours=1), max_depth_threshold = 100, probe_depths=None):
         self.model_ident = model_ident
         self.database_obj = wco_database
@@ -852,9 +933,17 @@ class comp_data(object):
             self.observations[this_buoy] = {}
 
     def retrieve_file_data(self):
+        """
+        TODO: Add docstring
+
+        """
         pass
 
     def retrieve_obs_data(self, buoy_name, var, measurement_type=None):
+        """
+        TODO: Add docstring
+
+        """
         if not hasattr(self.model_date_mm):
             print('Retrieve model data first')
             return
@@ -864,6 +953,10 @@ class comp_data(object):
         self.observations[buoy_name][var] = obs_dict
 
     def get_comp_data_interpolated(self, buoy_name, var_list):
+        """
+        TODO: Add docstring
+
+        """
         if not hasattr(self, comp_dict):
             self.comp_dict = {}
 
@@ -891,14 +984,26 @@ class comp_data(object):
         self.comp_dict[buoy_name] = obs_comp
 
     def comp_data_nearest(self, buoy_name, var_list):
+        """
+        TODO: Add docstring and code!
+
+        """
         pass
 
-    def model_closest_time():
+    def model_closest_time(self):
+        """
+        TODO: Add docstring and code!
+
+        """
         pass
 
 
-class comp_data_filereader(comp_data):
+class CompareDataFileReader(CompareData):
     def retrieve_file_data(self):
+        """
+        TODO: Add docstring
+
+        """
         where_str = 'buoy_name in ('
         for this_buoy in self.buoy_list:
             where_str+=this_buoy + ','
@@ -932,11 +1037,24 @@ class comp_data_filereader(comp_data):
             self.model_data[this_buoy] = model_all_dicts[this_buoy]
 
     def model_closest_time(self, find_time):
+        """
+        TODO: Add docstring and code!
+
+        """
         return closest_time
 
 
-class comp_data_probe(comp_data):
-    def retrieve_file_data():
+class CompareDataProbe(CompareData):
+    """
+    TODO: Add docstring
+
+    """
+
+    def retrieve_file_data(self):
+        """
+        TODO: Add docstring
+
+        """
         for this_buoy in self.buoy_list:
             t_filelist = []
             s_filelist = []
@@ -949,13 +1067,7 @@ class comp_data_probe(comp_data):
             self.model_data[this_buoy] = model_dict
 
 
-######################################################################################################################
-
-""" 
-Validation against ICES bottle data
-"""
-
-class ICES_comp(object):
+class CompareICES(object):
     """
     A class for comparing FVCOM(-ERSEM) models to ICES bottle data. It is a fvcom-ised and class-ised version of code written 
     by Momme Butenschon for NEMO output.
@@ -1090,7 +1202,12 @@ class ICES_comp(object):
         return ices_data, model_data
 
     def _ICES_dataget(self):
-        # Read the ices datafile
+        """
+        TODO: Add docstring
+
+        """
+
+        # Read the ICES datafile
         df=read_hdf(self.ices_file,"df")
 
         start_step_len = 1000000
@@ -1133,7 +1250,11 @@ class ICES_comp(object):
                         self._addICESsample(sample, sample_dt, model_dt, node_ind, z_ind)
 
     def _addICESsample(self, sample, sample_dt, model_dt, node_ind, z_ind):
-        self.ices_data['time_dt'].append(sample_dt)    
+        """
+        TODO: Add docstring
+
+        """
+        self.ices_data['time_dt'].append(sample_dt)
         self.model_data['time_dt'].append(model_dt)
                         
         self.ices_data['lat'].append(sample['Latdeg'])
@@ -1163,6 +1284,10 @@ class ICES_comp(object):
             self.model_data['NTRI(umol/l)'].append(mvalue)    
 
     def _model_dataget(self):
+        """
+        TODO: Add docstring
+
+        """
         if len(self.ices_data['time_dt']) == 0:
             print('No ICES data loaded for comparison')
             return
@@ -1203,11 +1328,19 @@ class ICES_comp(object):
                             self.model_data[key][this_record_ind] = getattr(this_day_fr.data, this_model_key)[time_ind, dep_ind, space_ind]
 
     def _add_ICES_model_varnames(self):
+        """
+        TODO: Add docstring
+
+        """
         self.ices_model_conversion = {'TEMP':'temp', 'PSAL':'salinity', 'PHOS(umol/l)':'N1_p', 'SLCA(umol/l)':'N5_s',
                         'PHPH':'O3_pH', 'ALKY(mmol/l)':'O3_TA', 'NTRA(umol/l)':'N3_n', 'AMON(umol/l)':'N4_n',
                         'DOXY(umol/l)':'O2_o', 'CPHL(mg/m^3)':'P1_Chl+P2_Chl+P3_Chl+P4_Chl'}
 
     def _add_data_dicts(self):
+        """
+        TODO: Add docstring
+
+        """
         self.ices_data = {'lat':[], 'lon':[], 'z':[], 'time_dt':[], 'NTRI(umol/l)':[]}
         self.model_data = {'node_ind':[], 'z_ind':[], 'time_dt':[], 'NTRI(umol/l)':[]}
         for this_key in self.ices_model_conversion:
@@ -1215,10 +1348,18 @@ class ICES_comp(object):
             self.model_data[this_key] = []
 
     def _add_default_varlist(self):
+        """
+        TODO: Add docstring
+
+        """
         self.var_keys = ['TEMP','PSAL', 'DOXY(umol/l)', 'PHOS(umol/l)', 'SLCA(umol/l)', 'NTRA(umol/l)', 'AMON(umol/l)',
                             'PHPH', 'ALKY(mmol/l)', 'CPHL(mg/m^3)']
 
     def _checkSample(self, sample):
+        """
+        TODO: Add docstring
+
+        """
         hasData=False
         for key in self.var_keys:
             if sample[key]>-8.999999:
@@ -1227,6 +1368,10 @@ class ICES_comp(object):
 
     @staticmethod
     def _checkDepth(z,dep_lays_choose):
+        """
+        TODO: Add docstring
+
+        """
         if z>dep_lays_choose[-1]:
             return -1
         else:
@@ -1235,6 +1380,10 @@ class ICES_comp(object):
 
     @staticmethod
     def _year_start(year_find, start_index, step, df):
+        """
+        TODO: Add docstring
+
+        """
         year_found = 0
         this_ind = start_index
         while year_found == 0:
