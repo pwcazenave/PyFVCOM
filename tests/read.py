@@ -88,8 +88,22 @@ class FileReader_test(TestCase):
         test.assert_almost_equal(np.squeeze(F.data.zeta), self.reference.data.zeta[-10, 10], decimal=5)
 
     def test_get_layer(self):
-        F = FileReader(self.stub.ncfile.name, dims={'siglay': [5], 'time': [100]}, variables=['ww'])
-        test.assert_almost_equal(np.squeeze(F.data.ww), self.reference.data.ww[100, 5, :], decimal=5)
+        F = FileReader(self.stub.ncfile.name, dims={'siglay': [5]}, variables=['ww'])
+        test.assert_almost_equal(np.squeeze(F.data.ww), self.reference.data.ww[:, 5, :], decimal=5)
+
+    def test_get_layer_get_nodes(self):
+        F = FileReader(self.stub.ncfile.name, dims={'siglay': [5], 'node': np.arange(4)}, variables=['temp'])
+        test.assert_almost_equal(np.squeeze(F.data.temp), self.reference.data.temp[:, 5, :4], decimal=5)
+
+    def test_get_layer_get_nodes_get_elements(self):
+        F = FileReader(self.stub.ncfile.name, dims={'siglay': [5], 'node': np.arange(4), 'nele': np.arange(3)}, variables=['ww', 'temp'])
+        test.assert_almost_equal(np.squeeze(F.data.temp), self.reference.data.temp[:, 5, :4], decimal=5)
+        test.assert_almost_equal(np.squeeze(F.data.ww), self.reference.data.ww[:, 5, :3], decimal=5)
+
+    def test_get_layer_get_level_get_nodes_get_elements(self):
+        F = FileReader(self.stub.ncfile.name, dims={'siglay': [5], 'siglev': [4], 'node': np.arange(4), 'nele': np.arange(3)}, variables=['ww', 'temp'])
+        test.assert_almost_equal(np.squeeze(F.data.temp), self.reference.data.temp[:, 5, :4], decimal=5)
+        test.assert_almost_equal(np.squeeze(F.data.ww), self.reference.data.ww[:, 5, :3], decimal=5)
 
     def test_get_layer_no_variable(self):
         F = FileReader(self.stub.ncfile.name, dims={'siglay': np.arange(0, 10, 2)})
@@ -147,7 +161,7 @@ class FileReader_test(TestCase):
 
     def test_get_time_with_string(self):
         time_dims = ['2001-02-12 09:00:00.00000', '2001-02-14 12:00:00.00000']
-        returned_indices = [26, 77]
+        returned_indices = np.arange(26, 77)
 
         F = FileReader(self.stub.ncfile.name, dims={'time': time_dims})
         test.assert_equal(F._dims['time'], returned_indices)
@@ -155,7 +169,7 @@ class FileReader_test(TestCase):
     def test_get_time_with_datetime(self):
         time_dims = [datetime.strptime('2001-02-12 09:00:00.00000', '%Y-%m-%d %H:%M:%S.%f'),
                      datetime.strptime('2001-02-14 12:00:00.00000', '%Y-%m-%d %H:%M:%S.%f')]
-        returned_indices = [26, 77]
+        returned_indices = [26, 76]
 
         F = FileReader(self.stub.ncfile.name, dims={'time': time_dims})
         test.assert_equal(F._dims['time'][0], returned_indices[0])
