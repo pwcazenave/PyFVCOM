@@ -1042,17 +1042,17 @@ def MFileReader(fvcom, noisy=False, *args, **kwargs):
     if isinstance(fvcom, str):
         if noisy:
             print('Loading {}'.format(fvcom))
-        fvcom = FileReader(fvcom, *args, **kwargs)
+        fvcom_out = FileReader(fvcom, *args, **kwargs)
     else:
         for file in fvcom:
             if noisy:
                 print('Loading {}'.format(file))
             if file == fvcom[0]:
-                fvcom = FileReader(file, *args, **kwargs)
+                fvcom_out = FileReader(file, *args, **kwargs)
             else:
-                fvcom += FileReader(file, *args, **kwargs)
+                fvcom_out += FileReader(file, *args, **kwargs)
 
-    return fvcom
+    return fvcom_out
 
 
 class FileReaderFromDict(FileReader):
