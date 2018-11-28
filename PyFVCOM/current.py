@@ -72,9 +72,9 @@ class Residuals(object):
                 # Check we've got a common time series now.
                 if np.max(_new_time[f_start:f_end + 1] - self._fvcom.time.datetime).total_seconds() == 0:
                     # Do the subsampling on the rest of the data.
-                    for var in self._pred.obj_iter(self._pred.data):
+                    for var in self._pred.data:
                         setattr(self._pred.data, var, getattr(self._pred.data, var)[::skip, ...])
-                    for time in self._pred.obj_iter(self._pred.time):
+                    for time in self._pred.time:
                         setattr(self._pred.time, time, getattr(self._pred.time, time)[::skip])
                 else:
                     # We need to interpolate.
@@ -85,9 +85,9 @@ class Residuals(object):
                 _new_time = self._fvcom.time.datetime[::skip]
                 if np.max(_new_time - self._pred.time.datetime).total_seconds() == 0:
                     # Do the subsampling on the rest of the data.
-                    for var in self._fvcom.obj_iter(self._fvcom.data):
+                    for var in self._fvcom.data:
                         setattr(self._fvcom.data, var, getattr(self._fvcom.data, var)[::skip, ...])
-                    for time in self._fvcom.obj_iter(self._fvcom.time):
+                    for time in self._fvcom.time:
                         setattr(self._fvcom.time, time, getattr(self._fvcom.time, time)[::skip])
                 else:
                     # We need to interpolate.

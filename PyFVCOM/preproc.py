@@ -146,7 +146,7 @@ class Model(Domain):
 
         # Add the sigma data to any open boundaries we've got loaded.
         for boundary in self.open_boundaries:
-            for attribute in self.obj_iter(self.sigma):
+            for attribute in self.sigma:
                 try:
                     # Ignore element-based data for now.
                     if 'center' not in attribute:
@@ -1309,7 +1309,7 @@ class Model(Domain):
 
                 boundary_river_indices = np.argwhere(breached_distance).tolist()
                 # Now drop all those indices from the relevant river data.
-                for field in self.obj_iter(self.river):
+                for field in self.river:
                     if field not in ['time']:
                         setattr(self.river, field, np.delete(getattr(self.river, field), flatten_list(boundary_river_indices), axis=-1))
 
@@ -2026,7 +2026,7 @@ class Model(Domain):
                 boundary.temp_nodes_index = np.isin(nodes, boundary.nodes)
                 boundary.temp_elements_index = np.isin(elements, boundary.elements)
 
-                for var in self.obj_iter(boundary.nest):
+                for var in boundary.nest:
                     if var == 'time':
                         pass
                     elif var in out_dict.keys():
@@ -3317,8 +3317,6 @@ class Nest(object):
         self.debug = False
         self._noisy = verbose
 
-        self.obj_iter = lambda x: [a for a in dir(x) if not a.startswith('__')]
-
         self.grid = copy.copy(grid)
         self.sigma = copy.copy(sigma)
 
@@ -3330,6 +3328,9 @@ class Nest(object):
             raise ValueError("Unsupported boundary type {}. Supply PyFVCOM.grid.OpenBoundary or `list'.".format(type(boundary)))
         # Add the sigma and grid structure attributes.
         self.__update_open_boundaries()
+
+    def __iter__(self):
+        return (a for a in dir(self) if not a.startswith('_'))
 
     def __update_open_boundaries(self):
         """
@@ -3344,7 +3345,7 @@ class Nest(object):
         for ii, boundary in enumerate(self.boundaries):
             if self._noisy:
                 print('adding grid info to boundary {} of {}'.format(ii + 1, len(self.boundaries)))
-            for attribute in self.obj_iter(self.grid):
+            for attribute in self.grid:
                 if self._noisy:
                     print('\t{}'.format(attribute))
                 try:
@@ -3362,7 +3363,7 @@ class Nest(object):
 
             if self._noisy:
                 print('adding sigma info to boundary {} of {}'.format(ii + 1, len(self.boundaries)))
-            for attribute in self.obj_iter(self.sigma):
+            for attribute in self.sigma:
                 if self._noisy:
                     print('\t{}'.format(attribute))
                 try:

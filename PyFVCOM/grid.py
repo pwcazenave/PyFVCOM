@@ -621,10 +621,6 @@ class Domain(object):
         self.grid = _GridReader(grid, native_coordinates, zone)
         self.dims = _MakeDimensions(self.grid)
 
-        # Get the things to iterate over for a given object. This is a bit hacky, but until or if I create separate
-        # classes for the dims, time, grid and data objects, this'll have to do.
-        self.obj_iter = lambda x: [a for a in dir(x) if not a.startswith('__')]
-
         # Set two dimensions: number of open boundaries (obc) and number of open boundary nodes (open_boundary_nodes).
         if self.grid.open_boundary_nodes:
             # If we have more than one open boundary, we need to iterate through the list of lists to get the total
@@ -1043,6 +1039,9 @@ class OpenBoundary(object):
         self.sigma = type('sigma', (), {})()
         self.time = type('time', (), {})()
         self.nest = type('nest', (), {})()
+
+    def __iter__(self):
+        return (a for a in dir(self) if not a.startswith('_'))
 
     def add_sponge_layer(self, radius, coefficient):
         """
