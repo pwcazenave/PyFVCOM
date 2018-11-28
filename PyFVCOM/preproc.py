@@ -4199,7 +4199,7 @@ class HYCOMReader(RegularReader):
         self.time.datetime = self.time.datetime
         self.time.matlabtime = self.time.time + 678942.0  # convert to MATLAB-indexed times from Modified Julian Date.
 
-    def _load_grid(self):
+    def _load_grid(self, netcdf_filestr):
         """
         Load the grid data.
 
