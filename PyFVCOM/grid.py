@@ -1830,7 +1830,6 @@ def read_sms_map(map_file):
     with open(map_file) as f:
         for line in f:
             line = line.strip()
-            print(line, flush=True)
             if line == 'NODE':
                 line = next(f).strip()
                 _, node_x, node_y, node_z = line.split()
