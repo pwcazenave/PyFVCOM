@@ -612,7 +612,12 @@ class FileReader(Domain):
 
         """
 
-        idem = copy.copy(self)  # somewhere to store the differences
+        # To deepcopy self, we need to close the netCDF file handle as it's not picklable. We'll reopen it afterwards.
+        self.ds.close()
+        delattr(self, 'ds')
+        idem = copy.deepcopy(self)  # somewhere to store the differences
+        self.ds = Dataset(self._fvcom, 'r')
+        idem.ds = Dataset(idem._fvcom, 'r')
 
         if dir(self.data) != dir(fvcom.data):
             raise ValueError("Inconsistent variables in the currently loaded data and the supplied data (`fvcom')")
