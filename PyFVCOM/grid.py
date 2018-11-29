@@ -323,18 +323,18 @@ class GridReaderNetCDF(object):
 
                 # Set the sigma data to the 0-1 range for siglay so that the maximum depth value is equal to the
                 # actual depth. This may be a problem.
-                _fixed_sig = fix_range(_original_sig, 0, 1)
-
+                _fixed_sig = fix_range(_original_sig, -1, 0)
                 # h_center can have a time dimension (when running with sediment transport and morphological
                 # update enabled). As such, we need to account for that in the creation of the _z arrays.
                 if np.ndim(z) > 1:
                     z = z[:, np.newaxis, :]
-                    _fixed_sig = fix_range(_original_sig, 0, 1)[np.newaxis, ...]
+                    _fixed_sig = _fixed_sig[np.newaxis, ...]
                 try:
-                    setattr(self, '{}_z'.format(var), fix_range(_original_sig, 0, 1) * z)
+                    setattr(self, '{}_z'.format(var), _fixed_sig * z)
                 except ValueError:
                     # The arrays might be the wrong shape for broadcasting to work, so transpose and retranspose
                     # accordingly. This is less than ideal.
+                    warning(f'Depth-resolved sigma {var} seems to be the wrong shape. Trying again.')
                     setattr(self, '{}_z'.format(var), (_fixed_sig.T * z).T)
                 # Update the original data with the subsetted data.
                 setattr(self, var, _original_sig)
