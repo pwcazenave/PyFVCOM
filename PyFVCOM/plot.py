@@ -472,7 +472,7 @@ class Plotter(object):
         mask : float, optional
             Mask out values < mask (plot_field only).
         res : string, optional
-            Resolution to use when drawing Basemap object
+            Resolution to use when drawing Basemap object. If None, no coastline is plotted.
         fs : int, optional
             Font size to use when rendering plot text
         title : str, optional
@@ -639,8 +639,9 @@ class Plotter(object):
             self.mxc, self.myc = self.m(self.lonc, self.latc)
 
             self.m.drawmapboundary()
-            self.m.drawcoastlines(zorder=2)
-            self.m.fillcontinents(color='0.6', zorder=2)
+            if self.res is not None:
+                self.m.drawcoastlines(zorder=2)
+                self.m.fillcontinents(color='0.6', zorder=2)
 
         if self.title:
             self.axes.set_title(self.title)
