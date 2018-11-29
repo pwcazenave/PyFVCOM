@@ -472,7 +472,7 @@ class Plotter(object):
         mask : float, optional
             Mask out values < mask (plot_field only).
         res : string, optional
-            Resolution to use when drawing Basemap object
+            Resolution to use when drawing Basemap object. If None, no coastline is plotted.
         fs : int, optional
             Font size to use when rendering plot text
         title : str, optional
@@ -639,8 +639,9 @@ class Plotter(object):
             self.mxc, self.myc = self.m(self.lonc, self.latc)
 
             self.m.drawmapboundary()
-            self.m.drawcoastlines(zorder=2)
-            self.m.fillcontinents(color='0.6', zorder=2)
+            if self.res is not None:
+                self.m.drawcoastlines(zorder=2)
+                self.m.fillcontinents(color='0.6', zorder=2)
 
         if self.title:
             self.axes.set_title(self.title)
@@ -1304,10 +1305,10 @@ class MPIWorker(object):
             # Add the attributes for labelling.
             self.fvcom.atts.speed = _passive_data_store()
             self.fvcom.atts.speed.long_name = 'speed'
-            self.fvcom.atts.speed.units = '$ms^{-1}$'
+            self.fvcom.atts.speed.units = 'ms^{-1}'
             self.fvcom.atts.direction = _passive_data_store()
             self.fvcom.atts.direction.long_name = 'direction'
-            self.fvcom.atts.direction.units = '$\degree$'
+            self.fvcom.atts.direction.units = '\degree'
 
         elif variable in ('depth_averaged_speed', 'depth_averaged_direction'):
             self.fvcom.data.depth_averaged_direction, self.fvcom.data.depth_averaged_speed = vector2scalar(
@@ -1316,21 +1317,21 @@ class MPIWorker(object):
             # Add the attributes for labelling.
             self.fvcom.atts.depth_averaged_speed = _passive_data_store()
             self.fvcom.atts.depth_averaged_speed.long_name = 'depth-averaged speed'
-            self.fvcom.atts.depth_averaged_speed.units = '$ms^{-1}$'
+            self.fvcom.atts.depth_averaged_speed.units = 'ms^{-1}'
             self.fvcom.atts.depth_averaged_direction = _passive_data_store()
             self.fvcom.atts.depth_averaged_direction.long_name = 'depth-averaged direction'
-            self.fvcom.atts.depth_averaged_direction.units = '$\degree$'
+            self.fvcom.atts.depth_averaged_direction.units = '\degree'
 
         if variable == 'speed_anomaly':
             self.fvcom.data.speed_anomaly = self.fvcom.data.speed.mean(axis=0) - fvcom.data.speed
             self.fvcom.atts.speed = _passive_data_store()
             self.fvcom.atts.speed.long_name = 'speed anomaly'
-            self.fvcom.atts.speed.units = '$ms^{-1}$'
+            self.fvcom.atts.speed.units = 'ms^{-1}'
         elif variable == 'depth_averaged_speed_anomaly':
             self.fvcom.data.depth_averaged_speed_anomaly = self.fvcom.data.uava.mean(axis=0) - fvcom.data.uava
             self.fvcom.atts.depth_averaged_speed_anomaly = _passive_data_store()
             self.fvcom.atts.depth_averaged_speed_anomaly.long_name = 'depth-averaged speed anomaly'
-            self.fvcom.atts.depth_averaged_speed_anomaly.units = '$ms^{-1}$'
+            self.fvcom.atts.depth_averaged_speed_anomaly.units = 'ms^{-1}'
         elif variable == 'tauc':
             pressure = nodes2elems(depth2pressure(self.fvcom.data.h, self.fvcom.data.y),
                                    self.fvcom.grid.triangles)
@@ -1338,7 +1339,7 @@ class MPIWorker(object):
             salinityc = nodes2elems(self.fvcom.data.temp, self.fvcom.grid.triangles)
             rho = dens_jackett(tempc, salinityc, pressure[np.newaxis, :])
             self.fvcom.data.tauc *= rho
-            self.fvcom.atts.tauc.units = '$Nm^{-2}$'
+            self.fvcom.atts.tauc.units = 'Nm^{-2}'
 
         if self._noisy and self.rank == self.root:
             print(f'done.', flush=True)

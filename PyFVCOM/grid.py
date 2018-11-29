@@ -311,10 +311,12 @@ class GridReaderNetCDF(object):
             # Ignore previously created depth-resolved data (in the case where we're updating the grid with a call to
             # self._load_data() with dims supplied).
             if var.startswith('sig') and not var.endswith('_z'):
+                # Make the depths negative down so we end up with positive down for {var}_z (since var is negative
+                # down already).
                 if var.endswith('_center'):
-                    z = self.h_center
+                    z = -self.h_center
                 else:
-                    z = self.h
+                    z = -self.h
 
                 if self._debug:
                     print(f'Making water depth vertical grid: {var}_z')
@@ -323,21 +325,19 @@ class GridReaderNetCDF(object):
 
                 # Set the sigma data to the 0-1 range for siglay so that the maximum depth value is equal to the
                 # actual depth. This may be a problem.
-                _fixed_sig = fix_range(_original_sig, 0, 1)
-
+                _fixed_sig = fix_range(_original_sig, -1, 0)
                 # h_center can have a time dimension (when running with sediment transport and morphological
                 # update enabled). As such, we need to account for that in the creation of the _z arrays.
                 if np.ndim(z) > 1:
                     z = z[:, np.newaxis, :]
-                    _fixed_sig = fix_range(_original_sig, 0, 1)[np.newaxis, ...]
+                    _fixed_sig = _fixed_sig[np.newaxis, ...]
                 try:
-                    setattr(self, '{}_z'.format(var), fix_range(_original_sig, 0, 1) * z)
+                    setattr(self, '{}_z'.format(var), _fixed_sig * z)
                 except ValueError:
                     # The arrays might be the wrong shape for broadcasting to work, so transpose and retranspose
                     # accordingly. This is less than ideal.
+                    warning(f'Depth-resolved sigma {var} seems to be the wrong shape. Trying again.')
                     setattr(self, '{}_z'.format(var), (_fixed_sig.T * z).T)
-                # Update the original data with the subsetted data.
-                setattr(self, var, _original_sig)
 
         # Check ranges and if zero assume we're missing that particular type, so convert from the other accordingly.
         self.lon_range = np.ptp(self.lon)
@@ -1867,7 +1867,6 @@ def read_sms_map(map_file):
     with open(map_file) as f:
         for line in f:
             line = line.strip()
-            print(line, flush=True)
             if line == 'NODE':
                 line = next(f).strip()
                 _, node_x, node_y, node_z = line.split()
