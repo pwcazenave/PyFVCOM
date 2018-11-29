@@ -473,10 +473,7 @@ class FileReader(Domain):
             nt = 1
         self.dims.time = nt
 
-        self.grid = GridReaderNetCDF(fvcom, dims=self._dims, zone=self._zone, debug=self._debug, verbose=self._noisy)
-        # Grab the dimensions from the grid in case we've subset somewhere.
-        self._dims = self.grid._dims
-        delattr(self.grid, '_dims')
+        self._load_grid(fvcom)
 
         # Load the attributes of anything we've been asked to load.
         self.atts = _AttributeReader(self._fvcom, self._variables)
@@ -624,6 +621,12 @@ class FileReader(Domain):
             setattr(idem.data, var1, getattr(self.data, var1) - getattr(fvcom.data, var2))
 
         return idem
+
+    def _load_grid(self, fvcom):
+        self.grid = GridReaderNetCDF(fvcom, dims=self._dims, zone=self._zone, debug=self._debug, verbose=self._noisy)
+        # Grab the dimensions from the grid in case we've subset somewhere.
+        self._dims = self.grid._dims
+        delattr(self.grid, '_dims')
 
     def _update_dimensions(self, variables):
         # Update the dimensions based on variables we've been given. Construct a list of the unique dimensions in all
@@ -1042,17 +1045,17 @@ def MFileReader(fvcom, noisy=False, *args, **kwargs):
     if isinstance(fvcom, str):
         if noisy:
             print('Loading {}'.format(fvcom))
-        fvcom = FileReader(fvcom, *args, **kwargs)
+        fvcom_out = FileReader(fvcom, *args, **kwargs)
     else:
         for file in fvcom:
             if noisy:
                 print('Loading {}'.format(file))
             if file == fvcom[0]:
-                fvcom = FileReader(file, *args, **kwargs)
+                fvcom_out = FileReader(file, *args, **kwargs)
             else:
-                fvcom += FileReader(file, *args, **kwargs)
+                fvcom_out += FileReader(file, *args, **kwargs)
 
-    return fvcom
+    return fvcom_out
 
 
 class FileReaderFromDict(FileReader):

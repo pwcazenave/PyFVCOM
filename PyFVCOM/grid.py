@@ -562,6 +562,8 @@ class _GridReader(object):
         # Make a bounding box variable too (spherical coordinates): W/E/S/N
         self.bounding_box = (np.min(self.lon), np.max(self.lon), np.min(self.lat), np.max(self.lat))
 
+    def __iter__(self):
+        return (a for a in dir(self) if not a.startswith('__'))
 
 class _MakeDimensions(object):
     def __init__(self, grid_reader):
@@ -620,10 +622,6 @@ class Domain(object):
         # Add some extra bits for the grid information.
         self.grid = _GridReader(grid, native_coordinates, zone)
         self.dims = _MakeDimensions(self.grid)
-
-        # Get the things to iterate over for a given object. This is a bit hacky, but until or if I create separate
-        # classes for the dims, time, grid and data objects, this'll have to do.
-        self.obj_iter = lambda x: [a for a in dir(x) if not a.startswith('__')]
 
         # Set two dimensions: number of open boundaries (obc) and number of open boundary nodes (open_boundary_nodes).
         if self.grid.open_boundary_nodes:
@@ -1043,6 +1041,9 @@ class OpenBoundary(object):
         self.sigma = type('sigma', (), {})()
         self.time = type('time', (), {})()
         self.nest = type('nest', (), {})()
+
+    def __iter__(self):
+        return (a for a in dir(self) if not a.startswith('_'))
 
     def add_sponge_layer(self, radius, coefficient):
         """
@@ -1600,6 +1601,27 @@ class OpenBoundary(object):
             y[y < coarse.grid.lat.min()] = coarse.grid.lat.min()
             y[y > coarse.grid.lat.max()] = coarse.grid.lat.max()
 
+            # Internal landmasses also need to be dealt with, so test if a point lies within the mask of the grid and move it to the nearest in grid
+            # point if so.            
+            if not mode == 'surface':
+                land_mask = getattr(coarse.data, coarse_name)[0, ...].mask[0,:,:]
+            else:
+                land_mask = getattr(coarse.data, coarse_name)[0, ...].mask
+
+            sea_points = np.ones(land_mask.shape)
+            sea_points[land_mask] = np.nan
+
+            ft_sea = RegularGridInterpolator((coarse.grid.lat, coarse.grid.lon), sea_points, method='linear', fill_value=np.nan)
+            internal_points = np.isnan(ft_sea(np.asarray([y,x]).T))
+
+            if np.any(internal_points):
+                xv, yv = np.meshgrid(coarse.grid.lon, coarse.grid.lat)
+                valid_ll = np.asarray([xv[~land_mask], yv[~land_mask]]).T
+                for this_ind in np.where(internal_points)[0]:
+                    nearest_valid_ind = np.argmin((valid_ll[:,0] - x[this_ind])**2 + (valid_ll[:,1] - y[this_ind])**2)
+                    x[this_ind] = valid_ll[nearest_valid_ind,0]
+                    y[this_ind] = valid_ll[nearest_valid_ind,1]
+
             # The depth data work differently as we need to squeeze each FVCOM water column into the available coarse
             # data. The only way to do this is to adjust each FVCOM water column in turn by comparing with the
             # closest coarse depth.
@@ -1607,14 +1629,29 @@ class OpenBoundary(object):
                 coarse_depths = np.tile(coarse.grid.depth, [coarse.dims.lat, coarse.dims.lon, 1]).transpose(2, 0, 1)
                 coarse_depths = np.ma.masked_array(coarse_depths, mask=getattr(coarse.data, coarse_name)[0, ...].mask)
                 coarse_depths = np.max(coarse_depths, axis=0)
+                coarse_depths = np.ma.filled(coarse_depths, 0)
+
                 # Go through each open boundary position and if its depth is deeper than the closest coarse data,
                 # squash the open boundary water column into the coarse water column.
                 for idx, node in enumerate(zip(x, y, z)):
-                    lon_index = np.argmin(np.abs(coarse.grid.lon - node[0]))
-                    lat_index = np.argmin(np.abs(coarse.grid.lat - node[1]))
-                    if coarse_depths[lat_index, lon_index] < node[2].max():
+                    nearest_lon_ind = np.argmin((coarse.grid.lon - node[0])**2)
+                    nearest_lat_ind = np.argmin((coarse.grid.lat - node[1])**2)
+
+                    if node[0] < coarse.grid.lon[nearest_lon_ind]:
+                        nearest_lon_ind = [nearest_lon_ind -1, nearest_lon_ind, nearest_lon_ind -1, nearest_lon_ind]
+                    else:
+                        nearest_lon_ind = [nearest_lon_ind, nearest_lon_ind + 1, nearest_lon_ind, nearest_lon_ind + 1]
+
+                    if node[1] < coarse.grid.lat[nearest_lat_ind]:
+                        nearest_lat_ind = [nearest_lat_ind -1, nearest_lat_ind -1, nearest_lat_ind, nearest_lat_ind]
+                    else:
+                        nearest_lat_ind = [nearest_lat_ind, nearest_lat_ind, nearest_lat_ind + 1, nearest_lat_ind + 1]
+
+                    grid_depth = np.min(coarse_depths[nearest_lat_ind, nearest_lon_ind])
+
+                    if grid_depth < node[2].max():
                         # Squash the FVCOM water column into the coarse water column.
-                        z[idx, :] = (node[2] / node[2].max()) * coarse_depths[lat_index, lon_index]
+                        z[idx, :] = (node[2] / node[2].max()) * grid_depth
                 # Fix all depths which are shallower than the shallowest coarse depth. This is more straightforward as
                 # it's a single minimum across all the open boundary positions.
                 z[z < coarse.grid.depth.min()] = coarse.grid.depth.min()
