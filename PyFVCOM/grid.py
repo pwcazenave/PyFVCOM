@@ -311,10 +311,12 @@ class GridReaderNetCDF(object):
             # Ignore previously created depth-resolved data (in the case where we're updating the grid with a call to
             # self._load_data() with dims supplied).
             if var.startswith('sig') and not var.endswith('_z'):
+                # Make the depths negative down so we end up with positive down for {var}_z (since var is negative
+                # down already).
                 if var.endswith('_center'):
-                    z = self.h_center
+                    z = -self.h_center
                 else:
-                    z = self.h
+                    z = -self.h
 
                 if self._debug:
                     print(f'Making water depth vertical grid: {var}_z')
@@ -336,8 +338,6 @@ class GridReaderNetCDF(object):
                     # accordingly. This is less than ideal.
                     warning(f'Depth-resolved sigma {var} seems to be the wrong shape. Trying again.')
                     setattr(self, '{}_z'.format(var), (_fixed_sig.T * z).T)
-                # Update the original data with the subsetted data.
-                setattr(self, var, _original_sig)
 
         # Check ranges and if zero assume we're missing that particular type, so convert from the other accordingly.
         self.lon_range = np.ptp(self.lon)
