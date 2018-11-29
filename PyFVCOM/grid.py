@@ -562,6 +562,8 @@ class _GridReader(object):
         # Make a bounding box variable too (spherical coordinates): W/E/S/N
         self.bounding_box = (np.min(self.lon), np.max(self.lon), np.min(self.lat), np.max(self.lat))
 
+    def __iter__(self):
+        return (a for a in dir(self) if not a.startswith('__'))
 
 class _MakeDimensions(object):
     def __init__(self, grid_reader):
