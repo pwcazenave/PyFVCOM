@@ -1036,11 +1036,11 @@ class OpenBoundary(object):
         self.weight_node = None
         self.weight_element = None
         # These get added to by PyFVCOM.preproc.Model and are used in the tide and nest functions below.
-        self.tide = type('tide', (), {})()
-        self.grid = type('grid', (), {})()
-        self.sigma = type('sigma', (), {})()
-        self.time = type('time', (), {})()
-        self.nest = type('nest', (), {})()
+        self.tide = _passive_data_store()
+        self.grid = _passive_data_store()
+        self.sigma = _passive_data_store()
+        self.time = _passive_data_store()
+        self.nest = _passive_data_store()
 
     def __iter__(self):
         return (a for a in dir(self) if not a.startswith('_'))
