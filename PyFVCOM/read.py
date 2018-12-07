@@ -1301,7 +1301,7 @@ def MFileReader(fvcom, noisy=False, *args, **kwargs):
             if file == fvcom[0]:
                 fvcom_out = FileReader(file, *args, **kwargs)
             else:
-                fvcom_out += FileReader(file, *args, **kwargs)
+                fvcom_out = FileReader(file, *args, **kwargs) >> fvcom_out
 
     return fvcom_out
 
