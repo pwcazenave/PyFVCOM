@@ -488,12 +488,14 @@ class FileReader(Domain):
         # For easy comparison of classes.
         return self.__dict__ == other.__dict__
 
-    def __add__(self, fvcom, debug=False):
+    def __rshift__(self, fvcom):
         """
-        This special method means we can stack two FileReader objects in time through a simple addition. For example:
+        This special method means we can stack two FileReader objects in time through a simple concatenation-like
+        syntax. For example:
 
         >>> fvcom1 = PyFVCOM.read.FileReader('file1.nc')
-        >>> fvcom1 += PyFVCOM.read.FileReader('file2.nc')
+        >>> fvcom2 = PyFVCOM.read.FileReader('file2.nc')
+        >>> fvcom = fvcom2 >> fvcom1
 
         Parameters
         ----------
