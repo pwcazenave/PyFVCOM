@@ -2103,8 +2103,10 @@ class Model(Domain):
             atts = {'units': 'degrees_north', 'standard_name': 'latitude', 'long_name': 'zonal latitude'}
             nest_ncfile.add_variable('latc', self.grid.latc[elements], ['nele'], attributes=atts, ncopts=ncopts)
 
-            # No attributes for nv in the existing nest files, so I won't add any here.
-            # nest_ncfile.add_variable('nv', nv, ['three', 'nele'], attributes=atts, ncopts=ncopts)
+            if self.debug:
+                print('adding nv to netCDF')
+            atts = {'long_name': 'nodes surrounding element'}
+            nest_ncfile.add_variable('nv', self.grid.nv[:,elements], ['three', 'nele'], format='i4', attributes=atts, ncopts=ncopts)
 
             if self.debug:
                 print('adding siglay to netCDF')
