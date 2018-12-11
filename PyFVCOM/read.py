@@ -44,6 +44,7 @@ class _TimeReader(object):
         _noisy = verbose
         self._dims = copy.deepcopy(dims)
         self._mjd_origin = 'days since 1858-11-17 00:00:00'
+        self._using_calendar_time = True  # for non-calendar runs, we need to skip the datetime stuff.
 
         time_variables = ('time', 'Itime', 'Itime2', 'Times')
         got_time, missing_time = [], []
@@ -114,24 +115,31 @@ class _TimeReader(object):
             # variable is often the one with the lowest precision, so use the others preferentially over that.
             if 'Times' not in got_time:
                 if 'time' in got_time:
-                    _dates = num2date(self.time, units=getattr(dataset.variables['time'], 'units'))
+                    time_units = getattr(dataset.variables['time'], 'units')
+                    if time_units.split()[-1] == '0.0':
+                        self._using_calendar_time = False
+                    if self._using_calendar_time:
+                        _dates = num2date(self.time, units=time_units)
+                    else:
+                        _dates = [None] * len(self.time)
                 elif 'Itime' in got_time and 'Itime2' in got_time:
                     itime_units = getattr(dataset.variables['Itime'], 'units')
                     _dates = num2date(self.Itime + self.Itime2 / 1000.0 / 60 / 60 / 24, units=itime_units)
                 else:
                     raise ValueError('Missing sufficient time information to make the relevant time data.')
 
-                try:
+                if self._using_calendar_time:
                     try:
-                        self.Times = np.array([datetime.strftime(d, '%Y-%m-%dT%H:%M:%S.%f') for d in _dates])
-                    except TypeError:
-                        self.Times = np.array([datetime.strftime(_dates, '%Y-%m-%dT%H:%M:%S.%f')])
-                except ValueError:
-                    self.Times = np.array([datetime.strftime(d, '%Y/%m/%d %H:%M:%S.%f') for d in _dates])
-                # Add the relevant attribute for the Times variable.
-                attributes = _passive_data_store()
-                setattr(attributes, 'time_zone', 'UTC')
-                # setattr(self.atts, 'Times', attributes)
+                        try:
+                            self.Times = np.array([datetime.strftime(d, '%Y-%m-%dT%H:%M:%S.%f') for d in _dates])
+                        except TypeError:
+                            self.Times = np.array([datetime.strftime(_dates, '%Y-%m-%dT%H:%M:%S.%f')])
+                    except ValueError:
+                        self.Times = np.array([datetime.strftime(d, '%Y/%m/%d %H:%M:%S.%f') for d in _dates])
+                    # Add the relevant attribute for the Times variable.
+                    attributes = _passive_data_store()
+                    setattr(attributes, 'time_zone', 'UTC')
+                    # setattr(self.atts, 'Times', attributes)
 
             if 'time' not in got_time:
                 if 'Times' in got_time:
@@ -207,7 +215,8 @@ class _TimeReader(object):
             # Remake 'time' from 'datetime' because the former can suffer from precision issues when read in directly
             # from the netCDF variable. Generally, 'datetime' is made from the 'Times' strings, which means it
             # usually has sufficient precision.
-            setattr(self, 'time', np.asarray([date2num(time, units=self._mjd_origin) for time in self.datetime]))
+            if self._using_calendar_time:
+                setattr(self, 'time', np.asarray([date2num(time, units=self._mjd_origin) for time in self.datetime]))
 
             # Clip everything to the time indices if we've been given them. Update the time dimension too.
             if 'time' in self._dims:
