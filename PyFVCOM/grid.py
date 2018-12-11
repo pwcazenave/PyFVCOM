@@ -323,8 +323,8 @@ class GridReaderNetCDF(object):
 
                 _original_sig = getattr(self, var)
 
-                # Set the sigma data to the 0-1 range for siglay so that the maximum depth value is equal to the
-                # actual depth. This may be a problem.
+                # Set the sigma data range to -1 to 0 (rather than close to -1 and 0) for siglay so that the maximum
+                # depth value is equal to the actual depth.
                 _fixed_sig = fix_range(_original_sig, -1, 0)
                 # h_center can have a time dimension (when running with sediment transport and morphological
                 # update enabled). As such, we need to account for that in the creation of the _z arrays.
