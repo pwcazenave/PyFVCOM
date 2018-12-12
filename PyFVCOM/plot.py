@@ -616,17 +616,17 @@ class Plotter(object):
         # Create basemap object
         if not self.m and not self.cartesian:
             if have_basemap:
-                self.m = Basemap(llcrnrlon=self.extents[:2].min(),
-                                 llcrnrlat=self.extents[-2:].min(),
-                                 urcrnrlon=self.extents[:2].max(),
-                                 urcrnrlat=self.extents[-2:].max(),
+                self.m = Basemap(llcrnrlon=np.min(self.extents[:2]),
+                                 llcrnrlat=np.min(self.extents[-2:]),
+                                 urcrnrlon=np.max(self.extents[:2]),
+                                 urcrnrlat=np.max(self.extents[-2:]),
                                  rsphere=(6378137.00, 6356752.3142),
                                  resolution=self.res,
                                  projection='merc',
                                  area_thresh=0.1,
-                                 lat_0=self.extents[-2:].mean(),
-                                 lon_0=self.extents[:2].mean(),
-                                 lat_ts=self.extents[-2:].mean(),
+                                 lat_0=np.mean(self.extents[-2:]),
+                                 lon_0=np.mean(self.extents[:2]),
+                                 lat_ts=np.mean(self.extents[-2:]),
                                  ax=self.axes)
             else:
                 raise RuntimeError('mpl_toolkits is not available in this Python.')
