@@ -1346,13 +1346,13 @@ class MPIWorker(object):
             load_verbose = True
             print(f'Loading {variable} data from netCDF...', end=' ', flush=True)
 
-        load_vars = [variable]
+        load_vars = [variable, 'wet_cells']
         if variable in ('speed', 'direction', 'speed_anomaly'):
-            load_vars = ['u', 'v']
+            load_vars = ['u', 'v', 'wet_cells']
         elif variable in ('depth_averaged_speed', 'depth_averaged_direction', 'depth_averaged_speed_anomaly'):
-            load_vars = ['ua', 'va']
+            load_vars = ['ua', 'va', 'wet_cells']
         elif variable == 'tauc':
-            load_vars = [variable, 'temp', 'salinity']
+            load_vars = [variable, 'temp', 'salinity', 'wet_cells']
 
         self.fvcom = FileReader(fvcom_file, variables=load_vars, dims=self.dims, verbose=load_verbose)
 
@@ -1367,6 +1367,7 @@ class MPIWorker(object):
             self.fvcom.atts.direction = _passive_data_store()
             self.fvcom.atts.direction.long_name = 'direction'
             self.fvcom.atts.direction.units = '\degree'
+            self.fvcom.variable_dimension_names[variable] = self.fvcom.variable_dimension_names['u']
 
         elif variable in ('depth_averaged_speed', 'depth_averaged_direction'):
             self.fvcom.data.depth_averaged_direction, self.fvcom.data.depth_averaged_speed = vector2scalar(
@@ -1379,17 +1380,22 @@ class MPIWorker(object):
             self.fvcom.atts.depth_averaged_direction = _passive_data_store()
             self.fvcom.atts.depth_averaged_direction.long_name = 'depth-averaged direction'
             self.fvcom.atts.depth_averaged_direction.units = '\degree'
+            self.fvcom.variable_dimension_names[variable] = self.fvcom.variable_dimension_names['ua']
 
         if variable == 'speed_anomaly':
             self.fvcom.data.speed_anomaly = self.fvcom.data.speed.mean(axis=0) - fvcom.data.speed
             self.fvcom.atts.speed = _passive_data_store()
             self.fvcom.atts.speed.long_name = 'speed anomaly'
             self.fvcom.atts.speed.units = 'ms^{-1}'
+            self.fvcom.variable_dimension_names[variable] = self.fvcom.variable_dimension_names['u']
+
         elif variable == 'depth_averaged_speed_anomaly':
             self.fvcom.data.depth_averaged_speed_anomaly = self.fvcom.data.uava.mean(axis=0) - fvcom.data.uava
             self.fvcom.atts.depth_averaged_speed_anomaly = _passive_data_store()
             self.fvcom.atts.depth_averaged_speed_anomaly.long_name = 'depth-averaged speed anomaly'
             self.fvcom.atts.depth_averaged_speed_anomaly.units = 'ms^{-1}'
+            self.fvcom.variable_dimension_names[variable] = self.fvcom.variable_dimension_names['ua']
+
         elif variable == 'tauc':
             pressure = nodes2elems(depth2pressure(self.fvcom.data.h, self.fvcom.data.y),
                                    self.fvcom.grid.triangles)
@@ -1398,12 +1404,13 @@ class MPIWorker(object):
             rho = dens_jackett(tempc, salinityc, pressure[np.newaxis, :])
             self.fvcom.data.tauc *= rho
             self.fvcom.atts.tauc.units = 'Nm^{-2}'
+            self.fvcom.variable_dimension_names[variable] = self.fvcom.variable_dimension_names['tauc']
 
         if self._noisy and self.rank == self.root:
             print(f'done.', flush=True)
 
     def plot_field(self, fvcom_file, time_indices, variable, figures_directory, label=None, dimensions=None, clims=None,
-                   norm=None, *args, **kwargs):
+                   norm=None, mask=False, *args, **kwargs):
         """
         Plot a given horizontal surface for `variable' for the time indices in `time_indices'.
 
@@ -1423,6 +1430,8 @@ class MPIWorker(object):
             Limit the colour range to these values.
         norm : matplotlib.colors.Normalize, optional
             Apply the normalisation given to the colours in the plot.
+        mask : bool
+            Set to True to enable masking with the FVCOM wet/dry data.
 
         Additional args and kwargs are passed to PyFVCOM.plot.Plotter.
 
@@ -1434,6 +1443,7 @@ class MPIWorker(object):
         self.dims.update({'time': time_indices})
 
         self.__loader(fvcom_file, variable)
+        field = np.squeeze(getattr(self.fvcom.data, variable))
 
         # Find out what the range of data is so we can set the colour limits automatically, if necessary.
         if clims is None:
@@ -1454,7 +1464,6 @@ class MPIWorker(object):
 
         local_plot = Plotter(self.fvcom, cb_label=label, *args, **kwargs)
 
-        field = np.squeeze(getattr(self.fvcom.data, variable))
 
         if norm is not None:
             # Check for zero and negative values if we're LogNorm'ing the data and replace with the colour limit
@@ -1468,7 +1477,13 @@ class MPIWorker(object):
                 field[invalid] = clims[0]
 
         for local_time, global_time in enumerate(time_indices):
-            local_plot.plot_field(field[local_time])
+            if mask:
+                local_mask = getattr(self.fvcom.data, 'wet_cells')[local_time] == 0
+            else:
+                local_mask = np.zeros(getattr(self.fvcom.data, variable).shape, dtype=bool)
+                if 'node' in self.fvcom.variable_dimension_names[variable]:
+                    local_mask = nodes2elems(local_mask, self.fvcom.grid.triangles)
+            local_plot.plot_field(field[local_time], mask=local_mask)
             local_plot.tripcolor_plot.set_clim(*clims)
             local_plot.figure.savefig(str(Path(figures_directory, f'{variable}_{global_time + 1:04d}.png')),
                                       bbox_inches='tight',
