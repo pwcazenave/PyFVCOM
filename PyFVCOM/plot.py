@@ -522,6 +522,8 @@ class Plotter(object):
 
         """
 
+        self._debug = False
+
         self.ds = dataset
         self.figure = figure
         self.axes = axes
