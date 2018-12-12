@@ -2347,7 +2347,7 @@ class Model(Domain):
             self.groundwater.temperature[:, node_index[0]] = temperature
             self.groundwater.salinity[:, node_index[0]] = salinity
 
-    def write_groundwater(self, output_file, ncopts={'zlib': True, 'complevel': 7}, **kwargs):
+    def write_groundwater(self, output_file, surface=False, ncopts={'zlib': True, 'complevel': 7}, **kwargs):
         """
         Generate a groundwater forcing file for the given FVCOM domain from the data in self.groundwater object. It
         should contain flux, temp and salt attributes (generated from self.add_groundwater).
@@ -2356,6 +2356,8 @@ class Model(Domain):
         ----------
         output_file : str, pathlib.Path
             File to which to write open boundary tidal elevation forcing data.
+        surface : bool
+            Set to True to generate a file for the experimental surface water input.
         ncopts : dict, optional
             Dictionary of options to use when creating the netCDF variables. Defaults to compression on.
 
@@ -2363,8 +2365,12 @@ class Model(Domain):
 
         """
 
-        globals = {'type': 'FVCOM GROUNDWATER FORCING FILE',
-                   'title': 'Groundwater input forcing time series',
+        name = 'GROUND'
+        if surface:
+            name = 'SURFACE'
+
+        globals = {'type': f'FVCOM {name}WATER FORCING FILE',
+                   'title': f'{name.title()}water input forcing time series',
                    'source': 'FVCOM grid (unstructured) surface forcing',
                    'history': 'File created using {} from PyFVCOM'.format(inspect.stack()[0][3])}
         # FVCOM checks for the existence of the nele dimension even though none of the groundwater data are specified
@@ -2373,22 +2379,22 @@ class Model(Domain):
 
         with WriteForcing(str(output_file), dims, global_attributes=globals, clobber=True, format='NETCDF4', **kwargs) as groundwater:
             # Add the variables.
-            atts = {'long_name': 'groundwater volume flux',
+            atts = {'long_name': f'{name.lower()}water volume flux',
                     'units': 'm3 s-1',
                     'grid': 'fvcom_grid',
                     'type': 'data'}
-            groundwater.add_variable('groundwater_flux', self.groundwater.flux, ['time', 'node'],
+            groundwater.add_variable(f'{name.lower()}water_flux', self.groundwater.flux, ['time', 'node'],
                                      attributes=atts, ncopts=ncopts)
-            atts = {'long_name': 'groundwater inflow temperature',
+            atts = {'long_name': f'{name.lower()}water inflow temperature',
                     'units': 'degrees_C',
                     'grid': 'fvcom_grid',
                     'type': 'data'}
-            groundwater.add_variable('groundwater_temp', self.groundwater.temperature, ['time', 'node'],
+            groundwater.add_variable(f'{name.lower()}water_temp', self.groundwater.temperature, ['time', 'node'],
                                      attributes=atts, ncopts=ncopts)
-            atts = {'long_name': 'groundwater inflow salinity', 'units': '1e-3',
+            atts = {'long_name': f'{name.lower()}water inflow salinity', 'units': '1e-3',
                     'grid': 'fvcom_grid',
                     'type': 'data'}
-            groundwater.add_variable('groundwater_salt', self.groundwater.salinity, ['time', 'node'],
+            groundwater.add_variable(f'{name.lower()}water_salt', self.groundwater.salinity, ['time', 'node'],
                                      attributes=atts, ncopts=ncopts)
             groundwater.write_fvcom_time(self.time.datetime)
 
