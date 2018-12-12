@@ -451,12 +451,10 @@ class Plotter(object):
 
     """
 
-    def __init__(self, dataset, figure=None, axes=None, stations=None,
-                 extents=None, vmin=None, vmax=None, mask=None, res='c', fs=10,
-                 title=None, cmap='viridis', figsize=(10., 10.), axis_position=None,
-                 edgecolors='none', s_stations=20, s_particles=20, linewidth=1.0,
-                 tick_inc=None, cb_label=None, extend='neither', norm=None, m=None,
-                 cartesian=False):
+    def __init__(self, dataset, figure=None, axes=None, stations=None, extents=None, vmin=None, vmax=None, mask=None,
+                 res='c', fs=10, title=None, cmap='viridis', figsize=(10., 10.), axis_position=None, edgecolors='none',
+                 s_stations=20, s_particles=20, linewidth=1.0, tick_inc=None, cb_label=None, extend='neither',
+                 norm=None, m=None, cartesian=False, **bmargs):
         """
         Parameters
         ----------
@@ -514,6 +512,8 @@ class Plotter(object):
         cartesian : bool, optional
             Set to True to skip using Basemap and instead return a simple
             cartesian axis plot. Defaults to False (geographical coordinates).
+        bmargs : dict
+            Additional arguments to pass to Basemap.
 
         Author(s)
         ---------
@@ -548,6 +548,7 @@ class Plotter(object):
         self.norm = norm
         self.m = m
         self.cartesian = cartesian
+        self.bmargs = bmargs
         self.colorbar_axis = None
 
         # Plot instances (initialise to None/[] for truthiness test later)
@@ -627,11 +628,11 @@ class Plotter(object):
                                  rsphere=(6378137.00, 6356752.3142),
                                  resolution=self.res,
                                  projection='merc',
-                                 area_thresh=0.1,
                                  lat_0=np.mean(self.extents[-2:]),
                                  lon_0=np.mean(self.extents[:2]),
                                  lat_ts=np.mean(self.extents[-2:]),
-                                 ax=self.axes)
+                                 ax=self.axes,
+                                 **self.bmargs)
             else:
                 raise RuntimeError('mpl_toolkits is not available in this Python.')
 
