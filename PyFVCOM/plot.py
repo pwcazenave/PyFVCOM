@@ -712,17 +712,45 @@ class Plotter(object):
 
         """
 
+        # We ignore the mask given when initialising the Plotter object and instead use the one given when calling
+        # this function. We'll warn in case anything (understandably) gets confused.
         if self.mask is not None:
-            field = np.ma.masked_where(field <= self.mask, field)
+            warn("The mask given when initiliasing this object is ignored for plotting surfaces. Supply a `mask' "
+                 "keyword to this function instead")
 
         if self.tripcolor_plot:
             # The field needs to be on the elements since that's the how it's plotted internally in tripcolor (unless
-            # shading is 'gouraud'). Check if we've been given element data and if not, convert accordingly.
-            if len(field) == len(self.mx):
-                self.tripcolor_plot.set_array(nodes2elems(field, self.triangles))
+            # shading is 'gouraud'). Check if we've been given element data and if not, convert accordingly. If we've
+            # been given a mask, things get compliated. We can't mask with a mask which varies in time (so a static
+            # in time mask is fine, but one that varies doesn't work with set_array. So we need to firstly find out
+            # if we've got a mask whose valid positions matches what we've already got, if so, easy peasy,
+            # just update the array with set_array. If it doesn't match, the onlhttps://mobile.emirates.com/english/CKIN/OLCI/boardingPass.xhtml?MBP=SBF.dazXWmcIxU-.iAOWeIYl.hvz29Uhy way to mask the data properly is to
+            # make a brand new plot.
+            if 'mask' in kwargs:
+                if len(self.tripcolor_plot.get_array()) == (kwargs['mask'] == False).sum():
+                    if self._debug:
+                        print('updating')
+                    # Mask is probably the same as the previous one (based on number of positions). Mask sense needs
+                    # to be inverted when setting the array as we're supplying valid positions, not hiding invalid
+                    # ones. Confusing, isn't it. You can imagine the fun I had figuring this out.
+                    if len(field) == len(self.mx):
+                        self.tripcolor_plot.set_array(nodes2elems(field, self.triangles)[~kwargs['mask']])
+                    else:
+                        self.tripcolor_plot.set_array(field[~kwargs['mask']])
+                    return
+                else:
+                    if self._debug:
+                        print('replotting')
+                    # Nothing to do here except clear the plot and make a brand new plot (which is a lot slower),
+                    # so we'll just skip out here and let the code continue.
+                    self.tripcolor_plot.remove()
+                    pass
             else:
-                self.tripcolor_plot.set_array(field)
-            return
+                if len(field) == len(self.mx):
+                    self.tripcolor_plot.set_array(nodes2elems(field, self.triangles))
+                else:
+                    self.tripcolor_plot.set_array(field)
+                return
 
         self.tripcolor_plot = self.axes.tripcolor(self.mx, self.my, self.triangles, np.squeeze(field), *args,
                                                   vmin=self.vmin, vmax=self.vmax,
