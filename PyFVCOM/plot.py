@@ -660,6 +660,37 @@ class Plotter(object):
             self.m.drawparallels(parallels, labels=[1, 0, 0, 0], fontsize=self.fs, linewidth=0, ax=self.axes)
             self.m.drawmeridians(meridians, labels=[0, 0, 0, 1], fontsize=self.fs, linewidth=0, ax=self.axes)
 
+    def get_colourbar_extension(self, field, clims):
+        """
+        Find the colourbar extension for the current variable, clipping in space if necessary.
+
+        Parameters
+        ----------
+        field : np.ndarray
+            The data being plotted.
+        clims : list, tuple
+            The colour limits of the plot.
+
+        Returns
+        -------
+        extend : str
+            The colourbar extension ('neither', 'min', 'max' or 'both').
+
+        """
+        # We need to find the nodes/elements for the current variable to make sure our colour bar extends for
+        # what we're plotting (not the entire data set). We'll have to guess based on shape here.
+        if self.n_nodes == field.shape[0]:
+            x = self.lon
+            y = self.lat
+        elif self.n_elems == field.shape[0]:
+            x = self.lonc
+            y = self.latc
+        mask = (x > self.extents[0]) & (x < self.extents[1]) & (y < self.extents[3]) & (y > self.extents[2])
+
+        extend = colorbar_extension(clims[0], clims[1], field[..., mask].min(), field[..., mask].max())
+
+        return extend
+
     def replot(self):
         self.axes.cla()
         self._init_figure()
