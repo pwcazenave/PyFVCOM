@@ -762,10 +762,9 @@ class Plotter(object):
             self.axes.set_xlim(self.mx.min(), self.mx.max())
             self.axes.set_ylim(self.my.min(), self.my.max())
 
-        divider = make_axes_locatable(self.axes)
-        self.colorbar_axis = divider.append_axes("right", size="5%", pad=0.05)
-        self.cbar = self.figure.colorbar(self.tripcolor_plot, cax=self.colorbar_axis, extend=self.extend)
-        self.cbar.ax.tick_params(labelsize=self.fs)
+        if self.cbar is None:
+            self.cbar = self.m.colorbar(self.tripcolor_plot, extend=extend)
+            self.cbar.ax.tick_params(labelsize=self.fs)
         if self.cb_label:
             self.cbar.set_label(self.cb_label)
 
