@@ -2546,6 +2546,33 @@ class Model(Domain):
                 if self._noisy:
                     print('done.')
 
+    def load_elevtide(self, elevtide):
+        """
+        Load a surface elevation forcing time series data set from a netCDF.
+
+        Parameters
+        ----------
+        elevtide : str, pathlib.Path
+            The path to the file to load.
+
+        """
+
+        # TODO: This needs more error checking (e.g. if no common nodes are found). We could also extend this to
+        # interpolate a given elevtide file onto the current boundaries.
+
+        ds = Dataset(elevtide)
+
+        nodes = ds.variables['obc_nodes'][:] - 1  # python indexing
+        elevation = ds.variables['elevation'][:]
+        Times = ds.variables['Times'][:]
+        datetimes = [datetime.strptime(''.join(t.astype(str)), '%Y-%m-%dT%H:%M:%S.%f') for t in Times]
+
+        for boundary in self.open_boundaries:
+            # Find the relevant time series from the set of nodes in the current boundary and those in the input file.
+            mask = nodes == boundary.nodes
+            setattr(boundary.tide, 'zeta', elevation[..., mask])
+            setattr(boundary.tide, 'time', datetimes)
+
 
 class NameListEntry(object):
 
