@@ -424,7 +424,8 @@ class Time(object):
             if self.cb_label:
                 self.colorbar.set_label(self.cb_label)
         else:
-            self.surface_plot
+            # Update the existing plot with the new data (currently untested!)
+            self.surface_plot.set_array(time_series)
 
 
 class Plotter(object):
