@@ -2,6 +2,7 @@
 
 from __future__ import print_function
 
+import copy
 from datetime import datetime
 from pathlib import Path
 from warnings import warn
