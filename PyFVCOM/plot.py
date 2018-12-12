@@ -1366,8 +1366,7 @@ class MPIWorker(object):
 
         # Make the meta-variable data.
         if variable in ('speed', 'direction'):
-            self.fvcom.data.direction, self.fvcom.data.speed = vector2scalar(self.fvcom.data.u,
-                                                                             self.fvcom.data.v)
+            self.fvcom.data.direction, self.fvcom.data.speed = vector2scalar(self.fvcom.data.u, self.fvcom.data.v)
             # Add the attributes for labelling.
             self.fvcom.atts.speed = _passive_data_store()
             self.fvcom.atts.speed.long_name = 'speed'
@@ -1378,9 +1377,8 @@ class MPIWorker(object):
             self.fvcom.variable_dimension_names[variable] = self.fvcom.variable_dimension_names['u']
 
         elif variable in ('depth_averaged_speed', 'depth_averaged_direction'):
-            self.fvcom.data.depth_averaged_direction, self.fvcom.data.depth_averaged_speed = vector2scalar(
-                self.fvcom.data.ua, self.fvcom.data.va
-            )
+            da_dir, da_speed = vector2scalar(self.fvcom.data.ua, self.fvcom.data.va)
+            self.fvcom.data.depth_averaged_direction, self.fvcom.data.depth_averaged_speed = da_dir, da_speed
             # Add the attributes for labelling.
             self.fvcom.atts.depth_averaged_speed = _passive_data_store()
             self.fvcom.atts.depth_averaged_speed.long_name = 'depth-averaged speed'
