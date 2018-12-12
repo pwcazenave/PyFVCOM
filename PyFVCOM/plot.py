@@ -1416,8 +1416,8 @@ class MPIWorker(object):
         if self._noisy and self.rank == self.root:
             print(f'done.', flush=True)
 
-    def plot_field(self, fvcom_file, time_indices, variable, figures_directory, label=None, dimensions=None, clims=None,
-                   norm=None, mask=False, *args, **kwargs):
+    def plot_field(self, fvcom_file, time_indices, variable, figures_directory, label=None, set_title=False,
+                   dimensions=None, clims=None, norm=None, mask=False, *args, **kwargs):
         """
         Plot a given horizontal surface for `variable' for the time indices in `time_indices'.
 
@@ -1431,6 +1431,8 @@ class MPIWorker(object):
             Where to save the figures. Figure files are named f'{variable}_{time_index + 1}.png'.
         label : str, optional
             What label to use for the colour bar. If omitted, uses the variable's `long_name' and `units'.
+        set_title : bool, optional
+            Add a title comprised of each time (formatted as '%Y-%m-%d %H:%M:%S').
         dimensions : str, optional
             What additional dimensions to load (time is handled by the `time_indices' argument).
         clims : tuple, list, optional
@@ -1508,6 +1510,9 @@ class MPIWorker(object):
                     local_mask = nodes2elems(local_mask, self.fvcom.grid.triangles)
             local_plot.plot_field(field[local_time], mask=local_mask)
             local_plot.tripcolor_plot.set_clim(*clims)
+            if set_title:
+                title_string = self.fvcom.time.datetime[local_time].strftime('%Y-%m-%d %H:%M:%S')
+                local_plot.set_title(title_string)
             local_plot.figure.savefig(str(Path(figures_directory, f'{variable}_{global_time + 1:04d}.png')),
                                       bbox_inches='tight',
                                       pad_inches=0.2,
