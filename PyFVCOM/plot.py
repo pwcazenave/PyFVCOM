@@ -762,6 +762,10 @@ class Plotter(object):
             self.axes.set_xlim(self.mx.min(), self.mx.max())
             self.axes.set_ylim(self.my.min(), self.my.max())
 
+        extend = copy.copy(self.extend)
+        if extend is None:
+            extend = self.get_colourbar_extension(variable)
+
         if self.cbar is None:
             self.cbar = self.m.colorbar(self.tripcolor_plot, extend=extend)
             self.cbar.ax.tick_params(labelsize=self.fs)
@@ -1462,8 +1466,24 @@ class MPIWorker(object):
             label = f'{getattr(self.fvcom.atts, variable).long_name.title()} ' \
                     f'(${getattr(self.fvcom.atts, variable).units}$)'
 
-        local_plot = Plotter(self.fvcom, cb_label=label, *args, **kwargs)
+        grid_mask = np.ones(field[0].shape[0], dtype=bool)
+        if 'extents' in kwargs:
+            # We need to find the nodes/elements for the current variable to make sure our colour bar extends for
+            # what we're plotting (not the entire data set).
+            if 'node' in self.fvcom.variable_dimension_names[variable]:
+                x = self.fvcom.grid.lon
+                y = self.fvcom.grid.lat
+            elif 'nele' in self.fvcom.variable_dimension_names[variable]:
+                x = self.fvcom.grid.lonc
+                y = self.fvcom.grid.latc
+            extents = kwargs['extents']
+            grid_mask = (x > extents[0]) & (x < extents[1]) & (y < extents[3]) & (y > extents[2])
 
+        extend = colorbar_extension(clims[0], clims[1], field[..., grid_mask].min(), field[..., grid_mask].max())
+        if not 'extend' in kwargs:
+            kwargs['extend'] = extend
+
+        local_plot = Plotter(self.fvcom, cb_label=label, *args, **kwargs)
 
         if norm is not None:
             # Check for zero and negative values if we're LogNorm'ing the data and replace with the colour limit
@@ -1642,6 +1662,38 @@ def plot_domain(domain, mesh=False, depth=False, **kwargs):
             domain.domain_plot.plot_field(domain.grid.h)
         else:
             domain.domain_plot.plot_field(-domain.grid.h)
+
+
+def colorbar_extension(colour_min, colour_max, data_min, data_max):
+    """
+    For the range specified by `colour_min' to `colour_max', return whether the data range specified by `data_min'
+    and `data_max' is inside, outside or partially overlapping. This allows you to automatically set the `extend'
+    keyword on a `matplotlib.pyplot.colorbar' call.
+
+    Parameters
+    ----------
+    colour_min, colour_max : float
+        Minimum and maximum value of the current colour bar limits.
+    data_min, data_max : float
+        Minimum and maximum value of the data limits.
+
+    Returns
+    -------
+    extension : str
+        Will be 'neither', 'both', 'min, or 'max' for the case when the colour_min and colour_max values are: equal
+        to the data; inside the data range; only larger or only smaller, respectively.
+    """
+
+    if data_min < colour_min and data_max > colour_max:
+        extension = 'both'
+    elif data_min < colour_min and data_max <= colour_max:
+        extension = 'min'
+    elif data_min >= colour_min and data_max > colour_max:
+        extension = 'max'
+    else:
+        extension = 'neither'
+
+    return extension
 
 
 def cm2inch(value):
