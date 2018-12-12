@@ -1453,12 +1453,12 @@ class MPIWorker(object):
         # Find out what the range of data is so we can set the colour limits automatically, if necessary.
         if clims is None:
             if self.have_mpi:
-                global_min = self.comm.reduce(np.nanmin(getattr(self.fvcom.data, variable)), op=MPI.MIN)
-                global_max = self.comm.reduce(np.nanmax(getattr(self.fvcom.data, variable)), op=MPI.MAX)
+                global_min = self.comm.reduce(np.nanmin(field), op=MPI.MIN)
+                global_max = self.comm.reduce(np.nanmax(field), op=MPI.MAX)
             else:
                 # Fall back to local extremes.
-                global_min = np.nanmin(getattr(self.fvcom.data, variable))
-                global_max = np.nanmax(getattr(self.fvcom.data, variable))
+                global_min = np.nanmin(field)
+                global_max = np.nanmax(field)
             clims = [global_min, global_max]
             if self.have_mpi:
                 clims = self.comm.bcast(clims, root=0)
