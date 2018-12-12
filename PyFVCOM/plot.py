@@ -1557,8 +1557,9 @@ class Player(FuncAnimation):
                                save_count=save_count, **kwargs)
 
     def play(self):
+        """ What to do when we play the animation. """
         while self.runs:
-            self.i = self.i+self.forwards-(not self.forwards)
+            self.i = self.i + self.forwards - (not self.forwards)
             if self.min < self.i < self.max:
                 yield self.i
             else:
@@ -1566,30 +1567,37 @@ class Player(FuncAnimation):
                 yield self.i
 
     def start(self):
-        self.runs=True
+        """ Start the animation. """
+        self.runs = True
         self.event_source.start()
 
     def stop(self):
+        """ Stop the animation. """
         self.runs = False
         self.event_source.stop()
 
     def forward(self):
+        """ Play forwards. """
         self.forwards = True
         self.start()
 
     def backward(self):
+        """ Play backwards. """
         self.forwards = False
         self.start()
 
     def oneforward(self):
+        """ Skip one forwards. """
         self.forwards = True
         self.onestep()
 
     def onebackward(self):
+        """ Skip one backwards. """
         self.forwards = False
         self.onestep()
 
     def onestep(self):
+        """ Skip through one frame at a time. """
         if self.min < self.i < self.max:
             self.i = self.i + self.forwards - (not self.forwards)
         elif self.i == self.min and self.forwards:
@@ -1601,6 +1609,7 @@ class Player(FuncAnimation):
         self.fig.canvas.draw_idle()
 
     def setup(self, pos):
+        """ Set up the animation. """
         playerax = self.fig.add_axes([pos[0],pos[1], 0.64, 0.04])
         divider = mpl_toolkits.axes_grid1.make_axes_locatable(playerax)
         bax = divider.append_axes("right", size="80%", pad=0.05)
@@ -1618,15 +1627,16 @@ class Player(FuncAnimation):
         self.button_stop.on_clicked(self.stop)
         self.button_forward.on_clicked(self.forward)
         self.button_oneforward.on_clicked(self.oneforward)
-        self.slider = matplotlib.widgets.Slider(sliderax, '',
-                                                self.min, self.max, valinit=self.i)
+        self.slider = matplotlib.widgets.Slider(sliderax, '', self.min, self.max, valinit=self.i)
         self.slider.on_changed(self.set_pos)
 
     def set_pos(self, i):
+        """ Set the slider position. """
         self.i = int(self.slider.val)
         self.func(self.i)
 
-    def update(self,i):
+    def update(self, i):
+        """ Update the slider to the given position. """
         self.slider.set_val(i)
 
 
