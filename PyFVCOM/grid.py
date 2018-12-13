@@ -563,7 +563,8 @@ class _GridReader(object):
         self.bounding_box = (np.min(self.lon), np.max(self.lon), np.min(self.lat), np.max(self.lat))
 
     def __iter__(self):
-        return (a for a in dir(self) if not a.startswith('__'))
+        return (a for a in self.__dict__.keys() if not a.startswith('_'))
+
 
 class _MakeDimensions(object):
     def __init__(self, grid_reader):
@@ -582,7 +583,7 @@ class _MakeDimensions(object):
         self.node = len(grid_reader.x)
 
     def __iter__(self):
-        return (a for a in dir(self) if not a.startswith('__'))
+        return (a for a in self.__dict__.keys() if not a.startswith('_'))
 
 
 class Domain(object):
@@ -1043,7 +1044,7 @@ class OpenBoundary(object):
         self.nest = _passive_data_store()
 
     def __iter__(self):
-        return (a for a in dir(self) if not a.startswith('_'))
+        return (a for a in self.__dict__.keys() if not a.startswith('_'))
 
     def add_sponge_layer(self, radius, coefficient):
         """

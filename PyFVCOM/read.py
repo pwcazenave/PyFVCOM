@@ -225,7 +225,7 @@ class _TimeReader(object):
         dataset.close()
 
     def __iter__(self):
-        return (a for a in dir(self) if not a.startswith('_'))
+        return (a for a in self.__dict__.keys() if not a.startswith('_'))
 
     def _time_to_index(self, *args, **kwargs):
         """
@@ -326,7 +326,7 @@ class _AttributeReader(object):
             delattr(self, '_ds')
 
     def __iter__(self):
-        return (a for a in dir(self) if not a.startswith('__') and not a.endswith('__'))
+        return (a for a in self.__dict__.keys() if not a.startswith('_'))
 
 
 class _MakeDimensions(object):
@@ -345,7 +345,7 @@ class _MakeDimensions(object):
             setattr(self, dim, dataset.dimensions[dim].size)
 
     def __iter__(self):
-        return (a for a in dir(self) if not a.startswith('__') and not a.endswith('__'))
+        return (a for a in self.__dict__.keys() if not a.startswith('_'))
 
 
 class FileReader(Domain):
@@ -482,7 +482,7 @@ class FileReader(Domain):
             self.load_data(self._variables)
 
     def __iter__(self):
-        return (a for a in dir(self) if not a.startswith('_'))
+        return (a for a in self.__dict__.keys() if not a.startswith('_'))
 
     def __eq__(self, other):
         # For easy comparison of classes.
