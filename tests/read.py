@@ -153,8 +153,9 @@ class FileReader_test(TestCase):
         all_times = np.concatenate((F1.time.datetime[:], F2.time.datetime[:]), axis=0)
         all_data = np.concatenate((F1.data.ww[:], F2.data.ww[:]), axis=0)
         # Repeat the process, but use the __add__ method in FileReader.
-        F = FileReader(self.stub.ncfile.name, dims={'siglay': [5], 'time': [0, -10]}, variables=['ww'])
-        F += FileReader(next_stub.ncfile.name, dims={'siglay': [5], 'time': [0, -10]}, variables=['ww'])
+        F1 = FileReader(self.stub.ncfile.name, dims={'siglay': [5], 'time': [0, -10]}, variables=['ww'])
+        F2 = FileReader(next_stub.ncfile.name, dims={'siglay': [5], 'time': [0, -10]}, variables=['ww'])
+        F = F1 >> F2
 
         test.assert_equal(F.time.datetime, all_times)
         test.assert_equal(F.data.ww, all_data)
