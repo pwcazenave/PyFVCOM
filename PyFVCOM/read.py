@@ -944,7 +944,7 @@ class FileReader(Domain):
         for var in variables:
             current_value = value
             if isinstance(value, FileReader):
-                current_value = getattr(fvcom.data, var)
+                current_value = getattr(value.data, var)
             setattr(idem.data, var, getattr(self.data, var) * current_value)
 
         return idem
