@@ -1110,8 +1110,8 @@ class FileReader(Domain):
             self._dims = dims
             self.time = _TimeReader(self._fvcom, dims=self._dims)
             self.dims.time = len(self.time.time)
-            self.grid = _GridReaderNetCDF(self._fvcom, dims=self._dims, zone=self._zone, debug=self._debug,
-                                          verbose=self._noisy)
+            self.grid = GridReaderNetCDF(self._fvcom, dims=self._dims, zone=self._zone, debug=self._debug,
+                                         verbose=self._noisy)
 
         # Check if we've got iterable variables and make one if not.
         if not hasattr(var, '__iter__') or isinstance(var, str):
