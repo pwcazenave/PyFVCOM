@@ -343,7 +343,7 @@ class _AttributeReader(object):
 class _MakeDimensions(object):
     def __init__(self, dataset):
         """
-        Calculate some dimensions from the given _GridReader object.
+        Calculate some dimensions from the given Dataset object.
 
         Parameters
         ----------
