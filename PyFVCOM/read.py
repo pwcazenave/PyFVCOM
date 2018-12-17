@@ -220,7 +220,9 @@ class _TimeReader(object):
 
             # Clip everything to the time indices if we've been given them. Update the time dimension too.
             if 'time' in self._dims:
-                is_datetimes_or_str = all([isinstance(i, (datetime, str)) for i in self._dims['time']])
+                is_datetimes_or_str = False
+                if not isinstance(self._dims['time'], slice):
+                    is_datetimes_or_str = all([isinstance(i, (datetime, str)) for i in self._dims['time']])
                 if not isinstance(self._dims['time'], slice) and is_datetimes_or_str:
                     # Convert datetime dimensions to indices in the currently loaded data. Assume we've got a list
                     # and if that fails, we've probably got a single index, so convert it accordingly.
