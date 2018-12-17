@@ -14,7 +14,7 @@ class _passive_data_store(object):
 
     def __iter__(self):
         # Iterate over attributes inside this object which don't start and end with double underscores.
-        return (a for a in dir(self) if not a.startswith('__') and not a.endswith('__'))
+        return (a for a in self.__dict__.keys() if not a.startswith('_'))
 
     def __eq__(self, other):
         # For easy comparison of classes.

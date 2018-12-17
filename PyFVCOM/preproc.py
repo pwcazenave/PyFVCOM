@@ -3602,7 +3602,7 @@ def read_regular(regular, variables, noisy=False, **kwargs):
         if ii == 0:
             regular_model = RegularReader(str(file), **kwargs)
         else:
-            regular_model += RegularReader(str(file), **kwargs)
+            regular_model = RegularReader(str(file), **kwargs) >> regular_model
 
     return regular_model
 
@@ -3723,10 +3723,10 @@ class RegularReader(FileReader):
 
     """
 
-    def __add__(self, other, debug=False):
+    def __rshift__(self, other, debug=False):
         """
-        This special method means we can stack two RegularReader objects in time through a simple addition (e.g. nemo1
-        += nemo2)
+        This special method means we can stack two RegularReader objects in time through a simple append (e.g. nemo
+        = nemo2 >> nemo1).
 
         """
 
@@ -4126,10 +4126,10 @@ class HYCOMReader(RegularReader):
 
     """
 
-    def __add__(self, other, debug=False):
+    def __rshift__(self, other, debug=False):
         """
-        This special method means we can stack two RegularReader objects in time through a simple addition (e.g. nemo1
-        += nemo2)
+        This special method means we can stack two RegularReader objects in time through a simple append: (e.g. nemo
+        = nemo2 >> nemo1)
 
         """
 
@@ -4486,7 +4486,7 @@ def read_hycom(regular, variables, noisy=False, **kwargs):
         if ii == 0:
             hycom_model = HYCOMReader(str(file), **kwargs)
         else:
-            hycom_model += HYCOMReader(str(file), **kwargs)
+            hycom_model = HYCOMReader(str(file), **kwargs) >> hycom_model
 
     return hycom_model
 

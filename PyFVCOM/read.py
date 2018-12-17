@@ -234,7 +234,7 @@ class _TimeReader(object):
         dataset.close()
 
     def __iter__(self):
-        return (a for a in dir(self) if not a.startswith('_'))
+        return (a for a in self.__dict__.keys() if not a.startswith('_'))
 
     def _time_to_index(self, *args, **kwargs):
         """
@@ -335,7 +335,7 @@ class _AttributeReader(object):
             delattr(self, '_ds')
 
     def __iter__(self):
-        return (a for a in dir(self) if not a.startswith('__') and not a.endswith('__'))
+        return (a for a in self.__dict__.keys() if not a.startswith('_'))
 
 
 class _MakeDimensions(object):
@@ -354,7 +354,7 @@ class _MakeDimensions(object):
             setattr(self, dim, dataset.dimensions[dim].size)
 
     def __iter__(self):
-        return (a for a in dir(self) if not a.startswith('__') and not a.endswith('__'))
+        return (a for a in self.__dict__.keys() if not a.startswith('_'))
 
 
 class FileReader(Domain):
@@ -491,18 +491,20 @@ class FileReader(Domain):
             self.load_data(self._variables)
 
     def __iter__(self):
-        return (a for a in dir(self) if not a.startswith('_'))
+        return (a for a in self.__dict__.keys() if not a.startswith('_'))
 
     def __eq__(self, other):
         # For easy comparison of classes.
         return self.__dict__ == other.__dict__
 
-    def __add__(self, fvcom, debug=False):
+    def __rshift__(self, fvcom):
         """
-        This special method means we can stack two FileReader objects in time through a simple addition. For example:
+        This special method means we can stack two FileReader objects in time through a simple concatenation-like
+        syntax. For example:
 
         >>> fvcom1 = PyFVCOM.read.FileReader('file1.nc')
-        >>> fvcom1 += PyFVCOM.read.FileReader('file2.nc')
+        >>> fvcom2 = PyFVCOM.read.FileReader('file2.nc')
+        >>> fvcom = fvcom2 >> fvcom1
 
         Parameters
         ----------
@@ -591,13 +593,86 @@ class FileReader(Domain):
 
         return idem
 
-    def __sub__(self, fvcom, debug=False):
+    def __make_pickleable__(self):
+        """
+        To deepcopy `self', we need to close the netCDF file handle as it's not picklable. This method does that and
+        then reopens it in self and the copy.
+
+        Returns
+        -------
+        idem : self
+            A deep copy of ourselves (self) but with the netCDF file handle closed and reopened during the copy.
+
+        """
+
+        self.ds.close()
+        delattr(self, 'ds')
+        idem = copy.deepcopy(self)  # somewhere to store the differences
+        self.ds = Dataset(self._fvcom, 'r')
+        idem.ds = Dataset(idem._fvcom, 'r')
+
+        return idem
+
+    def __check_common_variables__(self, variables, fvcom):
+
+        # Do we have a FileReader?
+        fvcom_variables = set(list(fvcom.data.__dict__.keys()))
+        self_variables = set(list(self.data.__dict__.keys()))
+
+        fvcom_required = set(variables) - set(self_variables)
+        self_required = set(variables) - set(fvcom_variables)
+
+        # We can't raise AttributeErrors here (although we really should) because if one of the arithmetic functions
+        # is given a number then we have to check for AttributeErrors in that instance. So, raise ValueErrors here
+        # instead.
+        if fvcom_required:
+            raise ValueError(f"Missing variables: {' '.join(fvcom_required)} in the supplied `fvcom' object.")
+
+        if self_required:
+            raise ValueError(f"Missing variables: {' '.join(self_required)} in the current object.")
+
+    def __add__(self, value):
+        """
+        Override the default special method to handle adding two objects to yield the sum of the data. If the supplied
+        `fvcom' is a number, we add that to the currently loaded data.
+
+        Parameters
+        ----------
+        value : PyFVCOM.read.FileReader, float
+            Other data to add to the currently loaded data.
+
+        Returns
+        -------
+        idem : PyFVCOM.read.FileReader
+            Sum of the data loaded as a `PyFVCOM.read.FileReader' class.
+
+        Notes
+        -----
+        - both objects must cover the exact same spatial domain
+        - both objects can have different dates but must have the same number of time steps.
+        - times are retained from the current object (i.e. `self', not `fvcom')
+
+        Example
+        -------
+        >>> file1 = PyFVCOM.read.FileReader('file1.nc', variables=['u', 'v', 'zeta'])
+        >>> file2 = PyFVCOM.read.FileReader('file2.nc', variables=['u', 'v', 'zeta'])
+        >>> summed = file1 + file2
+        >>> # List the variables for which we now have a sum.
+        >>> list(summed.__dict__.keys())
+
+        """
+
+        idem = self.__make_pickleable__()
+
+        return idem.add(value)
+
+    def __sub__(self, value):
         """
         Override the default special method to handle subtracting two objects to yield the differences in the data.
 
         Parameters
         ----------
-        fvcom : PyFVCOM.read.FileReader
+        value : PyFVCOM.read.FileReader, float
             Other data to subtract from the currently loaded data.
 
         Returns
@@ -617,22 +692,371 @@ class FileReader(Domain):
         >>> file2 = PyFVCOM.read.FileReader('file2.nc', variables=['u', 'v', 'zeta'])
         >>> diff = file1 - file2
         >>> # List the variables for which we now have a difference.
-        >>> [a for a in dir(diff.data) if not a.startswith('_')
+        >>> list(diff.__dict__.keys())
 
         """
 
-        # To deepcopy self, we need to close the netCDF file handle as it's not picklable. We'll reopen it afterwards.
-        self.ds.close()
-        delattr(self, 'ds')
-        idem = copy.deepcopy(self)  # somewhere to store the differences
-        self.ds = Dataset(self._fvcom, 'r')
-        idem.ds = Dataset(idem._fvcom, 'r')
+        idem = self.__make_pickleable__()
 
-        if dir(self.data) != dir(fvcom.data):
-            raise ValueError("Inconsistent variables in the currently loaded data and the supplied data (`fvcom')")
+        return idem.subtract(value)
 
-        for var1, var2 in zip(self.data, fvcom.data):
-            setattr(idem.data, var1, getattr(self.data, var1) - getattr(fvcom.data, var2))
+    def __mul__(self, value):
+        """
+        Method to multiply the given `value' to our currently loaded data. If `value' is a `PyFVCOM.read.FileReader'
+        object, then we multiply each coincident data (in the way the "*" operator works in PyFVCOM), otherwise,
+        we multiply each set of data by `value' individually.
+
+        Parameters
+        ----------
+        value : PyFVCOM.read.FileReader, float
+            Other data to multiply with the currently loaded data.
+
+        Returns
+        -------
+        idem : PyFVCOM.read.FileReader
+            Product in loaded data as a `PyFVCOM.read.FileReader' class.
+
+        Notes
+        -----
+        - both objects must cover the exact same spatial domain
+        - both objects can have different dates but must have the same number of time steps.
+        - times are retained from the current object (i.e. `self', not `fvcom')
+
+        Example
+        -------
+        >>> file1 = PyFVCOM.read.FileReader('file1.nc', variables=['u', 'v', 'zeta'])
+        >>> file2 = PyFVCOM.read.FileReader('file2.nc', variables=['u', 'v', 'zeta'])
+        >>> product = file1 * file2
+        >>> # List the variables for which we now have a product.
+        >>> iter(product.__dict__.keys())
+
+        """
+
+        idem = self.__make_pickleable__()
+
+        return idem.multiply(value)
+
+    def __div__(self, value):
+        """
+        Override the default special method to handle dividing two objects to yield the quotient plus remainder of the
+        loaded data.
+
+        Parameters
+        ----------
+        value : PyFVCOM.read.FileReader, float
+            Other data to divide with the currently loaded data.
+
+        Returns
+        -------
+        idem : PyFVCOM.read.FileReader
+            Product in loaded data as a `PyFVCOM.read.FileReader' class.
+
+        Notes
+        -----
+        - both objects must cover the exact same spatial domain
+        - both objects can have different dates but must have the same number of time steps.
+        - times are retained from the current object (i.e. `self', not `fvcom')
+
+        Example
+        -------
+        >>> file1 = PyFVCOM.read.FileReader('file1.nc', variables=['u', 'v', 'zeta'])
+        >>> file2 = PyFVCOM.read.FileReader('file2.nc', variables=['u', 'v', 'zeta'])
+        >>> quotient = file1 / file2
+        >>> # List the variables for which we now have a combined quotient and remainder.
+        >>> list(quotient.__dict__.keys())
+
+        """
+
+        idem = self.__make_pickleable__()
+
+        return idem.divide(value)
+
+    def __pow__(self, value):
+        """
+        Override the default special method to handle raising one dataset by another as a power.
+
+        Parameters
+        ----------
+        value : PyFVCOM.read.FileReader, float
+            Other data by which to raise the currently loaded data.
+
+        Returns
+        -------
+        idem : PyFVCOM.read.FileReader
+            Power of self raised by value in loaded data as a `PyFVCOM.read.FileReader' class.
+
+        Notes
+        -----
+        - both objects must cover the exact same spatial domain
+        - both objects can have different dates but must have the same number of time steps.
+        - times are retained from the current object (i.e. `self', not `fvcom')
+
+        Example
+        -------
+        >>> file1 = PyFVCOM.read.FileReader('file1.nc', variables=['u', 'v', 'zeta'])
+        >>> file2 = PyFVCOM.read.FileReader('file2.nc', variables=['u', 'v', 'zeta'])
+        >>> power = file1**file2
+        >>> # List the variables for which we now have file1 with data raised to power of the data in file2.
+        >>> list(power.__dict__.keys())
+
+        """
+
+        idem = self.__make_pickleable__()
+
+        return idem.power(value)
+
+    def add(self, value, variables=None):
+        """
+        Method to add the given `value' to our currently loaded data. If `value' is a `PyFVCOM.read.FileReader'
+        object, then we add each coincident data (in the way the "+" operator works in PyFVCOM), otherwise,
+        we add the `value' to each set of data individually.
+
+        Parameters
+        ----------
+        value : float, int, PyFVCOM.read.FileReader
+            Add either the current number to the loaded data, otherwise add the two FileReader objects together.
+        variables : list, tuple, optional
+            Give a list of variables on which to perform the arithmetic. Any other variables are ignored and not
+            passed to the resulting object.
+
+        Returns
+        -------
+        sum : self
+            The data in self.data with the supplied value added. If `value' is a FileReader object, then each set of
+            data in `self.data' is added to the corresponding set in `value.data'.
+
+        """
+
+        idem = self.__make_pickleable__()
+
+        if variables is None:
+            # Grab all the variable names and hope both objects have all the data. This could be simplified (under
+            # that assumption) to just be a list of one of the __dict__ keys.
+            try:
+                variables = list(set(list(value.data.__dict__.keys()) + list(self.data.__dict__.keys())))
+            except AttributeError:
+                variables = list(self.data.__dict__.keys())
+
+        try:
+            self.__check_common_variables__(variables, value)
+        except AttributeError:
+            # Nope, we don't. We have probably (hopefully) got a number for `value', so just carry on as normal.
+            pass
+
+        # Remove everything we have in our results before re-adding what's been requested. This approach means we
+        # only do the minimum computation instead of potentially doing lots and then removing the results afterwards.
+        for var in list(idem.data):
+            delattr(idem.data, var)
+
+        for var in variables:
+            current_value = value
+            if isinstance(value, FileReader):
+                current_value = getattr(fvcom.data, var)
+            setattr(idem.data, var, getattr(self.data, var) + current_value)
+
+        return idem
+
+    def subtract(self, value, variables=None):
+        """
+        Method to subtract the given `value' to our currently loaded data. If `value' is a `PyFVCOM.read.FileReader'
+        object, then we subtract each coincident data (in the way the "-" operator works in PyFVCOM), otherwise,
+        we subtract the `value' to each set of data individually.
+
+        Parameters
+        ----------
+        value : float, int, PyFVCOM.read.FileReader
+            Subtract either the current number to the loaded data, otherwise subtract the two FileReader objects.
+        variables : list, tuple, optional
+            Give a list of variables on which to perform the arithmetic. Any other variables are ignored and not
+            passed to the resulting object.
+
+        Returns
+        -------
+        diff : self
+            The data in self.data with the supplied value subtracted. If `value' is a FileReader object, then each set
+            of data in `self.data' is subtracted to the corresponding set in `value.data'.
+
+        """
+
+        idem = self.__make_pickleable__()
+
+        if variables is None:
+            # Grab all the variable names and hope both objects have all the data. This could be simplified (under
+            # that assumption) to just be a list of one of the __dict__ keys.
+            try:
+                variables = list(set(list(value.data.__dict__.keys()) + list(self.data.__dict__.keys())))
+            except AttributeError:
+                variables = list(self.data.__dict__.keys())
+
+        try:
+            self.__check_common_variables__(variables, value)
+        except AttributeError:
+            # Nope, we don't. We have probably (hopefully) got a number for `value', so just carry on as normal.
+            pass
+
+        # Remove everything we have in our results before re-adding what's been requested. This approach means we
+        # only do the minimum computation instead of potentially doing lots and then removing the results afterwards.
+        for var in list(idem.data):
+            delattr(idem.data, var)
+
+        for var in variables:
+            current_value = value
+            if isinstance(value, FileReader):
+                current_value = getattr(fvcom.data, var)
+            setattr(idem.data, var, getattr(self.data, var) - current_value)
+
+        return idem
+
+    def multiply(self, value, variables=None):
+        """
+        Method to multiply the given `value' to our currently loaded data. If `value' is a `PyFVCOM.read.FileReader'
+        object, then we multiply each coincident data (in the way the "*" operator works in PyFVCOM), otherwise,
+        we multiply each set of data by `value' individually.
+
+        Parameters
+        ----------
+        value : float, int, PyFVCOM.read.FileReader
+            Multiply either the current number to the loaded data, otherwise multiply the two FileReader objects.
+        variables : list, tuple, optional
+            Give a list of variables on which to perform the arithmetic. Any other variables are ignored and not
+            passed to the resulting object.
+
+        Returns
+        -------
+        product : self
+            The data in self.data multiplied by the supplied value. If `value' is a FileReader object, then each set
+            of data in `self.data' is multiplied by the corresponding set in `value.data'.
+
+        """
+
+        idem = self.__make_pickleable__()
+
+        if variables is None:
+            # Grab all the variable names and hope both objects have all the data. This could be simplified (under
+            # that assumption) to just be a list of one of the __dict__ keys.
+            try:
+                variables = list(set(list(value.data.__dict__.keys()) + list(self.data.__dict__.keys())))
+            except AttributeError:
+                variables = list(self.data.__dict__.keys())
+
+        try:
+            self.__check_common_variables__(variables, value)
+        except AttributeError:
+            # Nope, we don't. We have probably (hopefully) got a number for `value', so just carry on as normal.
+            pass
+
+        # Remove everything we have in our results before re-adding what's been requested. This approach means we
+        # only do the minimum computation instead of potentially doing lots and then removing the results afterwards.
+        for var in list(idem.data):
+            delattr(idem.data, var)
+
+        for var in variables:
+            current_value = value
+            if isinstance(value, FileReader):
+                current_value = getattr(value.data, var)
+            setattr(idem.data, var, getattr(self.data, var) * current_value)
+
+        return idem
+
+    def divide(self, value, variables=None):
+        """
+        Method to divide the given `value' to our currently loaded data. If `value' is a `PyFVCOM.read.FileReader'
+        object, then we divide each coincident data (in the way the "/" operator works in PyFVCOM), otherwise,
+        we divide the `value' to each set of data individually.
+
+        Parameters
+        ----------
+        value : float, int, PyFVCOM.read.FileReader
+            Divide either the current number to the loaded data, otherwise divide the two FileReader objects.
+        variables : list, tuple, optional
+            Give a list of variables on which to perform the arithmetic. Any other variables are ignored and not
+            passed to the resulting object.
+
+        Returns
+        -------
+        quotient : self
+            The data in self.data divided by the supplied value. If `value' is a FileReader object, then each set
+            of data in `self.data' is divided by the corresponding set in `value.data'.
+
+        """
+
+        idem = self.__make_pickleable__()
+
+        if variables is None:
+            # Grab all the variable names and hope both objects have all the data. This could be simplified (under
+            # that assumption) to just be a list of one of the __dict__ keys.
+            try:
+                variables = list(set(list(value.data.__dict__.keys()) + list(self.data.__dict__.keys())))
+            except AttributeError:
+                variables = list(self.data.__dict__.keys())
+
+        try:
+            self.__check_common_variables__(variables, value)
+        except AttributeError:
+            # Nope, we don't. We have probably (hopefully) got a number for `value', so just carry on as normal.
+            pass
+
+        # Remove everything we have in our results before re-adding what's been requested. This approach means we
+        # only do the minimum computation instead of potentially doing lots and then removing the results afterwards.
+        for var in list(idem.data):
+            delattr(idem.data, var)
+
+        for var in variables:
+            current_value = value
+            if isinstance(value, FileReader):
+                current_value = getattr(fvcom.data, var)
+            setattr(idem.data, var, getattr(self.data, var) / current_value)
+
+        return idem
+
+    def power(self, value, variables=None):
+        """
+        Method to raise the currently loaded data by a power of `value'. If `value' is a `PyFVCOM.read.FileReader'
+        object, then we raise each coincident data (in the way the "**" operator works in PyFVCOM), otherwise,
+        we raise each set of data by `value' individually.
+
+        Parameters
+        ----------
+        value : float, int, PyFVCOM.read.FileReader
+            Divide either the current number to the loaded data, otherwise divide the two FileReader objects.
+        variables : list, tuple, optional
+            Give a list of variables on which to perform the arithmetic. Any other variables are ignored and not
+            passed to the resulting object.
+
+        Returns
+        -------
+        quotient : self
+            The data in self.data divided by the supplied value. If `value' is a FileReader object, then each set
+            of data in `self.data' is divided by the corresponding set in `value.data'.
+
+        """
+
+        idem = self.__make_pickleable__()
+
+        if variables is None:
+            # Grab all the variable names and hope both objects have all the data. This could be simplified (under
+            # that assumption) to just be a list of one of the __dict__ keys.
+            try:
+                variables = list(set(list(value.data.__dict__.keys()) + list(self.data.__dict__.keys())))
+            except AttributeError:
+                variables = list(self.data.__dict__.keys())
+
+        try:
+            self.__check_common_variables__(variables, value)
+        except AttributeError:
+            # Nope, we don't. We have probably (hopefully) got a number for `value', so just carry on as normal.
+            pass
+
+        # Remove everything we have in our results before re-adding what's been requested. This approach means we
+        # only do the minimum computation instead of potentially doing lots and then removing the results afterwards.
+        for var in list(idem.data):
+            delattr(idem.data, var)
+
+        for var in variables:
+            current_value = value
+            if isinstance(value, FileReader):
+                current_value = getattr(fvcom.data, var)
+            setattr(idem.data, var, getattr(self.data, var) / current_value)
 
         return idem
 
@@ -1067,7 +1491,7 @@ def MFileReader(fvcom, noisy=False, *args, **kwargs):
             if file == fvcom[0]:
                 fvcom_out = FileReader(file, *args, **kwargs)
             else:
-                fvcom_out += FileReader(file, *args, **kwargs)
+                fvcom_out = FileReader(file, *args, **kwargs) >> fvcom_out
 
     return fvcom_out
 
