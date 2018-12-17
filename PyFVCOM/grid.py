@@ -1156,7 +1156,6 @@ class OpenBoundary(object):
                  'lat_name': lat_name,
                  'constituent_name': constituent_name}
         harmonics_lon, harmonics_lat, amplitudes, phases, available_constituents = self._load_harmonics(tpxo_harmonics, constituents, names)
-
         interpolated_amplitudes, interpolated_phases = self._interpolate_tpxo_harmonics(x, y,
                                                                                         amplitudes, phases,
                                                                                         harmonics_lon, harmonics_lat)
@@ -1265,7 +1264,7 @@ class OpenBoundary(object):
         coef = Bunch(name=self.tide.constituents, mean=0, slope=0)
         coef['aux'] = Bunch(reftime=729572.47916666674, lind=const_idx, frq=frq)
         coef['aux']['opt'] = Bunch(twodim=False, nodsatlint=False, nodsatnone=False,
-                                   gwchlint=False, gwchnone=False, notrend=False, prefilt=[])
+                                   gwchlint=False, gwchnone=False, notrend=True, prefilt=[])
 
         # Prepare the time data for predicting the time series. UTide needs MATLAB times.
         times = mtime(self.tide.time)
@@ -1399,8 +1398,8 @@ class OpenBoundary(object):
         # Make a dummy first dimension since we need it for the RegularGridInterpolator but don't actually
         # interpolated along it.
         c_data = np.arange(amp_data.shape[0])
-        amplitude_interp = RegularGridInterpolator((c_data, harmonics_lon, harmonics_lat), amp_data, method='linear', fill_value=None)
-        phase_interp = RegularGridInterpolator((c_data, harmonics_lon, harmonics_lat), phase_data, method='linear', fill_value=None)
+        amplitude_interp = RegularGridInterpolator((c_data, harmonics_lon, harmonics_lat), amp_data, method='nearest', fill_value=None)
+        phase_interp = RegularGridInterpolator((c_data, harmonics_lon, harmonics_lat), phase_data, method='nearest', fill_value=None)
 
         # Fix our input position longitudes to be in the 0-360 range to match the harmonics data range,
         # if necessary.
