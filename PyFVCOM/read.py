@@ -728,7 +728,7 @@ class FileReader(Domain):
         >>> file2 = PyFVCOM.read.FileReader('file2.nc', variables=['u', 'v', 'zeta'])
         >>> product = file1 * file2
         >>> # List the variables for which we now have a product.
-        >>> iter(product.__dict__.keys())
+        >>> list(product.__dict__.keys())
 
         """
 
