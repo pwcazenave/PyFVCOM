@@ -132,14 +132,14 @@ class Depth(object):
 
         """
 
-        # I'm not much of a fan of all this flipping and transposing. It feels like it's going to be a pain to debug
-        # when it inevitably does something you don't expect.
+        # I'm not much of a fan of all this transposing. It feels like it's going to be a pain to debug when it
+        # inevitably does something you don't expect.
         try:
-            self.slice_plot = self.axes.pcolormesh(horizontal, -depth, np.flipud(variable),
+            self.slice_plot = self.axes.pcolormesh(horizontal, -depth, variable,
                                                    cmap=self.cmap, *args, **kwargs)
         except TypeError:
             # Try flipping the data array, that might make it work.
-            self.slice_plot = self.axes.pcolormesh(horizontal, -depth, np.flipud(variable.T),
+            self.slice_plot = self.axes.pcolormesh(horizontal, -depth, variable.T,
                                                    cmap=self.cmap, *args, **kwargs)
 
         if fill_seabed:
