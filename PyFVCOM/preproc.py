@@ -706,7 +706,8 @@ class Model(Domain):
 
         return dist
 
-    def sigma_geometric(self, levels, p_sigma):
+    @staticmethod
+    def sigma_geometric(levels, p_sigma):
         """
         Generate a geometric sigma coordinate distribution.
 
@@ -743,7 +744,8 @@ class Model(Domain):
 
         return dist
 
-    def sigma_tanh(self, levels, dl, du):
+    @staticmethod
+    def sigma_tanh(levels, dl, du):
         """
         Generate a hyperbolic tangent vertical sigma coordinate distribution.
 
