@@ -701,6 +701,7 @@ class Model(Domain):
             # Hyperbolic tangent for deep areas
             dist = self.sigma_tanh(levels, dl, du)
         else:
+            # Uniform for shallow areas
             dist = self.sigma_geometric(levels, 1)
 
         return dist
