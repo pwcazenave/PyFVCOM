@@ -693,6 +693,9 @@ class Model(Domain):
 
         """
 
+        # Make sure we have positive down depths by nuking negatives.
+        h = np.abs(h)
+        hmin = np.abs(hmin)
 
         if h > hmin:
             dist = self.sigma_tanh(levels, du, dl)
