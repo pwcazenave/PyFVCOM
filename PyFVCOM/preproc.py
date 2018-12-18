@@ -698,7 +698,8 @@ class Model(Domain):
         hmin = np.abs(hmin)
 
         if h > hmin:
-            dist = self.sigma_tanh(levels, du, dl)
+            # Hyperbolic tangent for deep areas
+            dist = self.sigma_tanh(levels, dl, du)
         else:
             dist = self.sigma_geometric(levels, 1)
 
