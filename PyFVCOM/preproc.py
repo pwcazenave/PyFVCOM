@@ -614,7 +614,7 @@ class Model(Domain):
                 raise ValueError('Number of zkl values does not match the number specified in kl')
             sigma_levels = np.empty((self.dims.node, nlev)) * np.nan
             for i in range(self.dims.node):
-                sigma_levels[i, :] = self.sigma_generalized(nlev, dl, du, kl, ku, zkl, zku, self.grid.h[i], min_constant_depth)
+                sigma_levels[i, :] = self.sigma_generalized(nlev, dl, du, self.grid.h[i], min_constant_depth)
         elif sigtype.lower() == 'uniform':
             sigma_levels = np.repeat(self.sigma_geometric(nlev, 1), self.dims.node).reshape(self.dims.node, -1)
         elif sigtype.lower() == 'geometric':
@@ -669,7 +669,7 @@ class Model(Domain):
         # Update the open boundaries.
         self.__update_open_boundaries()
 
-    def sigma_generalized(self, levels, dl, du, kl, ku, zkl, zku, h, hmin):
+    def sigma_generalized(self, levels, dl, du, h, hmin):
         """
         Generate a generalised sigma coordinate distribution.
 
@@ -681,18 +681,10 @@ class Model(Domain):
             The lower depth boundary from the bottom, down to which the layers are uniform thickness.
         du : float
             The upper depth boundary from the surface, up to which the layers are uniform thickness.
-        kl : float
-            Number of layers in the upper water column
-        ku : float
-            Number of layers in the lower water column
-        zkl : list, np.ndarray
-            Upper water column layer thicknesses.
-        zku : list, np.ndarray
-            Lower water column layer thicknesses.
         h : float
-            Water depth.
+            Water depth (positive down).
         hmin : float
-            Minimum water depth.
+            Minimum water depth (positive down).
 
         Returns
         -------
@@ -701,12 +693,12 @@ class Model(Domain):
 
         """
 
-        dist = np.zeros(levels)
 
         if h > hmin:
             dist = self.sigma_tanh(levels, du, dl)
         else:
             dist = self.sigma_geometric(levels, 1)
+
         return dist
 
     def sigma_geometric(self, levels, p_sigma):
@@ -856,8 +848,6 @@ class Model(Domain):
         sigma_levels = np.empty((self.dims.node, self.dims.levels)) * np.nan
         for i in range(self.dims.node):
             sigma_levels[i, :] = self.sigma_generalized(levels, lower_layer_depth, upper_layer_depth,
-                                                        total_lower_layers, total_upper_layers,
-                                                        lower_layer_thickness, upper_layer_thickness,
                                                         self.grid.h[i], optimised_depth)
 
         # Create a sigma layer variable (i.e. midpoint in the sigma levels).
