@@ -540,9 +540,9 @@ class FileReader(Domain):
         nele_compare = self.dims.node == fvcom.dims.node
         siglay_compare = self.dims.siglay == fvcom.dims.siglay
         siglev_compare = self.dims.siglev == fvcom.dims.siglev
-        time_compare = self.time.datetime[-1] <= fvcom.time.datetime[0]
-        old_data = [i for i in self.data]
-        new_data = [i for i in fvcom.data]
+        time_compare = fvcom.time.datetime[-1] <= self.time.datetime[0]
+        old_data = [i for i in fvcom.data]
+        new_data = [i for i in self.data]
         data_compare = new_data == old_data
         if not node_compare:
             raise ValueError('Horizontal node data are incompatible.')
@@ -562,15 +562,15 @@ class FileReader(Domain):
             warn('Subsequent attempts to load data for this merged object will only load data from the first object. '
                  'Load data into each object before merging them.')
 
-        # Copy ourselves to a new version for concatenation. self is the old so we get appended to by the new.
+        # Copy ourselves to a new version for concatenation. fvcom is the old so we get appended to by the new.
         idem = copy.copy(self)
 
         # Go through all the parts of the data with a time dependency and concatenate them. Leave the grid alone.
         for var in idem.data:
             if 'time' in idem.ds.variables[var].dimensions:
-                setattr(idem.data, var, np.concatenate((getattr(idem.data, var), getattr(fvcom.data, var))))
+                setattr(idem.data, var, np.concatenate((getattr(fvcom.data, var), getattr(idem.data, var))))
         for time in idem.time:
-            setattr(idem.time, time, np.concatenate((getattr(idem.time, time), getattr(fvcom.time, time))))
+            setattr(idem.time, time, np.concatenate((getattr(fvcom.time, time), getattr(idem.time, time))))
 
         # Remove duplicate times.
         time_indices = np.arange(len(idem.time.time))

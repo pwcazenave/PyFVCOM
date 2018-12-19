@@ -3750,9 +3750,9 @@ class RegularReader(FileReader):
 
         lon_compare = xdim == getattr(other.dims, xname)
         lat_compare = ydim == getattr(other.dims, yname)
-        time_compare = self.time.datetime[-1] <= other.time.datetime[0]
-        old_data = [i for i in self.data]
-        new_data = [i for i in other.data]
+        time_compare = other.time.datetime[-1] <= self.time.datetime[0]
+        old_data = [i for i in other.data]
+        new_data = [i for i in self.data]
         data_compare = new_data == old_data
         if not lon_compare:
             raise ValueError('Horizontal longitude data are incompatible.')
@@ -3762,8 +3762,8 @@ class RegularReader(FileReader):
             raise ValueError('Vertical depth layers are incompatible.')
         if not time_compare:
             raise ValueError("Time periods are incompatible (`fvcom2' must be greater than or equal to `fvcom1')."
-                             "`fvcom1' has end {} and `fvcom2' has start {}".format(self.time.datetime[-1],
-                                                                                    other.time.datetime[0]))
+                             "`fvcom1' has end {} and `fvcom2' has start {}".format(other.time.datetime[-1],
+                                                                                    self.time.datetime[0]))
         if not data_compare:
             raise ValueError('Loaded data sets for each RegularReader class must match.')
         if not (old_data == new_data) and (old_data or new_data):
@@ -3777,9 +3777,9 @@ class RegularReader(FileReader):
             if 'time' in idem.ds.variables[var].dimensions:
                 if self._noisy:
                     print('Concatenating {} in time'.format(var))
-                setattr(idem.data, var, np.ma.concatenate((getattr(idem.data, var), getattr(other.data, var))))
+                setattr(idem.data, var, np.ma.concatenate((getattr(other.data, var), getattr(idem.data, var))))
         for time in idem.time:
-            setattr(idem.time, time, np.concatenate((getattr(idem.time, time), getattr(other.time, time))))
+            setattr(idem.time, time, np.concatenate((getattr(other.time, time), getattr(idem.time, time))))
 
         # Remove duplicate times.
         time_indices = np.arange(len(idem.time.time))
@@ -4137,9 +4137,9 @@ class HYCOMReader(RegularReader):
         lon_compare = self.dims.lon == other.dims.lon
         lat_compare = self.dims.lat == other.dims.lat
         depth_compare = self.dims.depth == other.dims.depth
-        time_compare = self.time.datetime[-1] <= other.time.datetime[0]
-        old_data = [i for i in self.data]
-        new_data = [i for i in other.data]
+        time_compare = other.time.datetime[-1] <= self.time.datetime[0]
+        old_data = [i for i in other.data]
+        new_data = [i for i in self.data]
         data_compare = new_data == old_data
         if not lon_compare:
             raise ValueError('Horizontal longitude data are incompatible.')
@@ -4149,8 +4149,8 @@ class HYCOMReader(RegularReader):
             raise ValueError('Vertical depth layers are incompatible.')
         if not time_compare:
             raise ValueError("Time periods are incompatible (`fvcom2' must be greater than or equal to `fvcom1')."
-                             "`fvcom1' has end {} and `fvcom2' has start {}".format(self.time.datetime[-1],
-                                                                                    other.time.datetime[0]))
+                             "`fvcom1' has end {} and `fvcom2' has start {}".format(other.time.datetime[-1],
+                                                                                    self.time.datetime[0]))
         if not data_compare:
             raise ValueError('Loaded data sets for each HYCOMReader class must match.')
         if not (old_data == new_data) and (old_data or new_data):
@@ -4162,9 +4162,9 @@ class HYCOMReader(RegularReader):
 
         for var in idem.data:
             if 'MT' in idem.ds.variables[var].dimensions:
-                setattr(idem.data, var, np.ma.concatenate((getattr(idem.data, var), getattr(other.data, var))))
+                setattr(idem.data, var, np.ma.concatenate((getattr(other.data, var), getattr(idem.data, var))))
         for time in idem.time:
-            setattr(idem.time, time, np.concatenate((getattr(idem.time, time), getattr(other.time, time))))
+            setattr(idem.time, time, np.concatenate((getattr(other.time, time), getattr(idem.time, time))))
 
         # Remove duplicate times.
         time_indices = np.arange(len(idem.time.time))
