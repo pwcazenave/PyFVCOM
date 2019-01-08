@@ -1460,6 +1460,92 @@ class FileReader(Domain):
 
         river_salt_raw = river_nc.variables['river_salt'][:, rivers_in_grid]
         self.river.river_salt = np.asarray([np.interp(mod_time_sec, self.river.river_time_sec, this_col) for this_col in river_salt_raw.T]).T
+        river_nc.close()
+
+def read_nesting_nodes(fvcom, nestpath):
+    """
+    Function to read the indices of the nodes and elements in the nesting region.
+
+    Parameters
+    ----------
+    fvcom : FileReader object
+        FVCOM FileReader object with grid information.
+    nestpath : str
+        Full path to one nesting netcdf file for the domain.
+
+    Returns
+    -------
+    msk_n, msk_e : np.ndarray
+        Logical mask arrays for nodes and elements.
+
+    """
+
+    with Dataset(nestpath, 'r') as nest:
+        lon = nest.variables['lon'][:]
+        lonc = nest.variables['lonc'][:]
+        lat = nest.variables['lat'][:]
+        latc = nest.variables['latc'][:]
+    # find the closest node to nesting node positions
+    nest_indices_n = fvcom.closest_node((lon,lat))
+    nest_indices_e = fvcom.closest_element((lonc,latc))
+    msk_n = np.full(fvcom.dims.node,False)
+    msk_e = np.full(fvcom.dims.nele,False)
+    msk_n[nest_indices_n] = True
+    msk_e[nest_indices_e] = True
+    return msk_n, msk_e
+
+
+def apply_mask(fvcom, vars=[],mask_nodes=[],mask_elements=[]):
+    """
+    Function to apply mask to specified variables. At least one mask is mandatory
+
+    Parameters
+    ----------
+    fvcom : FileReader object
+        FVCOM FileReader object. Some variables  need to have been read.
+    vars : list, optional
+        List of variable names to apply the mask to. If omitted, all variables in the FileReader object are
+        returned.
+    mask_nodes : np.ndarray, optional
+        Logical mask array for nodes. No time dimension is required here. True correspond to the nodes to be masked.
+    mask_elements : np.ndarray, optional
+        Logical mask array for element. No time dimension is required here. True correspond to the element to be masked.
+
+    Returns
+    -------
+    fvcom : FileReader object
+        FVCOM FileReader object with already read variables.
+
+    """
+
+
+    if not np.any(mask_nodes) and not np.any(mask_elements):
+        raise ValueError('Masks for nodes or elements not supplied')
+    # Determine if we have been given a list of variables
+    if not vars:
+        vars = list(fvcom.data)
+        print('Applying masks to  {} data '.format(vars), end='', flush=True)
+    # check we have all necessary masks
+    for key in vars:
+        # check if we need to apply the node mask or element mask
+        if 'node' in fvcom.variable_dimension_names[key]:
+            if not np.any(mask_nodes):
+                raise ValueError('Masks for nodes not supplied for {}'.format(key))
+        elif 'nele' in fvcom.variable_dimension_names[key]:
+            if not np.any(mask_elements):
+                raise ValueError('Masks for elements not supplied for {}'.format(key))
+
+    # iterate through the list of variables
+    for key in vars:
+        # check if we need to apply the node mask or element mask
+        if 'node' in fvcom.variable_dimension_names[key]:
+            # tile the mask to conform with the variable to mask
+            mask = np.tile(mask_nodes,(*getattr(fvcom.data,key).shape[:-1],1))
+        elif 'nele' in fvcom.variable_dimension_names[key]:
+            mask = np.tile(mask_elements, (*getattr(fvcom.data, key).shape[:-1], 1))
+        setattr(fvcom.data,key,np.ma.array(getattr(fvcom.data,key),mask=mask))
+
+    return fvcom
 
 
 def MFileReader(fvcom, noisy=False, *args, **kwargs):
