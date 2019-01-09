@@ -14,7 +14,7 @@ Table of contents
 Introduction
 ------------
 
-PyFVCOM is a collection of various tools and utilities which can be used to extract, analyse and plot input and output files from FVCOM.
+PyFVCOM is a collection of various tools and utilities which can be used to extract, analyse and plot input and output files from FVCOM as well as generate model inputs.
 
 Installing
 ----------
