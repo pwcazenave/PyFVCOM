@@ -1498,7 +1498,8 @@ def read_nesting_nodes(fvcom, nestpath):
 
     return mask_n, mask_e
 
-def apply_mask(fvcom, vars=[],mask_nodes=[],mask_elements=[]):
+
+def apply_mask(fvcom, vars=[], mask_nodes=[], mask_elements=[], noisy=False):
     """
     Function to apply mask to specified variables. At least one mask is mandatory
 
@@ -1512,6 +1513,8 @@ def apply_mask(fvcom, vars=[],mask_nodes=[],mask_elements=[]):
         Logical mask array for nodes. No time dimension is required here. True correspond to the nodes to be masked.
     mask_elements : np.ndarray, optional
         Logical mask array for element. No time dimension is required here. True correspond to the element to be masked.
+    noisy : bool, optional
+        Set to True to write out the name of each variable being masked.
 
     Returns
     -------
@@ -1525,7 +1528,8 @@ def apply_mask(fvcom, vars=[],mask_nodes=[],mask_elements=[]):
     # Determine if we have been given a list of variables
     if not vars:
         vars = list(fvcom.data)
-        print('Applying masks to  {} data '.format(vars), end='', flush=True)
+        if noisy:
+            print('Applying masks to all loaded data')
     # Check we have all necessary masks
     for key in vars:
         # Check if we need to apply the node mask or element mask
@@ -1543,6 +1547,9 @@ def apply_mask(fvcom, vars=[],mask_nodes=[],mask_elements=[]):
             mask = np.tile(mask_nodes, (*getattr(fvcom.data, key).shape[:-1],1))
         elif 'nele' in fvcom.variable_dimension_names[key]:
             mask = np.tile(mask_elements, (*getattr(fvcom.data, key).shape[:-1], 1))
+
+        if noisy:
+            print(f'Applying mask to {key}', flush=True)
 
         setattr(fvcom.data, key, np.ma.array(getattr(fvcom.data, key), mask=mask))
 
