@@ -5,7 +5,7 @@ The FVCOM Python toolbox (PyFVCOM)
 
 __version__ = '2.1.3'
 __author__ = 'Pierre Cazenave'
-__credits__ = ['Pierre Cazenave', 'Michael Bedington']
+__credits__ = ['Pierre Cazenave', 'Michael Bedington', 'Ricardo Torres']
 __license__ = 'MIT'
 __maintainer__ = 'Pierre Cazenave'
 __email__ = 'pica@pml.ac.uk'

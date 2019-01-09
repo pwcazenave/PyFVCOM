@@ -421,6 +421,7 @@ class FileReader(Domain):
         ---------
         Pierre Cazenave (Plymouth Marine Laboratory)
         Mike Bedington (Plymouth Marine Laboratory)
+        Ricardo Torres (Plymouth Marine Laboratory)
 
         """
 
