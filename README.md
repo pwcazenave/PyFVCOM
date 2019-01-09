@@ -321,6 +321,7 @@ Coding conventions
 - Use properties for accessing or setting data where you would normally have used simple, lightweight getter or setter methods
 - Use `with` when opening files or explicitly close files and sockets when done with them
 - Use TODO comments for code that is temporary, a short-term solution, or good-enough but not perfect
+- Verbose output should be off by default
 
 Citation
 --------
