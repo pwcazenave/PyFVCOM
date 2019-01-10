@@ -380,9 +380,52 @@ def lonlat_decimal_from_degminsec(lon_degminsec, lat_degminsec):
     return lon, lat
 
 
+def lonlat_decimal_from_degminsec_wco(lon_degminsec, lat_degminsec):
+    """
+    Converts from lon lat in degrees minutes and seconds to decimal degrees for the Western Channel Observatory
+    format (DDD.MMSSS) rather than actual degrees, minutes seconds.
+
+    Parameters
+    ----------
+    lon_degminsec : Mx3 np.ndarray
+        Array of longitude degrees, minutes and seconds in 3 separate columns (for M positions). East and West is
+        determined by the sign of the leading non-zero number (e.g. [-4, 20, 16] or [0, -3, 10])
+    lat_degminsec : Mx3 np.ndarray
+        Array of latitude degrees, minutes and seconds in 3 seperate columns (for M positions). North and South are
+        determined by the sign of the leading number.
+
+    Returns
+    -------
+    lon : np.ndarray
+        Array of converted decimal longitudes.
+    lat : np.ndarray
+        Array of converted decimal latitudes.
+
+    """
+    right_dims = (np.ndim(lon_degminsec) == 2 and np.ndim(lat_degminsec) == 2)
+    right_columns = (np.shape(lon_degminsec)[1] == 3 and np.shape(lat_degminsec)[1] == 3)
+    if not right_dims or not right_columns:
+        raise ValueError('Inputs are the wrong shape: incorrect dimensions (2) or number of columns (3).')
+
+    lon_sign = np.sign(lon_degminsec)
+    lat_sign = np.sign(lat_degminsec)
+    # Zeros have a sign of 0, but for our arithmetic, we need only -1 and 1, so replace 0 with 1 in the sign arrays.
+    lon_sign[lon_sign == 0] = 1
+    lat_sign[lat_sign == 0] = 1
+    # Since we've got only -1 and 1 in the arrays now, we can just find the minimum along each row which will tell us
+    # if we've got negative anything for a given set of coordinates. Since we're doing all the arithmetic on positive
+    # only numbers, we can then just flip the sign for the correct hemisphere at the end.
+    lon_sign = np.min(lon_sign, axis=1)
+    lat_sign = np.min(lat_sign, axis=1)
+
+    lon_adj = np.abs(lon_degminsec)
+    lat_adj = np.abs(lat_degminsec)
 
     lon = lon_adj[:, 0] + lon_adj[:, 1] / 60 + lon_adj[:, 2] / 6000
     lat = lat_adj[:, 0] + lat_adj[:, 1] / 60 + lat_adj[:, 2] / 6000
+
+    lon = lon_sign * lon
+    lat = lat_sign * lat
 
     return lon, lat
 
