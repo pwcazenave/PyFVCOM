@@ -1850,8 +1850,9 @@ def read_sms_map(map_file):
 
     Returns
     -------
-    arcs : list
-        List of the coordinate pairs and elevation for the polygons defined in the map file.
+    arcs : dict
+        Dictionary of each map (set of arcs) in the map file name as per SMS names. Each is a list of the coordinate
+        pairs and elevation for the polygons defined in the map file.
 
     Notes
     -----
@@ -1862,38 +1863,47 @@ def read_sms_map(map_file):
 
     """
 
-    x, y, z, arc_id, arc_elevation = [], [], [], [], []
-    arcs = []
+    x, y, z, arc_id, node_id = [], [], [], [], []
+    arcs = {}
     with open(map_file) as f:
         for line in f:
             line = line.strip()
-            if line == 'NODE':
+            if line.startswith('COVNAME'):
+                arc_name = line.split()[1].replace('"', '')
+                arcs[arc_name] = []
+            elif line == 'NODE':
                 line = next(f).strip()
                 _, node_x, node_y, node_z = line.split()
                 x.append(float(node_x))
                 y.append(float(node_y))
                 z.append(float(node_z))
+                line = next(f).strip()
+                node_id.append(float(line.split()[-1]))
             elif line == 'ARC':
                 # Skip the arc ID.
                 next(f)
                 # Skip the arc elevation.
                 next(f)
-                # Next line doesn't seem to be used for anything...
-                next(f)
+                # Grab the start and end IDs for the arc nodes.
+                line = next(f).strip()
+                start_id, end_id = [int(i) for i in line.split()[1:]]
+                start_index = node_id.index(start_id)
+                end_index = node_id.index(end_id)
                 # The number of nodes in the current arc.
                 line = next(f).strip()
                 number_of_nodes = int(line.split()[-1])
                 # Read in the coordinates and elevation for the current arc. Start with the appropriate coordinate
                 # from `x', `y' and its `z' value too (the 'node' in SMS parlance) before appending the arc vertices
                 # (in SMS parlance).
-                current_arc_id = len(arcs)
-                arcs.append([[x[current_arc_id], y[current_arc_id], z[current_arc_id]]])
+                arcs[arc_name].append([[x[start_index], y[start_index], z[start_index]]])
                 for next_line in range(number_of_nodes):
                     line = next(f).strip()
-                    arcs[-1].append([float(i) for i in line.split()])
+                    arcs[arc_name][-1].append([float(i) for i in line.split()])
+                # Add the end node
+                arcs[arc_name][-1].append([x[end_index], y[end_index], z[end_index]])
 
     # Make the arcs a list of numpy arrays.
-    arcs = [np.asarray(arc) for arc in arcs]
+    arcs = {key: [np.asarray(i) for i in arcs[key]] for key in arcs}
 
     return arcs
 
