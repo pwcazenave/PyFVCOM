@@ -554,8 +554,8 @@ class FileReader(Domain):
             raise ValueError('Vertical sigma levels are incompatible.')
         if not time_compare:
             raise ValueError("Time periods are incompatible (`fvcom2' must be greater than or equal to `fvcom1')."
-                             "`fvcom1' has end {} and `fvcom2' has start {}".format(self.time.datetime[-1],
-                                                                                    fvcom.time.datetime[0]))
+                             "`fvcom1' has end {} and `fvcom2' has start {}".format(fvcom.time.datetime[-1],
+                                                                                    self.time.datetime[0]))
         if not data_compare:
             raise ValueError('Loaded data sets for each FileReader class must match.')
         if not (old_data == new_data) and (old_data or new_data):
