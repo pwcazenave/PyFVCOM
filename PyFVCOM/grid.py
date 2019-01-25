@@ -649,7 +649,7 @@ class Domain(object):
         if not vincenty or not haversine:
             _, _, _, index = find_nearest_point(x, y, *where, maxDistance=threshold)
             if np.any(np.isnan(index)):
-                index[np.isnan[index]] = None
+                index[np.isnan(index)] = None
 
         if vincenty:
             grid_pts = np.asarray([lon, lat]).T
