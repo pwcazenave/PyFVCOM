@@ -1830,7 +1830,7 @@ def read_sms_mesh(mesh, nodestrings=False):
         return triangle, nodes, X, Y, Z, types
 
 
-def read_sms_map(map_file):
+def read_sms_map(map_file, merge_lines=False):
     """
     Reads in the SMS map file format.
 
@@ -1838,8 +1838,8 @@ def read_sms_map(map_file):
     ----------
     map_file : str
         Full path to an SMS map (.map) file.
-    noisy : bool, optional
-        Set to True to enable verbose messages.
+    merge_lines : bool
+        Set to True to merge distinct arcs into contiguous ones to make sensible polygons. Defaults to False.
 
     Returns
     -------
@@ -1895,8 +1895,16 @@ def read_sms_map(map_file):
                 # Add the end node
                 arcs[arc_name][-1].append([x[end_index], y[end_index], z[end_index]])
 
-    # Make the arcs a list of numpy arrays.
-    arcs = {key: [np.asarray(i) for i in arcs[key]] for key in arcs}
+    if merge_lines:
+        # Get all the z values for the arcs so we can put them back after merging.
+        for arc in arcs:
+            separate_lines = [shapely.geometry.LineString(a) for a in arcs[arc]]
+            all_lines = shapely.geometry.MultiLineString(separate_lines)
+            merged = shapely.ops.linemerge(all_lines)
+            arcs[arc] = [np.asarray(line.coords) for line in merged]
+    else:
+        # Just make the arcs a list of numpy arrays.
+        arcs = {key: [np.asarray(i) for i in arcs[key]] for key in arcs}
 
     return arcs
 
