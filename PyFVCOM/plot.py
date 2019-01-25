@@ -596,7 +596,10 @@ class Plotter(object):
             self.nv = self.ds.variables['nv'][:]
 
         if self.nv.min() != 1:
-            self.nv -= self.nv.min()
+            if self.nv.min() > 0:
+                self.nv -= self.nv.min()
+            else:
+                self.nv += 1 - self.nv.min()
 
         # Triangles
         self.triangles = self.nv.transpose() - 1
