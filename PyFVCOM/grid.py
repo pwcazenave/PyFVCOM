@@ -646,7 +646,7 @@ class Domain(object):
         # We have to split this into two parts: if our threshold is in the same units as the grid (i.e. haversine and
         # vincenty are both False), then we can use the quick find_nearest_point function; if either of haversine or
         # vincenty have been given, we need to use the distance conversion functions, which are slower.
-        if not vincenty or not haversine:
+        if not vincenty and not haversine:
             _, _, _, index = find_nearest_point(x, y, *where, maxDistance=threshold)
             if np.any(np.isnan(index)):
                 index[np.isnan(index)] = None
