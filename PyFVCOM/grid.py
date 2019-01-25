@@ -1532,7 +1532,7 @@ class OpenBoundary(object):
         coarse : RegularReader
             The regularly gridded data to interpolate onto the open boundary nodes. This must include time, lon,
             lat and depth data as well as the time series to interpolate (4D volume [time, depth, lat, lon]).
-        interval : str, optional
+        interval : float, optional
             Time sampling interval in days. Defaults to 1 day.
         constrain_coordinates : bool, optional
             Set to True to constrain the open boundary coordinates (lon, lat, depth) to the supplied coarse data.
