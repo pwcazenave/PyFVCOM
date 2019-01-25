@@ -735,7 +735,7 @@ class Plotter(object):
             # just update the array with set_array. If it doesn't match, the only way to mask the data properly is to
             # make a brand new plot.
             if 'mask' in kwargs:
-                if len(self.tripcolor_plot.get_array()) == (kwargs['mask'] == False).sum():
+                if len(self.tripcolor_plot.get_array()) == ~kwargs['mask'].sum():
                     if self._debug:
                         print('updating')
                     # Mask is probably the same as the previous one (based on number of positions). Mask sense needs
