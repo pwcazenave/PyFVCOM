@@ -407,45 +407,15 @@ class GridReaderNetCDF(object):
         If the 'wesn' keyword has been included in the supplied dimensions, interactively select a region if the
         value of 'wesn' is not a shapely Polygon. If it is a shapely Polygon, use that for the subsetting.
 
-        Eventually this functionality should just be folded into FileReader.
-
         """
 
+        bounding_poly = None
         if 'wesn' in self._dims:
             if isinstance(self._dims['wesn'], shapely.geometry.Polygon):
                 bounding_poly = np.asarray(self._dims['wesn'].exterior.coords)
-        else:
-            fig = plt.figure()
-            ax = fig.add_subplot(111)
-            ax.scatter(self.lon, self.lat, c='lightgray')
-            plt.show()
 
-            keep_picking = True
-            while keep_picking:
-                n_pts = int(input('How many polygon points? '))
-                bounding_poly = np.full((n_pts, 2), np.nan)
-                poly_lin = []
-                for point in range(n_pts):
-                    bounding_poly[point, :] = plt.ginput(1)[0]
-                    poly_lin.append(ax.plot(np.hstack([bounding_poly[:, 0], bounding_poly[0, 0]]),
-                                            np.hstack([bounding_poly[:, 1], bounding_poly[0, 1]]),
-                                            c='r', linewidth=2)[0])
-                    fig.canvas.draw()
-
-                happy = input('Is that polygon OK? Y/N: ')
-                if happy.lower() == 'y':
-                    keep_picking = False
-
-                for this_l in poly_lin:
-                    this_l.remove()
-
-            plt.close()
-
-        poly_path = mpath.Path(bounding_poly)
-
-        # Shouldn't need the np.asarray here, I think, but leaving it in as I'm not 100% sure.
-        self._dims['node'] = np.squeeze(np.argwhere(np.asarray(poly_path.contains_points(np.asarray([self.lon, self.lat]).T))))
-        self._dims['nele'] = np.squeeze(np.argwhere(np.all(np.isin(self.triangles, self._dims['node']), axis=1)))
+        # Do the subset of our grid.
+        self._dims['node'], self._dims['nele'], _ = subset_domain(self.lon, self.lat, self.triangles, bounding_poly)
         self._get_data_pattern = 'memory'
         # Remove the now useless 'wesn' dimension.
         self._dims.pop('wesn')
@@ -815,6 +785,29 @@ class Domain(object):
         indices, distance = element_sample(self.grid.lonc, self.grid.latc, positions)
 
         return indices, distance
+
+    def subset_domain(self, polygon=None):
+        """
+        Subset the current model grid interactively with a given polygon. Coordinates in `polygon' must be in the
+        same system as `x' and `y'.
+
+        Parameters
+        ----------
+        polygon : shapely.geometry.Polygon, optional
+            If given, use this polygon to use to clip the given domain. If omitted, subsetting is interactive.
+
+        Returns
+        -------
+        nodes : np.ndarray
+            List of the nodes within the given polygon.
+        elements : np.ndarray
+            List of the elements within the given polygon.
+        triangles : np.ndarray
+            The reduced triangulation.
+
+        """
+
+        return subset_domain(self.grid.lon, self.grid.lat, self.grid.triangles, polygon)
 
     def calculate_areas(self):
         """
@@ -4494,6 +4487,71 @@ def isintriangle(tri_x, tri_y, point_x, point_y):
     is_in = 0 <= a <= 1 and 0 <= b <= 1 and 0 <= c <= 1
 
     return is_in
+
+
+def subset_domain(x, y, triangles, polygon=None):
+    """
+    Subset the current model grid, either interactively or with a given polygon. Coordinates in `polygon' must be in
+    the same system as `x' and `y'.
+
+    Parameters
+    ----------
+    x, y : np.ndarray
+        The x and y coordinates of the whole model grid.
+    triangles : np.ndarray
+        The grid triangulation (shape = [elements, 3])
+    polygon : shapely.geometry.Polygon, optional
+        If given, the domain will be clipped by this polygon. If omitted, the polygon is defined interactively.
+
+    Returns
+    -------
+    nodes : np.ndarray
+        List of the nodes within the given polygon.
+    elements : np.ndarray
+        List of the elements within the given polygon.
+    triangles : np.ndarray
+        The reduced triangulation of the new subdomain.
+
+    """
+
+    if polygon is not None:
+        bounding_poly = np.asarray(polygon.exterior.coords)
+    else:
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+        ax.scatter(x, y, c='lightgray')
+        plt.show()
+
+        keep_picking = True
+        while keep_picking:
+            n_pts = int(input('How many polygon points? '))
+            bounding_poly = np.full((n_pts, 2), np.nan)
+            poly_lin = []
+            for point in range(n_pts):
+                bounding_poly[point, :] = plt.ginput(1)[0]
+                poly_lin.append(ax.plot(np.hstack([bounding_poly[:, 0], bounding_poly[0, 0]]),
+                                        np.hstack([bounding_poly[:, 1], bounding_poly[0, 1]]),
+                                        c='r', linewidth=2)[0])
+                fig.canvas.draw()
+
+            happy = input('Is that polygon OK? Y/N: ')
+            if happy.lower() == 'y':
+                keep_picking = False
+
+            for this_l in poly_lin:
+                this_l.remove()
+
+        plt.close()
+
+    poly_path = mpath.Path(bounding_poly)
+
+    # Shouldn't need the np.asarray here, I think, but leaving it in as I'm not 100% sure.
+    nodes = np.squeeze(np.argwhere(np.asarray(poly_path.contains_points(np.asarray([x, y]).T))))
+    elements = np.squeeze(np.argwhere(np.all(np.isin(triangles, len(x)), axis=1)))
+
+    sub_triangles = reduce_triangulation(triangles, nodes)
+
+    return nodes, elements, sub_triangles
 
 
 class Graph(object):
