@@ -2296,7 +2296,7 @@ def write_sms_mesh(triangles, nodes, x, y, z, types, mesh):
 
     # Write out the connectivity table (triangles)
     current_node = 0
-    for line in triangles:
+    for line in triangles.copy():
         # Bump the numbers by one to correct for Python indexing from zero
         line += 1
         line_string = []
