@@ -2348,9 +2348,13 @@ def write_sms_mesh(triangles, nodes, x, y, z, types, mesh):
     # BEG2DMBC = Beginning of the model assignments
     # MAT = Material assignment
     # END2DMBC = End of the model assignments
-    footer = 'BEGPARAMDEF\nGM  "Mesh"\nSI  0\nDY  0\nTU  ""\nTD  0  0\nNUME  3\nBCPGC  0\nBEDISP  0 0 0 0 1 0 1 0 0 0 0 1\nBEFONT  0 2\nBEDISP  1 0 0 0 1 0 1 0 0 0 0 1\nBEFONT  1 2\nBEDISP  2 0 0 0 1 0 1 0 0 0 0 1\nBEFONT  2 2\nENDPARAMDEF\nBEG2DMBC\nMAT  1 "material 01"\nEND2DMBC\n'
+    footer_parts = ('BEGPARAMDEF', 'GM  "Mesh"', 'SI  0', 'DY  0', 'TU  ""', 'TD  0  0', 'NUME  3', 'BCPGC  0',
+                    'BEDISP  0 0 0 0 1 0 1 0 0 0 0 1', 'BEFONT  0 2', 'BEDISP  1 0 0 0 1 0 1 0 0 0 0 1',
+                    'BEFONT  1 2', 'BEDISP  2 0 0 0 1 0 1 0 0 0 0 1', 'BEFONT  2 2', 'ENDPARAMDEF',
+                    'BEG2DMBC', 'MAT  1 "material 01"', 'END2DMBC')
+    footer = '\n'.join(footer_parts)
 
-    file_write.write(footer)
+    file_write.write(f'{footer}\n')
 
     file_write.close()
 
