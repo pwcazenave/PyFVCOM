@@ -468,7 +468,7 @@ class FileReader(Domain):
             dim_is_string = isinstance(self._dims[dim], str)  # for date ranges
             dim_is_slice = isinstance(self._dims[dim], slice)
             if not dim_is_iterable and not dim_is_slice and not dim_is_string:
-                if self._noisy:
+                if self._debug:
                     print('Making dimension {} iterable'.format(dim))
 
                 self._dims[dim] = [self._dims[dim]]
