@@ -732,7 +732,7 @@ class Plotter(object):
             # been given a mask, things get compliated. We can't mask with a mask which varies in time (so a static
             # in time mask is fine, but one that varies doesn't work with set_array. So we need to firstly find out
             # if we've got a mask whose valid positions matches what we've already got, if so, easy peasy,
-            # just update the array with set_array. If it doesn't match, the onlhttps://mobile.emirates.com/english/CKIN/OLCI/boardingPass.xhtml?MBP=SBF.dazXWmcIxU-.iAOWeIYl.hvz29Uhy way to mask the data properly is to
+            # just update the array with set_array. If it doesn't match, the only way to mask the data properly is to
             # make a brand new plot.
             if 'mask' in kwargs:
                 if len(self.tripcolor_plot.get_array()) == (kwargs['mask'] == False).sum():
