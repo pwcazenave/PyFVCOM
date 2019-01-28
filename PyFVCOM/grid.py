@@ -356,7 +356,7 @@ class GridReaderNetCDF(object):
                 except ValueError:
                     # The arrays might be the wrong shape for broadcasting to work, so transpose and retranspose
                     # accordingly. This is less than ideal.
-                    warning(f'Depth-resolved sigma {var} seems to be the wrong shape. Trying again.')
+                    warn(f'Depth-resolved sigma {var} seems to be the wrong shape. Trying again.')
                     setattr(self, '{}_z'.format(var), (_fixed_sig.T * z).T)
 
         # Check ranges and if zero assume we're missing that particular type, so convert from the other accordingly.
