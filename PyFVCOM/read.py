@@ -1120,7 +1120,7 @@ class FileReader(Domain):
 
         for v in var:
             if self._debug or self._noisy:
-                print(f'Loading: {v}')
+                print(f'Loading: {v}', flush=True)
 
             if v not in self.ds.variables:
                 raise NameError(f"Variable '{v}' not present in {self._fvcom}")
@@ -1133,7 +1133,7 @@ class FileReader(Domain):
                 if dimension in dims:
                     variable_index = var_dim.index(dimension)
                     if self._debug:
-                        print(f'Extracting specific indices for {dimension}')
+                        print(f'Extracting specific indices for {dimension}', flush=True)
                     variable_indices[variable_index] = dims[dimension]
 
             # Add attributes for the variable we're loading.
@@ -1146,17 +1146,17 @@ class FileReader(Domain):
             try:
                 if self._get_data_pattern == 'slice':
                     if self._debug:
-                        print('Slicing the data directly from netCDF')
+                        print('Slicing the data directly from netCDF', flush=True)
                     setattr(self.data, v, self.ds.variables[v][variable_indices])
                 elif self._get_data_pattern == 'memory':
                     if self._debug:
-                        print('Loading all data in memory and then subsetting')
+                        print('Loading all data in memory and then subsetting', flush=True)
                     data_raw = self.ds.variables[v][:]
 
                     for i in range(data_raw.ndim):
                         if not isinstance(variable_indices[i], slice):
                             if self._debug:
-                                print(f'Extracting indices {variable_indices[i]} for variable {v}')
+                                print(f'Extracting indices {variable_indices[i]} for variable {v}', flush=True)
                             data_raw = data_raw.take(variable_indices[i], axis=i)
 
                     setattr(self.data, v, data_raw)

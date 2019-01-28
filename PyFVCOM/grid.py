@@ -107,7 +107,7 @@ class GridReaderNetCDF(object):
             # If we don't have a triangulation, make one. Warn that if we've made one, it might not match the
             # original triangulation used in the model run.
             if self._debug:
-                print("Creating new triangulation since we're missing one")
+                print("Creating new triangulation since we're missing one", flush=True)
             triangulation = Triangulation(self.lon, self.lat)
             self.triangles = triangulation.triangles
             self.nv = copy.copy(self.triangles.T + 1)
@@ -118,7 +118,7 @@ class GridReaderNetCDF(object):
         if self.nv.min() != 1:
             if self._debug:
                 print('Fixing broken triangulation. Current minimum for nv is {} and for triangles is {} but they '
-                      'should be 1 and 0, respectively.'.format(self.nv.min(), self.triangles.min()))
+                      'should be 1 and 0, respectively.'.format(self.nv.min(), self.triangles.min()), flush=True)
             self.nv = (ds.variables['nv'][:].astype(int) - ds.variables['nv'][:].astype(int).min()) + 1
             self.triangles = copy.copy(self.nv.T) - 1
 
@@ -129,7 +129,7 @@ class GridReaderNetCDF(object):
         # If we've been given a spatial dimension to subsample in fix the triangulation.
         if 'nele' in self._dims or 'node' in self._dims:
             if self._debug:
-                print('Fix triangulation table as we have been asked for only specific nodes/elements.')
+                print('Fix triangulation table as we have been asked for only specific nodes/elements.', flush=True)
 
             if 'node' in self._dims:
                 new_tri, new_ele = reduce_triangulation(self.triangles, self._dims['node'], return_elements=True)
@@ -302,7 +302,7 @@ class GridReaderNetCDF(object):
             if short_dim in self._dims:
                 if short_dim in ds.variables[var].dimensions:
                     if self._debug:
-                        print(f'Subsetting {var} in the vertical ({short_dim} = {self._dims[short_dim]}')
+                        print(f'Subsetting {var} in the vertical ({short_dim} = {self._dims[short_dim]})', flush=True)
                     _temp = getattr(self, var)[self._dims[short_dim], ...]
                     setattr(self, var, _temp)
 
@@ -319,7 +319,7 @@ class GridReaderNetCDF(object):
                     z = -self.h
 
                 if self._debug:
-                    print(f'Making water depth vertical grid: {var}_z')
+                    print(f'Making water depth vertical grid: {var}_z', flush=True)
 
                 _original_sig = getattr(self, var)
 
