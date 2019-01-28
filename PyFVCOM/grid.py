@@ -158,6 +158,8 @@ class GridReaderNetCDF(object):
         if 'node' in self._dims:
             nodes = len(self._dims['node'])
             for var in 'x', 'y', 'lon', 'lat', 'h', 'siglay', 'siglev':
+                if self._debug:
+                    print(f'Loading {var} data using the {self._get_data_pattern} method', flush=True)
                 try:
                     node_index = ds.variables[var].dimensions.index('node')
                     var_shape = [i for i in np.shape(ds.variables[var])]
@@ -168,6 +170,9 @@ class GridReaderNetCDF(object):
                     elif 'siglev' in self._dims and 'siglev' in ds.variables[var].dimensions:
                         var_shape[ds.variables[var].dimensions.index('siglev')] = ds.dimensions['siglev'].size
                     _temp = np.empty(var_shape)
+                    if self._debug:
+                        print(f'Loading {var} data using the {self._get_data_pattern} method', flush=True)
+
                     if 'siglay' in ds.variables[var].dimensions:
                         for ni, node in enumerate(self._dims['node']):
                             if 'siglay' in self._dims:
@@ -204,6 +209,9 @@ class GridReaderNetCDF(object):
                     elif 'siglev' in self._dims and 'siglev' in ds.variables[var].dimensions:
                         var_shape[ds.variables[var].dimensions.index('siglev')] = ds.dimensions['siglev'].size
                     _temp = np.full(var_shape, np.nan)
+                    if self._debug:
+                        print(f'Loading {var} data using the {self._get_data_pattern} method', flush=True)
+
                     if 'siglay' in ds.variables[var].dimensions:
                         for ni, current_nele in enumerate(self._dims['nele']):
                             if 'siglay' in self._dims:
@@ -255,6 +263,8 @@ class GridReaderNetCDF(object):
         # This does not occur if we've been asked to extract an incompatible set of nodes and elements, for whatever
         # reason (e.g. testing). We don't add attributes for the data if we've created it as doing so is a pain.
         for var in 'h_center', 'siglay_center', 'siglev_center':
+            if self._debug:
+                print('Add element-based compatibility arrays', flush=True)
             try:
                 if 'nele' in self._dims:
                     var_raw = ds.variables[var][:]
@@ -382,6 +392,9 @@ class GridReaderNetCDF(object):
 
         ds.close()
 
+        if self._debug:
+            print('Finished loading grid from netCDF')
+
     def __iter__(self):
         return (a for a in dir(self) if not a.startswith('_'))
 
@@ -413,12 +426,18 @@ class GridReaderNetCDF(object):
         if 'wesn' in self._dims:
             if isinstance(self._dims['wesn'], shapely.geometry.Polygon):
                 bounding_poly = np.asarray(self._dims['wesn'].exterior.coords)
+                if self._debug:
+                    print('Subsetting the data with a polygon', flush=True)
 
         # Do the subset of our grid.
+        if self._debug:
+            print('Starting the subsetting...', end=' ', flush=True)
         self._dims['node'], self._dims['nele'], _ = subset_domain(self.lon, self.lat, self.triangles, bounding_poly)
         self._get_data_pattern = 'memory'
         # Remove the now useless 'wesn' dimension.
         self._dims.pop('wesn')
+        if self._debug:
+            print('done.', flush=True)
 
 
 class _GridReader(object):
