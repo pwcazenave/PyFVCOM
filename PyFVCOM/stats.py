@@ -125,14 +125,16 @@ def rmse(a, b, axis=0):
     return rmse
 
 
-def calculate_coefficient(x, y, noisy=False):
+def calculate_coefficient(x, y, min_samples=9, noisy=False):
     """
     Calculate the correlation coefficient and its p-value for two time series.
 
     Parameters
     ----------
-    x, y : ndarray
+    x, y : np.ndarray
         Time series arrays to correlate.
+    min_samples : int
+        The minimum number of samples below which we return NaN rather than compute the correlations. Defaults to 9.
     noisy : bool, optional
         Set to True to enable verbose output (defaults to False).
 
@@ -145,7 +147,6 @@ def calculate_coefficient(x, y, noisy=False):
 
     Notes
     -----
-
     Using numpy.ma.corrcoef is ~5 slower than using scipy.stats.pearsonr despite giving the same results. In fact,
     the latter also gives the p-value.
 
@@ -158,8 +159,8 @@ def calculate_coefficient(x, y, noisy=False):
     # Make sure we always have something to return in case we have fewer than 9 points.
     r, p = np.nan, np.nan
 
-    # Skip data with fewer than nine points.
-    if len(np.ma.compressed(x)) > 9:
+    # Skip data with fewer than `min_samples' points.
+    if len(np.ma.compressed(x)) > min_samples:
         # r = np.ma.corrcoef(xt, yt)[0, 1]
         r, p = stats.pearsonr(x, y)
     else:

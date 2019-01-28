@@ -2,6 +2,7 @@
 
 from __future__ import print_function
 
+import copy
 from datetime import datetime
 from pathlib import Path
 from warnings import warn
@@ -132,14 +133,14 @@ class Depth(object):
 
         """
 
-        # I'm not much of a fan of all this flipping and transposing. It feels like it's going to be a pain to debug
-        # when it inevitably does something you don't expect.
+        # I'm not much of a fan of all this transposing. It feels like it's going to be a pain to debug when it
+        # inevitably does something you don't expect.
         try:
-            self.slice_plot = self.axes.pcolormesh(horizontal, -depth, np.flipud(variable),
+            self.slice_plot = self.axes.pcolormesh(horizontal, -depth, variable,
                                                    cmap=self.cmap, *args, **kwargs)
         except TypeError:
             # Try flipping the data array, that might make it work.
-            self.slice_plot = self.axes.pcolormesh(horizontal, -depth, np.flipud(variable.T),
+            self.slice_plot = self.axes.pcolormesh(horizontal, -depth, variable.T,
                                                    cmap=self.cmap, *args, **kwargs)
 
         if fill_seabed:
@@ -424,7 +425,8 @@ class Time(object):
             if self.cb_label:
                 self.colorbar.set_label(self.cb_label)
         else:
-            self.surface_plot
+            # Update the existing plot with the new data (currently untested!)
+            self.surface_plot.set_array(time_series)
 
 
 class Plotter(object):
@@ -449,12 +451,10 @@ class Plotter(object):
 
     """
 
-    def __init__(self, dataset, figure=None, axes=None, stations=None,
-                 extents=None, vmin=None, vmax=None, mask=None, res='c', fs=10,
-                 title=None, cmap='viridis', figsize=(10., 10.), axis_position=None,
-                 edgecolors='none', s_stations=20, s_particles=20, linewidth=1.0,
-                 tick_inc=None, cb_label=None, extend='neither', norm=None, m=None,
-                 cartesian=False):
+    def __init__(self, dataset, figure=None, axes=None, stations=None, extents=None, vmin=None, vmax=None, mask=None,
+                 res='c', fs=10, title=None, cmap='viridis', figsize=(10., 10.), axis_position=None, edgecolors='none',
+                 s_stations=20, s_particles=20, linewidth=1.0, tick_inc=None, cb_label=None, extend='neither',
+                 norm=None, m=None, cartesian=False, **bmargs):
         """
         Parameters
         ----------
@@ -512,6 +512,8 @@ class Plotter(object):
         cartesian : bool, optional
             Set to True to skip using Basemap and instead return a simple
             cartesian axis plot. Defaults to False (geographical coordinates).
+        bmargs : dict
+            Additional arguments to pass to Basemap.
 
         Author(s)
         ---------
@@ -519,6 +521,8 @@ class Plotter(object):
         Pierre Cazenave (PML)
 
         """
+
+        self._debug = False
 
         self.ds = dataset
         self.figure = figure
@@ -544,6 +548,7 @@ class Plotter(object):
         self.norm = norm
         self.m = m
         self.cartesian = cartesian
+        self.bmargs = bmargs
         self.colorbar_axis = None
 
         # Plot instances (initialise to None/[] for truthiness test later)
@@ -591,7 +596,10 @@ class Plotter(object):
             self.nv = self.ds.variables['nv'][:]
 
         if self.nv.min() != 1:
-            self.nv -= self.nv.min()
+            if self.nv.min() > 0:
+                self.nv -= self.nv.min()
+            else:
+                self.nv += 1 - self.nv.min()
 
         # Triangles
         self.triangles = self.nv.transpose() - 1
@@ -616,18 +624,18 @@ class Plotter(object):
         # Create basemap object
         if not self.m and not self.cartesian:
             if have_basemap:
-                self.m = Basemap(llcrnrlon=self.extents[:2].min(),
-                                 llcrnrlat=self.extents[-2:].min(),
-                                 urcrnrlon=self.extents[:2].max(),
-                                 urcrnrlat=self.extents[-2:].max(),
+                self.m = Basemap(llcrnrlon=np.min(self.extents[:2]),
+                                 llcrnrlat=np.min(self.extents[-2:]),
+                                 urcrnrlon=np.max(self.extents[:2]),
+                                 urcrnrlat=np.max(self.extents[-2:]),
                                  rsphere=(6378137.00, 6356752.3142),
                                  resolution=self.res,
                                  projection='merc',
-                                 area_thresh=0.1,
-                                 lat_0=self.extents[-2:].mean(),
-                                 lon_0=self.extents[:2].mean(),
-                                 lat_ts=self.extents[-2:].mean(),
-                                 ax=self.axes)
+                                 lat_0=np.mean(self.extents[-2:]),
+                                 lon_0=np.mean(self.extents[:2]),
+                                 lat_ts=np.mean(self.extents[-2:]),
+                                 ax=self.axes,
+                                 **self.bmargs)
             else:
                 raise RuntimeError('mpl_toolkits is not available in this Python.')
 
@@ -660,6 +668,37 @@ class Plotter(object):
             self.m.drawparallels(parallels, labels=[1, 0, 0, 0], fontsize=self.fs, linewidth=0, ax=self.axes)
             self.m.drawmeridians(meridians, labels=[0, 0, 0, 1], fontsize=self.fs, linewidth=0, ax=self.axes)
 
+    def get_colourbar_extension(self, field, clims):
+        """
+        Find the colourbar extension for the current variable, clipping in space if necessary.
+
+        Parameters
+        ----------
+        field : np.ndarray
+            The data being plotted.
+        clims : list, tuple
+            The colour limits of the plot.
+
+        Returns
+        -------
+        extend : str
+            The colourbar extension ('neither', 'min', 'max' or 'both').
+
+        """
+        # We need to find the nodes/elements for the current variable to make sure our colour bar extends for
+        # what we're plotting (not the entire data set). We'll have to guess based on shape here.
+        if self.n_nodes == field.shape[0]:
+            x = self.lon
+            y = self.lat
+        elif self.n_elems == field.shape[0]:
+            x = self.lonc
+            y = self.latc
+        mask = (x > self.extents[0]) & (x < self.extents[1]) & (y < self.extents[3]) & (y > self.extents[2])
+
+        extend = colorbar_extension(clims[0], clims[1], field[..., mask].min(), field[..., mask].max())
+
+        return extend
+
     def replot(self):
         self.axes.cla()
         self._init_figure()
@@ -681,17 +720,45 @@ class Plotter(object):
 
         """
 
+        # We ignore the mask given when initialising the Plotter object and instead use the one given when calling
+        # this function. We'll warn in case anything (understandably) gets confused.
         if self.mask is not None:
-            field = np.ma.masked_where(field <= self.mask, field)
+            warn("The mask given when initiliasing this object is ignored for plotting surfaces. Supply a `mask' "
+                 "keyword to this function instead")
 
         if self.tripcolor_plot:
             # The field needs to be on the elements since that's the how it's plotted internally in tripcolor (unless
-            # shading is 'gouraud'). Check if we've been given element data and if not, convert accordingly.
-            if len(field) == len(self.mx):
-                self.tripcolor_plot.set_array(nodes2elems(field, self.triangles))
+            # shading is 'gouraud'). Check if we've been given element data and if not, convert accordingly. If we've
+            # been given a mask, things get compliated. We can't mask with a mask which varies in time (so a static
+            # in time mask is fine, but one that varies doesn't work with set_array. So we need to firstly find out
+            # if we've got a mask whose valid positions matches what we've already got, if so, easy peasy,
+            # just update the array with set_array. If it doesn't match, the only way to mask the data properly is to
+            # make a brand new plot.
+            if 'mask' in kwargs:
+                if len(self.tripcolor_plot.get_array()) == ~kwargs['mask'].sum():
+                    if self._debug:
+                        print('updating')
+                    # Mask is probably the same as the previous one (based on number of positions). Mask sense needs
+                    # to be inverted when setting the array as we're supplying valid positions, not hiding invalid
+                    # ones. Confusing, isn't it. You can imagine the fun I had figuring this out.
+                    if len(field) == len(self.mx):
+                        self.tripcolor_plot.set_array(nodes2elems(field, self.triangles)[~kwargs['mask']])
+                    else:
+                        self.tripcolor_plot.set_array(field[~kwargs['mask']])
+                    return
+                else:
+                    if self._debug:
+                        print('replotting')
+                    # Nothing to do here except clear the plot and make a brand new plot (which is a lot slower),
+                    # so we'll just skip out here and let the code continue.
+                    self.tripcolor_plot.remove()
+                    pass
             else:
-                self.tripcolor_plot.set_array(field)
-            return
+                if len(field) == len(self.mx):
+                    self.tripcolor_plot.set_array(nodes2elems(field, self.triangles))
+                else:
+                    self.tripcolor_plot.set_array(field)
+                return
 
         self.tripcolor_plot = self.axes.tripcolor(self.mx, self.my, self.triangles, np.squeeze(field), *args,
                                                   vmin=self.vmin, vmax=self.vmax,
@@ -703,10 +770,13 @@ class Plotter(object):
             self.axes.set_xlim(self.mx.min(), self.mx.max())
             self.axes.set_ylim(self.my.min(), self.my.max())
 
-        divider = make_axes_locatable(self.axes)
-        self.colorbar_axis = divider.append_axes("right", size="5%", pad=0.05)
-        self.cbar = self.figure.colorbar(self.tripcolor_plot, cax=self.colorbar_axis, extend=self.extend)
-        self.cbar.ax.tick_params(labelsize=self.fs)
+        extend = copy.copy(self.extend)
+        if extend is None:
+            extend = self.get_colourbar_extension(variable)
+
+        if self.cbar is None:
+            self.cbar = self.m.colorbar(self.tripcolor_plot, extend=extend)
+            self.cbar.ax.tick_params(labelsize=self.fs)
         if self.cb_label:
             self.cbar.set_label(self.cb_label)
 
@@ -1288,20 +1358,19 @@ class MPIWorker(object):
             load_verbose = True
             print(f'Loading {variable} data from netCDF...', end=' ', flush=True)
 
-        load_vars = [variable]
+        load_vars = [variable, 'wet_cells']
         if variable in ('speed', 'direction', 'speed_anomaly'):
-            load_vars = ['u', 'v']
+            load_vars = ['u', 'v', 'wet_cells']
         elif variable in ('depth_averaged_speed', 'depth_averaged_direction', 'depth_averaged_speed_anomaly'):
-            load_vars = ['ua', 'va']
+            load_vars = ['ua', 'va', 'wet_cells']
         elif variable == 'tauc':
-            load_vars = [variable, 'temp', 'salinity']
+            load_vars = [variable, 'temp', 'salinity', 'wet_cells']
 
         self.fvcom = FileReader(fvcom_file, variables=load_vars, dims=self.dims, verbose=load_verbose)
 
         # Make the meta-variable data.
         if variable in ('speed', 'direction'):
-            self.fvcom.data.direction, self.fvcom.data.speed = vector2scalar(self.fvcom.data.u,
-                                                                             self.fvcom.data.v)
+            self.fvcom.data.direction, self.fvcom.data.speed = vector2scalar(self.fvcom.data.u, self.fvcom.data.v)
             # Add the attributes for labelling.
             self.fvcom.atts.speed = _passive_data_store()
             self.fvcom.atts.speed.long_name = 'speed'
@@ -1309,11 +1378,11 @@ class MPIWorker(object):
             self.fvcom.atts.direction = _passive_data_store()
             self.fvcom.atts.direction.long_name = 'direction'
             self.fvcom.atts.direction.units = '\degree'
+            self.fvcom.variable_dimension_names[variable] = self.fvcom.variable_dimension_names['u']
 
         elif variable in ('depth_averaged_speed', 'depth_averaged_direction'):
-            self.fvcom.data.depth_averaged_direction, self.fvcom.data.depth_averaged_speed = vector2scalar(
-                self.fvcom.data.ua, self.fvcom.data.va
-            )
+            da_dir, da_speed = vector2scalar(self.fvcom.data.ua, self.fvcom.data.va)
+            self.fvcom.data.depth_averaged_direction, self.fvcom.data.depth_averaged_speed = da_dir, da_speed
             # Add the attributes for labelling.
             self.fvcom.atts.depth_averaged_speed = _passive_data_store()
             self.fvcom.atts.depth_averaged_speed.long_name = 'depth-averaged speed'
@@ -1321,17 +1390,22 @@ class MPIWorker(object):
             self.fvcom.atts.depth_averaged_direction = _passive_data_store()
             self.fvcom.atts.depth_averaged_direction.long_name = 'depth-averaged direction'
             self.fvcom.atts.depth_averaged_direction.units = '\degree'
+            self.fvcom.variable_dimension_names[variable] = self.fvcom.variable_dimension_names['ua']
 
         if variable == 'speed_anomaly':
             self.fvcom.data.speed_anomaly = self.fvcom.data.speed.mean(axis=0) - fvcom.data.speed
             self.fvcom.atts.speed = _passive_data_store()
             self.fvcom.atts.speed.long_name = 'speed anomaly'
             self.fvcom.atts.speed.units = 'ms^{-1}'
+            self.fvcom.variable_dimension_names[variable] = self.fvcom.variable_dimension_names['u']
+
         elif variable == 'depth_averaged_speed_anomaly':
             self.fvcom.data.depth_averaged_speed_anomaly = self.fvcom.data.uava.mean(axis=0) - fvcom.data.uava
             self.fvcom.atts.depth_averaged_speed_anomaly = _passive_data_store()
             self.fvcom.atts.depth_averaged_speed_anomaly.long_name = 'depth-averaged speed anomaly'
             self.fvcom.atts.depth_averaged_speed_anomaly.units = 'ms^{-1}'
+            self.fvcom.variable_dimension_names[variable] = self.fvcom.variable_dimension_names['ua']
+
         elif variable == 'tauc':
             pressure = nodes2elems(depth2pressure(self.fvcom.data.h, self.fvcom.data.y),
                                    self.fvcom.grid.triangles)
@@ -1340,12 +1414,13 @@ class MPIWorker(object):
             rho = dens_jackett(tempc, salinityc, pressure[np.newaxis, :])
             self.fvcom.data.tauc *= rho
             self.fvcom.atts.tauc.units = 'Nm^{-2}'
+            self.fvcom.variable_dimension_names[variable] = self.fvcom.variable_dimension_names['tauc']
 
         if self._noisy and self.rank == self.root:
             print(f'done.', flush=True)
 
-    def plot_field(self, fvcom_file, time_indices, variable, figures_directory, label=None, dimensions=None, clims=None,
-                   norm=None, *args, **kwargs):
+    def plot_field(self, fvcom_file, time_indices, variable, figures_directory, label=None, set_title=False,
+                   dimensions=None, clims=None, norm=None, mask=False, *args, **kwargs):
         """
         Plot a given horizontal surface for `variable' for the time indices in `time_indices'.
 
@@ -1359,12 +1434,16 @@ class MPIWorker(object):
             Where to save the figures. Figure files are named f'{variable}_{time_index + 1}.png'.
         label : str, optional
             What label to use for the colour bar. If omitted, uses the variable's `long_name' and `units'.
+        set_title : bool, optional
+            Add a title comprised of each time (formatted as '%Y-%m-%d %H:%M:%S').
         dimensions : str, optional
             What additional dimensions to load (time is handled by the `time_indices' argument).
         clims : tuple, list, optional
             Limit the colour range to these values.
         norm : matplotlib.colors.Normalize, optional
             Apply the normalisation given to the colours in the plot.
+        mask : bool
+            Set to True to enable masking with the FVCOM wet/dry data.
 
         Additional args and kwargs are passed to PyFVCOM.plot.Plotter.
 
@@ -1376,16 +1455,17 @@ class MPIWorker(object):
         self.dims.update({'time': time_indices})
 
         self.__loader(fvcom_file, variable)
+        field = np.squeeze(getattr(self.fvcom.data, variable))
 
         # Find out what the range of data is so we can set the colour limits automatically, if necessary.
         if clims is None:
             if self.have_mpi:
-                global_min = self.comm.reduce(np.nanmin(getattr(self.fvcom.data, variable)), op=MPI.MIN)
-                global_max = self.comm.reduce(np.nanmax(getattr(self.fvcom.data, variable)), op=MPI.MAX)
+                global_min = self.comm.reduce(np.nanmin(field), op=MPI.MIN)
+                global_max = self.comm.reduce(np.nanmax(field), op=MPI.MAX)
             else:
                 # Fall back to local extremes.
-                global_min = np.nanmin(getattr(self.fvcom.data, variable))
-                global_max = np.nanmax(getattr(self.fvcom.data, variable))
+                global_min = np.nanmin(field)
+                global_max = np.nanmax(field)
             clims = [global_min, global_max]
             if self.have_mpi:
                 clims = self.comm.bcast(clims, root=0)
@@ -1394,9 +1474,24 @@ class MPIWorker(object):
             label = f'{getattr(self.fvcom.atts, variable).long_name.title()} ' \
                     f'(${getattr(self.fvcom.atts, variable).units}$)'
 
-        local_plot = Plotter(self.fvcom, cb_label=label, *args, **kwargs)
+        grid_mask = np.ones(field[0].shape[0], dtype=bool)
+        if 'extents' in kwargs:
+            # We need to find the nodes/elements for the current variable to make sure our colour bar extends for
+            # what we're plotting (not the entire data set).
+            if 'node' in self.fvcom.variable_dimension_names[variable]:
+                x = self.fvcom.grid.lon
+                y = self.fvcom.grid.lat
+            elif 'nele' in self.fvcom.variable_dimension_names[variable]:
+                x = self.fvcom.grid.lonc
+                y = self.fvcom.grid.latc
+            extents = kwargs['extents']
+            grid_mask = (x > extents[0]) & (x < extents[1]) & (y < extents[3]) & (y > extents[2])
 
-        field = np.squeeze(getattr(self.fvcom.data, variable))
+        extend = colorbar_extension(clims[0], clims[1], field[..., grid_mask].min(), field[..., grid_mask].max())
+        if not 'extend' in kwargs:
+            kwargs['extend'] = extend
+
+        local_plot = Plotter(self.fvcom, cb_label=label, *args, **kwargs)
 
         if norm is not None:
             # Check for zero and negative values if we're LogNorm'ing the data and replace with the colour limit
@@ -1410,8 +1505,17 @@ class MPIWorker(object):
                 field[invalid] = clims[0]
 
         for local_time, global_time in enumerate(time_indices):
-            local_plot.plot_field(field[local_time])
+            if mask:
+                local_mask = getattr(self.fvcom.data, 'wet_cells')[local_time] == 0
+            else:
+                local_mask = np.zeros(getattr(self.fvcom.data, variable).shape, dtype=bool)
+                if 'node' in self.fvcom.variable_dimension_names[variable]:
+                    local_mask = nodes2elems(local_mask, self.fvcom.grid.triangles)
+            local_plot.plot_field(field[local_time], mask=local_mask)
             local_plot.tripcolor_plot.set_clim(*clims)
+            if set_title:
+                title_string = self.fvcom.time.datetime[local_time].strftime('%Y-%m-%d %H:%M:%S')
+                local_plot.set_title(title_string)
             local_plot.figure.savefig(str(Path(figures_directory, f'{variable}_{global_time + 1:04d}.png')),
                                       bbox_inches='tight',
                                       pad_inches=0.2,
@@ -1462,8 +1566,9 @@ class Player(FuncAnimation):
                                save_count=save_count, **kwargs)
 
     def play(self):
+        """ What to do when we play the animation. """
         while self.runs:
-            self.i = self.i+self.forwards-(not self.forwards)
+            self.i = self.i + self.forwards - (not self.forwards)
             if self.min < self.i < self.max:
                 yield self.i
             else:
@@ -1471,30 +1576,37 @@ class Player(FuncAnimation):
                 yield self.i
 
     def start(self):
-        self.runs=True
+        """ Start the animation. """
+        self.runs = True
         self.event_source.start()
 
     def stop(self):
+        """ Stop the animation. """
         self.runs = False
         self.event_source.stop()
 
     def forward(self):
+        """ Play forwards. """
         self.forwards = True
         self.start()
 
     def backward(self):
+        """ Play backwards. """
         self.forwards = False
         self.start()
 
     def oneforward(self):
+        """ Skip one forwards. """
         self.forwards = True
         self.onestep()
 
     def onebackward(self):
+        """ Skip one backwards. """
         self.forwards = False
         self.onestep()
 
     def onestep(self):
+        """ Skip through one frame at a time. """
         if self.min < self.i < self.max:
             self.i = self.i + self.forwards - (not self.forwards)
         elif self.i == self.min and self.forwards:
@@ -1506,6 +1618,7 @@ class Player(FuncAnimation):
         self.fig.canvas.draw_idle()
 
     def setup(self, pos):
+        """ Set up the animation. """
         playerax = self.fig.add_axes([pos[0],pos[1], 0.64, 0.04])
         divider = mpl_toolkits.axes_grid1.make_axes_locatable(playerax)
         bax = divider.append_axes("right", size="80%", pad=0.05)
@@ -1523,15 +1636,16 @@ class Player(FuncAnimation):
         self.button_stop.on_clicked(self.stop)
         self.button_forward.on_clicked(self.forward)
         self.button_oneforward.on_clicked(self.oneforward)
-        self.slider = matplotlib.widgets.Slider(sliderax, '',
-                                                self.min, self.max, valinit=self.i)
+        self.slider = matplotlib.widgets.Slider(sliderax, '', self.min, self.max, valinit=self.i)
         self.slider.on_changed(self.set_pos)
 
     def set_pos(self, i):
+        """ Set the slider position. """
         self.i = int(self.slider.val)
         self.func(self.i)
 
-    def update(self,i):
+    def update(self, i):
+        """ Update the slider to the given position. """
         self.slider.set_val(i)
 
 
@@ -1569,6 +1683,38 @@ def plot_domain(domain, mesh=False, depth=False, **kwargs):
             domain.domain_plot.plot_field(domain.grid.h)
         else:
             domain.domain_plot.plot_field(-domain.grid.h)
+
+
+def colorbar_extension(colour_min, colour_max, data_min, data_max):
+    """
+    For the range specified by `colour_min' to `colour_max', return whether the data range specified by `data_min'
+    and `data_max' is inside, outside or partially overlapping. This allows you to automatically set the `extend'
+    keyword on a `matplotlib.pyplot.colorbar' call.
+
+    Parameters
+    ----------
+    colour_min, colour_max : float
+        Minimum and maximum value of the current colour bar limits.
+    data_min, data_max : float
+        Minimum and maximum value of the data limits.
+
+    Returns
+    -------
+    extension : str
+        Will be 'neither', 'both', 'min, or 'max' for the case when the colour_min and colour_max values are: equal
+        to the data; inside the data range; only larger or only smaller, respectively.
+    """
+
+    if data_min < colour_min and data_max > colour_max:
+        extension = 'both'
+    elif data_min < colour_min and data_max <= colour_max:
+        extension = 'min'
+    elif data_min >= colour_min and data_max > colour_max:
+        extension = 'max'
+    else:
+        extension = 'neither'
+
+    return extension
 
 
 def cm2inch(value):

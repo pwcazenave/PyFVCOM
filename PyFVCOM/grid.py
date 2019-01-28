@@ -19,7 +19,7 @@ import matplotlib.path as mpath
 import networkx
 import numpy as np
 import scipy.spatial
-import shapely
+import shapely.geometry
 from dateutil.relativedelta import relativedelta
 from matplotlib.dates import date2num as mtime
 from matplotlib.tri import CubicTriInterpolator
@@ -107,7 +107,7 @@ class GridReaderNetCDF(object):
             # If we don't have a triangulation, make one. Warn that if we've made one, it might not match the
             # original triangulation used in the model run.
             if self._debug:
-                print("Creating new triangulation since we're missing one")
+                print("Creating new triangulation since we're missing one", flush=True)
             triangulation = Triangulation(self.lon, self.lat)
             self.triangles = triangulation.triangles
             self.nv = copy.copy(self.triangles.T + 1)
@@ -118,7 +118,7 @@ class GridReaderNetCDF(object):
         if self.nv.min() != 1:
             if self._debug:
                 print('Fixing broken triangulation. Current minimum for nv is {} and for triangles is {} but they '
-                      'should be 1 and 0, respectively.'.format(self.nv.min(), self.triangles.min()))
+                      'should be 1 and 0, respectively.'.format(self.nv.min(), self.triangles.min()), flush=True)
             self.nv = (ds.variables['nv'][:].astype(int) - ds.variables['nv'][:].astype(int).min()) + 1
             self.triangles = copy.copy(self.nv.T) - 1
 
@@ -126,10 +126,10 @@ class GridReaderNetCDF(object):
         if self._bounding_box:
             self._make_subset_dimensions()
 
-        # If we've been given a spatial dimension to subsample in fix the triangulation.
+        # If we've been given a spatial dimension to subsample in, fix the triangulation.
         if 'nele' in self._dims or 'node' in self._dims:
             if self._debug:
-                print('Fix triangulation table as we have been asked for only specific nodes/elements.')
+                print('Fix triangulation table as we have been asked for only specific nodes/elements.', flush=True)
 
             if 'node' in self._dims:
                 new_tri, new_ele = reduce_triangulation(self.triangles, self._dims['node'], return_elements=True)
@@ -155,82 +155,31 @@ class GridReaderNetCDF(object):
             self.nv = new_tri.T + 1
             self.triangles = new_tri
 
-        if 'node' in self._dims:
-            nodes = len(self._dims['node'])
-            for var in 'x', 'y', 'lon', 'lat', 'h', 'siglay', 'siglev':
-                try:
-                    node_index = ds.variables[var].dimensions.index('node')
-                    var_shape = [i for i in np.shape(ds.variables[var])]
-                    var_shape[node_index] = nodes
+        # If we have node/nele dimensions, subset the relevant arrays here. Make all zero arrays if we're missing
+        # them in the netCDF file.
+        spatial_variables = {'node': ['x', 'y', 'lon', 'lat', 'h', 'siglay', 'siglev'],
+                             'nele': ['xc', 'yc', 'lonc', 'latc', 'h_center', 'siglay_center', 'siglev_center']}
 
-                    if 'siglay' in self._dims and 'siglay' in ds.variables[var].dimensions:
-                        var_shape[ds.variables[var].dimensions.index('siglay')] = ds.dimensions['siglay'].size
-                    elif 'siglev' in self._dims and 'siglev' in ds.variables[var].dimensions:
-                        var_shape[ds.variables[var].dimensions.index('siglev')] = ds.dimensions['siglev'].size
-                    _temp = np.empty(var_shape)
-                    if 'siglay' in ds.variables[var].dimensions:
-                        for ni, node in enumerate(self._dims['node']):
-                            if 'siglay' in self._dims:
-                                _temp[..., ni] = ds.variables[var][self._dims['siglay'], node]
-                            else:
-                                _temp[..., ni] = ds.variables[var][:, node]
-                    elif 'siglev' in ds.variables[var].dimensions:
-                        for ni, node in enumerate(self._dims['node']):
-                            if 'siglev' in self._dims:
-                                _temp[..., ni] = ds.variables[var][self._dims['siglev'], node]
-                            else:
-                                _temp[..., ni] = ds.variables[var][:, node]
-                    else:
-                        for ni, node in enumerate(self._dims['node']):
-                            _temp[..., ni] = ds.variables[var][..., node]
-                except KeyError:
-                    if 'siglay' in var:
-                        _temp = np.empty((ds.dimensions['siglay'].size, nodes))
-                    elif 'siglev' in var:
-                        _temp = np.empty((ds.dimensions['siglev'].size, nodes))
-                    else:
-                        _temp = np.empty(nodes)
-                setattr(self, var, _temp)
+        for spatial_dimension in spatial_variables:
+            if spatial_dimension in self._dims:
+                spatial_points = len(self._dims[spatial_dimension])
+                for var in spatial_variables[spatial_dimension]:
+                    try:
+                        _temp = ds.variables[var][:]
+                        _temp = _temp[..., self._dims[spatial_dimension]]
+                    except KeyError:
+                        if spatial_dimension == 'nele':
+                            if self._noisy:
+                                print('Adding element-centred {} for compatibility.'.format(var))
+                        if 'siglay' in var:
+                            var_shape = (ds.dimensions['siglay'].size, spatial_points)
+                        elif 'siglev' in var:
+                            var_shape = (ds.dimensions['siglev'].size, spatial_points)
+                        else:
+                            var_shape = spatial_points
+                        _temp = np.zeros(var_shape)
 
-        if 'nele' in self._dims:
-            nele = len(self._dims['nele'])
-            for var in 'xc', 'yc', 'lonc', 'latc', 'h_center', 'siglay_center', 'siglev_center':
-                try:
-                    nele_index = ds.variables[var].dimensions.index('nele')
-                    var_shape = [i for i in np.shape(ds.variables[var])]
-                    var_shape[nele_index] = nele
-                    if 'siglay' in self._dims and 'siglay' in ds.variables[var].dimensions:
-                        var_shape[ds.variables[var].dimensions.index('siglay')] = ds.dimensions['siglay'].size
-                    elif 'siglev' in self._dims and 'siglev' in ds.variables[var].dimensions:
-                        var_shape[ds.variables[var].dimensions.index('siglev')] = ds.dimensions['siglev'].size
-                    _temp = np.full(var_shape, np.nan)
-                    if 'siglay' in ds.variables[var].dimensions:
-                        for ni, current_nele in enumerate(self._dims['nele']):
-                            if 'siglay' in self._dims:
-                                _temp[..., ni] = ds.variables[var][self._dims['siglay'], current_nele]
-                            else:
-                                _temp[..., ni] = ds.variables[var][:, current_nele]
-                    elif 'siglev' in ds.variables[var].dimensions:
-                        for ni, current_nele in enumerate(self._dims['nele']):
-                            if 'siglev' in self._dims:
-                                _temp[..., ni] = ds.variables[var][self._dims['siglev'], current_nele]
-                            else:
-                                _temp[..., ni] = ds.variables[var][:, current_nele]
-                    else:
-                        for ni, current_nele in enumerate(self._dims['nele']):
-                            _temp[..., ni] = ds.variables[var][..., current_nele]
-                except KeyError:
-                    # FVCOM3 files don't have h_center, siglay_center and siglev_center, so make var_shape manually.
-                    if self._noisy:
-                        print('Adding element-centred {} for compatibility.'.format(var))
-                    if var.startswith('siglev'):
-                        var_shape = [ds.dimensions['siglev'].size, nele]
-                    elif var.startswith('siglay'):
-                        var_shape = [ds.dimensions['siglay'].size, nele]
-                    else:
-                        var_shape = nele
-                    _temp = np.zeros(var_shape)
-                setattr(self, var, _temp)
+                    setattr(self, var, _temp)
 
         # Load the grid metrics data separately as we don't want to set a bunch of zeros for missing data.
         for metric, grid_pos in grid_metrics.items():
@@ -255,6 +204,8 @@ class GridReaderNetCDF(object):
         # This does not occur if we've been asked to extract an incompatible set of nodes and elements, for whatever
         # reason (e.g. testing). We don't add attributes for the data if we've created it as doing so is a pain.
         for var in 'h_center', 'siglay_center', 'siglev_center':
+            if self._debug:
+                print('Add element-based compatibility arrays', flush=True)
             try:
                 if 'nele' in self._dims:
                     var_raw = ds.variables[var][:]
@@ -289,7 +240,8 @@ class GridReaderNetCDF(object):
                     else:
                         raise ValueError('Inexplicably, we have a variable not in the loop we have defined.')
 
-        # Check if we've been given vertical dimensions to subset in too, and if so, do that.
+        # Check if we've been given only vertical dimensions to subset in too, and if so, do that. At this point,
+        # if we've got node/element subsets given, we've already subsetted those.
         for var in 'siglay', 'siglev', 'siglay_center', 'siglev_center':
             # Only carry on if we have this variable in the output file with which we're working (mainly this
             # is for compatibility with FVCOM 3 outputs which do not have the _center variables).
@@ -302,7 +254,7 @@ class GridReaderNetCDF(object):
             if short_dim in self._dims:
                 if short_dim in ds.variables[var].dimensions:
                     if self._debug:
-                        print(f'Subsetting {var} in the vertical ({short_dim} = {self._dims[short_dim]}')
+                        print(f'Subsetting {var} in the vertical ({short_dim} = {self._dims[short_dim]})', flush=True)
                     _temp = getattr(self, var)[self._dims[short_dim], ...]
                     setattr(self, var, _temp)
 
@@ -319,7 +271,7 @@ class GridReaderNetCDF(object):
                     z = -self.h
 
                 if self._debug:
-                    print(f'Making water depth vertical grid: {var}_z')
+                    print(f'Making water depth vertical grid: {var}_z', flush=True)
 
                 _original_sig = getattr(self, var)
 
@@ -336,7 +288,7 @@ class GridReaderNetCDF(object):
                 except ValueError:
                     # The arrays might be the wrong shape for broadcasting to work, so transpose and retranspose
                     # accordingly. This is less than ideal.
-                    warning(f'Depth-resolved sigma {var} seems to be the wrong shape. Trying again.')
+                    warn(f'Depth-resolved sigma {var} seems to be the wrong shape. Trying again.')
                     setattr(self, '{}_z'.format(var), (_fixed_sig.T * z).T)
 
         # Check ranges and if zero assume we're missing that particular type, so convert from the other accordingly.
@@ -382,6 +334,9 @@ class GridReaderNetCDF(object):
 
         ds.close()
 
+        if self._debug:
+            print('Finished loading grid from netCDF')
+
     def __iter__(self):
         return (a for a in dir(self) if not a.startswith('_'))
 
@@ -407,48 +362,24 @@ class GridReaderNetCDF(object):
         If the 'wesn' keyword has been included in the supplied dimensions, interactively select a region if the
         value of 'wesn' is not a shapely Polygon. If it is a shapely Polygon, use that for the subsetting.
 
-        Eventually this functionality should just be folded into FileReader.
-
         """
 
+        bounding_poly = None
         if 'wesn' in self._dims:
             if isinstance(self._dims['wesn'], shapely.geometry.Polygon):
-                bounding_poly = np.asarray(self._dims['wesn'].exterior.coords)
-        else:
-            fig = plt.figure()
-            ax = fig.add_subplot(111)
-            ax.scatter(self.lon, self.lat, c='lightgray')
-            plt.show()
+                bounding_poly = self._dims['wesn']
+                if self._debug:
+                    print('Subsetting the data with a polygon', flush=True)
 
-            keep_picking = True
-            while keep_picking:
-                n_pts = int(input('How many polygon points? '))
-                bounding_poly = np.full((n_pts, 2), np.nan)
-                poly_lin = []
-                for point in range(n_pts):
-                    bounding_poly[point, :] = plt.ginput(1)[0]
-                    poly_lin.append(ax.plot(np.hstack([bounding_poly[:, 0], bounding_poly[0, 0]]),
-                                            np.hstack([bounding_poly[:, 1], bounding_poly[0, 1]]),
-                                            c='r', linewidth=2)[0])
-                    fig.canvas.draw()
-
-                happy = input('Is that polygon OK? Y/N: ')
-                if happy.lower() == 'y':
-                    keep_picking = False
-
-                for this_l in poly_lin:
-                    this_l.remove()
-
-            plt.close()
-
-        poly_path = mpath.Path(bounding_poly)
-
-        # Shouldn't need the np.asarray here, I think, but leaving it in as I'm not 100% sure.
-        self._dims['node'] = np.squeeze(np.argwhere(np.asarray(poly_path.contains_points(np.asarray([self.lon, self.lat]).T))))
-        self._dims['nele'] = np.squeeze(np.argwhere(np.all(np.isin(self.triangles, self._dims['node']), axis=1)))
+        # Do the subset of our grid.
+        if self._debug:
+            print('Starting the subsetting...', end=' ', flush=True)
+        self._dims['node'], self._dims['nele'], _ = subset_domain(self.lon, self.lat, self.triangles, bounding_poly)
         self._get_data_pattern = 'memory'
         # Remove the now useless 'wesn' dimension.
         self._dims.pop('wesn')
+        if self._debug:
+            print('done.', flush=True)
 
 
 class _GridReader(object):
@@ -563,7 +494,8 @@ class _GridReader(object):
         self.bounding_box = (np.min(self.lon), np.max(self.lon), np.min(self.lat), np.max(self.lat))
 
     def __iter__(self):
-        return (a for a in dir(self) if not a.startswith('__'))
+        return (a for a in self.__dict__.keys() if not a.startswith('_'))
+
 
 class _MakeDimensions(object):
     def __init__(self, grid_reader):
@@ -582,7 +514,7 @@ class _MakeDimensions(object):
         self.node = len(grid_reader.x)
 
     def __iter__(self):
-        return (a for a in dir(self) if not a.startswith('__'))
+        return (a for a in self.__dict__.keys() if not a.startswith('_'))
 
 
 class Domain(object):
@@ -675,11 +607,14 @@ class Domain(object):
         # We have to split this into two parts: if our threshold is in the same units as the grid (i.e. haversine and
         # vincenty are both False), then we can use the quick find_nearest_point function; if either of haversine or
         # vincenty have been given, we need to use the distance conversion functions, which are slower.
-        if not vincenty or not haversine:
+        if not vincenty and not haversine:
             _, _, _, index = find_nearest_point(x, y, *where, maxDistance=threshold)
             if np.any(np.isnan(index)):
-                index[np.isnan[index]] = None
+                index[np.isnan(index)] = None
 
+        # Note: this is really slow! Computing the distances between the entire grid and the point of interest is
+        # very slow. There must be a faster way of doing this! which fall inside the `where' bounding box.
+        # TODO: implement a faster conversion
         if vincenty:
             grid_pts = np.asarray([lon, lat]).T
             dist = np.asarray([vincenty_distance(pt_1, where) for pt_1 in grid_pts]) * 1000
@@ -814,6 +749,29 @@ class Domain(object):
         indices, distance = element_sample(self.grid.lonc, self.grid.latc, positions)
 
         return indices, distance
+
+    def subset_domain(self, polygon=None):
+        """
+        Subset the current model grid interactively with a given polygon. Coordinates in `polygon' must be in the
+        same system as `x' and `y'.
+
+        Parameters
+        ----------
+        polygon : shapely.geometry.Polygon, optional
+            If given, use this polygon to use to clip the given domain. If omitted, subsetting is interactive.
+
+        Returns
+        -------
+        nodes : np.ndarray
+            List of the nodes within the given polygon.
+        elements : np.ndarray
+            List of the elements within the given polygon.
+        triangles : np.ndarray
+            The reduced triangulation.
+
+        """
+
+        return subset_domain(self.grid.lon, self.grid.lat, self.grid.triangles, polygon)
 
     def calculate_areas(self):
         """
@@ -1043,7 +1001,7 @@ class OpenBoundary(object):
         self.nest = _passive_data_store()
 
     def __iter__(self):
-        return (a for a in dir(self) if not a.startswith('_'))
+        return (a for a in self.__dict__.keys() if not a.startswith('_'))
 
     def add_sponge_layer(self, radius, coefficient):
         """
@@ -1155,7 +1113,6 @@ class OpenBoundary(object):
                  'lat_name': lat_name,
                  'constituent_name': constituent_name}
         harmonics_lon, harmonics_lat, amplitudes, phases, available_constituents = self._load_harmonics(tpxo_harmonics, constituents, names)
-
         interpolated_amplitudes, interpolated_phases = self._interpolate_tpxo_harmonics(x, y,
                                                                                         amplitudes, phases,
                                                                                         harmonics_lon, harmonics_lat)
@@ -1264,7 +1221,7 @@ class OpenBoundary(object):
         coef = Bunch(name=self.tide.constituents, mean=0, slope=0)
         coef['aux'] = Bunch(reftime=729572.47916666674, lind=const_idx, frq=frq)
         coef['aux']['opt'] = Bunch(twodim=False, nodsatlint=False, nodsatnone=False,
-                                   gwchlint=False, gwchnone=False, notrend=False, prefilt=[])
+                                   gwchlint=False, gwchnone=False, notrend=True, prefilt=[])
 
         # Prepare the time data for predicting the time series. UTide needs MATLAB times.
         times = mtime(self.tide.time)
@@ -1398,8 +1355,8 @@ class OpenBoundary(object):
         # Make a dummy first dimension since we need it for the RegularGridInterpolator but don't actually
         # interpolated along it.
         c_data = np.arange(amp_data.shape[0])
-        amplitude_interp = RegularGridInterpolator((c_data, harmonics_lon, harmonics_lat), amp_data, method='linear', fill_value=None)
-        phase_interp = RegularGridInterpolator((c_data, harmonics_lon, harmonics_lat), phase_data, method='linear', fill_value=None)
+        amplitude_interp = RegularGridInterpolator((c_data, harmonics_lon, harmonics_lat), amp_data, method='nearest', fill_value=None)
+        phase_interp = RegularGridInterpolator((c_data, harmonics_lon, harmonics_lat), phase_data, method='nearest', fill_value=None)
 
         # Fix our input position longitudes to be in the 0-360 range to match the harmonics data range,
         # if necessary.
@@ -1539,7 +1496,7 @@ class OpenBoundary(object):
         coarse : RegularReader
             The regularly gridded data to interpolate onto the open boundary nodes. This must include time, lon,
             lat and depth data as well as the time series to interpolate (4D volume [time, depth, lat, lon]).
-        interval : str, optional
+        interval : float, optional
             Time sampling interval in days. Defaults to 1 day.
         constrain_coordinates : bool, optional
             Set to True to constrain the open boundary coordinates (lon, lat, depth) to the supplied coarse data.
@@ -1837,7 +1794,7 @@ def read_sms_mesh(mesh, nodestrings=False):
         return triangle, nodes, X, Y, Z, types
 
 
-def read_sms_map(map_file):
+def read_sms_map(map_file, merge_lines=False):
     """
     Reads in the SMS map file format.
 
@@ -1845,13 +1802,14 @@ def read_sms_map(map_file):
     ----------
     map_file : str
         Full path to an SMS map (.map) file.
-    noisy : bool, optional
-        Set to True to enable verbose messages.
+    merge_lines : bool
+        Set to True to merge distinct arcs into contiguous ones to make sensible polygons. Defaults to False.
 
     Returns
     -------
-    arcs : list
-        List of the coordinate pairs and elevation for the polygons defined in the map file.
+    arcs : dict
+        Dictionary of each map (set of arcs) in the map file name as per SMS names. Each is a list of the coordinate
+        pairs and elevation for the polygons defined in the map file.
 
     Notes
     -----
@@ -1862,38 +1820,55 @@ def read_sms_map(map_file):
 
     """
 
-    x, y, z, arc_id, arc_elevation = [], [], [], [], []
-    arcs = []
+    x, y, z, arc_id, node_id = [], [], [], [], []
+    arcs = {}
     with open(map_file) as f:
         for line in f:
             line = line.strip()
-            if line == 'NODE':
+            if line.startswith('COVNAME'):
+                arc_name = line.split()[1].replace('"', '')
+                arcs[arc_name] = []
+            elif line == 'NODE':
                 line = next(f).strip()
                 _, node_x, node_y, node_z = line.split()
                 x.append(float(node_x))
                 y.append(float(node_y))
                 z.append(float(node_z))
+                line = next(f).strip()
+                node_id.append(float(line.split()[-1]))
             elif line == 'ARC':
                 # Skip the arc ID.
                 next(f)
                 # Skip the arc elevation.
                 next(f)
-                # Next line doesn't seem to be used for anything...
-                next(f)
+                # Grab the start and end IDs for the arc nodes.
+                line = next(f).strip()
+                start_id, end_id = [int(i) for i in line.split()[1:]]
+                start_index = node_id.index(start_id)
+                end_index = node_id.index(end_id)
                 # The number of nodes in the current arc.
                 line = next(f).strip()
                 number_of_nodes = int(line.split()[-1])
                 # Read in the coordinates and elevation for the current arc. Start with the appropriate coordinate
                 # from `x', `y' and its `z' value too (the 'node' in SMS parlance) before appending the arc vertices
                 # (in SMS parlance).
-                current_arc_id = len(arcs)
-                arcs.append([[x[current_arc_id], y[current_arc_id], z[current_arc_id]]])
+                arcs[arc_name].append([[x[start_index], y[start_index], z[start_index]]])
                 for next_line in range(number_of_nodes):
                     line = next(f).strip()
-                    arcs[-1].append([float(i) for i in line.split()])
+                    arcs[arc_name][-1].append([float(i) for i in line.split()])
+                # Add the end node
+                arcs[arc_name][-1].append([x[end_index], y[end_index], z[end_index]])
 
-    # Make the arcs a list of numpy arrays.
-    arcs = [np.asarray(arc) for arc in arcs]
+    if merge_lines:
+        # Get all the z values for the arcs so we can put them back after merging.
+        for arc in arcs:
+            separate_lines = [shapely.geometry.LineString(a) for a in arcs[arc]]
+            all_lines = shapely.geometry.MultiLineString(separate_lines)
+            merged = shapely.ops.linemerge(all_lines)
+            arcs[arc] = [np.asarray(line.coords) for line in merged]
+    else:
+        # Just make the arcs a list of numpy arrays.
+        arcs = {key: [np.asarray(i) for i in arcs[key]] for key in arcs}
 
     return arcs
 
@@ -2285,7 +2260,7 @@ def write_sms_mesh(triangles, nodes, x, y, z, types, mesh):
 
     # Write out the connectivity table (triangles)
     current_node = 0
-    for line in triangles:
+    for line in triangles.copy():
         # Bump the numbers by one to correct for Python indexing from zero
         line += 1
         line_string = []
@@ -2337,9 +2312,13 @@ def write_sms_mesh(triangles, nodes, x, y, z, types, mesh):
     # BEG2DMBC = Beginning of the model assignments
     # MAT = Material assignment
     # END2DMBC = End of the model assignments
-    footer = 'BEGPARAMDEF\nGM  "Mesh"\nSI  0\nDY  0\nTU  ""\nTD  0  0\nNUME  3\nBCPGC  0\nBEDISP  0 0 0 0 1 0 1 0 0 0 0 1\nBEFONT  0 2\nBEDISP  1 0 0 0 1 0 1 0 0 0 0 1\nBEFONT  1 2\nBEDISP  2 0 0 0 1 0 1 0 0 0 0 1\nBEFONT  2 2\nENDPARAMDEF\nBEG2DMBC\nMAT  1 "material 01"\nEND2DMBC\n'
+    footer_parts = ('BEGPARAMDEF', 'GM  "Mesh"', 'SI  0', 'DY  0', 'TU  ""', 'TD  0  0', 'NUME  3', 'BCPGC  0',
+                    'BEDISP  0 0 0 0 1 0 1 0 0 0 0 1', 'BEFONT  0 2', 'BEDISP  1 0 0 0 1 0 1 0 0 0 0 1',
+                    'BEFONT  1 2', 'BEDISP  2 0 0 0 1 0 1 0 0 0 0 1', 'BEFONT  2 2', 'ENDPARAMDEF',
+                    'BEG2DMBC', 'MAT  1 "material 01"', 'END2DMBC')
+    footer = '\n'.join(footer_parts)
 
-    file_write.write(footer)
+    file_write.write(f'{footer}\n')
 
     file_write.close()
 
@@ -4484,6 +4463,71 @@ def isintriangle(tri_x, tri_y, point_x, point_y):
     is_in = 0 <= a <= 1 and 0 <= b <= 1 and 0 <= c <= 1
 
     return is_in
+
+
+def subset_domain(x, y, triangles, polygon=None):
+    """
+    Subset the current model grid, either interactively or with a given polygon. Coordinates in `polygon' must be in
+    the same system as `x' and `y'.
+
+    Parameters
+    ----------
+    x, y : np.ndarray
+        The x and y coordinates of the whole model grid.
+    triangles : np.ndarray
+        The grid triangulation (shape = [elements, 3])
+    polygon : shapely.geometry.Polygon, optional
+        If given, the domain will be clipped by this polygon. If omitted, the polygon is defined interactively.
+
+    Returns
+    -------
+    nodes : np.ndarray
+        List of the nodes within the given polygon.
+    elements : np.ndarray
+        List of the elements within the given polygon.
+    triangles : np.ndarray
+        The reduced triangulation of the new subdomain.
+
+    """
+
+    if polygon is not None:
+        bounding_poly = np.asarray(polygon.exterior.coords)
+    else:
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+        ax.scatter(x, y, c='lightgray')
+        plt.show()
+
+        keep_picking = True
+        while keep_picking:
+            n_pts = int(input('How many polygon points? '))
+            bounding_poly = np.full((n_pts, 2), np.nan)
+            poly_lin = []
+            for point in range(n_pts):
+                bounding_poly[point, :] = plt.ginput(1)[0]
+                poly_lin.append(ax.plot(np.hstack([bounding_poly[:, 0], bounding_poly[0, 0]]),
+                                        np.hstack([bounding_poly[:, 1], bounding_poly[0, 1]]),
+                                        c='r', linewidth=2)[0])
+                fig.canvas.draw()
+
+            happy = input('Is that polygon OK? Y/N: ')
+            if happy.lower() == 'y':
+                keep_picking = False
+
+            for this_l in poly_lin:
+                this_l.remove()
+
+        plt.close()
+
+    poly_path = mpath.Path(bounding_poly)
+
+    # Shouldn't need the np.asarray here, I think, but leaving it in as I'm not 100% sure.
+    nodes = np.squeeze(np.argwhere(np.asarray(poly_path.contains_points(np.asarray([x, y]).T))))
+    elements = np.squeeze(np.argwhere(np.all(np.isin(triangles, nodes), axis=1)))
+
+    sub_triangles = reduce_triangulation(triangles, nodes)
+
+    return nodes, elements, sub_triangles
 
 
 class Graph(object):

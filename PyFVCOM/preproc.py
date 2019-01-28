@@ -614,7 +614,7 @@ class Model(Domain):
                 raise ValueError('Number of zkl values does not match the number specified in kl')
             sigma_levels = np.empty((self.dims.node, nlev)) * np.nan
             for i in range(self.dims.node):
-                sigma_levels[i, :] = self.sigma_generalized(nlev, dl, du, kl, ku, zkl, zku, self.grid.h[i], min_constant_depth)
+                sigma_levels[i, :] = self.sigma_generalized(nlev, dl, du, self.grid.h[i], min_constant_depth)
         elif sigtype.lower() == 'uniform':
             sigma_levels = np.repeat(self.sigma_geometric(nlev, 1), self.dims.node).reshape(self.dims.node, -1)
         elif sigtype.lower() == 'geometric':
@@ -669,7 +669,7 @@ class Model(Domain):
         # Update the open boundaries.
         self.__update_open_boundaries()
 
-    def sigma_generalized(self, levels, dl, du, kl, ku, zkl, zku, h, hmin):
+    def sigma_generalized(self, levels, dl, du, h, hmin):
         """
         Generate a generalised sigma coordinate distribution.
 
@@ -681,18 +681,10 @@ class Model(Domain):
             The lower depth boundary from the bottom, down to which the layers are uniform thickness.
         du : float
             The upper depth boundary from the surface, up to which the layers are uniform thickness.
-        kl : float
-            Number of layers in the upper water column
-        ku : float
-            Number of layers in the lower water column
-        zkl : list, np.ndarray
-            Upper water column layer thicknesses.
-        zku : list, np.ndarray
-            Lower water column layer thicknesses.
         h : float
-            Water depth.
+            Water depth (positive down).
         hmin : float
-            Minimum water depth.
+            Minimum water depth (positive down).
 
         Returns
         -------
@@ -701,15 +693,21 @@ class Model(Domain):
 
         """
 
-        dist = np.zeros(levels)
+        # Make sure we have positive down depths by nuking negatives.
+        h = np.abs(h)
+        hmin = np.abs(hmin)
 
         if h > hmin:
-            dist = self.sigma_tanh(levels, du, dl)
+            # Hyperbolic tangent for deep areas
+            dist = self.sigma_tanh(levels, dl, du)
         else:
+            # Uniform for shallow areas
             dist = self.sigma_geometric(levels, 1)
+
         return dist
 
-    def sigma_geometric(self, levels, p_sigma):
+    @staticmethod
+    def sigma_geometric(levels, p_sigma):
         """
         Generate a geometric sigma coordinate distribution.
 
@@ -746,7 +744,8 @@ class Model(Domain):
 
         return dist
 
-    def sigma_tanh(self, levels, dl, du):
+    @staticmethod
+    def sigma_tanh(levels, dl, du):
         """
         Generate a hyperbolic tangent vertical sigma coordinate distribution.
 
@@ -856,8 +855,6 @@ class Model(Domain):
         sigma_levels = np.empty((self.dims.node, self.dims.levels)) * np.nan
         for i in range(self.dims.node):
             sigma_levels[i, :] = self.sigma_generalized(levels, lower_layer_depth, upper_layer_depth,
-                                                        total_lower_layers, total_upper_layers,
-                                                        lower_layer_thickness, upper_layer_thickness,
                                                         self.grid.h[i], optimised_depth)
 
         # Create a sigma layer variable (i.e. midpoint in the sigma levels).
@@ -2103,8 +2100,10 @@ class Model(Domain):
             atts = {'units': 'degrees_north', 'standard_name': 'latitude', 'long_name': 'zonal latitude'}
             nest_ncfile.add_variable('latc', self.grid.latc[elements], ['nele'], attributes=atts, ncopts=ncopts)
 
-            # No attributes for nv in the existing nest files, so I won't add any here.
-            # nest_ncfile.add_variable('nv', nv, ['three', 'nele'], attributes=atts, ncopts=ncopts)
+            if self.debug:
+                print('adding nv to netCDF')
+            atts = {'long_name': 'nodes surrounding element'}
+            nest_ncfile.add_variable('nv', self.grid.nv[:,elements], ['three', 'nele'], format='i4', attributes=atts, ncopts=ncopts)
 
             if self.debug:
                 print('adding siglay to netCDF')
@@ -2345,7 +2344,7 @@ class Model(Domain):
             self.groundwater.temperature[:, node_index[0]] = temperature
             self.groundwater.salinity[:, node_index[0]] = salinity
 
-    def write_groundwater(self, output_file, ncopts={'zlib': True, 'complevel': 7}, **kwargs):
+    def write_groundwater(self, output_file, surface=False, ncopts={'zlib': True, 'complevel': 7}, **kwargs):
         """
         Generate a groundwater forcing file for the given FVCOM domain from the data in self.groundwater object. It
         should contain flux, temp and salt attributes (generated from self.add_groundwater).
@@ -2354,6 +2353,8 @@ class Model(Domain):
         ----------
         output_file : str, pathlib.Path
             File to which to write open boundary tidal elevation forcing data.
+        surface : bool
+            Set to True to generate a file for the experimental surface water input.
         ncopts : dict, optional
             Dictionary of options to use when creating the netCDF variables. Defaults to compression on.
 
@@ -2361,8 +2362,12 @@ class Model(Domain):
 
         """
 
-        globals = {'type': 'FVCOM GROUNDWATER FORCING FILE',
-                   'title': 'Groundwater input forcing time series',
+        name = 'GROUND'
+        if surface:
+            name = 'SURFACE'
+
+        globals = {'type': f'FVCOM {name}WATER FORCING FILE',
+                   'title': f'{name.title()}water input forcing time series',
                    'source': 'FVCOM grid (unstructured) surface forcing',
                    'history': 'File created using {} from PyFVCOM'.format(inspect.stack()[0][3])}
         # FVCOM checks for the existence of the nele dimension even though none of the groundwater data are specified
@@ -2371,22 +2376,22 @@ class Model(Domain):
 
         with WriteForcing(str(output_file), dims, global_attributes=globals, clobber=True, format='NETCDF4', **kwargs) as groundwater:
             # Add the variables.
-            atts = {'long_name': 'groundwater volume flux',
+            atts = {'long_name': f'{name.lower()}water volume flux',
                     'units': 'm3 s-1',
                     'grid': 'fvcom_grid',
                     'type': 'data'}
-            groundwater.add_variable('groundwater_flux', self.groundwater.flux, ['time', 'node'],
+            groundwater.add_variable(f'{name.lower()}water_flux', self.groundwater.flux, ['time', 'node'],
                                      attributes=atts, ncopts=ncopts)
-            atts = {'long_name': 'groundwater inflow temperature',
+            atts = {'long_name': f'{name.lower()}water inflow temperature',
                     'units': 'degrees_C',
                     'grid': 'fvcom_grid',
                     'type': 'data'}
-            groundwater.add_variable('groundwater_temp', self.groundwater.temperature, ['time', 'node'],
+            groundwater.add_variable(f'{name.lower()}water_temp', self.groundwater.temperature, ['time', 'node'],
                                      attributes=atts, ncopts=ncopts)
-            atts = {'long_name': 'groundwater inflow salinity', 'units': '1e-3',
+            atts = {'long_name': f'{name.lower()}water inflow salinity', 'units': '1e-3',
                     'grid': 'fvcom_grid',
                     'type': 'data'}
-            groundwater.add_variable('groundwater_salt', self.groundwater.salinity, ['time', 'node'],
+            groundwater.add_variable(f'{name.lower()}water_salt', self.groundwater.salinity, ['time', 'node'],
                                      attributes=atts, ncopts=ncopts)
             groundwater.write_fvcom_time(self.time.datetime)
 
@@ -2537,6 +2542,33 @@ class Model(Domain):
                 weight_node.type = 'data'
                 if self._noisy:
                     print('done.')
+
+    def load_elevtide(self, elevtide):
+        """
+        Load a surface elevation forcing time series data set from a netCDF.
+
+        Parameters
+        ----------
+        elevtide : str, pathlib.Path
+            The path to the file to load.
+
+        """
+
+        # TODO: This needs more error checking (e.g. if no common nodes are found). We could also extend this to
+        # interpolate a given elevtide file onto the current boundaries.
+
+        ds = Dataset(elevtide)
+
+        nodes = ds.variables['obc_nodes'][:] - 1  # python indexing
+        elevation = ds.variables['elevation'][:]
+        Times = ds.variables['Times'][:]
+        datetimes = [datetime.strptime(''.join(t.astype(str)), '%Y-%m-%dT%H:%M:%S.%f') for t in Times]
+
+        for boundary in self.open_boundaries:
+            # Find the relevant time series from the set of nodes in the current boundary and those in the input file.
+            mask = nodes == boundary.nodes
+            setattr(boundary.tide, 'zeta', elevation[..., mask])
+            setattr(boundary.tide, 'time', datetimes)
 
 
 class NameListEntry(object):
@@ -3567,7 +3599,7 @@ def read_regular(regular, variables, noisy=False, **kwargs):
         if ii == 0:
             regular_model = RegularReader(str(file), **kwargs)
         else:
-            regular_model += RegularReader(str(file), **kwargs)
+            regular_model = RegularReader(str(file), **kwargs) >> regular_model
 
     return regular_model
 
@@ -3688,10 +3720,10 @@ class RegularReader(FileReader):
 
     """
 
-    def __add__(self, other, debug=False):
+    def __rshift__(self, other, debug=False):
         """
-        This special method means we can stack two RegularReader objects in time through a simple addition (e.g. nemo1
-        += nemo2)
+        This special method means we can stack two RegularReader objects in time through a simple append (e.g. nemo
+        = nemo2 >> nemo1).
 
         """
 
@@ -3718,9 +3750,9 @@ class RegularReader(FileReader):
 
         lon_compare = xdim == getattr(other.dims, xname)
         lat_compare = ydim == getattr(other.dims, yname)
-        time_compare = self.time.datetime[-1] <= other.time.datetime[0]
-        old_data = [i for i in self.data]
-        new_data = [i for i in other.data]
+        time_compare = other.time.datetime[-1] <= self.time.datetime[0]
+        old_data = [i for i in other.data]
+        new_data = [i for i in self.data]
         data_compare = new_data == old_data
         if not lon_compare:
             raise ValueError('Horizontal longitude data are incompatible.')
@@ -3730,8 +3762,8 @@ class RegularReader(FileReader):
             raise ValueError('Vertical depth layers are incompatible.')
         if not time_compare:
             raise ValueError("Time periods are incompatible (`fvcom2' must be greater than or equal to `fvcom1')."
-                             "`fvcom1' has end {} and `fvcom2' has start {}".format(self.time.datetime[-1],
-                                                                                    other.time.datetime[0]))
+                             "`fvcom1' has end {} and `fvcom2' has start {}".format(other.time.datetime[-1],
+                                                                                    self.time.datetime[0]))
         if not data_compare:
             raise ValueError('Loaded data sets for each RegularReader class must match.')
         if not (old_data == new_data) and (old_data or new_data):
@@ -3745,9 +3777,9 @@ class RegularReader(FileReader):
             if 'time' in idem.ds.variables[var].dimensions:
                 if self._noisy:
                     print('Concatenating {} in time'.format(var))
-                setattr(idem.data, var, np.ma.concatenate((getattr(idem.data, var), getattr(other.data, var))))
+                setattr(idem.data, var, np.ma.concatenate((getattr(other.data, var), getattr(idem.data, var))))
         for time in idem.time:
-            setattr(idem.time, time, np.concatenate((getattr(idem.time, time), getattr(other.time, time))))
+            setattr(idem.time, time, np.concatenate((getattr(other.time, time), getattr(idem.time, time))))
 
         # Remove duplicate times.
         time_indices = np.arange(len(idem.time.time))
@@ -4091,10 +4123,10 @@ class HYCOMReader(RegularReader):
 
     """
 
-    def __add__(self, other, debug=False):
+    def __rshift__(self, other, debug=False):
         """
-        This special method means we can stack two RegularReader objects in time through a simple addition (e.g. nemo1
-        += nemo2)
+        This special method means we can stack two RegularReader objects in time through a simple append: (e.g. nemo
+        = nemo2 >> nemo1)
 
         """
 
@@ -4105,9 +4137,9 @@ class HYCOMReader(RegularReader):
         lon_compare = self.dims.lon == other.dims.lon
         lat_compare = self.dims.lat == other.dims.lat
         depth_compare = self.dims.depth == other.dims.depth
-        time_compare = self.time.datetime[-1] <= other.time.datetime[0]
-        old_data = [i for i in self.data]
-        new_data = [i for i in other.data]
+        time_compare = other.time.datetime[-1] <= self.time.datetime[0]
+        old_data = [i for i in other.data]
+        new_data = [i for i in self.data]
         data_compare = new_data == old_data
         if not lon_compare:
             raise ValueError('Horizontal longitude data are incompatible.')
@@ -4117,8 +4149,8 @@ class HYCOMReader(RegularReader):
             raise ValueError('Vertical depth layers are incompatible.')
         if not time_compare:
             raise ValueError("Time periods are incompatible (`fvcom2' must be greater than or equal to `fvcom1')."
-                             "`fvcom1' has end {} and `fvcom2' has start {}".format(self.time.datetime[-1],
-                                                                                    other.time.datetime[0]))
+                             "`fvcom1' has end {} and `fvcom2' has start {}".format(other.time.datetime[-1],
+                                                                                    self.time.datetime[0]))
         if not data_compare:
             raise ValueError('Loaded data sets for each HYCOMReader class must match.')
         if not (old_data == new_data) and (old_data or new_data):
@@ -4130,9 +4162,9 @@ class HYCOMReader(RegularReader):
 
         for var in idem.data:
             if 'MT' in idem.ds.variables[var].dimensions:
-                setattr(idem.data, var, np.ma.concatenate((getattr(idem.data, var), getattr(other.data, var))))
+                setattr(idem.data, var, np.ma.concatenate((getattr(other.data, var), getattr(idem.data, var))))
         for time in idem.time:
-            setattr(idem.time, time, np.concatenate((getattr(idem.time, time), getattr(other.time, time))))
+            setattr(idem.time, time, np.concatenate((getattr(other.time, time), getattr(idem.time, time))))
 
         # Remove duplicate times.
         time_indices = np.arange(len(idem.time.time))
@@ -4451,7 +4483,7 @@ def read_hycom(regular, variables, noisy=False, **kwargs):
         if ii == 0:
             hycom_model = HYCOMReader(str(file), **kwargs)
         else:
-            hycom_model += HYCOMReader(str(file), **kwargs)
+            hycom_model = HYCOMReader(str(file), **kwargs) >> hycom_model
 
     return hycom_model
 

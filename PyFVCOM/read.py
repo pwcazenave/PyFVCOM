@@ -44,6 +44,7 @@ class _TimeReader(object):
         _noisy = verbose
         self._dims = copy.deepcopy(dims)
         self._mjd_origin = 'days since 1858-11-17 00:00:00'
+        self._using_calendar_time = True  # for non-calendar runs, we need to skip the datetime stuff.
 
         time_variables = ('time', 'Itime', 'Itime2', 'Times')
         got_time, missing_time = [], []
@@ -114,24 +115,31 @@ class _TimeReader(object):
             # variable is often the one with the lowest precision, so use the others preferentially over that.
             if 'Times' not in got_time:
                 if 'time' in got_time:
-                    _dates = num2date(self.time, units=getattr(dataset.variables['time'], 'units'))
+                    time_units = getattr(dataset.variables['time'], 'units')
+                    if time_units.split()[-1] == '0.0':
+                        self._using_calendar_time = False
+                    if self._using_calendar_time:
+                        _dates = num2date(self.time, units=time_units)
+                    else:
+                        _dates = [None] * len(self.time)
                 elif 'Itime' in got_time and 'Itime2' in got_time:
                     itime_units = getattr(dataset.variables['Itime'], 'units')
                     _dates = num2date(self.Itime + self.Itime2 / 1000.0 / 60 / 60 / 24, units=itime_units)
                 else:
                     raise ValueError('Missing sufficient time information to make the relevant time data.')
 
-                try:
+                if self._using_calendar_time:
                     try:
-                        self.Times = np.array([datetime.strftime(d, '%Y-%m-%dT%H:%M:%S.%f') for d in _dates])
-                    except TypeError:
-                        self.Times = np.array([datetime.strftime(_dates, '%Y-%m-%dT%H:%M:%S.%f')])
-                except ValueError:
-                    self.Times = np.array([datetime.strftime(d, '%Y/%m/%d %H:%M:%S.%f') for d in _dates])
-                # Add the relevant attribute for the Times variable.
-                attributes = _passive_data_store()
-                setattr(attributes, 'time_zone', 'UTC')
-                # setattr(self.atts, 'Times', attributes)
+                        try:
+                            self.Times = np.array([datetime.strftime(d, '%Y-%m-%dT%H:%M:%S.%f') for d in _dates])
+                        except TypeError:
+                            self.Times = np.array([datetime.strftime(_dates, '%Y-%m-%dT%H:%M:%S.%f')])
+                    except ValueError:
+                        self.Times = np.array([datetime.strftime(d, '%Y/%m/%d %H:%M:%S.%f') for d in _dates])
+                    # Add the relevant attribute for the Times variable.
+                    attributes = _passive_data_store()
+                    setattr(attributes, 'time_zone', 'UTC')
+                    # setattr(self.atts, 'Times', attributes)
 
             if 'time' not in got_time:
                 if 'Times' in got_time:
@@ -207,11 +215,14 @@ class _TimeReader(object):
             # Remake 'time' from 'datetime' because the former can suffer from precision issues when read in directly
             # from the netCDF variable. Generally, 'datetime' is made from the 'Times' strings, which means it
             # usually has sufficient precision.
-            setattr(self, 'time', np.asarray([date2num(time, units=self._mjd_origin) for time in self.datetime]))
+            if self._using_calendar_time:
+                setattr(self, 'time', np.asarray([date2num(time, units=self._mjd_origin) for time in self.datetime]))
 
             # Clip everything to the time indices if we've been given them. Update the time dimension too.
             if 'time' in self._dims:
-                is_datetimes_or_str = all([isinstance(i, (datetime, str)) for i in self._dims['time']])
+                is_datetimes_or_str = False
+                if not isinstance(self._dims['time'], slice):
+                    is_datetimes_or_str = all([isinstance(i, (datetime, str)) for i in self._dims['time']])
                 if not isinstance(self._dims['time'], slice) and is_datetimes_or_str:
                     # Convert datetime dimensions to indices in the currently loaded data. Assume we've got a list
                     # and if that fails, we've probably got a single index, so convert it accordingly.
@@ -225,7 +236,7 @@ class _TimeReader(object):
         dataset.close()
 
     def __iter__(self):
-        return (a for a in dir(self) if not a.startswith('_'))
+        return (a for a in self.__dict__.keys() if not a.startswith('_'))
 
     def _time_to_index(self, *args, **kwargs):
         """
@@ -326,13 +337,13 @@ class _AttributeReader(object):
             delattr(self, '_ds')
 
     def __iter__(self):
-        return (a for a in dir(self) if not a.startswith('__') and not a.endswith('__'))
+        return (a for a in self.__dict__.keys() if not a.startswith('_'))
 
 
 class _MakeDimensions(object):
     def __init__(self, dataset):
         """
-        Calculate some dimensions from the given _GridReader object.
+        Calculate some dimensions from the given Dataset object.
 
         Parameters
         ----------
@@ -345,7 +356,7 @@ class _MakeDimensions(object):
             setattr(self, dim, dataset.dimensions[dim].size)
 
     def __iter__(self):
-        return (a for a in dir(self) if not a.startswith('__') and not a.endswith('__'))
+        return (a for a in self.__dict__.keys() if not a.startswith('_'))
 
 
 class FileReader(Domain):
@@ -410,6 +421,7 @@ class FileReader(Domain):
         ---------
         Pierre Cazenave (Plymouth Marine Laboratory)
         Mike Bedington (Plymouth Marine Laboratory)
+        Ricardo Torres (Plymouth Marine Laboratory)
 
         """
 
@@ -457,7 +469,7 @@ class FileReader(Domain):
             dim_is_string = isinstance(self._dims[dim], str)  # for date ranges
             dim_is_slice = isinstance(self._dims[dim], slice)
             if not dim_is_iterable and not dim_is_slice and not dim_is_string:
-                if self._noisy:
+                if self._debug:
                     print('Making dimension {} iterable'.format(dim))
 
                 self._dims[dim] = [self._dims[dim]]
@@ -482,18 +494,20 @@ class FileReader(Domain):
             self.load_data(self._variables)
 
     def __iter__(self):
-        return (a for a in dir(self) if not a.startswith('_'))
+        return (a for a in self.__dict__.keys() if not a.startswith('_'))
 
     def __eq__(self, other):
         # For easy comparison of classes.
         return self.__dict__ == other.__dict__
 
-    def __add__(self, fvcom, debug=False):
+    def __rshift__(self, fvcom):
         """
-        This special method means we can stack two FileReader objects in time through a simple addition. For example:
+        This special method means we can stack two FileReader objects in time through a simple concatenation-like
+        syntax. For example:
 
         >>> fvcom1 = PyFVCOM.read.FileReader('file1.nc')
-        >>> fvcom1 += PyFVCOM.read.FileReader('file2.nc')
+        >>> fvcom2 = PyFVCOM.read.FileReader('file2.nc')
+        >>> fvcom = fvcom2 >> fvcom1
 
         Parameters
         ----------
@@ -527,9 +541,9 @@ class FileReader(Domain):
         nele_compare = self.dims.node == fvcom.dims.node
         siglay_compare = self.dims.siglay == fvcom.dims.siglay
         siglev_compare = self.dims.siglev == fvcom.dims.siglev
-        time_compare = self.time.datetime[-1] <= fvcom.time.datetime[0]
-        old_data = [i for i in self.data]
-        new_data = [i for i in fvcom.data]
+        time_compare = fvcom.time.datetime[-1] <= self.time.datetime[0]
+        old_data = [i for i in fvcom.data]
+        new_data = [i for i in self.data]
         data_compare = new_data == old_data
         if not node_compare:
             raise ValueError('Horizontal node data are incompatible.')
@@ -541,23 +555,23 @@ class FileReader(Domain):
             raise ValueError('Vertical sigma levels are incompatible.')
         if not time_compare:
             raise ValueError("Time periods are incompatible (`fvcom2' must be greater than or equal to `fvcom1')."
-                             "`fvcom1' has end {} and `fvcom2' has start {}".format(self.time.datetime[-1],
-                                                                                    fvcom.time.datetime[0]))
+                             "`fvcom1' has end {} and `fvcom2' has start {}".format(fvcom.time.datetime[-1],
+                                                                                    self.time.datetime[0]))
         if not data_compare:
             raise ValueError('Loaded data sets for each FileReader class must match.')
         if not (old_data == new_data) and (old_data or new_data):
             warn('Subsequent attempts to load data for this merged object will only load data from the first object. '
                  'Load data into each object before merging them.')
 
-        # Copy ourselves to a new version for concatenation. self is the old so we get appended to by the new.
+        # Copy ourselves to a new version for concatenation. fvcom is the old so we get appended to by the new.
         idem = copy.copy(self)
 
         # Go through all the parts of the data with a time dependency and concatenate them. Leave the grid alone.
         for var in idem.data:
             if 'time' in idem.ds.variables[var].dimensions:
-                setattr(idem.data, var, np.concatenate((getattr(idem.data, var), getattr(fvcom.data, var))))
+                setattr(idem.data, var, np.concatenate((getattr(fvcom.data, var), getattr(idem.data, var))))
         for time in idem.time:
-            setattr(idem.time, time, np.concatenate((getattr(idem.time, time), getattr(fvcom.time, time))))
+            setattr(idem.time, time, np.concatenate((getattr(fvcom.time, time), getattr(idem.time, time))))
 
         # Remove duplicate times.
         time_indices = np.arange(len(idem.time.time))
@@ -582,13 +596,86 @@ class FileReader(Domain):
 
         return idem
 
-    def __sub__(self, fvcom, debug=False):
+    def __make_pickleable__(self):
+        """
+        To deepcopy `self', we need to close the netCDF file handle as it's not picklable. This method does that and
+        then reopens it in self and the copy.
+
+        Returns
+        -------
+        idem : self
+            A deep copy of ourselves (self) but with the netCDF file handle closed and reopened during the copy.
+
+        """
+
+        self.ds.close()
+        delattr(self, 'ds')
+        idem = copy.deepcopy(self)  # somewhere to store the differences
+        self.ds = Dataset(self._fvcom, 'r')
+        idem.ds = Dataset(idem._fvcom, 'r')
+
+        return idem
+
+    def __check_common_variables__(self, variables, fvcom):
+
+        # Do we have a FileReader?
+        fvcom_variables = set(list(fvcom.data.__dict__.keys()))
+        self_variables = set(list(self.data.__dict__.keys()))
+
+        fvcom_required = set(variables) - set(self_variables)
+        self_required = set(variables) - set(fvcom_variables)
+
+        # We can't raise AttributeErrors here (although we really should) because if one of the arithmetic functions
+        # is given a number then we have to check for AttributeErrors in that instance. So, raise ValueErrors here
+        # instead.
+        if fvcom_required:
+            raise ValueError(f"Missing variables: {' '.join(fvcom_required)} in the supplied `fvcom' object.")
+
+        if self_required:
+            raise ValueError(f"Missing variables: {' '.join(self_required)} in the current object.")
+
+    def __add__(self, value):
+        """
+        Override the default special method to handle adding two objects to yield the sum of the data. If the supplied
+        `fvcom' is a number, we add that to the currently loaded data.
+
+        Parameters
+        ----------
+        value : PyFVCOM.read.FileReader, float
+            Other data to add to the currently loaded data.
+
+        Returns
+        -------
+        idem : PyFVCOM.read.FileReader
+            Sum of the data loaded as a `PyFVCOM.read.FileReader' class.
+
+        Notes
+        -----
+        - both objects must cover the exact same spatial domain
+        - both objects can have different dates but must have the same number of time steps.
+        - times are retained from the current object (i.e. `self', not `fvcom')
+
+        Example
+        -------
+        >>> file1 = PyFVCOM.read.FileReader('file1.nc', variables=['u', 'v', 'zeta'])
+        >>> file2 = PyFVCOM.read.FileReader('file2.nc', variables=['u', 'v', 'zeta'])
+        >>> summed = file1 + file2
+        >>> # List the variables for which we now have a sum.
+        >>> list(summed.__dict__.keys())
+
+        """
+
+        idem = self.__make_pickleable__()
+
+        return idem.add(value)
+
+    def __sub__(self, value):
         """
         Override the default special method to handle subtracting two objects to yield the differences in the data.
 
         Parameters
         ----------
-        fvcom : PyFVCOM.read.FileReader
+        value : PyFVCOM.read.FileReader, float
             Other data to subtract from the currently loaded data.
 
         Returns
@@ -608,27 +695,379 @@ class FileReader(Domain):
         >>> file2 = PyFVCOM.read.FileReader('file2.nc', variables=['u', 'v', 'zeta'])
         >>> diff = file1 - file2
         >>> # List the variables for which we now have a difference.
-        >>> [a for a in dir(diff.data) if not a.startswith('_')
+        >>> list(diff.__dict__.keys())
 
         """
 
-        # To deepcopy self, we need to close the netCDF file handle as it's not picklable. We'll reopen it afterwards.
-        self.ds.close()
-        delattr(self, 'ds')
-        idem = copy.deepcopy(self)  # somewhere to store the differences
-        self.ds = Dataset(self._fvcom, 'r')
-        idem.ds = Dataset(idem._fvcom, 'r')
+        idem = self.__make_pickleable__()
 
-        if dir(self.data) != dir(fvcom.data):
-            raise ValueError("Inconsistent variables in the currently loaded data and the supplied data (`fvcom')")
+        return idem.subtract(value)
 
-        for var1, var2 in zip(self.data, fvcom.data):
-            setattr(idem.data, var1, getattr(self.data, var1) - getattr(fvcom.data, var2))
+    def __mul__(self, value):
+        """
+        Method to multiply the given `value' to our currently loaded data. If `value' is a `PyFVCOM.read.FileReader'
+        object, then we multiply each coincident data (in the way the "*" operator works in PyFVCOM), otherwise,
+        we multiply each set of data by `value' individually.
+
+        Parameters
+        ----------
+        value : PyFVCOM.read.FileReader, float
+            Other data to multiply with the currently loaded data.
+
+        Returns
+        -------
+        idem : PyFVCOM.read.FileReader
+            Product in loaded data as a `PyFVCOM.read.FileReader' class.
+
+        Notes
+        -----
+        - both objects must cover the exact same spatial domain
+        - both objects can have different dates but must have the same number of time steps.
+        - times are retained from the current object (i.e. `self', not `fvcom')
+
+        Example
+        -------
+        >>> file1 = PyFVCOM.read.FileReader('file1.nc', variables=['u', 'v', 'zeta'])
+        >>> file2 = PyFVCOM.read.FileReader('file2.nc', variables=['u', 'v', 'zeta'])
+        >>> product = file1 * file2
+        >>> # List the variables for which we now have a product.
+        >>> list(product.__dict__.keys())
+
+        """
+
+        idem = self.__make_pickleable__()
+
+        return idem.multiply(value)
+
+    def __div__(self, value):
+        """
+        Override the default special method to handle dividing two objects to yield the quotient plus remainder of the
+        loaded data.
+
+        Parameters
+        ----------
+        value : PyFVCOM.read.FileReader, float
+            Other data to divide with the currently loaded data.
+
+        Returns
+        -------
+        idem : PyFVCOM.read.FileReader
+            Product in loaded data as a `PyFVCOM.read.FileReader' class.
+
+        Notes
+        -----
+        - both objects must cover the exact same spatial domain
+        - both objects can have different dates but must have the same number of time steps.
+        - times are retained from the current object (i.e. `self', not `fvcom')
+
+        Example
+        -------
+        >>> file1 = PyFVCOM.read.FileReader('file1.nc', variables=['u', 'v', 'zeta'])
+        >>> file2 = PyFVCOM.read.FileReader('file2.nc', variables=['u', 'v', 'zeta'])
+        >>> quotient = file1 / file2
+        >>> # List the variables for which we now have a combined quotient and remainder.
+        >>> list(quotient.__dict__.keys())
+
+        """
+
+        idem = self.__make_pickleable__()
+
+        return idem.divide(value)
+
+    def __pow__(self, value):
+        """
+        Override the default special method to handle raising one dataset by another as a power.
+
+        Parameters
+        ----------
+        value : PyFVCOM.read.FileReader, float
+            Other data by which to raise the currently loaded data.
+
+        Returns
+        -------
+        idem : PyFVCOM.read.FileReader
+            Power of self raised by value in loaded data as a `PyFVCOM.read.FileReader' class.
+
+        Notes
+        -----
+        - both objects must cover the exact same spatial domain
+        - both objects can have different dates but must have the same number of time steps.
+        - times are retained from the current object (i.e. `self', not `fvcom')
+
+        Example
+        -------
+        >>> file1 = PyFVCOM.read.FileReader('file1.nc', variables=['u', 'v', 'zeta'])
+        >>> file2 = PyFVCOM.read.FileReader('file2.nc', variables=['u', 'v', 'zeta'])
+        >>> power = file1**file2
+        >>> # List the variables for which we now have file1 with data raised to power of the data in file2.
+        >>> list(power.__dict__.keys())
+
+        """
+
+        idem = self.__make_pickleable__()
+
+        return idem.power(value)
+
+    def add(self, value, variables=None):
+        """
+        Method to add the given `value' to our currently loaded data. If `value' is a `PyFVCOM.read.FileReader'
+        object, then we add each coincident data (in the way the "+" operator works in PyFVCOM), otherwise,
+        we add the `value' to each set of data individually.
+
+        Parameters
+        ----------
+        value : float, int, PyFVCOM.read.FileReader
+            Add either the current number to the loaded data, otherwise add the two FileReader objects together.
+        variables : list, tuple, optional
+            Give a list of variables on which to perform the arithmetic. Any other variables are ignored and not
+            passed to the resulting object.
+
+        Returns
+        -------
+        sum : self
+            The data in self.data with the supplied value added. If `value' is a FileReader object, then each set of
+            data in `self.data' is added to the corresponding set in `value.data'.
+
+        """
+
+        idem = self.__make_pickleable__()
+
+        if variables is None:
+            # Grab all the variable names and hope both objects have all the data. This could be simplified (under
+            # that assumption) to just be a list of one of the __dict__ keys.
+            try:
+                variables = list(set(list(value.data.__dict__.keys()) + list(self.data.__dict__.keys())))
+            except AttributeError:
+                variables = list(self.data.__dict__.keys())
+
+        try:
+            self.__check_common_variables__(variables, value)
+        except AttributeError:
+            # Nope, we don't. We have probably (hopefully) got a number for `value', so just carry on as normal.
+            pass
+
+        # Remove everything we have in our results before re-adding what's been requested. This approach means we
+        # only do the minimum computation instead of potentially doing lots and then removing the results afterwards.
+        for var in list(idem.data):
+            delattr(idem.data, var)
+
+        for var in variables:
+            current_value = value
+            if isinstance(value, FileReader):
+                current_value = getattr(value.data, var)
+            setattr(idem.data, var, getattr(self.data, var) + current_value)
+
+        return idem
+
+    def subtract(self, value, variables=None):
+        """
+        Method to subtract the given `value' to our currently loaded data. If `value' is a `PyFVCOM.read.FileReader'
+        object, then we subtract each coincident data (in the way the "-" operator works in PyFVCOM), otherwise,
+        we subtract the `value' to each set of data individually.
+
+        Parameters
+        ----------
+        value : float, int, PyFVCOM.read.FileReader
+            Subtract either the current number to the loaded data, otherwise subtract the two FileReader objects.
+        variables : list, tuple, optional
+            Give a list of variables on which to perform the arithmetic. Any other variables are ignored and not
+            passed to the resulting object.
+
+        Returns
+        -------
+        diff : self
+            The data in self.data with the supplied value subtracted. If `value' is a FileReader object, then each set
+            of data in `self.data' is subtracted to the corresponding set in `value.data'.
+
+        """
+
+        idem = self.__make_pickleable__()
+
+        if variables is None:
+            # Grab all the variable names and hope both objects have all the data. This could be simplified (under
+            # that assumption) to just be a list of one of the __dict__ keys.
+            try:
+                variables = list(set(list(value.data.__dict__.keys()) + list(self.data.__dict__.keys())))
+            except AttributeError:
+                variables = list(self.data.__dict__.keys())
+
+        try:
+            self.__check_common_variables__(variables, value)
+        except AttributeError:
+            # Nope, we don't. We have probably (hopefully) got a number for `value', so just carry on as normal.
+            pass
+
+        # Remove everything we have in our results before re-adding what's been requested. This approach means we
+        # only do the minimum computation instead of potentially doing lots and then removing the results afterwards.
+        for var in list(idem.data):
+            delattr(idem.data, var)
+
+        for var in variables:
+            current_value = value
+            if isinstance(value, FileReader):
+                current_value = getattr(value.data, var)
+            setattr(idem.data, var, getattr(self.data, var) - current_value)
+
+        return idem
+
+    def multiply(self, value, variables=None):
+        """
+        Method to multiply the given `value' to our currently loaded data. If `value' is a `PyFVCOM.read.FileReader'
+        object, then we multiply each coincident data (in the way the "*" operator works in PyFVCOM), otherwise,
+        we multiply each set of data by `value' individually.
+
+        Parameters
+        ----------
+        value : float, int, PyFVCOM.read.FileReader
+            Multiply either the current number to the loaded data, otherwise multiply the two FileReader objects.
+        variables : list, tuple, optional
+            Give a list of variables on which to perform the arithmetic. Any other variables are ignored and not
+            passed to the resulting object.
+
+        Returns
+        -------
+        product : self
+            The data in self.data multiplied by the supplied value. If `value' is a FileReader object, then each set
+            of data in `self.data' is multiplied by the corresponding set in `value.data'.
+
+        """
+
+        idem = self.__make_pickleable__()
+
+        if variables is None:
+            # Grab all the variable names and hope both objects have all the data. This could be simplified (under
+            # that assumption) to just be a list of one of the __dict__ keys.
+            try:
+                variables = list(set(list(value.data.__dict__.keys()) + list(self.data.__dict__.keys())))
+            except AttributeError:
+                variables = list(self.data.__dict__.keys())
+
+        try:
+            self.__check_common_variables__(variables, value)
+        except AttributeError:
+            # Nope, we don't. We have probably (hopefully) got a number for `value', so just carry on as normal.
+            pass
+
+        # Remove everything we have in our results before re-adding what's been requested. This approach means we
+        # only do the minimum computation instead of potentially doing lots and then removing the results afterwards.
+        for var in list(idem.data):
+            delattr(idem.data, var)
+
+        for var in variables:
+            current_value = value
+            if isinstance(value, FileReader):
+                current_value = getattr(value.data, var)
+            setattr(idem.data, var, getattr(self.data, var) * current_value)
+
+        return idem
+
+    def divide(self, value, variables=None):
+        """
+        Method to divide the given `value' to our currently loaded data. If `value' is a `PyFVCOM.read.FileReader'
+        object, then we divide each coincident data (in the way the "/" operator works in PyFVCOM), otherwise,
+        we divide the `value' to each set of data individually.
+
+        Parameters
+        ----------
+        value : float, int, PyFVCOM.read.FileReader
+            Divide either the current number to the loaded data, otherwise divide the two FileReader objects.
+        variables : list, tuple, optional
+            Give a list of variables on which to perform the arithmetic. Any other variables are ignored and not
+            passed to the resulting object.
+
+        Returns
+        -------
+        quotient : self
+            The data in self.data divided by the supplied value. If `value' is a FileReader object, then each set
+            of data in `self.data' is divided by the corresponding set in `value.data'.
+
+        """
+
+        idem = self.__make_pickleable__()
+
+        if variables is None:
+            # Grab all the variable names and hope both objects have all the data. This could be simplified (under
+            # that assumption) to just be a list of one of the __dict__ keys.
+            try:
+                variables = list(set(list(value.data.__dict__.keys()) + list(self.data.__dict__.keys())))
+            except AttributeError:
+                variables = list(self.data.__dict__.keys())
+
+        try:
+            self.__check_common_variables__(variables, value)
+        except AttributeError:
+            # Nope, we don't. We have probably (hopefully) got a number for `value', so just carry on as normal.
+            pass
+
+        # Remove everything we have in our results before re-adding what's been requested. This approach means we
+        # only do the minimum computation instead of potentially doing lots and then removing the results afterwards.
+        for var in list(idem.data):
+            delattr(idem.data, var)
+
+        for var in variables:
+            current_value = value
+            if isinstance(value, FileReader):
+                current_value = getattr(value.data, var)
+            setattr(idem.data, var, getattr(self.data, var) / current_value)
+
+        return idem
+
+    def power(self, value, variables=None):
+        """
+        Method to raise the currently loaded data by a power of `value'. If `value' is a `PyFVCOM.read.FileReader'
+        object, then we raise each coincident data (in the way the "**" operator works in PyFVCOM), otherwise,
+        we raise each set of data by `value' individually.
+
+        Parameters
+        ----------
+        value : float, int, PyFVCOM.read.FileReader
+            Divide either the current number to the loaded data, otherwise divide the two FileReader objects.
+        variables : list, tuple, optional
+            Give a list of variables on which to perform the arithmetic. Any other variables are ignored and not
+            passed to the resulting object.
+
+        Returns
+        -------
+        quotient : self
+            The data in self.data divided by the supplied value. If `value' is a FileReader object, then each set
+            of data in `self.data' is divided by the corresponding set in `value.data'.
+
+        """
+
+        idem = self.__make_pickleable__()
+
+        if variables is None:
+            # Grab all the variable names and hope both objects have all the data. This could be simplified (under
+            # that assumption) to just be a list of one of the __dict__ keys.
+            try:
+                variables = list(set(list(value.data.__dict__.keys()) + list(self.data.__dict__.keys())))
+            except AttributeError:
+                variables = list(self.data.__dict__.keys())
+
+        try:
+            self.__check_common_variables__(variables, value)
+        except AttributeError:
+            # Nope, we don't. We have probably (hopefully) got a number for `value', so just carry on as normal.
+            pass
+
+        # Remove everything we have in our results before re-adding what's been requested. This approach means we
+        # only do the minimum computation instead of potentially doing lots and then removing the results afterwards.
+        for var in list(idem.data):
+            delattr(idem.data, var)
+
+        for var in variables:
+            current_value = value
+            if isinstance(value, FileReader):
+                current_value = getattr(value.data, var)
+            setattr(idem.data, var, getattr(self.data, var) / current_value)
 
         return idem
 
     def _load_grid(self, fvcom):
         self.grid = GridReaderNetCDF(fvcom, dims=self._dims, zone=self._zone, debug=self._debug, verbose=self._noisy)
+        # Pull back the _get_data_pattern back out in case we've been subsetting.
+        if hasattr(self.grid, '_get_data_pattern'):
+            self._get_data_pattern = self.grid._get_data_pattern
         # Grab the dimensions from the grid in case we've subset somewhere.
         self._dims = self.grid._dims
         delattr(self.grid, '_dims')
@@ -675,8 +1114,13 @@ class FileReader(Domain):
             self._dims = dims
             self.time = _TimeReader(self._fvcom, dims=self._dims)
             self.dims.time = len(self.time.time)
-            self.grid = _GridReaderNetCDF(self._fvcom, dims=self._dims, zone=self._zone, debug=self._debug,
-                                          verbose=self._noisy)
+            self.grid = GridReaderNetCDF(self._fvcom, dims=self._dims, zone=self._zone, debug=self._debug,
+                                         verbose=self._noisy)
+
+        # Make sure we inherit the data pattern from GridReaderNetCDF as it'll be set to 'memory' if we're
+        # subsetting in space to make the extraction tractable in time.
+        if hasattr(self.grid, '_get_data_pattern'):
+            self._get_data_pattern = self.grid._get_data_pattern
 
         # Check if we've got iterable variables and make one if not.
         if not hasattr(var, '__iter__') or isinstance(var, str):
@@ -684,7 +1128,7 @@ class FileReader(Domain):
 
         for v in var:
             if self._debug or self._noisy:
-                print(f'Loading: {v}')
+                print(f'Loading: {v}', flush=True)
 
             if v not in self.ds.variables:
                 raise NameError(f"Variable '{v}' not present in {self._fvcom}")
@@ -697,7 +1141,7 @@ class FileReader(Domain):
                 if dimension in dims:
                     variable_index = var_dim.index(dimension)
                     if self._debug:
-                        print(f'Extracting specific indices for {dimension}')
+                        print(f'Extracting specific indices for {dimension}', flush=True)
                     variable_indices[variable_index] = dims[dimension]
 
             # Add attributes for the variable we're loading.
@@ -710,17 +1154,17 @@ class FileReader(Domain):
             try:
                 if self._get_data_pattern == 'slice':
                     if self._debug:
-                        print('Slicing the data directly from netCDF')
+                        print('Slicing the data directly from netCDF', flush=True)
                     setattr(self.data, v, self.ds.variables[v][variable_indices])
                 elif self._get_data_pattern == 'memory':
                     if self._debug:
-                        print('Loading all data in memory and then subsetting')
+                        print('Loading all data in memory and then subsetting', flush=True)
                     data_raw = self.ds.variables[v][:]
 
                     for i in range(data_raw.ndim):
                         if not isinstance(variable_indices[i], slice):
                             if self._debug:
-                                print(f'Extracting indices {variable_indices[i]} for variable {v}')
+                                print(f'Extracting indices {variable_indices[i]} for variable {v}', flush=True)
                             data_raw = data_raw.take(variable_indices[i], axis=i)
 
                     setattr(self.data, v, data_raw)
@@ -807,9 +1251,9 @@ class FileReader(Domain):
             # Warn if we've got different number of zeta times from the other variable times. In that situation,
             # we'll do non-time-varying volumes.
             if self.ds.dimensions['time'].size != self.dims.time:
-                warn(f"Found a different length surface elevation time series from {var}. As such, we cannot load the "
-                     "relevant surface elevation so we are setting it to zero. If you are concatenating FileReader "
-                     f"objects, load `zeta' along with `{var}' to fix this.")
+                warn(f"Found a different length surface elevation time series from what has already been loaded. As "
+                     f"such, we cannot load the relevant surface elevation so we are setting it to zero. If you are "
+                     f"concatenating FileReader objects, load `zeta' along with your other variables to fix this.")
                 self.data.zeta = np.zeros((self.dims.time, self.dims.node))
             else:
                 self.load_data(['zeta'])
@@ -1026,6 +1470,100 @@ class FileReader(Domain):
         river_salt_raw = river_nc.variables['river_salt'][:, rivers_in_grid]
         self.river.river_salt = np.asarray([np.interp(mod_time_sec, self.river.river_time_sec, this_col) for this_col in river_salt_raw.T]).T
 
+        river_nc.close()
+
+
+def read_nesting_nodes(fvcom, nestpath):
+    """
+    Function to read the indices of the nodes and elements in the nesting region.
+
+    Parameters
+    ----------
+    fvcom : FileReader object
+        FVCOM FileReader object with grid information.
+    nestpath : str
+        Full path to one nesting netCDF file for the domain.
+
+    Returns
+    -------
+    mask_n, mask_e : np.ndarray
+        Logical mask arrays for nodes and elements.
+
+    """
+
+    with Dataset(nestpath, 'r') as nest:
+        lon = nest.variables['lon'][:]
+        lonc = nest.variables['lonc'][:]
+        lat = nest.variables['lat'][:]
+        latc = nest.variables['latc'][:]
+
+    # Find the closest node to nesting node positions
+    nest_indices_n = fvcom.closest_node((lon, lat))
+    nest_indices_e = fvcom.closest_element((lonc, latc))
+    mask_n = np.full(fvcom.dims.node, False)
+    mask_e = np.full(fvcom.dims.nele, False)
+    mask_n[nest_indices_n] = True
+    mask_e[nest_indices_e] = True
+
+    return mask_n, mask_e
+
+
+def apply_mask(fvcom, vars=[], mask_nodes=[], mask_elements=[], noisy=False):
+    """
+    Function to apply mask to specified variables. At least one mask is mandatory
+
+    Parameters
+    ----------
+    fvcom : FileReader object
+        FVCOM FileReader object. Some variables  need to have been read.
+    vars : list, optional
+        List of variable names to apply the mask to. If omitted, all data variables in the FileReader object are masked.
+    mask_nodes : np.ndarray, optional
+        Logical mask array for nodes. No time dimension is required here. True correspond to the nodes to be masked.
+    mask_elements : np.ndarray, optional
+        Logical mask array for element. No time dimension is required here. True correspond to the element to be masked.
+    noisy : bool, optional
+        Set to True to write out the name of each variable being masked.
+
+    Returns
+    -------
+    fvcom : FileReader object
+        FVCOM FileReader object with already read variables.
+
+    """
+
+    if not np.any(mask_nodes) and not np.any(mask_elements):
+        raise ValueError('Masks for nodes or elements not supplied')
+    # Determine if we have been given a list of variables
+    if not vars:
+        vars = list(fvcom.data)
+        if noisy:
+            print('Applying masks to all loaded data')
+    # Check we have all necessary masks
+    for key in vars:
+        # Check if we need to apply the node mask or element mask
+        if 'node' in fvcom.variable_dimension_names[key]:
+            if not np.any(mask_nodes):
+                raise ValueError('Masks for nodes not supplied for {}'.format(key))
+        elif 'nele' in fvcom.variable_dimension_names[key]:
+            if not np.any(mask_elements):
+                raise ValueError('Masks for elements not supplied for {}'.format(key))
+
+    # Iterate through the list of variables
+    for key in vars:
+        # Check if we need to apply the node mask or element mask and tile the mask to the right shape.
+        if 'node' in fvcom.variable_dimension_names[key]:
+            mask = np.tile(mask_nodes, (*getattr(fvcom.data, key).shape[:-1],1))
+        elif 'nele' in fvcom.variable_dimension_names[key]:
+            mask = np.tile(mask_elements, (*getattr(fvcom.data, key).shape[:-1], 1))
+
+        if noisy:
+            print(f'Applying mask to {key}', flush=True)
+
+        setattr(fvcom.data, key, np.ma.array(getattr(fvcom.data, key), mask=mask))
+
+    return fvcom
+
 
 def MFileReader(fvcom, noisy=False, *args, **kwargs):
     """
@@ -1058,7 +1596,7 @@ def MFileReader(fvcom, noisy=False, *args, **kwargs):
             if file == fvcom[0]:
                 fvcom_out = FileReader(file, *args, **kwargs)
             else:
-                fvcom_out += FileReader(file, *args, **kwargs)
+                fvcom_out = FileReader(file, *args, **kwargs) >> fvcom_out
 
     return fvcom_out
 
@@ -2127,12 +2665,15 @@ class WriteFVCOM(object):
             if var in var_types:
                 fmt = var_types[var]
 
-            dims = self._fvcom.variable_dimension_names[var]
-            self._variables[var] = self._nc.createVariable(var, fmt, dims, **self._ncopts)
-            # Add any attributes we have.
-            var_atts = getattr(self._fvcom.atts, var)
-            for att in var_atts:
-                self._variables[var].setncattr(att, getattr(var_atts, att))
+            # We might have a lot of variables in self._fvcom.grid and they might not be 'real' variables,
+            # so skip them if we don't have their dimensions stored from reading in the original netCDF.
+            if var in self._fvcom.variable_dimension_names:
+                dims = self._fvcom.variable_dimension_names[var]
+                self._variables[var] = self._nc.createVariable(var, fmt, dims, **self._ncopts)
+                # Add any attributes we have.
+                var_atts = getattr(self._fvcom.atts, var)
+                for att in var_atts:
+                    self._variables[var].setncattr(att, getattr(var_atts, att))
 
         # self._fvcom.data. may be missing entirely (it's always present as I write this, but I think it may go away
         # in the future - assume I've done that since it's relatively cheap to do so).
@@ -2177,6 +2718,8 @@ class WriteFVCOM(object):
         for var in self._fvcom.grid:
             # Skip custom variables as we haven't defined those in self._create_variables.
             if var in self._custom_variables:
+                continue
+            if var not in self._fvcom.variable_dimension_names:
                 continue
             self._variables[var][:] = getattr(self._fvcom.grid, var)
 
