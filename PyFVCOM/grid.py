@@ -315,6 +315,14 @@ class GridReaderNetCDF(object):
                 if short_dim in ds.variables[var].dimensions:
                     if self._debug:
                         print(f'Subsetting {var} in the vertical ({short_dim} = {self._dims[short_dim]})', flush=True)
+                    # For reasons I can't figure out at the moment, we sometimes try to subset twice. That's not a
+                    # good idea, so we'll check to make sure we have the same number of dimensions here as we had in
+                    # the original array. If we've got that, we'll assume we can subset, otherwise, it's bound to
+                    # fai. TODO: I'm not sure I like this solution - it feels hacky.
+                    if len(ds.variables[var].dimensions) != len(getattr(self, var).shape):
+                        if self._debug:
+                            print(f"We've already subsetted {var } somewhere, so don't do it again!")
+                        continue
                     _temp = getattr(self, var)[self._dims[short_dim], ...]
                     setattr(self, var, _temp)
 
