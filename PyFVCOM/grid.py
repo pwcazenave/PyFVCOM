@@ -155,92 +155,31 @@ class GridReaderNetCDF(object):
             self.nv = new_tri.T + 1
             self.triangles = new_tri
 
-        # TODO: This whole bit can be massively simplified! Check if we're doing things in memory first,
-        #  then find if we've got vertical layers to load, make a slice() accordingly and then load the
-        #  data, either iteratively or from the data in memory.
-        if 'node' in self._dims:
-            nodes = len(self._dims['node'])
-            for var in 'x', 'y', 'lon', 'lat', 'h', 'siglay', 'siglev':
-                if self._debug:
-                    print(f'Loading {var} data using the {self._get_data_pattern} method', flush=True)
-                try:
-                    node_index = ds.variables[var].dimensions.index('node')
-                    var_shape = [i for i in np.shape(ds.variables[var])]
-                    var_shape[node_index] = nodes
+        # If we have node/nele dimensions, subset the relevant arrays here. Make all zero arrays if we're missing
+        # them in the netCDF file.
+        spatial_variables = {'node': ['x', 'y', 'lon', 'lat', 'h', 'siglay', 'siglev'],
+                             'nele': ['xc', 'yc', 'lonc', 'latc', 'h_center', 'siglay_center', 'siglev_center']}
 
-                    if 'siglay' in self._dims and 'siglay' in ds.variables[var].dimensions:
-                        var_shape[ds.variables[var].dimensions.index('siglay')] = ds.dimensions['siglay'].size
-                    elif 'siglev' in self._dims and 'siglev' in ds.variables[var].dimensions:
-                        var_shape[ds.variables[var].dimensions.index('siglev')] = ds.dimensions['siglev'].size
-
-                    if self._debug:
-                        print(f'Loading {var} data using the {self._get_data_pattern} method', flush=True)
-
-                    _temp = ds.variables[var][:]
-                    if 'siglay' in ds.variables[var].dimensions:
-                        if 'siglay' in self._dims:
-                            _temp = _temp[self._dims['siglay'], self._dims['node']]
+        for spatial_dimension in spatial_variables:
+            if spatial_dimension in self._dims:
+                spatial_points = len(self._dims[spatial_dimension])
+                for var in spatial_variables[spatial_dimension]:
+                    try:
+                        _temp = ds.variables[var][:]
+                        _temp = _temp[..., self._dims[spatial_dimension]]
+                    except KeyError:
+                        if spatial_dimension == 'nele':
+                            if self._noisy:
+                                print('Adding element-centred {} for compatibility.'.format(var))
+                        if 'siglay' in var:
+                            var_shape = (ds.dimensions['siglay'].size, spatial_points)
+                        elif 'siglev' in var:
+                            var_shape = (ds.dimensions['siglev'].size, spatial_points)
                         else:
-                            _temp = _temp[..., self._dims['node']]
-                    elif 'siglev' in ds.variables[var].dimensions:
-                        if 'siglev' in self._dims:
-                            _temp = _temp[self._dims['siglev'], self._dims['node']]
-                        else:
-                            _temp = _temp[..., self._dims['node']]
-                    else:
-                        _temp = _temp[..., self._dims['node']]
+                            var_shape = spatial_points
+                        _temp = np.zeros(var_shape)
 
-                except KeyError:
-                    if 'siglay' in var:
-                        _temp = np.empty((ds.dimensions['siglay'].size, nodes))
-                    elif 'siglev' in var:
-                        _temp = np.empty((ds.dimensions['siglev'].size, nodes))
-                    else:
-                        _temp = np.empty(nodes)
-                setattr(self, var, _temp)
-
-        if 'nele' in self._dims:
-            nele = len(self._dims['nele'])
-            for var in 'xc', 'yc', 'lonc', 'latc', 'h_center', 'siglay_center', 'siglev_center':
-                try:
-                    nele_index = ds.variables[var].dimensions.index('nele')
-                    var_shape = [i for i in np.shape(ds.variables[var])]
-                    var_shape[nele_index] = nele
-
-                    if 'siglay' in self._dims and 'siglay' in ds.variables[var].dimensions:
-                        var_shape[ds.variables[var].dimensions.index('siglay')] = ds.dimensions['siglay'].size
-                    elif 'siglev' in self._dims and 'siglev' in ds.variables[var].dimensions:
-                        var_shape[ds.variables[var].dimensions.index('siglev')] = ds.dimensions['siglev'].size
-
-                    if self._debug:
-                        print(f'Loading {var} data using the {self._get_data_pattern} method', flush=True)
-
-                    _temp = ds.variables[var][:]
-                    if 'siglay' in ds.variables[var].dimensions:
-                        if 'siglay' in self._dims:
-                            _temp = _temp[self._dims['siglay'], self._dims['nele']]
-                        else:
-                            _temp = _temp[..., self._dims['nele']]
-                    elif 'siglev' in ds.variables[var].dimensions:
-                        if 'siglev' in self._dims:
-                            _temp = _temp[self._dims['siglev'], self._dims['nele']]
-                        else:
-                            _temp = _temp[..., self._dims['nele']]
-                    else:
-                        _temp = _temp[..., self._dims['nele']]
-
-                except KeyError:
-                    # FVCOM3 files don't have h_center, siglay_center and siglev_center, so make var_shape manually.
-                    if self._noisy:
-                        print('Adding element-centred {} for compatibility.'.format(var))
-                    if var.startswith('siglev'):
-                        var_shape = [ds.dimensions['siglev'].size, nele]
-                    elif var.startswith('siglay'):
-                        var_shape = [ds.dimensions['siglay'].size, nele]
-                    else:
-                        var_shape = nele
-                    _temp = np.zeros(var_shape)
-                setattr(self, var, _temp)
+                    setattr(self, var, _temp)
 
         # Load the grid metrics data separately as we don't want to set a bunch of zeros for missing data.
         for metric, grid_pos in grid_metrics.items():
@@ -301,7 +240,8 @@ class GridReaderNetCDF(object):
                     else:
                         raise ValueError('Inexplicably, we have a variable not in the loop we have defined.')
 
-        # Check if we've been given vertical dimensions to subset in too, and if so, do that.
+        # Check if we've been given only vertical dimensions to subset in too, and if so, do that. At this point,
+        # if we've got node/element subsets given, we've already subsetted those.
         for var in 'siglay', 'siglev', 'siglay_center', 'siglev_center':
             # Only carry on if we have this variable in the output file with which we're working (mainly this
             # is for compatibility with FVCOM 3 outputs which do not have the _center variables).
@@ -315,14 +255,6 @@ class GridReaderNetCDF(object):
                 if short_dim in ds.variables[var].dimensions:
                     if self._debug:
                         print(f'Subsetting {var} in the vertical ({short_dim} = {self._dims[short_dim]})', flush=True)
-                    # For reasons I can't figure out at the moment, we sometimes try to subset twice. That's not a
-                    # good idea, so we'll check to make sure we have the same number of dimensions here as we had in
-                    # the original array. If we've got that, we'll assume we can subset, otherwise, it's bound to
-                    # fai. TODO: I'm not sure I like this solution - it feels hacky.
-                    if len(ds.variables[var].dimensions) != len(getattr(self, var).shape):
-                        if self._debug:
-                            print(f"We've already subsetted {var } somewhere, so don't do it again!")
-                        continue
                     _temp = getattr(self, var)[self._dims[short_dim], ...]
                     setattr(self, var, _temp)
 
