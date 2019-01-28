@@ -2665,12 +2665,15 @@ class WriteFVCOM(object):
             if var in var_types:
                 fmt = var_types[var]
 
-            dims = self._fvcom.variable_dimension_names[var]
-            self._variables[var] = self._nc.createVariable(var, fmt, dims, **self._ncopts)
-            # Add any attributes we have.
-            var_atts = getattr(self._fvcom.atts, var)
-            for att in var_atts:
-                self._variables[var].setncattr(att, getattr(var_atts, att))
+            # We might have a lot of variables in self._fvcom.grid and they might not be 'real' variables,
+            # so skip them if we don't have their dimensions stored from reading in the original netCDF.
+            if var in self._fvcom.variable_dimension_names:
+                dims = self._fvcom.variable_dimension_names[var]
+                self._variables[var] = self._nc.createVariable(var, fmt, dims, **self._ncopts)
+                # Add any attributes we have.
+                var_atts = getattr(self._fvcom.atts, var)
+                for att in var_atts:
+                    self._variables[var].setncattr(att, getattr(var_atts, att))
 
         # self._fvcom.data. may be missing entirely (it's always present as I write this, but I think it may go away
         # in the future - assume I've done that since it's relatively cheap to do so).
@@ -2715,6 +2718,8 @@ class WriteFVCOM(object):
         for var in self._fvcom.grid:
             # Skip custom variables as we haven't defined those in self._create_variables.
             if var in self._custom_variables:
+                continue
+            if var not in self._fvcom.variable_dimension_names:
                 continue
             self._variables[var][:] = getattr(self._fvcom.grid, var)
 
