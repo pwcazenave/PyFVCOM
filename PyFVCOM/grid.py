@@ -126,7 +126,7 @@ class GridReaderNetCDF(object):
         if self._bounding_box:
             self._make_subset_dimensions()
 
-        # If we've been given a spatial dimension to subsample in fix the triangulation.
+        # If we've been given a spatial dimension to subsample in, fix the triangulation.
         if 'nele' in self._dims or 'node' in self._dims:
             if self._debug:
                 print('Fix triangulation table as we have been asked for only specific nodes/elements.', flush=True)
