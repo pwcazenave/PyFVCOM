@@ -435,7 +435,7 @@ class GridReaderNetCDF(object):
         bounding_poly = None
         if 'wesn' in self._dims:
             if isinstance(self._dims['wesn'], shapely.geometry.Polygon):
-                bounding_poly = np.asarray(self._dims['wesn'].exterior.coords)
+                bounding_poly = self._dims['wesn']
                 if self._debug:
                     print('Subsetting the data with a polygon', flush=True)
 
@@ -4588,7 +4588,7 @@ def subset_domain(x, y, triangles, polygon=None):
 
     # Shouldn't need the np.asarray here, I think, but leaving it in as I'm not 100% sure.
     nodes = np.squeeze(np.argwhere(np.asarray(poly_path.contains_points(np.asarray([x, y]).T))))
-    elements = np.squeeze(np.argwhere(np.all(np.isin(triangles, len(x)), axis=1)))
+    elements = np.squeeze(np.argwhere(np.all(np.isin(triangles, nodes), axis=1)))
 
     sub_triangles = reduce_triangulation(triangles, nodes)
 
