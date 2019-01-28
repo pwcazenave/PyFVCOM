@@ -612,6 +612,9 @@ class Domain(object):
             if np.any(np.isnan(index)):
                 index[np.isnan(index)] = None
 
+        # Note: this is really slow! Computing the distances between the entire grid and the point of interest is
+        # very slow. There must be a faster way of doing this! which fall inside the `where' bounding box.
+        # TODO: implement a faster conversion
         if vincenty:
             grid_pts = np.asarray([lon, lat]).T
             dist = np.asarray([vincenty_distance(pt_1, where) for pt_1 in grid_pts]) * 1000
