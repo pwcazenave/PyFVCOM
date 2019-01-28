@@ -4519,13 +4519,13 @@ class Restart(FileReader):
         self.load_data(['siglay'])
         self.data.siglay_center = nodes2elems(self.data.siglay, self.grid.triangles)
         if mode == 'elements':
-            x = self.grid.lonc
-            y = self.grid.latc
+            x = copy.deepcopy(self.grid.lonc)
+            y = copy.deepcopy(self.grid.latc)
             # Keep depths positive down.
             z = self.grid.h_center * -self.data.siglay_center
         else:
-            x = self.grid.lon
-            y = self.grid.lat
+            x = copy.deepcopy(self.grid.lon[:])
+            y = copy.deepcopy(self.grid.lat[:])
             # Keep depths positive down.
             z = self.grid.h * -self.data.siglay
 
@@ -4535,28 +4535,60 @@ class Restart(FileReader):
             y[y < coarse.grid.lat.min()] = coarse.grid.lat.min()
             y[y > coarse.grid.lat.max()] = coarse.grid.lat.max()
 
+            # Internal landmasses also need to be dealt with, so test if a point lies within the mask of the grid and move it to the nearest in grid
+            # point if so.            
+            if not mode == 'surface':
+                land_mask = getattr(coarse.data, coarse_name)[0, ...].mask[0,:,:]
+            else:
+                land_mask = getattr(coarse.data, coarse_name)[0, ...].mask
+
+            sea_points = np.ones(land_mask.shape)
+            sea_points[land_mask] = np.nan
+
+            ft_sea = RegularGridInterpolator((coarse.grid.lat, coarse.grid.lon), sea_points, method='linear', fill_value=np.nan)
+            internal_points = np.isnan(ft_sea(np.asarray([y,x]).T))
+
+            if np.any(internal_points):
+                xv, yv = np.meshgrid(coarse.grid.lon, coarse.grid.lat)
+                valid_ll = np.asarray([xv[~land_mask], yv[~land_mask]]).T
+                for this_ind in np.where(internal_points)[0]:
+                    nearest_valid_ind = np.argmin((valid_ll[:,0] - x[this_ind])**2 + (valid_ll[:,1] - y[this_ind])**2)
+                    x[this_ind] = valid_ll[nearest_valid_ind,0]
+                    y[this_ind] = valid_ll[nearest_valid_ind,1]
+
             # The depth data work differently as we need to squeeze each FVCOM water column into the available coarse
             # data. The only way to do this is to adjust each FVCOM water column in turn by comparing with the
             # closest coarse depth.
-            coarse.grid.coarse_depths = np.tile(coarse.grid.depth, [coarse.dims.lat, coarse.dims.lon, 1]).transpose(2, 0, 1)
-            coarse.grid.coarse_depths = np.ma.masked_array(coarse.grid.coarse_depths,
-                                                           mask=getattr(coarse.data, coarse_name)[0, ...].mask)
-            # Where we only have a single depth value, we need to make sure we still have a "water column" into which
-            #  we squeeze the FVCOM layers.
-            coarse_depths = np.max(coarse.grid.coarse_depths, axis=0)
-            # Go through each grid position and if its depth is deeper than the closest coarse data, squash the FVCOM
-            # water column into the coarse water column.
-            for idx, node in enumerate(zip(x, y, z)):
-                lon_index = np.argmin(np.abs(coarse.grid.lon - node[0]))
-                lat_index = np.argmin(np.abs(coarse.grid.lat - node[1]))
-                if coarse_depths[lat_index, lon_index] < node[2].max():
-                    z[idx, :] = (node[2] / node[2].max()) * coarse_depths[lat_index, lon_index]
-                    # Remove some percentage of the depth to make sure the FVCOM column definitely fits inside the
-                    # coarse one.
-                    z[idx, :] = z[idx, :] - (z[idx, :] * 0.005)
-            # Fix all depths which are shallower than the shallowest coarse depth. This is more straightforward as
-            # it's a single minimum across all the grid positions.
-            z[z < coarse.grid.depth.min()] = coarse.grid.depth.min()
+            if mode != 'surface':
+                coarse_depths = np.tile(coarse.grid.depth, [coarse.dims.lat, coarse.dims.lon, 1]).transpose(2, 0, 1)
+                coarse_depths = np.ma.masked_array(coarse_depths, mask=getattr(coarse.data, coarse_name)[0, ...].mask)
+                coarse_depths = np.max(coarse_depths, axis=0)
+                coarse_depths = np.ma.filled(coarse_depths, 0)
+
+                # Go through each open boundary position and if its depth is deeper than the closest coarse data,
+                # squash the open boundary water column into the coarse water column.
+                for idx, node in enumerate(zip(x, y, z.T)):
+                    nearest_lon_ind = np.argmin((coarse.grid.lon - node[0])**2)
+                    nearest_lat_ind = np.argmin((coarse.grid.lat - node[1])**2)
+
+                    if node[0] < coarse.grid.lon[nearest_lon_ind]:
+                        nearest_lon_ind = [nearest_lon_ind -1, nearest_lon_ind, nearest_lon_ind -1, nearest_lon_ind]
+                    else:
+                        nearest_lon_ind = [nearest_lon_ind, nearest_lon_ind + 1, nearest_lon_ind, nearest_lon_ind + 1]
+
+                    if node[1] < coarse.grid.lat[nearest_lat_ind]:
+                        nearest_lat_ind = [nearest_lat_ind -1, nearest_lat_ind -1, nearest_lat_ind, nearest_lat_ind]
+                    else:
+                        nearest_lat_ind = [nearest_lat_ind, nearest_lat_ind, nearest_lat_ind + 1, nearest_lat_ind + 1]
+
+                    grid_depth = np.min(coarse_depths[nearest_lat_ind, nearest_lon_ind])
+
+                    if grid_depth < node[2].max():
+                        # Squash the FVCOM water column into the coarse water column.
+                        z[:, idx] = (node[2] / node[2].max()) * grid_depth
+                # Fix all depths which are shallower than the shallowest coarse depth. This is more straightforward as
+                # it's a single minimum across all the open boundary positions.
+                z[z < coarse.grid.depth.min()] = coarse.grid.depth.min()
 
         # Make arrays of lon, lat, depth and time. Need to make the coordinates match the coarse data shape and then
         # flatten the lot. We should be able to do the interpolation in one shot this way, but we have to be
@@ -4564,23 +4596,26 @@ class Restart(FileReader):
         nt = len(self.time.time)
         nx = len(x)
         nz = z.shape[0]
-        boundary_grid = np.array((np.tile(self.time.time, [nx, nz, 1]).T.ravel(),
-                                  np.tile(z, [nt, 1, 1]).ravel(),
-                                  np.tile(y, [nz, nt, 1]).transpose(1, 0, 2).ravel(),
-                                  np.tile(x, [nz, nt, 1]).transpose(1, 0, 2).ravel())).T
 
-        # Set the land values in the coarse data to NaN.
-        # to_mask = getattr(coarse.data, coarse_name)
-        # mask = to_mask.mask
-        # to_mask = np.array(to_mask)
-        # to_mask[mask] = np.nan
-        # setattr(coarse.data, coarse_name, to_mask)
-        # del to_mask, mask
-
-        ft = RegularGridInterpolator((coarse.time.time, coarse.grid.depth, coarse.grid.lat, coarse.grid.lon),
-                                     getattr(coarse.data, coarse_name), method='linear')
-        # Reshape the results to match the un-ravelled boundary_grid array.
-        interpolated_coarse_data = ft(boundary_grid).reshape([nt, nz, -1])
+        if mode == 'surface':
+            boundary_grid = np.array((np.tile(self.time.time, [nx, 1]).T.ravel(),
+                                      np.tile(y, [nt, 1]).transpose(0, 1).ravel(),
+                                      np.tile(x, [nt, 1]).transpose(0, 1).ravel())).T
+            ft = RegularGridInterpolator((coarse.time.time, coarse.grid.lat, coarse.grid.lon),
+                                         getattr(coarse.data, coarse_name), method='linear', fill_value=np.nan)
+            # Reshape the results to match the un-ravelled boundary_grid array.
+            interpolated_coarse_data = ft(boundary_grid).reshape([nt, -1])
+            # Drop the interpolated data into the nest object.
+        else:
+            boundary_grid = np.array((np.tile(self.time.time, [nx, nz, 1]).T.ravel(),
+                                      np.tile(z, [nt, 1, 1]).ravel(),
+                                      np.tile(y, [nz, nt, 1]).transpose(1, 0, 2).ravel(),
+                                      np.tile(x, [nz, nt, 1]).transpose(1, 0, 2).ravel())).T
+            ft = RegularGridInterpolator((coarse.time.time, coarse.grid.depth, coarse.grid.lat, coarse.grid.lon),
+                                         getattr(coarse.data, coarse_name), method='linear',
+                                         fill_value=0)
+            # Reshape the results to match the un-ravelled boundary_grid array.
+            interpolated_coarse_data = ft(boundary_grid).reshape([nt, nz, -1])
 
         self.replace_variable(variable, interpolated_coarse_data)
 
