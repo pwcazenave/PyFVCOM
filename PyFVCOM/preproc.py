@@ -4582,7 +4582,7 @@ class Restart(FileReader):
 
             if np.any(internal_points):
                 xv, yv = np.meshgrid(coarse.grid.lon, coarse.grid.lat)
-                valid_ll = np.asarray([xv[~land_mask], yv[~land_mask]]).T
+                valid_ll = np.asarray([x[~internal_points], y[~internal_points]]).T
                 for this_ind in np.where(internal_points)[0]:
                     nearest_valid_ind = np.argmin((valid_ll[:,0] - x[this_ind])**2 + (valid_ll[:,1] - y[this_ind])**2)
                     x[this_ind] = valid_ll[nearest_valid_ind,0]
