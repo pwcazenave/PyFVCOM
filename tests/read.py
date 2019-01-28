@@ -155,7 +155,7 @@ class FileReader_test(TestCase):
         # Repeat the process, but use the __add__ method in FileReader.
         F1 = FileReader(self.stub.ncfile.name, dims={'siglay': [5], 'time': [0, -10]}, variables=['ww'])
         F2 = FileReader(next_stub.ncfile.name, dims={'siglay': [5], 'time': [0, -10]}, variables=['ww'])
-        F = F1 >> F2
+        F = F2 >> F1
 
         test.assert_equal(F.time.datetime, all_times)
         test.assert_equal(F.data.ww, all_data)
