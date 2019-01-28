@@ -1065,6 +1065,9 @@ class FileReader(Domain):
 
     def _load_grid(self, fvcom):
         self.grid = GridReaderNetCDF(fvcom, dims=self._dims, zone=self._zone, debug=self._debug, verbose=self._noisy)
+        # Pull back the _get_data_pattern back out in case we've been subsetting.
+        if hasattr(self.grid, '_get_data_pattern'):
+            self._get_data_pattern = self.grid._get_data_pattern
         # Grab the dimensions from the grid in case we've subset somewhere.
         self._dims = self.grid._dims
         delattr(self.grid, '_dims')
@@ -1113,6 +1116,11 @@ class FileReader(Domain):
             self.dims.time = len(self.time.time)
             self.grid = GridReaderNetCDF(self._fvcom, dims=self._dims, zone=self._zone, debug=self._debug,
                                          verbose=self._noisy)
+
+        # Make sure we inherit the data pattern from GridReaderNetCDF as it'll be set to 'memory' if we're
+        # subsetting in space to make the extraction tractable in time.
+        if hasattr(self.grid, '_get_data_pattern'):
+            self._get_data_pattern = self.grid._get_data_pattern
 
         # Check if we've got iterable variables and make one if not.
         if not hasattr(var, '__iter__') or isinstance(var, str):
