@@ -4681,7 +4681,10 @@ class Restart(FileReader):
                 if name in self.replaced:
                     if self._noisy:
                         print('NEW DATA')
-                    ds[name][:] = getattr(self.data, name)
+                    if name in ['time', 'Itime', 'Itime2', 'Times']:
+                        ds[name][:] = getattr(self.time, name)
+                    else:
+                        ds[name][:] = getattr(self.data, name)
                 else:
                     if self._noisy:
                         print('existing data')
