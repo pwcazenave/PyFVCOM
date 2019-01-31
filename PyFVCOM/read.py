@@ -475,7 +475,7 @@ class FileReader(Domain):
                 self._dims[dim] = [self._dims[dim]]
 
         self.time = _TimeReader(self._fvcom, dims=self._dims)
-        self._dims = self.time._dims  # grab the updated dimensions from the _TimeReader object.
+        self._dims = copy.deepcopy(self.time._dims)  # grab the updated dimensions from the _TimeReader object.
 
         # Update the time dimension no we've read in the time data (in case we did so with a specified dimension
         # range).
