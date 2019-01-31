@@ -1142,6 +1142,9 @@ class FileReader(Domain):
                     if self._debug:
                         print(f'Extracting specific indices for {dimension}', flush=True)
                     variable_indices[variable_index] = dims[dimension]
+                    # If we've got a slice, convert to indices here. This is so we can np.array.take() it below.
+                    if isinstance(dims[dimension], slice):
+                        variable_indices[variable_index] = np.arange(variable_shape[variable_index])[dims[dimension]]
 
             # Add attributes for the variable we're loading.
             self.atts.get_attribute(v)
