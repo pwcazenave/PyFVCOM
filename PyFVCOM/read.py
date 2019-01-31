@@ -480,10 +480,9 @@ class FileReader(Domain):
         # Update the time dimension no we've read in the time data (in case we did so with a specified dimension
         # range).
         try:
-            nt = len(self.time.time)
+            self.dims.time = len(self.time.time)
         except TypeError:
-            nt = 1
-        self.dims.time = nt
+            self.dims.time = 1
 
         self._load_grid(fvcom)
 
