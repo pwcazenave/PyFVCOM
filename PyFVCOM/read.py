@@ -233,6 +233,24 @@ class _TimeReader(object):
                 for time in self:
                     setattr(self, time, getattr(self, time)[self._dims['time']])
 
+            # The time of the averaged data is midnight at the end of the averaging period. Offset by half the
+            # averaging interval to fix that, and update all the other time representations accordingly.
+            if 'title' in dataset.ncattrs():
+                if 'Average output file!' in dataset.getncattr('title'):
+                    if _noisy:
+                        print('Offsetting average period times by half the interval to place the time stamp at the '
+                              'midpoint of the averaging period')
+                    offset = np.diff(getattr(self, 'datetime')).mean() / 2
+                    self.datetime = self.datetime - offset
+                    self.time = date2num(self.datetime, units=self._mjd_origin)
+                    self.Itime = np.floor(self.time)
+                    self.Itime2 = (self.time - np.floor(self.time)) * 1000 * 60 * 60 * 24  # microseconds since midnight
+                    if self._using_calendar_time:
+                        try:
+                            self.Times = np.array([datetime.strftime(d, '%Y-%m-%dT%H:%M:%S.%f') for d in self.datetime])
+                        except TypeError:
+                            self.Times = np.array([datetime.strftime(self.datetime, '%Y-%m-%dT%H:%M:%S.%f')])
+
         dataset.close()
 
     def __iter__(self):
