@@ -1152,7 +1152,7 @@ class CompareICES(object):
         self.zeta_filereader = FileReader(self.model_files[0], ['zeta'])
         if len(self.model_files) > 1:
             for this_file in self.model_files[1:]:
-                self.zeta_filereader += FileReader(this_file, ['zeta'])
+                self.zeta_filereader = FileReader(this_file, ['zeta']) >> self.zeta_filereader
         self.lon_mm = [np.min(self.zeta_filereader.grid.lon), np.max(self.zeta_filereader.grid.lon)]
         self.lat_mm = [np.min(self.zeta_filereader.grid.lat), np.max(self.zeta_filereader.grid.lat)]
         bn_list = get_boundary_polygons(self.zeta_filereader.grid.triangles)[0] # Assumes first poly is outer boundary
@@ -1294,6 +1294,7 @@ class CompareICES(object):
         
         current_modelfile_ind = 0
         current_modelfile_dt = [this_date.date() for this_date in FileReader(self.model_files[current_modelfile_ind]).time.datetime]
+
         unique_obs_days = np.unique([this_date.date() for this_date in self.ices_data['time_dt']])
         for counter_ind, this_day in enumerate(unique_obs_days):
             if self.noisy:
