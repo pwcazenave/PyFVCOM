@@ -233,6 +233,24 @@ class _TimeReader(object):
                 for time in self:
                     setattr(self, time, getattr(self, time)[self._dims['time']])
 
+            # The time of the averaged data is midnight at the end of the averaging period. Offset by half the
+            # averaging interval to fix that, and update all the other time representations accordingly.
+            if 'title' in dataset.ncattrs():
+                if 'Average output file!' in dataset.getncattr('title'):
+                    if _noisy:
+                        print('Offsetting average period times by half the interval to place the time stamp at the '
+                              'midpoint of the averaging period')
+                    offset = np.diff(getattr(self, 'datetime')).mean() / 2
+                    self.datetime = self.datetime - offset
+                    self.time = date2num(self.datetime, units=self._mjd_origin)
+                    self.Itime = np.floor(self.time)
+                    self.Itime2 = (self.time - np.floor(self.time)) * 1000 * 60 * 60 * 24  # microseconds since midnight
+                    if self._using_calendar_time:
+                        try:
+                            self.Times = np.array([datetime.strftime(d, '%Y-%m-%dT%H:%M:%S.%f') for d in self.datetime])
+                        except TypeError:
+                            self.Times = np.array([datetime.strftime(self.datetime, '%Y-%m-%dT%H:%M:%S.%f')])
+
         dataset.close()
 
     def __iter__(self):
@@ -475,15 +493,14 @@ class FileReader(Domain):
                 self._dims[dim] = [self._dims[dim]]
 
         self.time = _TimeReader(self._fvcom, dims=self._dims)
-        self._dims = self.time._dims  # grab the updated dimensions from the _TimeReader object.
+        self._dims = copy.deepcopy(self.time._dims)  # grab the updated dimensions from the _TimeReader object.
 
-        # Update the time dimension no we've read in the time data (in case we did so with a specificed dimension
+        # Update the time dimension no we've read in the time data (in case we did so with a specified dimension
         # range).
         try:
-            nt = len(self.time.time)
+            self.dims.time = len(self.time.time)
         except TypeError:
-            nt = 1
-        self.dims.time = nt
+            self.dims.time = 1
 
         self._load_grid(fvcom)
 
@@ -1143,6 +1160,9 @@ class FileReader(Domain):
                     if self._debug:
                         print(f'Extracting specific indices for {dimension}', flush=True)
                     variable_indices[variable_index] = dims[dimension]
+                    # If we've got a slice, convert to indices here. This is so we can np.array.take() it below.
+                    if isinstance(dims[dimension], slice):
+                        variable_indices[variable_index] = np.arange(variable_shape[variable_index])[dims[dimension]]
 
             # Add attributes for the variable we're loading.
             self.atts.get_attribute(v)
