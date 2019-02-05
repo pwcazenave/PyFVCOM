@@ -1928,6 +1928,54 @@ def read_fvcom_mesh(mesh):
 
     return triangle, nodes, X, Y, Z
 
+def read_smesh_mesh(mesh):
+    """
+    Reads output of the smeshing tool. This is (close) to the fort.14 file format.
+
+    Parameters
+    ----------
+    mesh : str
+        Full path to the smesh output file
+
+    Returns
+    -------
+    triangle : np.ndarray
+        Integer array of shape (ntri, 3). Each triangle is composed of
+        three points and this contains the three node numbers (stored in
+        nodes) which refer to the coordinates in `x' and `y' (see below).
+    X, Y : np.ndarray
+        Coordinates of each grid node
+
+    """
+
+    fileRead = open(mesh, 'r')
+    # Skip the file header line
+    lines = fileRead.readlines()[1:]
+    fileRead.close()
+
+    triangles = []
+    nodes = []
+    x = []
+    y = []
+
+    for line in lines:
+        ttt = line.strip().split()
+        if len(ttt) == 3:
+            t1 = int(ttt[0])
+            t2 = int(ttt[1])
+            t3 = int(ttt[2])
+            triangles.append([t1, t2, t3])
+        elif len(ttt) == 2:
+            x.append(float(ttt[0]))
+            y.append(float(ttt[1]))
+
+    # Convert to numpy arrays.
+    triangle = np.asarray(triangles)
+    X = np.asarray(x)
+    Y = np.asarray(y)
+
+    return triangle, X, Y 
+
 
 def read_mike_mesh(mesh, flipZ=True):
     """
