@@ -218,21 +218,6 @@ class _TimeReader(object):
             if self._using_calendar_time:
                 setattr(self, 'time', np.asarray([date2num(time, units=self._mjd_origin) for time in self.datetime]))
 
-            # Clip everything to the time indices if we've been given them. Update the time dimension too.
-            if 'time' in self._dims:
-                is_datetimes_or_str = False
-                if not isinstance(self._dims['time'], slice):
-                    is_datetimes_or_str = all([isinstance(i, (datetime, str)) for i in self._dims['time']])
-                if not isinstance(self._dims['time'], slice) and is_datetimes_or_str:
-                    # Convert datetime dimensions to indices in the currently loaded data. Assume we've got a list
-                    # and if that fails, we've probably got a single index, so convert it accordingly.
-                    try:
-                        self._dims['time'] = np.arange(*[self._time_to_index(i) for i in self._dims['time']])
-                    except TypeError:
-                        self._dims['time'] = np.arange(*[self._time_to_index(self._dims['time'])])  # make iterable
-                for time in self:
-                    setattr(self, time, getattr(self, time)[self._dims['time']])
-
             # The time of the averaged data is midnight at the end of the averaging period. Offset by half the
             # averaging interval to fix that, and update all the other time representations accordingly.
             if 'title' in dataset.ncattrs():
@@ -250,6 +235,21 @@ class _TimeReader(object):
                             self.Times = np.array([datetime.strftime(d, '%Y-%m-%dT%H:%M:%S.%f') for d in self.datetime])
                         except TypeError:
                             self.Times = np.array([datetime.strftime(self.datetime, '%Y-%m-%dT%H:%M:%S.%f')])
+
+            # Clip everything to the time indices if we've been given them. Update the time dimension too.
+            if 'time' in self._dims:
+                is_datetimes_or_str = False
+                if not isinstance(self._dims['time'], slice):
+                    is_datetimes_or_str = all([isinstance(i, (datetime, str)) for i in self._dims['time']])
+                if not isinstance(self._dims['time'], slice) and is_datetimes_or_str:
+                    # Convert datetime dimensions to indices in the currently loaded data. Assume we've got a list
+                    # and if that fails, we've probably got a single index, so convert it accordingly.
+                    try:
+                        self._dims['time'] = np.arange(*[self._time_to_index(i) for i in self._dims['time']])
+                    except TypeError:
+                        self._dims['time'] = np.arange(*[self._time_to_index(self._dims['time'])])  # make iterable
+                for time in self:
+                    setattr(self, time, getattr(self, time)[self._dims['time']])
 
         dataset.close()
 
