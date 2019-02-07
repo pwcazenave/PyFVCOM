@@ -1014,7 +1014,7 @@ class OpenBoundary(object):
         self.grid = _passive_data_store()
         self.sigma = _passive_data_store()
         self.time = _passive_data_store()
-        self.nest = _passive_data_store()
+        self.data = _passive_data_store()
 
     def __iter__(self):
         return (a for a in self.__dict__.keys() if not a.startswith('_'))
@@ -1547,13 +1547,13 @@ class OpenBoundary(object):
             raise AttributeError('Add vertical sigma coordinates in order to interpolate forcing along this boundary.')
 
         # Populate the time data.
-        self.nest.time = type('time', (), {})()
-        self.nest.time.interval = interval
-        self.nest.time.datetime = date_range(self.time.start, self.time.end, inc=interval)
-        self.nest.time.time = date2num(getattr(self.nest.time, 'datetime'), units='days since 1858-11-17 00:00:00')
-        self.nest.time.Itime = np.floor(getattr(self.nest.time, 'time'))  # integer Modified Julian Days
-        self.nest.time.Itime2 = (getattr(self.nest.time, 'time') - getattr(self.nest.time, 'Itime')) * 24 * 60 * 60 * 1000  # milliseconds since midnight
-        self.nest.time.Times = [t.strftime('%Y-%m-%dT%H:%M:%S.%f') for t in getattr(self.nest.time, 'datetime')]
+        self.data.time = type('time', (), {})()
+        self.data.time.interval = interval
+        self.data.time.datetime = date_range(self.time.start, self.time.end, inc=interval)
+        self.data.time.time = date2num(getattr(self.data.time, 'datetime'), units='days since 1858-11-17 00:00:00')
+        self.data.time.Itime = np.floor(getattr(self.data.time, 'time'))  # integer Modified Julian Days
+        self.data.time.Itime2 = (getattr(self.data.time, 'time') - getattr(self.data.time, 'Itime')) * 24 * 60 * 60 * 1000  # milliseconds since midnight
+        self.data.time.Times = [t.strftime('%Y-%m-%dT%H:%M:%S.%f') for t in getattr(self.data.time, 'datetime')]
 
         if mode == 'elements':
             boundary_points = self.elements
@@ -1632,21 +1632,21 @@ class OpenBoundary(object):
         # Make arrays of lon, lat, depth and time. Need to make the coordinates match the coarse data shape and then
         # flatten the lot. We should be able to do the interpolation in one shot this way, but we have to be
         # careful our coarse data covers our model domain (space and time).
-        nt = len(self.nest.time.time)
+        nt = len(self.data.time.time)
         nx = len(boundary_points)
         nz = z.shape[-1]
 
         if mode == 'surface':
-            boundary_grid = np.array((np.tile(self.nest.time.time, [nx, 1]).T.ravel(),
+            boundary_grid = np.array((np.tile(self.data.time.time, [nx, 1]).T.ravel(),
                                       np.tile(y, [nt, 1]).transpose(0, 1).ravel(),
                                       np.tile(x, [nt, 1]).transpose(0, 1).ravel())).T
             ft = RegularGridInterpolator((coarse.time.time, coarse.grid.lat, coarse.grid.lon),
                                          getattr(coarse.data, coarse_name), method='linear', fill_value=np.nan)
             # Reshape the results to match the un-ravelled boundary_grid array.
             interpolated_coarse_data = ft(boundary_grid).reshape([nt, -1])
-            # Drop the interpolated data into the nest object.
+            # Drop the interpolated data into the data object.
         else:
-            boundary_grid = np.array((np.tile(self.nest.time.time, [nx, nz, 1]).T.ravel(),
+            boundary_grid = np.array((np.tile(self.data.time.time, [nx, nz, 1]).T.ravel(),
                                       np.tile(z.T, [nt, 1, 1]).ravel(),
                                       np.tile(y, [nz, nt, 1]).transpose(1, 0, 2).ravel(),
                                       np.tile(x, [nz, nt, 1]).transpose(1, 0, 2).ravel())).T
@@ -1655,12 +1655,12 @@ class OpenBoundary(object):
                                          fill_value=np.nan)
             # Reshape the results to match the un-ravelled boundary_grid array.
             interpolated_coarse_data = ft(boundary_grid).reshape([nt, nz, -1])
-            # Drop the interpolated data into the nest object.
+            # Drop the interpolated data into the data object.
 
         if tide_adjust and fvcom_name in ['u', 'v', 'ua', 'va']:
             interpolated_coarse_data = interpolated_coarse_data + getattr(self.tide, fvcom_name)
 
-        setattr(self.nest, fvcom_name, interpolated_coarse_data)
+        setattr(self.data, fvcom_name, interpolated_coarse_data)
 
     @staticmethod
     def _nested_forcing_interpolator(data, lon, lat, depth, points):
@@ -1696,12 +1696,12 @@ class OpenBoundary(object):
 
     def avg_nest_force_vel(self):
         """
-        Create depth-averaged velocities (`ua', `va') in the current self.nest data.
+        Create depth-averaged velocities (`ua', `va') in the current self.data data.
 
         """
         layer_thickness = self.sigma.levels_center.T[0:-1, :] - self.sigma.levels_center.T[1:, :]
-        self.nest.ua = zbar(self.nest.u, layer_thickness)
-        self.nest.va = zbar(self.nest.v, layer_thickness)
+        self.data.ua = zbar(self.data.u, layer_thickness)
+        self.data.va = zbar(self.data.v, layer_thickness)
 
 
 def read_sms_mesh(mesh, nodestrings=False):
