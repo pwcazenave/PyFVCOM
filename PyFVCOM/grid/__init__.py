@@ -3,6 +3,9 @@ Tools for manipulating and converting unstructured grids in a range of formats.
 
 """
 
+# TODO: This is a massive sprawling collection of functions. We should split it up into more sensible subdivisions
+#  within PyFVCOM.grid to make it more manageable and generally more useable.
+
 from __future__ import print_function, division
 
 import copy
