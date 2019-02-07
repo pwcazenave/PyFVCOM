@@ -2,12 +2,17 @@ import os
 
 import numpy.testing as test
 import numpy as np
+import tempfile
 
 from unittest import TestCase
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 
 from PyFVCOM.read import FileReader
+from PyFVCOM.grid import nodes2elems
+from PyFVCOM.coordinate import utm_from_lonlat
+from PyFVCOM.utilities.time import date_range
+from netCDF4 import Dataset, date2num
 
 
 class StubFile(object):
