@@ -781,7 +781,7 @@ class Plotter(object):
         if self.cb_label:
             self.cbar.set_label(self.cb_label)
 
-    def plot_quiver(self, u, v, field=False, add_key=True, scale=1.0, label=None):
+    def plot_quiver(self, u, v, field=False, add_key=True, scale=1.0, label=None, *args, **kwargs):
         """ Produce quiver plot using u and v velocity components.
 
         Parameters
@@ -800,6 +800,8 @@ class Plotter(object):
         label : str, optional
             Give label to use for the quiver key (defaults to "`scale' ms^{-1}").
 
+        Additional `args' and `kwargs' are passed to `matplotlib.pyplot.quiver'.
+
         """
 
         if self.quiver_plot:
@@ -817,7 +819,8 @@ class Plotter(object):
                                                 cmap=self.cmap,
                                                 units='inches',
                                                 scale_units='inches',
-                                                scale=scale)
+                                                scale=scale,
+                                                *args, **kwargs)
             divider = make_axes_locatable(self.axes)
             cax = divider.append_axes("right", size="5%", pad=0.05)
             self.cbar = self.figure.colorbar(self.quiver_plot, cax=cax)
@@ -826,6 +829,7 @@ class Plotter(object):
                 self.cbar.set_label(self.cb_label)
         else:
             self.quiver_plot = self.axes.quiver(self.mxc, self.myc, u, v, units='inches', scale_units='inches', scale=scale)
+
         if add_key:
             self.quiver_key = plt.quiverkey(self.quiver_plot, 0.9, 0.9, scale, label, coordinates='axes')
 
