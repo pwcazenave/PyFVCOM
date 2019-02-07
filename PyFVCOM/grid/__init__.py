@@ -17,13 +17,13 @@ from collections import defaultdict, deque
 from functools import partial
 from warnings import warn
 
-import matplotlib.pyplot as plt
 import matplotlib.path as mpath
+import matplotlib.pyplot as plt
 import networkx
 import numpy as np
 import scipy.spatial
-import shapely.geometry
 import shapefile
+import shapely.geometry
 from dateutil.relativedelta import relativedelta
 from matplotlib.dates import date2num as mtime
 from matplotlib.tri import CubicTriInterpolator
