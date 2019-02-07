@@ -20,6 +20,7 @@ import networkx
 import numpy as np
 import scipy.spatial
 import shapely.geometry
+import shapefile
 from dateutil.relativedelta import relativedelta
 from matplotlib.dates import date2num as mtime
 from matplotlib.tri import CubicTriInterpolator
@@ -2695,6 +2696,45 @@ def MIKEarc2CST(file, output):
                 # Reset n and arc for new arc
                 n = 1
                 arc = []
+
+
+def shp2cst(file, output_file):
+    """
+    Convert ESRI ShapeFiles to SMS-compatible CST files.
+
+    Parameters
+    ----------
+    file : str
+        Full path to the ESRI ShapeFile to convert.
+    output_file : str
+        Full path to the output file.
+
+    Notes
+    -----
+    There's no particular reason this function should exist as SMS can read shapefiles natively. I imagine I didn't
+    know that when I wrote this.
+
+    """
+
+    sf = shapefile.Reader(file)
+    shapes = sf.shapes()
+
+    nArcs = sf.numRecords
+
+    # Set up the output file
+    with open(output_file, 'w') as file_out:
+        file_out.write('COAST\n')
+        file_out.write('{}\n'.format(int(nArcs)))
+
+        z = 0
+
+        for arc in range(nArcs):
+            # Write the current arc out to file. Start with number of nodes and z
+            arcLength = len(shapes[arc].points)
+            file_out.write('{}\t{}\n'.format(arcLength, float(z)))
+            # Add the actual arc
+            for arcPos in shapes[arc].points:
+                file_out.write('\t{}\t{}\t{}\n'.format(float(arcPos[0]), float(arcPos[1]), float(z)))
 
 
 def find_nearest_point(grid_x, grid_y, x, y, maxDistance=np.inf):
