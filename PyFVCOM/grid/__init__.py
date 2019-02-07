@@ -2238,7 +2238,7 @@ def parse_obc_sections(obc_node_array, triangle):
     return nodestrings
 
 
-def read_CST(cst):
+def read_sms_cst(cst):
     """
     Read a CST file and store the vertices in a dict.
 
@@ -2600,7 +2600,7 @@ def write_fvcom_mesh(triangles, nodes, x, y, z, mesh, extra_depth=None):
                 f.write('{:.6f} {:.6f} {:.6f}\n'.format(*node))
 
 
-def write_CST(obc, file, sort=False):
+def write_sms_cst(obc, file, sort=False):
     """
     Read a CST file and store the vertices in a dict.
 
@@ -2661,6 +2661,7 @@ def MIKEarc2CST(file, output):
         Full path to the output file.
 
     """
+
     with open(file, 'r') as file_in:
         lines = file_in.readlines()
 
