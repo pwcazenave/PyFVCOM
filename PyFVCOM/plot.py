@@ -463,8 +463,8 @@ class Plotter(object):
         stations : 2D array, optional
             List of station coordinates to be plotted ([[lons], [lats]])
         extents : 1D array, optional
-            Four element numpy array giving lon/lat limits (e.g. [-4.56, -3.76,
-            49.96, 50.44])
+            Four element numpy array giving lon/lat limits as west, east, south, north (e.g. [-4.56, -3.76, 49.96,
+            50.44])
         vmin : float, optional
             Lower bound to be used on colour bar (plot_field only).
         vmax : float, optional
@@ -505,13 +505,12 @@ class Plotter(object):
             Set the colour bar extension ('neither', 'both', 'min', 'max').
             Defaults to 'neither').
         norm : matplotlib.colors.Normalize, optional
-            Normalise the luminance to 0,1. For example, use from
-            matplotlib.colors.LogNorm to do log plots of fields.
+            Normalise the luminance to 0,1. For example, use from matplotlib.colors.LogNorm to do log plots of fields.
         m : mpl_toolkits.basemap.Basemap, optional
             Pass a Basemap object rather than creating one on each invocation.
         cartesian : bool, optional
-            Set to True to skip using Basemap and instead return a simple
-            cartesian axis plot. Defaults to False (geographical coordinates).
+            Set to True to skip using Basemap and instead return a simple cartesian axis plot. Defaults to False
+            (geographical coordinates).
         bmargs : dict
             Additional arguments to pass to Basemap.
 
