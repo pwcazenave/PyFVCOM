@@ -223,7 +223,7 @@ class StubFile(object):
         Times.setncattr('time_zone', 'UTC')
 
         # Add a single variable of each size commonly found in FVCOM (2D and 3D time series). It should be possible
-        # to use create_variable() here, but I'm not sure I like the idea of spamming self with load of arrays.
+        # to use create_variable() here, but I'm not sure I like the idea of spamming self with loads of arrays.
         # Perhaps making a self.data would be a nice compromise.
 
         # 3D nodes siglev
