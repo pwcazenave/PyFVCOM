@@ -1574,8 +1574,8 @@ class OpenBoundary(object):
             y[y < coarse.grid.lat.min()] = coarse.grid.lat.min()
             y[y > coarse.grid.lat.max()] = coarse.grid.lat.max()
 
-            # Internal landmasses also need to be dealt with, so test if a point lies within the mask of the grid and move it to the nearest in grid
-            # point if so.            
+            # Internal landmasses also need to be dealt with, so test if a point lies within the mask of the grid and
+            # move it to the nearest in grid point if so.
             if not mode == 'surface':
                 land_mask = getattr(coarse.data, coarse_name)[0, ...].mask[0, :, :]
             else:
