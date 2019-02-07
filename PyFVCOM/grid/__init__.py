@@ -2237,6 +2237,66 @@ def parse_obc_sections(obc_node_array, triangle):
     return nodestrings
 
 
+def read_CST(cst):
+    """
+    Read a CST file and store the vertices in a dict.
+
+    Parameters
+    ----------
+    cst : str
+        Path to the CST file to load in.
+
+    Returns
+    -------
+    vert : dict
+        Dictionary with the coordinates of the vertices of the arcs defined in
+        the CST file.
+
+    """
+
+    f = open(cst, 'r')
+    lines = f.readlines()
+    f.close()
+
+    vert = {}
+    c = 0
+    for line in lines:
+        line = line.strip()
+        if line.startswith('COAST'):
+            pass
+        else:
+            # Split the line on tabs and work based on that output.
+            line = line.split('\t')
+            if len(line) == 1:
+                # Number of arcs. We don't especially need to know this.
+                pass
+
+            elif len(line) == 2:
+                # Number of nodes within a single arc. Store the current index
+                # and use as the key for the dict.
+                nv = int(line[0])
+                id = str(c)    # dict key
+                vert[id] = []  # initialise the vert list
+                c += 1         # arc counter
+
+            elif len(line) == 3:
+                coords = [float(x) for x in line[:-1]]
+                # Skip the last position if we've already got some data in the
+                # dict for this arc.
+                if vert[id]:
+                    if len(vert[id]) != nv - 1:
+                        vert[id].append(coords)
+                    else:
+                        # We're at the end of this arc, so convert the
+                        # coordinates we've got to a numpy array for easier
+                        # handling later on.
+                        vert[id] = np.asarray(vert[id])
+                else:
+                    vert[id].append(coords)
+
+    return vert
+
+
 def write_sms_mesh(triangles, nodes, x, y, z, types, mesh):
     """
     Takes appropriate triangle, node, boundary type and coordinate data and
@@ -2537,6 +2597,44 @@ def write_fvcom_mesh(triangles, nodes, x, y, z, mesh, extra_depth=None):
             f.write('Node Number = {:d}\n'.format(len(x)))
             for node in zip(x, y, z):
                 f.write('{:.6f} {:.6f} {:.6f}\n'.format(*node))
+
+
+def write_CST(obc, file, sort=False):
+    """
+    Read a CST file and store the vertices in a dict.
+
+    Parameters
+    ----------
+    obc : dict
+        Dict with each entry as a NumPy array of coordinates (x, y).
+    file : str
+        Path to the CST file to which to write (overwrites existing files).
+    sort : bool, optional
+        Optionally sort the output coordinates (by x then y). This might break
+        things with complicated open boundary geometries.
+
+    """
+    nb = len(obc)
+
+    with open(file, 'w') as f:
+        # Header
+        f.write('COAST\n')
+        f.write('{:d}\n'.format(nb))
+
+        for _, bb in obc.iteritems():  # each boundary
+            nn = len(bb)
+
+            # The current arc's header
+            f.write('{:d}\t0.0\n'.format(nn))
+
+            if sort:
+                idx = np.lexsort(bb.transpose())
+                bb = bb[idx, :]
+
+            for xy in bb:
+                f.write('\t{:.6f}\t{:.6f}\t0.0\n'.format(xy[0], xy[1]))
+
+        f.close
 
 
 def find_nearest_point(grid_x, grid_y, x, y, maxDistance=np.inf):
