@@ -1948,21 +1948,18 @@ def read_smesh_mesh(mesh):
     Returns
     -------
     triangle : np.ndarray
-        Integer array of shape (ntri, 3). Each triangle is composed of
-        three points and this contains the three node numbers (stored in
-        nodes) which refer to the coordinates in `x' and `y' (see below).
-    X, Y : np.ndarray
+        Integer array of shape (ntri, 3). Each triangle is composed of three points and this contains the three node
+        numbers which refer to the coordinates in `x' and `y' (see below).
+    x, y : np.ndarray
         Coordinates of each grid node
 
     """
 
-    fileRead = open(mesh, 'r')
-    # Skip the file header line
-    lines = fileRead.readlines()[1:]
-    fileRead.close()
+    with open(mesh, 'r') as file_read:
+        # Skip the file header line
+        lines = file_read.readlines()[1:]
 
     triangles = []
-    nodes = []
     x = []
     y = []
 
@@ -1979,10 +1976,10 @@ def read_smesh_mesh(mesh):
 
     # Convert to numpy arrays.
     triangle = np.asarray(triangles)
-    X = np.asarray(x)
-    Y = np.asarray(y)
+    x = np.asarray(x)
+    y = np.asarray(y)
 
-    return triangle, X, Y 
+    return triangle, x, y
 
 
 def read_mike_mesh(mesh, flipZ=True):
