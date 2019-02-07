@@ -715,7 +715,7 @@ class Plotter(object):
         field : np.ndarray
             Field to plot (either on elements or nodes).
 
-        Additional arguments and keyword arguments are passed to matplotlib.pyplot.tripcolor.
+        Additional arguments and keyword arguments are passed to `matplotlib.pyplot.tripcolor'.
 
         """
 
