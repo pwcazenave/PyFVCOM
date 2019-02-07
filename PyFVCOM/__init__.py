@@ -16,7 +16,6 @@ from warnings import warn
 
 # Import everything! Eventually, we're going to hit a circular dependency here...
 from PyFVCOM import buoy
-from PyFVCOM import coast
 from PyFVCOM import ctd
 from PyFVCOM import current
 from PyFVCOM import grid
