@@ -702,6 +702,11 @@ class Plotter(object):
         return extend
 
     def replot(self):
+        """
+        Helper method to nuke and existing plot in the current self.axes and reset everything to clean.
+
+        """
+
         self.axes.cla()
         self._init_figure()
         self.tripcolor_plot = None
@@ -841,7 +846,8 @@ class Plotter(object):
             self.axes.set_ylim(self.my.min(), self.my.max())
 
     def plot_lines(self, x, y, group_name='Default', colour='r', zone_number='30N'):
-        """ Plot path lines.
+        """
+        Plot geographical lines.
 
         Parameters:
         -----------
