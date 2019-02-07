@@ -2615,6 +2615,7 @@ def write_sms_cst(obc, file, sort=False):
         things with complicated open boundary geometries.
 
     """
+
     nb = len(obc)
 
     with open(file, 'w') as f:
@@ -2622,7 +2623,7 @@ def write_sms_cst(obc, file, sort=False):
         f.write('COAST\n')
         f.write('{:d}\n'.format(nb))
 
-        for _, bb in obc.iteritems():  # each boundary
+        for _, bb in obc:  # each boundary
             nn = len(bb)
 
             # The current arc's header
