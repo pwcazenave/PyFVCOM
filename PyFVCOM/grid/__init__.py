@@ -566,6 +566,9 @@ class Domain(object):
                 self.dims.open_boundary_nodes = len(self.grid.open_boundary_nodes)
                 self.dims.open_boundary = 1
 
+    def __iter__(self):
+        return (a for a in self.__dict__.keys() if not a.startswith('_'))
+
     @staticmethod
     def _closest_point(x, y, lon, lat, where, threshold=np.inf, vincenty=False, haversine=False):
         """
@@ -763,9 +766,9 @@ class Domain(object):
         Returns
         -------
         nodes : np.ndarray
-            List of the nodes within the given polygon.
+            List of the node IDs from the original `triangles' array within the given polygon.
         elements : np.ndarray
-            List of the elements within the given polygon.
+            List of the element IDs from the original `triangles' array within the given polygon.
         triangles : np.ndarray
             The reduced triangulation.
 
@@ -1927,6 +1930,7 @@ def read_fvcom_mesh(mesh):
     Z = np.asarray(z)
 
     return triangle, nodes, X, Y, Z
+
 
 def read_smesh_mesh(mesh):
     """
@@ -4530,9 +4534,9 @@ def subset_domain(x, y, triangles, polygon=None):
     Returns
     -------
     nodes : np.ndarray
-        List of the nodes within the given polygon.
+        List of the node IDs from the original `triangles' array within the given polygon.
     elements : np.ndarray
-        List of the elements within the given polygon.
+        List of the element IDs from the original `triangles' array within the given polygon.
     triangles : np.ndarray
         The reduced triangulation of the new subdomain.
 
@@ -4576,6 +4580,30 @@ def subset_domain(x, y, triangles, polygon=None):
     sub_triangles = reduce_triangulation(triangles, nodes)
 
     return nodes, elements, sub_triangles
+
+
+def fvcom2ugrid(fvcom):
+    """
+    Add the necessary information to convert an FVCOM output file to one which is compatible with the UGRID format.
+
+    Parameters
+    ----------
+    fvcom : str
+        Path to an FVCOM netCDF file (can be a remote URL).
+
+    """
+
+    with Dataset(fvcom, 'a') as ds:
+        fvcom_mesh = ds.createVariable('fvcom_mesh', np.int32)
+        setattr(fvcom_mesh, 'cf_role', 'mesh_topology')
+        setattr(fvcom_mesh, 'topology_dimension', 2)
+        setattr(fvcom_mesh, 'node_coordinates', 'lon lat')
+        setattr(fvcom_mesh, 'face_coordinates', 'lonc latc')
+        setattr(fvcom_mesh, 'face_node_connectivity', 'nv')
+
+        # Add the global convention.
+        setattr(ds, 'Convention', 'UGRID-1.0')
+        setattr(ds, 'CoordinateProjection', 'none')
 
 
 class Graph(object):
