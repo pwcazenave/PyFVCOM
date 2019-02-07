@@ -449,6 +449,8 @@ class Plotter(object):
     James Clark (Plymouth Marine Laboratory)
     Pierre Cazenave (Plymouth Marine Laboratory)
 
+    TODO: Replace Basemap with cartopy. The former is being deprecated and the latter is its suggested replacement.
+
     """
 
     def __init__(self, dataset, figure=None, axes=None, stations=None, extents=None, vmin=None, vmax=None, mask=None,
