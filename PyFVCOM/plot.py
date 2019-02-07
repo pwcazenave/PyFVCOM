@@ -551,10 +551,10 @@ class Plotter(object):
         self.colorbar_axis = None
 
         # Plot instances (initialise to None/[] for truthiness test later)
-        self.quiver_plot = []
-        self.scat_plot = []
-        self.tripcolor_plot = []
-        self.line_plot = []
+        self.quiver_plot = None
+        self.scatter_plot = None
+        self.tripcolor_plot = None
+        self.line_plot = None
         self.tri = None
         self.masked_tris = None
         self.cbar = None
@@ -701,10 +701,10 @@ class Plotter(object):
     def replot(self):
         self.axes.cla()
         self._init_figure()
-        self.tripcolor_plot = []
-        self.line_plot = []
-        self.quiver_plot = []
-        self.scat_plot = []
+        self.tripcolor_plot = None
+        self.line_plot = None
+        self.quiver_plot = None
+        self.scatter_plot = None
 
     def plot_field(self, field, *args, **kwargs):
         """
