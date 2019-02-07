@@ -2637,6 +2637,66 @@ def write_CST(obc, file, sort=False):
         f.close
 
 
+def MIKEarc2CST(file, output):
+    """
+    Read in a set of MIKE arc files and export to CST format compatible with
+    SMS.
+
+    MIKE format is:
+
+        x, y, position, z(?), ID
+
+    where position is 1 = along arc and 0 = end of arc.
+
+    In the CST format, the depth is typically zero, but we'll read it from the
+    MIKE z value and add it to the output file nevertheless. For the
+    conversion, we don't need the ID, so we can ignore that.
+
+    Parameters
+    ----------
+    file : str
+        Full path to the DHI MIKE21 arc files.
+    output : str
+        Full path to the output file.
+
+    """
+    with open(file, 'r') as file_in:
+        lines = file_in.readlines()
+
+    with open(output, 'w') as file_out:
+        # Add the easy header
+        file_out.write('COAST\n')
+        # This isn't pretty, but assuming you're coastline isn't millions of
+        # points, it should be ok...
+        num_arcs = 0
+        for line in lines:
+            x, y, pos, z, arc_id = line.strip().split(' ')
+            if int(pos) == 0:
+                num_arcs += 1
+
+        file_out.write('{}\n'.format(int(num_arcs)))
+
+        arc = []
+        n = 1
+
+        for line in lines:
+
+            x, y, pos, z, arc_id = line.strip().split(' ')
+            if int(pos) == 1:
+                arc.append([x, y])
+                n += 1
+            elif int(pos) == 0:
+                arc.append([x, y])
+                # We're at the end of an arc, so write out to file. Start with
+                # number of nodes and z
+                file_out.write('{}\t{}\n'.format(int(n), float(z)))
+                for arc_position in arc:
+                    file_out.write('\t{}\t{}\t{}\n'.format(float(arc_position[0]), float(arc_position[1]), float(z)))
+                # Reset n and arc for new arc
+                n = 1
+                arc = []
+
+
 def find_nearest_point(grid_x, grid_y, x, y, maxDistance=np.inf):
     """
     Given some point(s) `x' and `y', find the nearest grid node in `grid_x' and `grid_y'.
