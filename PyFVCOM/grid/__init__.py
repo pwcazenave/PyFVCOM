@@ -2639,7 +2639,7 @@ def write_sms_cst(obc, file, sort=False):
         f.close
 
 
-def MIKEarc2CST(file, output):
+def MIKEarc2cst(file, output):
     """
     Read in a set of MIKE arc files and export to CST format compatible with
     SMS.
