@@ -990,9 +990,18 @@ class OpenBoundary(object):
 
         self.nodes = None
         self.elements = None
+        # Silently convert IDs from numpy arrays to lists.
         if mode == 'nodes':
+            try:
+                ids = ids.tolist()
+            except AttributeError:
+                pass
             self.nodes = ids
         else:
+            try:
+                ids = ids.tolist()
+            except AttributeError:
+                pass
             self.elements = ids
         self.sponge_coefficient = None
         self.sponge_radius = None
