@@ -552,6 +552,7 @@ class Plotter(object):
 
         # Plot instances (initialise to None/[] for truthiness test later)
         self.quiver_plot = None
+        self.quiver_key = None
         self.scatter_plot = None
         self.tripcolor_plot = None
         self.line_plot = None
@@ -704,6 +705,7 @@ class Plotter(object):
         self.tripcolor_plot = None
         self.line_plot = None
         self.quiver_plot = None
+        self.quiver_key = None
         self.scatter_plot = None
 
     def plot_field(self, field, *args, **kwargs):
