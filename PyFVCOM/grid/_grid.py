@@ -162,6 +162,12 @@ class GridReaderNetCDF(object):
                     triangulation_nodes = np.unique(self.triangles[self._dims['nele']])
                     if np.all(triangulation_nodes == np.sort(self._dims['node'])):
                         new_tri = self.triangles[self._dims['nele']]
+                        # Remap nodes to a new index. Work on a copy so we don't end up replacing a value more than
+                        # once.
+                        new_index = np.arange(0, self._dims['node'])
+                        original_tri = new_tri.copy()
+                        for this_old, this_new in zip(self._dims['node'], new_index):
+                            new_tri[original_tri == this_old] = this_new
                     else:
                         if self._noisy:
                             print('Mismatch between given elements and nodes for triangulation, retaining original elements')
