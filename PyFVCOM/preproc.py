@@ -2572,14 +2572,14 @@ class Model(Domain):
                 x = dest.createVariable(name, variable.datatype, variable.dimensions)
                 # Intercept variables with either a node or element dimension and subset accordingly.
                 if 'nele' in source[name].dimensions:
-                    dest[name][:] = source[name][:][..., new_elements]
+                    x[:] = source[name][:][..., new_elements]
                 elif 'node' in source[name].dimensions:
-                    dest[name][:] = source[name][:][..., new_nodes]
+                    x[:] = source[name][:][..., new_nodes]
                 else:
                     # Just copy everything over.
-                    dest[name][:] = source[name][:]
+                    x[:] = source[name][:]
                 # Copy variable attributes all at once via dictionary
-                dest[name].setncatts(source[name].__dict__)
+                x.setncatts(source[name].__dict__)
                 if self._noisy:
                     print('done.')
 
