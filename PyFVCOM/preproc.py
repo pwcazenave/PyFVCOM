@@ -1585,8 +1585,8 @@ class Model(Domain):
 
         nemo_variables = ['rodic', 'ronh4', 'rono3', 'roo', 'rop', 'rorunoff', 'rosio2',
                           'rotemper', 'rototalk', 'robioalk']
-        sensible_names = ['O3_c', 'N4_n', 'N3_n', 'O2_o', 'N1_p', 'flux', 'N5_s',
-                          'temperature', 'O3_TA', 'O3_bioalk']
+        ersem_names = ['O3_c', 'N4_n', 'N3_n', 'O2_o', 'N1_p', 'flux', 'N5_s',
+                       'temperature', 'O3_TA', 'O3_bioalk']
 
         nemo = {}
         # NEMO river data are stored ['time', 'y', 'x'].
@@ -1604,12 +1604,12 @@ class Model(Domain):
                     baltic_indices.append((y_index, x_index))  # make the indices match the dimensions in the netCDF arrays
 
             for vi, var in enumerate(nemo_variables):
-                nemo[sensible_names[vi]] = nc.variables[var][:]
+                nemo[ersem_names[vi]] = nc.variables[var][:]
                 if remove_baltic:
                     for baltic_index in baltic_indices:
                         # Replace with zeros to match the other non-river data in the netCDF. Dimensions of the arrays are
                         # [time, y, x].
-                        nemo[sensible_names[vi]][:, baltic_index[0], baltic_index[1]] = 0
+                        nemo[ersem_names[vi]][:, baltic_index[0], baltic_index[1]] = 0
 
             # Get the NEMO grid area for correcting units.
             area = nc.variables['dA'][:]
