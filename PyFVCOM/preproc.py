@@ -1651,6 +1651,63 @@ class Model(Domain):
 
         return nemo
 
+    def read_ea_river_temperature_climatology(self, ea_input):
+        """
+        Read river temperature climatologies from the Environment Agency river temperature data. If no data are found
+        within the threshold specified, a mean climatology from the nearest 30 sites is provided instead.
+
+        Parameters
+        ----------
+        ea_input : str, pathlib.Path
+            The path to the Environment Agency climatology netCDF file.
+
+        Returns
+        -------
+        ea_temp : dict
+            The river temperature time series data with the following keys:
+
+            lon, lat : np.ndarray
+                The river gauge positions [n_gauge].
+            temperature : np.ndarray
+                The temperature climatology time series [time, n_gauge].
+            site_type : np.ndarray
+                The EA river gauge classification type [n_gauge].
+            time : np.ndarray
+                EA river gauge time series as datetime objects. Since the data is a climatology, this uses the
+                self.start and self.end variables to create a matching time series for the river data [time].
+
+        Notes
+        -----
+        This is based on the MATLAB fvcom-toolbox function get_EA_river_climatology.m.
+
+        """
+
+        ea_temp = {}
+        with Dataset(ea_input, 'r') as ds:
+            for var in ['lon', 'lat', 'climatology', 'SiteType', 'time']:
+                ea_temp[var] = ds.variables[var][:]
+
+        # Remove non-River sites.
+        ea_temp['SiteType'] = np.asarray([''.join(i.astype(str)).strip() for i in ea_temp['SiteType']])
+        mask = ea_temp['SiteType'] == 'RIVER'
+        for var in ['lon', 'lat', 'climatology', 'SiteType']:
+            ea_temp[var] = ea_temp[var][mask]
+            if np.ndim(ea_temp[var]) > 1:
+                # Put time as the first dimension.
+                ea_temp[var] = ea_temp[var].T
+
+        # Make times based on the current time data. Offset by one as the 'times' variable starts at 1, not zero.
+        ea_temp['time'] = [self.start + relativedelta(days=i) for i in ea_temp['time'] - 1]
+
+        # Rename SiteType and climatology to be more consistent with the others.
+        ea_temp['site_type'] = ea_temp['SiteType']
+        ea_temp.pop('SiteType', None)
+
+        ea_temp['temperature'] = ea_temp['climatology']
+        ea_temp.pop('climatology', None)
+
+        return ea_temp
+
     def add_probes(self, positions, names, variables, interval, max_distance=np.inf):
         """
         Generate probe locations closest to the given locations.
