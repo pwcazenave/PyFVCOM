@@ -3611,7 +3611,8 @@ def get_area(v1, v2, v3):
 
 def get_area_heron(s1, s2, s3):
     """
-    Calculate the area of a triangle/set of triangles based on side length (Herons formula). Could tidy by combining with get_area
+    Calculate the area of a triangle/set of triangles based on side length (Herons formula). Could tidy by combining
+    with get_area.
 
     Parameters
     ----------
