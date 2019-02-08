@@ -148,8 +148,23 @@ class GridReaderNetCDF(object):
                         print('Elements not specified but reducing to only those within the triangulation of selected nodes')
                     self._dims['nele'] = new_ele
                 elif not np.array_equal(np.sort(new_ele), np.sort(self._dims['nele'])):
-                    if self._noisy:
-                        print('Mismatch between given elements and nodes for triangulation, retaining original elements')
+                    # Try culling some elements as what may happen is we have asked for some nodes which form an
+                    # element but we haven't asked for that element.
+                    #        a
+                    #        /\
+                    #       /  \
+                    #      / 1  \
+                    #    b/______\c
+                    #
+                    # That is, we've asked for nodes a, b and c but not element 1. The way to check this is to find
+                    # all the nodes in the triangulation for the given elements and if those match the nodes we've
+                    # asked for, use the elements to cull the triangulation object.
+                    triangulation_nodes = np.unique(self.triangles[self._dims['nele']])
+                    if np.all(triangulation_nodes == np.sort(self._dims['node'])):
+                        new_tri = self.triangles[self._dims['nele']]
+                    else:
+                        if self._noisy:
+                            print('Mismatch between given elements and nodes for triangulation, retaining original elements')
             else:
                 if self._noisy:
                     print('Nodes not specified but reducing to only those within the triangulation of selected elements')
