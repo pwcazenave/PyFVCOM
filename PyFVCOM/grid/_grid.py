@@ -4583,10 +4583,12 @@ def reduce_triangulation(tri, nodes, return_elements=False):
 
     reduced_tri = tri[np.all(np.isin(tri, nodes), axis=1), :]
 
-    # remap nodes to a new index
+    # Remap nodes to a new index. Use a copy of the reduced triangulation for the lookup so we avoid potentially
+    # remapping a node twice.
+    original_tri = reduced_tri.copy()
     new_index = np.arange(0, len(nodes))
     for this_old, this_new in zip(nodes, new_index):
-        reduced_tri[reduced_tri == this_old] = this_new
+        reduced_tri[original_tri == this_old] = this_new
 
     if return_elements:
         ele_ind = np.where(np.all(np.isin(tri, nodes), axis=1))[0]
