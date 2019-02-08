@@ -1643,6 +1643,9 @@ class Model(Domain):
                     nemo[key] = nemo[key][:, mask].T.reshape(-1, number_of_times).T
                 except IndexError:
                     nemo[key] = nemo[key][mask]
+                # Append the last value twice so the time series data match the length of the times array.
+                if np.ndim(nemo[key]) > 1:
+                    nemo[key] = np.append(nemo[key], nemo[key][-1, :][np.newaxis, :], axis=0)
         # Since the NEMO river don't have names, make some based on their position.
         nemo['names'] = ['river_{}_{}'.format(*i) for i in zip(nemo['lon'], nemo['lat'])]
 
