@@ -1549,8 +1549,8 @@ class Model(Domain):
             positions : np.ndarray
                 NEMO river locations.
             times : np.ndarray
-                NEMO river time series. Since the NEMO data is a climatology, this uses the self.start and self.end
-                variables to create a matching time series for the river data.
+                NEMO river time series as datetime objects.. Since the NEMO data is a climatology, this uses the
+                self.start and self.end variables to create a matching time series for the river data.
             names : np.ndarray
                 NEMO river names.
             flux : np.ndarray
