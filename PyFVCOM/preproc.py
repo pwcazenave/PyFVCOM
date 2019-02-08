@@ -1523,7 +1523,7 @@ class Model(Domain):
             Path(output_file).unlink()
         for ri in range(self.dims.river):
             namelist = {'NML_RIVER': [NameListEntry('RIVER_NAME', self.river.names[ri]),
-                                      NameListEntry('RIVER_FILE', forcing_file),
+                                      NameListEntry('RIVER_FILE', str(forcing_file)),
                                       NameListEntry('RIVER_GRID_LOCATION', self.river.node[ri] + 1, 'd'),
                                       NameListEntry('RIVER_VERTICAL_DISTRIBUTION', vertical_distribution)]}
             write_model_namelist(output_file, namelist, mode='a')
