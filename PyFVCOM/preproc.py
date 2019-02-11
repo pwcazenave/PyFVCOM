@@ -636,6 +636,18 @@ class Model(Domain):
         if sigtype.lower() == 'geometric':
             self.sigma.power = sigpow
 
+        if sigtype.lower() == 'generalized':
+            self.sigma.upper_layer_depth = du
+            self.sigma.lower_layer_depth = dl
+            # Has to be indexable as we assume transition_depth is in Model.write_sigma. We do so because if we're
+            # generating the transition depth, it'll be an array and we only want the value of the array rather than
+            # its entirety as a string.
+            self.sigma.transition_depth = [min_constant_depth]
+            self.sigma.total_upper_layers = ku
+            self.sigma.total_lower_layers = kl
+            self.sigma.upper_layer_thickness = zku
+            self.sigma.lower_layer_thickness = zkl
+
         # Make some depth-resolved sigma distributions.
         self.sigma.layers_z = self.grid.h[:, np.newaxis] * self.sigma.layers
         self.sigma.layers_center_z = self.grid.h_center[:, np.newaxis] * self.sigma.layers_center
