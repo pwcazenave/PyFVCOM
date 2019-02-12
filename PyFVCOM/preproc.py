@@ -3531,6 +3531,7 @@ class Nest(object):
 
         for this_boundary in new_level_boundaries:
             self.boundaries.append(this_boundary)
+
         # Populate the grid and sigma objects too.
         self.__update_open_boundaries()
 
@@ -4646,8 +4647,8 @@ class Restart(FileReader):
             y[y < coarse.grid.lat.min()] = coarse.grid.lat.min()
             y[y > coarse.grid.lat.max()] = coarse.grid.lat.max()
 
-            # Internal landmasses also need to be dealt with, so test if a point lies within the mask of the grid and move it to the nearest in grid
-            # point if so.            
+            # Internal landmasses also need to be dealt with, so test if a point lies within the mask of the grid and
+            # move it to the nearest in grid point if so.
             if not mode == 'surface':
                 land_mask = getattr(coarse.data, coarse_name)[0, ...].mask[0,:,:]
             else:
@@ -4783,9 +4784,9 @@ class Restart(FileReader):
             Set to True to enable verbose output. Defaults to False.
         Remaining keyword arguments are passed to RegularReader.
 
-        Returns
-        -------
-        regular_model : PyFVCOM.preproc.RegularReader
+        Provides
+        --------
+        self.regular : PyFVCOM.preproc.RegularReader
             A RegularReader object with the requested variables loaded.
 
         """
