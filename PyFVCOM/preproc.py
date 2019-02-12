@@ -2930,7 +2930,7 @@ class ModelNameList(object):
                             NameListEntry('RIVER_KIND', 'variable'),
                             NameListEntry('RIVER_TS_SETTING', 'calculated'),
                             NameListEntry('RIVER_INFLOW_LOCATION', 'node'),
-                            NameListEntry('RIVER_INFO_FILE', f'{self._casename}_riv_ersem.nml')],
+                            NameListEntry('RIVER_INFO_FILE', f'{self._casename}_riv.nml')],
                        'NML_OPEN_BOUNDARY_CONTROL':
                            [NameListEntry('OBC_ON', 'F'),
                             NameListEntry('OBC_NODE_LIST_FILE', f'{self._casename}_obc.dat'),
