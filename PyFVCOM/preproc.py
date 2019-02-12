@@ -356,7 +356,9 @@ class Model(Domain):
         dates = np.empty(len(results)).astype(datetime)
         sst = np.empty((len(results), self.dims.node))
         for i, result in enumerate(results):
-            dates[i] = result[0][0] + relativedelta(hours=12)  # FVCOM wants times at midday whilst the data are at midnight
+            # Force the data to be at midday instead of whatever's in the input netCDFs. This is because FVCOM seems
+            # to want times at midday.
+            dates[i] = datetime(*[getattr(result[0][0], i) for i in ('year', 'month', 'day')], 12)
             sst[i, :] = result[1]
 
         # Sort by time.
