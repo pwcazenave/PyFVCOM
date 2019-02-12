@@ -2902,7 +2902,7 @@ class ModelNameList(object):
                             NameListEntry('HORIZONTAL_MIXING_COEFFICIENT', 0.1, 'f'),
                             NameListEntry('HORIZONTAL_PRANDTL_NUMBER', 1.0, 'f'),
                             NameListEntry('VERTICAL_MIXING_TYPE', 'closure'),
-                            NameListEntry('VERTICAL_MIXING_COEFFICIENT', 0.00001, 'f'),
+                            NameListEntry('VERTICAL_MIXING_COEFFICIENT', 0.2, 'f'),
                             NameListEntry('VERTICAL_PRANDTL_NUMBER', 1.0, 'f'),
                             NameListEntry('BOTTOM_ROUGHNESS_MINIMUM', 0.0001, 'f'),
                             NameListEntry('BOTTOM_ROUGHNESS_LENGTHSCALE', -1, 'f'),
