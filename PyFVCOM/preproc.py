@@ -3240,6 +3240,11 @@ class ModelNameList(object):
             The target time in seconds for which to aim when finding the required NCNEST_OUT_INTERVAL. If omitted,
             defaults to 900 seconds.
 
+        Notes
+        -----
+        This can fail to find a solution which is considered valid (where valid is "it's a nice round number").
+        Adjust target_interval to something else to try and get it to work.
+
         """
 
         model_start = datetime.strptime(self.value('NML_CASE', 'START_DATE'), '%Y-%m-%d %H:%M:%S')
