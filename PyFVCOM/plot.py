@@ -1330,6 +1330,7 @@ class MPIWorker(object):
         self.have_mpi = True
         try:
             from mpi4py import MPI
+            self.MPI = MPI
         except ImportError:
             warn('No mpi4py found in this python installation. Some functions will be disabled.')
             self.have_mpi = False
@@ -1476,8 +1477,8 @@ class MPIWorker(object):
         # Find out what the range of data is so we can set the colour limits automatically, if necessary.
         if clims is None:
             if self.have_mpi:
-                global_min = self.comm.reduce(np.nanmin(field), op=MPI.MIN)
-                global_max = self.comm.reduce(np.nanmax(field), op=MPI.MAX)
+                global_min = self.comm.reduce(np.nanmin(field), op=self.MPI.MIN)
+                global_max = self.comm.reduce(np.nanmax(field), op=self.MPI.MAX)
             else:
                 # Fall back to local extremes.
                 global_min = np.nanmin(field)
