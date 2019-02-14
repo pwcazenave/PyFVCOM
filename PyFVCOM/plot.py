@@ -1526,9 +1526,7 @@ class MPIWorker(object):
             if mask:
                 local_mask = getattr(self.fvcom.data, 'wet_cells')[local_time] == 0
             else:
-                local_mask = np.zeros(getattr(self.fvcom.data, variable).shape, dtype=bool)
-                if 'node' in self.fvcom.variable_dimension_names[variable]:
-                    local_mask = nodes2elems(local_mask, self.fvcom.grid.triangles)
+                local_mask = np.zeros(self.fvcom.dims.nele, dtype=bool)
             local_plot.plot_field(field[local_time], mask=local_mask)
             local_plot.tripcolor_plot.set_clim(*clims)
             if set_title:
