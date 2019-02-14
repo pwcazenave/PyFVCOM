@@ -1433,7 +1433,7 @@ class MPIWorker(object):
             print(f'done.', flush=True)
 
     def plot_field(self, fvcom_file, time_indices, variable, figures_directory, label=None, set_title=False,
-                   dimensions=None, clims=None, norm=None, mask=False, *args, **kwargs):
+                   dimensions=None, clims=None, norm=None, mask=False, figure_index=None, *args, **kwargs):
         """
         Plot a given horizontal surface for `variable' for the time indices in `time_indices'.
 
@@ -1457,6 +1457,9 @@ class MPIWorker(object):
             Apply the normalisation given to the colours in the plot.
         mask : bool
             Set to True to enable masking with the FVCOM wet/dry data.
+        figure_index : int
+            Give a starting index for the figure names. This is useful if you're calling this function in a loop over
+            multiple files.
 
         Additional args and kwargs are passed to PyFVCOM.plot.Plotter.
 
@@ -1517,6 +1520,8 @@ class MPIWorker(object):
                                      "which hasn't been supplied, or which has a zero (or below) minimum.")
                 field[invalid] = clims[0]
 
+        if figure_index is None:
+            figure_index = 0
         for local_time, global_time in enumerate(time_indices):
             if mask:
                 local_mask = getattr(self.fvcom.data, 'wet_cells')[local_time] == 0
@@ -1529,7 +1534,7 @@ class MPIWorker(object):
             if set_title:
                 title_string = self.fvcom.time.datetime[local_time].strftime('%Y-%m-%d %H:%M:%S')
                 local_plot.set_title(title_string)
-            local_plot.figure.savefig(str(Path(figures_directory, f'{variable}_{global_time + 1:04d}.png')),
+            local_plot.figure.savefig(str(Path(figures_directory, f'{variable}_{figure_index + global_time + 1:04d}.png')),
                                       bbox_inches='tight',
                                       pad_inches=0.2,
                                       dpi=120)
