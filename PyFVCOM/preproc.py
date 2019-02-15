@@ -38,15 +38,18 @@ class Model(Domain):
     """
     Everything related to making a new model run.
 
-    There should be more use of objects here. For example, each open boundary should be a Boundary object which has
-    methods for interpolating data onto it (tides, temperature, salinity, ERSEM variables etc.). The coastline could
-    be an object which has methods related to rivers and checking depths. Likewise, the model grid object could
-    contain methods for interpolating SST, creating restart files etc.
-
-    TODO:
-    Open boundaries end up held in Model.open_boundaries and Model.grid.open_boundaries which seems wrong.
-
     """
+
+    # There should be more use of objects here. For example, each open boundary should be a Boundary object which has
+    # methods for interpolating data onto it (tides, temperature, salinity, ERSEM variables etc.). The coastline
+    # could be an object which has methods related to rivers and checking depths. Likewise, the model grid object
+    # could contain methods for interpolating SST, creating restart files etc.
+
+    # TODO:
+    #  - Open boundaries end up held in Model.open_boundaries and Model.grid.open_boundaries which seems wrong.
+    #  - Make a method to create a subdomain input file for namelist outputs over different spatial domains
+    #  (NC{,AV}_SUBDOMAIN_FILES in the NML_NETCDF{,_AV} namelist section).
+
 
     def __init__(self, start, end, *args, **kwargs):
 
