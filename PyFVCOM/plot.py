@@ -988,20 +988,19 @@ class CrossPlotter(Plotter):
     >>> c_plot.plot_pcolor_field('temp',150)
     >>> plt.show()
 
-
-    TO DO
-    -----
-    Currently only works for scalar variables, want to get it working for vectors to do u/v/w plots
-    Sort colorbars
-    Sort left hand channel justification for multiple channels.
-    Error handling for no wet/dry, no land
-    Plus a lot of other stuff. And tidy it up.
-
     Notes
     -----
     Only works with FileReader data. No plans to change this.
 
     """
+
+    # TODO
+    #  - Currently only works for scalar variables, want to get it working for vectors to do u/v/w plots
+    #  - Sort colour bars
+    #  - Sort left hand channel justification for multiple channels.
+    #  - Error handling for no wet/dry, no land
+    #  - Plus a lot of other stuff. And tidy it up.
+
 
     def __init__(self):
 
@@ -1237,7 +1236,7 @@ class CrossPlotter(Plotter):
         var_sel = np.squeeze(getattr(self.ds.data, var))[..., self.sel_points]
 
         this_step_wet_points = np.asarray(self.wet_points_data[timestep, :], dtype=bool)
-        var_sel[:, ~this_step_wet_points] = np.NAN
+        var_sel[:, ~this_step_wet_points] = np.NaN
         self.var_sel = var_sel
         var_sel_ext = self._nan_extend(var_sel)
 
@@ -1288,7 +1287,7 @@ class CrossPlotter(Plotter):
         else:
             raise ValueError('Unsupported number of dimensions.')
 
-        nan_ext[:] = np.NAN
+        nan_ext[:] = np.NaN
         return np.append(in_array, nan_ext, axis=len(in_shape) - 1)
 
     @staticmethod
@@ -1677,7 +1676,7 @@ def plot_domain(domain, mesh=False, depth=False, **kwargs):
     depth : bool
         Set to True to plot water depth. Defaults to False. If enabled, a colour bar is added to the figure.
 
-    All remaining arguments are passed to PyFVCOM.plot.Plotter.
+    Remaining keyword arguments are passed to PyFVCOM.plot.Plotter.
 
     Provides
     --------
@@ -1685,6 +1684,7 @@ def plot_domain(domain, mesh=False, depth=False, **kwargs):
         The plot object.
     mesh_plot : matplotlib.axes, optional
         The mesh axis object, if enabled.
+
     """
 
     domain.domain_plot = Plotter(domain, **kwargs)
