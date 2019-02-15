@@ -52,6 +52,42 @@ class Model(Domain):
 
 
     def __init__(self, start, end, *args, **kwargs):
+        """
+        Initialise an FVCOM model configuration object with a given start and end date.
+
+        Parameters
+        ----------
+        start : datetime.datetime
+            The start of the model run.
+        end : datetime.datetime
+            The end of the model run (inclusive).
+        grid : str, pathlib.Path
+            The model grid to read.
+        native_coordinates : str
+            Defined the coordinate system used in the grid ('spherical' or 'cartesian'). Defaults to `spherical'.
+        zone : str, optional
+            If `native_coordinates' is 'cartesian', give the UTM zone as a string, formatted as, for example,
+            '30N'. Ignored if `native_coordinates' is 'spherical'.
+        sampling : float, optional
+            The sampling interval for the time series data generated for this model run. If omitted, defaults to hourly.
+        noisy : bool, optional
+            Set to True to enable verbose output. Defaults to False.
+        debug : bool, optional
+            Set to True to enable debugging output. Defaults to False.
+
+        Most data are stored in objects within this object:
+
+        self.time : time related data (e.g. Modified Julian Days).
+        self.sigma : vertical grid discretisation.
+        self.sst : sea surface temperature data assimilation data.
+        self.nest : data pertaining to the nested forcing.
+        self.stations : information on any defined stations.
+        self.probes : information on any defined stations.
+        self.ady : information on the light absorption for use in ERSEM.
+        self.regular : regularly gridded model information used for interpolation to the boundaries.
+        self.groundwater : configuration information for the groundwater module in FVCOM.
+
+        """
 
         sampling = 1
         if 'sampling' in kwargs:
