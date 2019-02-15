@@ -2574,7 +2574,7 @@ class WriteFVCOM(object):
     """
 
     def __init__(self, ncfile, fvcom, data_variables=None, title=None, type=None, affiliation=None, ncformat='NETCDF4',
-                 ncopts={'zlib': True, 'complevel': 7}):
+                 ncopts={'zlib': True, 'complevel': 7}, ugrid_support=False):
         """
         Create a new FVCOM-formatted netCDF file for the given FileReader object.
 
@@ -2598,6 +2598,8 @@ class WriteFVCOM(object):
         ncopts : dict, optional
             Dictionary of additional arguments to pass when adding new variables (see
             `netCDF4.Dataset.createVariable'). If omitted, defaults to compression on.
+        ugrid_support : bool, optional
+            Set to True to enable adding the UGRID standard variable. Defaults to False (not added).
 
         """
 
@@ -2632,7 +2634,8 @@ class WriteFVCOM(object):
         self._add_attributes()
         self._create_variables()
         self._add_variables()
-        self._add_ugrid_support()
+        if ugrid_support:
+            self._add_ugrid_support()
         if self._fvcom.dims.time != 0:
             self._write_fvcom_time(self._fvcom.time.datetime)
 
