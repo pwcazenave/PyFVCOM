@@ -3184,6 +3184,11 @@ class ModelNameList(object):
             The index for the NML_`section' `entry'.
 
         """
+
+        # Remove leading "&" in case we've copy-pasted carelessly.
+        if section.startswith('&'):
+            section = section[1:]
+
         if section not in self.config:
             raise KeyError(f'{section} is not defined in this namelist configuration.')
 
@@ -3211,6 +3216,11 @@ class ModelNameList(object):
             The value for the NML_`section' `entry'.
 
         """
+
+        # Remove leading "&" in case we've copy-pasted carelessly.
+        if section.startswith('&'):
+            section = section[1:]
+
         if section not in self.config:
             raise KeyError(f'{section} is not defined in this namelist configuration.')
 
@@ -3232,6 +3242,11 @@ class ModelNameList(object):
             The type to update the namelist entry with.
 
         """
+
+        # Remove leading "&" in case we've copy-pasted carelessly.
+        if section.startswith('&'):
+            section = section[1:]
+
         if value is None and type is None:
             raise ValueError("Give one of `value' or `type' to update.")
 
