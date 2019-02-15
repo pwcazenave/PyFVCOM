@@ -1917,7 +1917,7 @@ class Model(Domain):
                                           NameListEntry('PROBE_VARIABLE', variable),
                                           NameListEntry('PROBE_VAR_NAME', long_name)]}
                 if np.any(sigma):
-                    sigma_nml = NameListEntry('PROBE_LEVELS', f'{sigma[0]:d} {simga[1]:d}', no_quote_string=True)
+                    sigma_nml = NameListEntry('PROBE_LEVELS', f'{sigma[0]:d} {sigma[-1]:d}', no_quote_string=True)
                     namelist['NML_PROBE'].append(sigma_nml)
                 write_model_namelist(output_file, namelist, mode='a')
 
