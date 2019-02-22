@@ -449,6 +449,8 @@ class Plotter(object):
     James Clark (Plymouth Marine Laboratory)
     Pierre Cazenave (Plymouth Marine Laboratory)
 
+    TODO: Replace Basemap with cartopy. The former is being deprecated and the latter is its suggested replacement.
+
     """
 
     def __init__(self, dataset, figure=None, axes=None, stations=None, extents=None, vmin=None, vmax=None, mask=None,
@@ -463,8 +465,8 @@ class Plotter(object):
         stations : 2D array, optional
             List of station coordinates to be plotted ([[lons], [lats]])
         extents : 1D array, optional
-            Four element numpy array giving lon/lat limits (e.g. [-4.56, -3.76,
-            49.96, 50.44])
+            Four element numpy array giving lon/lat limits as west, east, south, north (e.g. [-4.56, -3.76, 49.96,
+            50.44])
         vmin : float, optional
             Lower bound to be used on colour bar (plot_field only).
         vmax : float, optional
@@ -505,13 +507,12 @@ class Plotter(object):
             Set the colour bar extension ('neither', 'both', 'min', 'max').
             Defaults to 'neither').
         norm : matplotlib.colors.Normalize, optional
-            Normalise the luminance to 0,1. For example, use from
-            matplotlib.colors.LogNorm to do log plots of fields.
+            Normalise the luminance to 0,1. For example, use from matplotlib.colors.LogNorm to do log plots of fields.
         m : mpl_toolkits.basemap.Basemap, optional
             Pass a Basemap object rather than creating one on each invocation.
         cartesian : bool, optional
-            Set to True to skip using Basemap and instead return a simple
-            cartesian axis plot. Defaults to False (geographical coordinates).
+            Set to True to skip using Basemap and instead return a simple cartesian axis plot. Defaults to False
+            (geographical coordinates).
         bmargs : dict
             Additional arguments to pass to Basemap.
 
@@ -552,10 +553,11 @@ class Plotter(object):
         self.colorbar_axis = None
 
         # Plot instances (initialise to None/[] for truthiness test later)
-        self.quiver_plot = []
-        self.scat_plot = []
-        self.tripcolor_plot = []
-        self.line_plot = []
+        self.quiver_plot = None
+        self.quiver_key = None
+        self.scatter_plot = None
+        self.tripcolor_plot = None
+        self.line_plot = None
         self.tri = None
         self.masked_tris = None
         self.cbar = None
@@ -700,12 +702,18 @@ class Plotter(object):
         return extend
 
     def replot(self):
+        """
+        Helper method to nuke and existing plot in the current self.axes and reset everything to clean.
+
+        """
+
         self.axes.cla()
         self._init_figure()
-        self.tripcolor_plot = []
-        self.line_plot = []
-        self.quiver_plot = []
-        self.scat_plot = []
+        self.tripcolor_plot = None
+        self.line_plot = None
+        self.quiver_plot = None
+        self.quiver_key = None
+        self.scatter_plot = None
 
     def plot_field(self, field, *args, **kwargs):
         """
@@ -716,7 +724,7 @@ class Plotter(object):
         field : np.ndarray
             Field to plot (either on elements or nodes).
 
-        Additional arguments and keyword arguments are passed to matplotlib.pyplot.tripcolor.
+        Additional arguments and keyword arguments are passed to `matplotlib.pyplot.tripcolor'.
 
         """
 
@@ -780,7 +788,7 @@ class Plotter(object):
         if self.cb_label:
             self.cbar.set_label(self.cb_label)
 
-    def plot_quiver(self, u, v, field=False, add_key=True, scale=1.0, label=None):
+    def plot_quiver(self, u, v, field=False, add_key=True, scale=1.0, label=None, *args, **kwargs):
         """ Produce quiver plot using u and v velocity components.
 
         Parameters
@@ -799,6 +807,8 @@ class Plotter(object):
         label : str, optional
             Give label to use for the quiver key (defaults to "`scale' ms^{-1}").
 
+        Additional `args' and `kwargs' are passed to `matplotlib.pyplot.quiver'.
+
         """
 
         if self.quiver_plot:
@@ -816,7 +826,8 @@ class Plotter(object):
                                                 cmap=self.cmap,
                                                 units='inches',
                                                 scale_units='inches',
-                                                scale=scale)
+                                                scale=scale,
+                                                *args, **kwargs)
             divider = make_axes_locatable(self.axes)
             cax = divider.append_axes("right", size="5%", pad=0.05)
             self.cbar = self.figure.colorbar(self.quiver_plot, cax=cax)
@@ -825,6 +836,7 @@ class Plotter(object):
                 self.cbar.set_label(self.cb_label)
         else:
             self.quiver_plot = self.axes.quiver(self.mxc, self.myc, u, v, units='inches', scale_units='inches', scale=scale)
+
         if add_key:
             self.quiver_key = plt.quiverkey(self.quiver_plot, 0.9, 0.9, scale, label, coordinates='axes')
 
@@ -834,7 +846,8 @@ class Plotter(object):
             self.axes.set_ylim(self.my.min(), self.my.max())
 
     def plot_lines(self, x, y, group_name='Default', colour='r', zone_number='30N'):
-        """ Plot path lines.
+        """
+        Plot geographical lines.
 
         Parameters:
         -----------
@@ -975,20 +988,19 @@ class CrossPlotter(Plotter):
     >>> c_plot.plot_pcolor_field('temp',150)
     >>> plt.show()
 
-
-    TO DO
-    -----
-    Currently only works for scalar variables, want to get it working for vectors to do u/v/w plots
-    Sort colorbars
-    Sort left hand channel justification for multiple channels.
-    Error handling for no wet/dry, no land
-    Plus a lot of other stuff. And tidy it up.
-
     Notes
     -----
     Only works with FileReader data. No plans to change this.
 
     """
+
+    # TODO
+    #  - Currently only works for scalar variables, want to get it working for vectors to do u/v/w plots
+    #  - Sort colour bars
+    #  - Sort left hand channel justification for multiple channels.
+    #  - Error handling for no wet/dry, no land
+    #  - Plus a lot of other stuff. And tidy it up.
+
 
     def __init__(self):
 
@@ -1224,7 +1236,7 @@ class CrossPlotter(Plotter):
         var_sel = np.squeeze(getattr(self.ds.data, var))[..., self.sel_points]
 
         this_step_wet_points = np.asarray(self.wet_points_data[timestep, :], dtype=bool)
-        var_sel[:, ~this_step_wet_points] = np.NAN
+        var_sel[:, ~this_step_wet_points] = np.NaN
         self.var_sel = var_sel
         var_sel_ext = self._nan_extend(var_sel)
 
@@ -1275,7 +1287,7 @@ class CrossPlotter(Plotter):
         else:
             raise ValueError('Unsupported number of dimensions.')
 
-        nan_ext[:] = np.NAN
+        nan_ext[:] = np.NaN
         return np.append(in_array, nan_ext, axis=len(in_shape) - 1)
 
     @staticmethod
@@ -1317,6 +1329,7 @@ class MPIWorker(object):
         self.have_mpi = True
         try:
             from mpi4py import MPI
+            self.MPI = MPI
         except ImportError:
             warn('No mpi4py found in this python installation. Some functions will be disabled.')
             self.have_mpi = False
@@ -1393,14 +1406,14 @@ class MPIWorker(object):
             self.fvcom.variable_dimension_names[variable] = self.fvcom.variable_dimension_names['ua']
 
         if variable == 'speed_anomaly':
-            self.fvcom.data.speed_anomaly = self.fvcom.data.speed.mean(axis=0) - fvcom.data.speed
+            self.fvcom.data.speed_anomaly = self.fvcom.data.speed.mean(axis=0) - self.fvcom.data.speed
             self.fvcom.atts.speed = _passive_data_store()
             self.fvcom.atts.speed.long_name = 'speed anomaly'
             self.fvcom.atts.speed.units = 'ms^{-1}'
             self.fvcom.variable_dimension_names[variable] = self.fvcom.variable_dimension_names['u']
 
         elif variable == 'depth_averaged_speed_anomaly':
-            self.fvcom.data.depth_averaged_speed_anomaly = self.fvcom.data.uava.mean(axis=0) - fvcom.data.uava
+            self.fvcom.data.depth_averaged_speed_anomaly = self.fvcom.data.uava.mean(axis=0) - self.fvcom.data.uava
             self.fvcom.atts.depth_averaged_speed_anomaly = _passive_data_store()
             self.fvcom.atts.depth_averaged_speed_anomaly.long_name = 'depth-averaged speed anomaly'
             self.fvcom.atts.depth_averaged_speed_anomaly.units = 'ms^{-1}'
@@ -1420,7 +1433,7 @@ class MPIWorker(object):
             print(f'done.', flush=True)
 
     def plot_field(self, fvcom_file, time_indices, variable, figures_directory, label=None, set_title=False,
-                   dimensions=None, clims=None, norm=None, mask=False, *args, **kwargs):
+                   dimensions=None, clims=None, norm=None, mask=False, figure_index=None, *args, **kwargs):
         """
         Plot a given horizontal surface for `variable' for the time indices in `time_indices'.
 
@@ -1444,6 +1457,9 @@ class MPIWorker(object):
             Apply the normalisation given to the colours in the plot.
         mask : bool
             Set to True to enable masking with the FVCOM wet/dry data.
+        figure_index : int
+            Give a starting index for the figure names. This is useful if you're calling this function in a loop over
+            multiple files.
 
         Additional args and kwargs are passed to PyFVCOM.plot.Plotter.
 
@@ -1460,8 +1476,8 @@ class MPIWorker(object):
         # Find out what the range of data is so we can set the colour limits automatically, if necessary.
         if clims is None:
             if self.have_mpi:
-                global_min = self.comm.reduce(np.nanmin(field), op=MPI.MIN)
-                global_max = self.comm.reduce(np.nanmax(field), op=MPI.MAX)
+                global_min = self.comm.reduce(np.nanmin(field), op=self.MPI.MIN)
+                global_max = self.comm.reduce(np.nanmax(field), op=self.MPI.MAX)
             else:
                 # Fall back to local extremes.
                 global_min = np.nanmin(field)
@@ -1504,19 +1520,19 @@ class MPIWorker(object):
                                      "which hasn't been supplied, or which has a zero (or below) minimum.")
                 field[invalid] = clims[0]
 
+        if figure_index is None:
+            figure_index = 0
         for local_time, global_time in enumerate(time_indices):
             if mask:
                 local_mask = getattr(self.fvcom.data, 'wet_cells')[local_time] == 0
             else:
-                local_mask = np.zeros(getattr(self.fvcom.data, variable).shape, dtype=bool)
-                if 'node' in self.fvcom.variable_dimension_names[variable]:
-                    local_mask = nodes2elems(local_mask, self.fvcom.grid.triangles)
+                local_mask = np.zeros(self.fvcom.dims.nele, dtype=bool)
             local_plot.plot_field(field[local_time], mask=local_mask)
             local_plot.tripcolor_plot.set_clim(*clims)
             if set_title:
                 title_string = self.fvcom.time.datetime[local_time].strftime('%Y-%m-%d %H:%M:%S')
                 local_plot.set_title(title_string)
-            local_plot.figure.savefig(str(Path(figures_directory, f'{variable}_{global_time + 1:04d}.png')),
+            local_plot.figure.savefig(str(Path(figures_directory, f'{variable}_{figure_index + global_time + 1:04d}.png')),
                                       bbox_inches='tight',
                                       pad_inches=0.2,
                                       dpi=120)
@@ -1660,7 +1676,7 @@ def plot_domain(domain, mesh=False, depth=False, **kwargs):
     depth : bool
         Set to True to plot water depth. Defaults to False. If enabled, a colour bar is added to the figure.
 
-    All remaining arguments are passed to PyFVCOM.plot.Plotter.
+    Remaining keyword arguments are passed to PyFVCOM.plot.Plotter.
 
     Provides
     --------
@@ -1668,6 +1684,7 @@ def plot_domain(domain, mesh=False, depth=False, **kwargs):
         The plot object.
     mesh_plot : matplotlib.axes, optional
         The mesh axis object, if enabled.
+
     """
 
     domain.domain_plot = Plotter(domain, **kwargs)

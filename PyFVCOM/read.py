@@ -2573,8 +2573,8 @@ class WriteFVCOM(object):
 
     """
 
-    def __init__(self, ncfile, fvcom, data_variables=None, title=None, type=None, affiliation=None, ncformat='NETCDF4',
-                 ncopts={'zlib': True, 'complevel': 7}):
+    def __init__(self, ncfile, fvcom, data_variables=None, global_attributes=None, ncformat='NETCDF4',
+                 ncopts={'zlib': True, 'complevel': 7}, ugrid_support=False):
         """
         Create a new FVCOM-formatted netCDF file for the given FileReader object.
 
@@ -2586,18 +2586,16 @@ class WriteFVCOM(object):
             Model data object.
         data_variables : list, optional.
             The fvcom.dadta variables to write out. If omitted, write everything.
-        title : str, optional
-            The contents of the `title' global attribute (omitted if empty or missing).
-        type : str, optional
-            The contents of the `type' global attribute (omitted if empty or missing).
-        affiliation : str, optional
-            The affiliation (name, institution etc.) of the creator saved in the `author' global attribute (omitted
-            if empty or missing).
+        global_attributes : dict, optional
+            A dictionary of global attributes and their values. If omitted, only `history' and `source' are written.
+            The latter is mainly for ParaView compatibility (I think).
         ncformat : str, optional
             The netCDF file type to create. If omitted, defaults to `NETCDF4'.
         ncopts : dict, optional
             Dictionary of additional arguments to pass when adding new variables (see
             `netCDF4.Dataset.createVariable'). If omitted, defaults to compression on.
+        ugrid_support : bool, optional
+            Set to True to enable adding the UGRID standard variable. Defaults to False (not added).
 
         """
 
@@ -2615,10 +2613,10 @@ class WriteFVCOM(object):
         self._ncopts = ncopts
         self._ncformat = ncformat
 
-        # Some extra pieces of information
-        self._title = title
-        self._type = type
-        self._affiliation = affiliation
+        if global_attributes is not None:
+            self._global_attributes = global_attributes
+        else:
+            self._global_attributes = {}
 
         # Some variables to skip
         range_variables = [f'{i}_range' for i in ('lon', 'lat', 'lonc', 'latc', 'x', 'xc', 'y', 'yc')]
@@ -2632,7 +2630,8 @@ class WriteFVCOM(object):
         self._add_attributes()
         self._create_variables()
         self._add_variables()
-        self._add_ugrid_support()
+        if ugrid_support:
+            self._add_ugrid_support()
         if self._fvcom.dims.time != 0:
             self._write_fvcom_time(self._fvcom.time.datetime)
 
@@ -2657,18 +2656,15 @@ class WriteFVCOM(object):
             self._nc.createDimension('DateStrLen', 26)
 
     def _add_attributes(self):
-        # Add any attributes we've got. We don't have as many global attributes as we don't really keep those in a
-        # FileReader object.
-        if self._type is not None:
-            self._nc.setncattr('type', self._type)
-        if self._title is not None:
-            self._nc.setncattr('title', self._title)
-        if self._affiliation is not None:
-            self._nc.setncattr('author', self._affiliation)
+        # Add any attributes we've got. A typical FileReader object doesn't have global attributes, so we'll only add
+        # history and source by default. If we've been given a set of others via global_attributes, then we can add
+        # those too (potentially overwriting history and source).
         module_name = f'PyFVCOM.{Path(inspect.stack()[0][1]).stem}.{self.__class__.__name__}'
         now = datetime.now().strftime('%Y-%m-%d at %H:%M:%S')
         self._nc.setncattr('history', f'File created using {module_name} on {now}.')
         self._nc.setncattr('source', 'FVCOM_3.0')  # for ParaView compatibility
+        for attribute, value in self._global_attributes.items():
+            self._nc.setncattr(attribute, value)
 
     def _create_variables(self):
         # Create the variables from the self._fvcom.grid and self._fvcom.data objects.

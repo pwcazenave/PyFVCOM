@@ -38,17 +38,56 @@ class Model(Domain):
     """
     Everything related to making a new model run.
 
-    There should be more use of objects here. For example, each open boundary should be a Boundary object which has
-    methods for interpolating data onto it (tides, temperature, salinity, ERSEM variables etc.). The coastline could
-    be an object which has methods related to rivers and checking depths. Likewise, the model grid object could
-    contain methods for interpolating SST, creating restart files etc.
-
-    TODO:
-    Open boundaries end up held in Model.open_boundaries and Model.grid.open_boundaries which seems wrong.
-
     """
 
+    # There should be more use of objects here. For example, each open boundary should be a Boundary object which has
+    # methods for interpolating data onto it (tides, temperature, salinity, ERSEM variables etc.). The coastline
+    # could be an object which has methods related to rivers and checking depths. Likewise, the model grid object
+    # could contain methods for interpolating SST, creating restart files etc.
+
+    # TODO:
+    #  - Open boundaries end up held in Model.open_boundaries and Model.grid.open_boundaries which seems wrong.
+    #  - Make a method to create a subdomain input file for namelist outputs over different spatial domains
+    #  (NC{,AV}_SUBDOMAIN_FILES in the NML_NETCDF{,_AV} namelist section).
+
+
     def __init__(self, start, end, *args, **kwargs):
+        """
+        Initialise an FVCOM model configuration object with a given start and end date.
+
+        Parameters
+        ----------
+        start : datetime.datetime
+            The start of the model run.
+        end : datetime.datetime
+            The end of the model run (inclusive).
+        grid : str, pathlib.Path
+            The model grid to read.
+        native_coordinates : str
+            Defined the coordinate system used in the grid ('spherical' or 'cartesian'). Defaults to `spherical'.
+        zone : str, optional
+            If `native_coordinates' is 'cartesian', give the UTM zone as a string, formatted as, for example,
+            '30N'. Ignored if `native_coordinates' is 'spherical'.
+        sampling : float, optional
+            The sampling interval for the time series data generated for this model run. If omitted, defaults to hourly.
+        noisy : bool, optional
+            Set to True to enable verbose output. Defaults to False.
+        debug : bool, optional
+            Set to True to enable debugging output. Defaults to False.
+
+        Most data are stored in objects within this object:
+
+        self.time : time related data (e.g. Modified Julian Days).
+        self.sigma : vertical grid discretisation.
+        self.sst : sea surface temperature data assimilation data.
+        self.nest : data pertaining to the nested forcing.
+        self.stations : information on any defined stations.
+        self.probes : information on any defined stations.
+        self.ady : information on the light absorption for use in ERSEM.
+        self.regular : regularly gridded model information used for interpolation to the boundaries.
+        self.groundwater : configuration information for the groundwater module in FVCOM.
+
+        """
 
         sampling = 1
         if 'sampling' in kwargs:
@@ -356,7 +395,9 @@ class Model(Domain):
         dates = np.empty(len(results)).astype(datetime)
         sst = np.empty((len(results), self.dims.node))
         for i, result in enumerate(results):
-            dates[i] = result[0][0] + relativedelta(hours=12)  # FVCOM wants times at midday whilst the data are at midnight
+            # Force the data to be at midday instead of whatever's in the input netCDFs. This is because FVCOM seems
+            # to want times at midday.
+            dates[i] = datetime(*[getattr(result[0][0], i) for i in ('year', 'month', 'day')], 12)
             sst[i, :] = result[1]
 
         # Sort by time.
@@ -635,6 +676,18 @@ class Model(Domain):
 
         if sigtype.lower() == 'geometric':
             self.sigma.power = sigpow
+
+        if sigtype.lower() == 'generalized':
+            self.sigma.upper_layer_depth = du
+            self.sigma.lower_layer_depth = dl
+            # Has to be indexable as we assume transition_depth is in Model.write_sigma. We do so because if we're
+            # generating the transition depth, it'll be an array and we only want the value of the array rather than
+            # its entirety as a string.
+            self.sigma.transition_depth = [min_constant_depth]
+            self.sigma.total_upper_layers = ku
+            self.sigma.total_lower_layers = kl
+            self.sigma.upper_layer_thickness = zku
+            self.sigma.lower_layer_thickness = zkl
 
         # Make some depth-resolved sigma distributions.
         self.sigma.layers_z = self.grid.h[:, np.newaxis] * self.sigma.layers
@@ -1524,7 +1577,7 @@ class Model(Domain):
             Path(output_file).unlink()
         for ri in range(self.dims.river):
             namelist = {'NML_RIVER': [NameListEntry('RIVER_NAME', self.river.names[ri]),
-                                      NameListEntry('RIVER_FILE', forcing_file),
+                                      NameListEntry('RIVER_FILE', str(forcing_file)),
                                       NameListEntry('RIVER_GRID_LOCATION', self.river.node[ri] + 1, 'd'),
                                       NameListEntry('RIVER_VERTICAL_DISTRIBUTION', vertical_distribution)]}
             write_model_namelist(output_file, namelist, mode='a')
@@ -1550,8 +1603,8 @@ class Model(Domain):
             positions : np.ndarray
                 NEMO river locations.
             times : np.ndarray
-                NEMO river time series. Since the NEMO data is a climatology, this uses the self.start and self.end
-                variables to create a matching time series for the river data.
+                NEMO river time series as datetime objects.. Since the NEMO data is a climatology, this uses the
+                self.start and self.end variables to create a matching time series for the river data.
             names : np.ndarray
                 NEMO river names.
             flux : np.ndarray
@@ -1586,8 +1639,8 @@ class Model(Domain):
 
         nemo_variables = ['rodic', 'ronh4', 'rono3', 'roo', 'rop', 'rorunoff', 'rosio2',
                           'rotemper', 'rototalk', 'robioalk']
-        sensible_names = ['O3_c', 'N4_n', 'N3_n', 'O2_o', 'N1_p', 'flux', 'N5_s',
-                          'temperature', 'O3_TA', 'O3_bioalk']
+        ersem_names = ['O3_c', 'N4_n', 'N3_n', 'O2_o', 'N1_p', 'flux', 'N5_s',
+                       'temperature', 'O3_TA', 'O3_bioalk']
 
         nemo = {}
         # NEMO river data are stored ['time', 'y', 'x'].
@@ -1605,12 +1658,12 @@ class Model(Domain):
                     baltic_indices.append((y_index, x_index))  # make the indices match the dimensions in the netCDF arrays
 
             for vi, var in enumerate(nemo_variables):
-                nemo[sensible_names[vi]] = nc.variables[var][:]
+                nemo[ersem_names[vi]] = nc.variables[var][:]
                 if remove_baltic:
                     for baltic_index in baltic_indices:
                         # Replace with zeros to match the other non-river data in the netCDF. Dimensions of the arrays are
                         # [time, y, x].
-                        nemo[sensible_names[vi]][:, baltic_index[0], baltic_index[1]] = 0
+                        nemo[ersem_names[vi]][:, baltic_index[0], baltic_index[1]] = 0
 
             # Get the NEMO grid area for correcting units.
             area = nc.variables['dA'][:]
@@ -1644,10 +1697,70 @@ class Model(Domain):
                     nemo[key] = nemo[key][:, mask].T.reshape(-1, number_of_times).T
                 except IndexError:
                     nemo[key] = nemo[key][mask]
+                # Append the last value twice so the time series data match the length of the times array.
+                if np.ndim(nemo[key]) > 1:
+                    nemo[key] = np.append(nemo[key], nemo[key][-1, :][np.newaxis, :], axis=0)
         # Since the NEMO river don't have names, make some based on their position.
         nemo['names'] = ['river_{}_{}'.format(*i) for i in zip(nemo['lon'], nemo['lat'])]
 
         return nemo
+
+    def read_ea_river_temperature_climatology(self, ea_input):
+        """
+        Read river temperature climatologies from the Environment Agency river temperature data. If no data are found
+        within the threshold specified, a mean climatology from the nearest 30 sites is provided instead.
+
+        Parameters
+        ----------
+        ea_input : str, pathlib.Path
+            The path to the Environment Agency climatology netCDF file.
+
+        Returns
+        -------
+        ea_temp : dict
+            The river temperature time series data with the following keys:
+
+            lon, lat : np.ndarray
+                The river gauge positions [n_gauge].
+            temperature : np.ndarray
+                The temperature climatology time series [time, n_gauge].
+            site_type : np.ndarray
+                The EA river gauge classification type [n_gauge].
+            time : np.ndarray
+                EA river gauge time series as datetime objects. Since the data is a climatology, this uses the
+                self.start and self.end variables to create a matching time series for the river data [time].
+
+        Notes
+        -----
+        This is based on the MATLAB fvcom-toolbox function get_EA_river_climatology.m.
+
+        """
+
+        ea_temp = {}
+        with Dataset(ea_input, 'r') as ds:
+            for var in ['lon', 'lat', 'climatology', 'SiteType', 'time']:
+                ea_temp[var] = ds.variables[var][:]
+
+        # Remove non-River sites.
+        ea_temp['SiteType'] = np.asarray([''.join(i.astype(str)).strip() for i in ea_temp['SiteType']])
+        mask = ea_temp['SiteType'] == 'RIVER'
+        for var in ['lon', 'lat', 'climatology', 'SiteType']:
+            ea_temp[var] = ea_temp[var][mask]
+            if np.ndim(ea_temp[var]) > 1:
+                # Put time as the first dimension.
+                ea_temp[var] = ea_temp[var].T
+
+        # Make times based on the current time data. Offset by one as the 'times' variable starts at 1, not zero.
+        ea_temp['time'] = [self.start + relativedelta(days=i) for i in ea_temp['time'] - 1]
+
+        # Rename SiteType and climatology to be more consistent with the others.
+        ea_temp['site_type'] = ea_temp['SiteType']
+        ea_temp.pop('SiteType', None)
+
+        ea_temp['temperature'] = ea_temp['climatology']
+        ea_temp.pop('climatology', None)
+
+        return ea_temp
 
     def add_probes(self, positions, names, variables, interval, max_distance=np.inf):
         """
@@ -1805,7 +1918,7 @@ class Model(Domain):
                                           NameListEntry('PROBE_VARIABLE', variable),
                                           NameListEntry('PROBE_VAR_NAME', long_name)]}
                 if np.any(sigma):
-                    sigma_nml = NameListEntry('PROBE_LEVELS', f'{sigma[0]:d} {simga[1]:d}', no_quote_string=True)
+                    sigma_nml = NameListEntry('PROBE_LEVELS', f'{sigma[0]:d} {sigma[-1]:d}', no_quote_string=True)
                     namelist['NML_PROBE'].append(sigma_nml)
                 write_model_namelist(output_file, namelist, mode='a')
 
@@ -2513,14 +2626,14 @@ class Model(Domain):
                 x = dest.createVariable(name, variable.datatype, variable.dimensions)
                 # Intercept variables with either a node or element dimension and subset accordingly.
                 if 'nele' in source[name].dimensions:
-                    dest[name][:] = source[name][:][..., new_elements]
+                    x[:] = source[name][:][..., new_elements]
                 elif 'node' in source[name].dimensions:
-                    dest[name][:] = source[name][:][..., new_nodes]
+                    x[:] = source[name][:][..., new_nodes]
                 else:
                     # Just copy everything over.
-                    dest[name][:] = source[name][:]
+                    x[:] = source[name][:]
                 # Copy variable attributes all at once via dictionary
-                dest[name].setncatts(source[name].__dict__)
+                x.setncatts(source[name].__dict__)
                 if self._noisy:
                     print('done.')
 
@@ -2829,7 +2942,7 @@ class ModelNameList(object):
                             NameListEntry('HORIZONTAL_MIXING_COEFFICIENT', 0.1, 'f'),
                             NameListEntry('HORIZONTAL_PRANDTL_NUMBER', 1.0, 'f'),
                             NameListEntry('VERTICAL_MIXING_TYPE', 'closure'),
-                            NameListEntry('VERTICAL_MIXING_COEFFICIENT', 0.00001, 'f'),
+                            NameListEntry('VERTICAL_MIXING_COEFFICIENT', 0.2, 'f'),
                             NameListEntry('VERTICAL_PRANDTL_NUMBER', 1.0, 'f'),
                             NameListEntry('BOTTOM_ROUGHNESS_MINIMUM', 0.0001, 'f'),
                             NameListEntry('BOTTOM_ROUGHNESS_LENGTHSCALE', -1, 'f'),
@@ -2857,7 +2970,7 @@ class ModelNameList(object):
                             NameListEntry('RIVER_KIND', 'variable'),
                             NameListEntry('RIVER_TS_SETTING', 'calculated'),
                             NameListEntry('RIVER_INFLOW_LOCATION', 'node'),
-                            NameListEntry('RIVER_INFO_FILE', f'{self._casename}_riv_ersem.nml')],
+                            NameListEntry('RIVER_INFO_FILE', f'{self._casename}_riv.nml')],
                        'NML_OPEN_BOUNDARY_CONTROL':
                            [NameListEntry('OBC_ON', 'F'),
                             NameListEntry('OBC_NODE_LIST_FILE', f'{self._casename}_obc.dat'),
@@ -3072,6 +3185,11 @@ class ModelNameList(object):
             The index for the NML_`section' `entry'.
 
         """
+
+        # Remove leading "&" in case we've copy-pasted carelessly.
+        if section.startswith('&'):
+            section = section[1:]
+
         if section not in self.config:
             raise KeyError(f'{section} is not defined in this namelist configuration.')
 
@@ -3099,6 +3217,11 @@ class ModelNameList(object):
             The value for the NML_`section' `entry'.
 
         """
+
+        # Remove leading "&" in case we've copy-pasted carelessly.
+        if section.startswith('&'):
+            section = section[1:]
+
         if section not in self.config:
             raise KeyError(f'{section} is not defined in this namelist configuration.')
 
@@ -3120,6 +3243,11 @@ class ModelNameList(object):
             The type to update the namelist entry with.
 
         """
+
+        # Remove leading "&" in case we've copy-pasted carelessly.
+        if section.startswith('&'):
+            section = section[1:]
+
         if value is None and type is None:
             raise ValueError("Give one of `value' or `type' to update.")
 
@@ -3166,6 +3294,11 @@ class ModelNameList(object):
         target_interval : float, optional
             The target time in seconds for which to aim when finding the required NCNEST_OUT_INTERVAL. If omitted,
             defaults to 900 seconds.
+
+        Notes
+        -----
+        This can fail to find a solution which is considered valid (where valid is "it's a nice round number").
+        Adjust target_interval to something else to try and get it to work.
 
         """
 
@@ -3284,7 +3417,7 @@ class ModelNameList(object):
             if current_end is None:
                 self.update(*end, case_end)
 
-        if not self.valid_nesting_timescale():
+        if not self.valid_nesting_timescale() and self.value('NML_NESTING', 'NESTING_ON') == 'T':
             raise ValueError('The current NCNEST_OUT_INTERVAL is invalid for FVCOM. Use '
                              'PyFVCOM.preproc.Model.update_nesting_interval to find a suitable value.')
 
@@ -3453,6 +3586,7 @@ class Nest(object):
 
         for this_boundary in new_level_boundaries:
             self.boundaries.append(this_boundary)
+
         # Populate the grid and sigma objects too.
         self.__update_open_boundaries()
 
@@ -4568,8 +4702,8 @@ class Restart(FileReader):
             y[y < coarse.grid.lat.min()] = coarse.grid.lat.min()
             y[y > coarse.grid.lat.max()] = coarse.grid.lat.max()
 
-            # Internal landmasses also need to be dealt with, so test if a point lies within the mask of the grid and move it to the nearest in grid
-            # point if so.            
+            # Internal landmasses also need to be dealt with, so test if a point lies within the mask of the grid and
+            # move it to the nearest in grid point if so.
             if not mode == 'surface':
                 land_mask = getattr(coarse.data, coarse_name)[0, ...].mask[0,:,:]
             else:
@@ -4705,9 +4839,9 @@ class Restart(FileReader):
             Set to True to enable verbose output. Defaults to False.
         Remaining keyword arguments are passed to RegularReader.
 
-        Returns
-        -------
-        regular_model : PyFVCOM.preproc.RegularReader
+        Provides
+        --------
+        self.regular : PyFVCOM.preproc.RegularReader
             A RegularReader object with the requested variables loaded.
 
         """
