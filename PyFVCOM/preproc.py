@@ -1061,10 +1061,11 @@ class Model(Domain):
         # can be defined on a finer time series than other data.
         time = self.open_boundaries[0].tide.time
         zeta = np.full((len(time), self.dims.open_boundary_nodes), np.nan)
-        for id, boundary in enumerate(self.open_boundaries):
-            start_index = id * len(boundary.nodes)
+        start_index = 0
+        for boundary in self.open_boundaries:
             end_index = start_index + len(boundary.nodes)
             zeta[:, start_index:end_index] = boundary.tide.zeta
+            start_index = end_index
 
         globals = {'type': 'FVCOM TIME SERIES ELEVATION FORCING FILE',
                    'title': 'TPXO tides',
