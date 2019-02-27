@@ -3948,24 +3948,25 @@ class RegularReader(FileReader):
         """
         self.time = _TimeReaderReg(self.ds, dims=self._dims)
 
-    def _load_grid(self, netcdf_filestr):
+    def _load_grid(self, netcdf_filestr, grid_variables=None):
         """
         Load the grid data.
 
         Convert from UTM to spherical if we haven't got those data in the existing output file.
 
         """
+        if grid_variables is None:
+            grid_variables = {'lon':'lon', 'lat':'lat', 'x':'x', 'y':'y', 'depth':'depth', 'Longitude':'Longitude', 'Latitude':'Latitude'}
 
-        grid_variables = ['lon', 'lat', 'x', 'y', 'depth', 'Longitude', 'Latitude']
         self.grid = _passive_data_store()
         # Get the grid data.
-        for grid in grid_variables:
+        for grid, nc_grid in grid_variables.items():
             try:
-                setattr(self.grid, grid, self.ds.variables[grid][:])
+                setattr(self.grid, grid, self.ds.variables[nc_grid][:])
                 # Save the attributes.
                 attributes = _passive_data_store()
-                for attribute in self.ds.variables[grid].ncattrs():
-                    setattr(attributes, attribute, getattr(self.ds.variables[grid], attribute))
+                for attribute in self.ds.variables[nc_grid].ncattrs():
+                    setattr(attributes, attribute, getattr(self.ds.variables[nc_grid], attribute))
                 #setattr(self.atts, grid, attributes)
             except KeyError:
                 # Make zeros for this missing variable so we can convert from the non-missing data below.
@@ -3978,7 +3979,7 @@ class RegularReader(FileReader):
             except ValueError as value_error_message:
                 warn('Variable {} has a problem with the data. Setting value as all zeros.'.format(grid))
                 print(value_error_message)
-                setattr(self.grid, grid, np.zeros(self.ds.variables[grid].shape))
+                setattr(self.grid, grid, np.zeros(self.ds.variables[nc_grid].shape))
 
         # Make the grid data the right shape for us to assume it's an FVCOM-style data set.
         # self.grid.lon, self.grid.lat = np.meshgrid(self.grid.lon, self.grid.lat)
