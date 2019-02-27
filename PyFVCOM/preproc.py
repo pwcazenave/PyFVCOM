@@ -4293,7 +4293,7 @@ class NemoRestartRegularReader(RegularReader):
         super().load_grid(netcdf_filestr, grid_variables=grid_variables)
 
         self.grid.lat = np.unique(self.grid.lat)
-        self.grid.lon = np.unique(self.grid.lon
+        self.grid.lon = np.unique(self.grid.lon)
 
         self.dims.lon = self.dims.x
         self.dims.lat = self.dims.y
