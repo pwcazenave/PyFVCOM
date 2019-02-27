@@ -4252,6 +4252,58 @@ class Regular2DReader(RegularReader):
     def _get_depth_dim(self):
         return None, None, None, True
 
+class NemoRestartRegularReader(RegularReader):
+    """
+    A nemo reader class for the restart files from the AMM7 nemo-ersem run aimed at making ersem restart files for fvcom using the Restart object. 
+    Since the mask is stored in a different file this needs to be added manually before loading variables e.g.
+
+    nemo_data = '/data/euryale2/to_archive/momm-AMM7-HINDCAST-v0/2007/03/restart_trc.nc''
+    nemo_mask = '/data/euryale4/to_archive/momm-AMM7-INPUTS/GRID/mesh_mask.nc'
+
+    tmask = nc.Dataset(nemo_mask_file).variables['tmask'][:] == 0
+
+    nemo_data_reader = pf.preproc.NemoRestartRegularReader(nemo_data_file)
+    nemo_data_reader.data_mask = tmask
+    nemo_data_reader.load_data([this_nemo])
+
+    Also since these restart files are timeless a single dummy time (2001,1,1) is put in on initialising. The replace interpolation *should* ignore
+    the time if there is only one timestep but you can always overwrite it e.g. 
+
+    nemo_data_reader.time = restart_file_object.time    
+    restart_file_object.replace_variable_with_regular(this_fvcom, this_nemo, nemo_data_reader, constrain_coordinates=True, mode='nodes'
+
+    """
+    def _load_time(self):
+        """
+        Populate a time object with additional useful time representations from the netCDF time data.
+        """
+        self.time = _passive_data_store()
+        self.time.time = datetime(2001,1,1)
+        self.time._dims = self._dims
+
+    def _load_grid(self, netcdf_filestr):
+        grid_variables = {'lon':'nav_lon', 'lat':'nav_lat', 'depth':'nav_lev', 'x':'x', 'y':'y'}
+        super().load_grid(netcdf_filestr, grid_variables=grid_variables)
+
+        self.grid.lat = np.unique(self.grid.lat)
+        self.grid.lon = np.unique(self.grid.lon
+
+        self.dims.lon = self.dims.x
+        self.dims.lat = self.dims.y
+
+    def load_data(self, var):
+        if not hasattr(self, 'data_mask'):
+            print('Need to add data mask before trying to retrieve variables')
+            return
+
+        if hasattr(self.dims, 'time'):
+            del self.dims.time
+        super().load_data(var)
+        
+        # create mask
+        for this_var in var:
+            setattr(self.data, this_var, np.ma.masked_array(getattr(self.data,this_var), mask=self.data_mask))
+
 
 class HYCOMReader(RegularReader):
     """
