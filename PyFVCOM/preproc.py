@@ -4765,24 +4765,41 @@ class Restart(FileReader):
         nz = z.shape[0]
 
         if mode == 'surface':
-            boundary_grid = np.array((np.tile(self.time.time, [nx, 1]).T.ravel(),
-                                      np.tile(y, [nt, 1]).transpose(0, 1).ravel(),
-                                      np.tile(x, [nt, 1]).transpose(0, 1).ravel())).T
-            ft = RegularGridInterpolator((coarse.time.time, coarse.grid.lat, coarse.grid.lon),
-                                         getattr(coarse.data, coarse_name), method='linear', fill_value=np.nan)
-            # Reshape the results to match the un-ravelled boundary_grid array.
-            interpolated_coarse_data = ft(boundary_grid).reshape([nt, -1])
-            # Drop the interpolated data into the nest object.
+            if nt > 1:
+                boundary_grid = np.array((np.tile(self.time.time, [nx, 1]).T.ravel(),
+                                          np.tile(y, [nt, 1]).transpose(0, 1).ravel(),
+                                          np.tile(x, [nt, 1]).transpose(0, 1).ravel())).T
+                ft = RegularGridInterpolator((coarse.time.time, coarse.grid.lat, coarse.grid.lon),
+                                             getattr(coarse.data, coarse_name), method='linear', fill_value=np.nan)
+                # Reshape the results to match the un-ravelled boundary_grid array.
+                interpolated_coarse_data = ft(boundary_grid).reshape([nt, -1])
+            else:
+                boundary_grid = np.array((y.ravel(), x.ravel())).T
+                ft = RegularGridInterpolator((coarse.grid.lat, coarse.grid.lon),
+                                             np.squeeze(getattr(coarse.data, coarse_name)), method='linear', fill_value=np.nan)
+                # Reshape the results to match the un-ravelled boundary_grid array.
+                interpolated_coarse_data = ft(boundary_grid).reshape([nt, -1])
+
         else:
-            boundary_grid = np.array((np.tile(self.time.time, [nx, nz, 1]).T.ravel(),
-                                      np.tile(z, [nt, 1, 1]).ravel(),
-                                      np.tile(y, [nz, nt, 1]).transpose(1, 0, 2).ravel(),
-                                      np.tile(x, [nz, nt, 1]).transpose(1, 0, 2).ravel())).T
-            ft = RegularGridInterpolator((coarse.time.time, coarse.grid.depth, coarse.grid.lat, coarse.grid.lon),
-                                         getattr(coarse.data, coarse_name), method='linear',
-                                         fill_value=0)
-            # Reshape the results to match the un-ravelled boundary_grid array.
-            interpolated_coarse_data = ft(boundary_grid).reshape([nt, nz, -1])
+            if nt > 1:
+                boundary_grid = np.array((np.tile(self.time.time, [nx, nz, 1]).T.ravel(),
+                                          np.tile(z, [nt, 1, 1]).ravel(),
+                                          np.tile(y, [nz, nt, 1]).transpose(1, 0, 2).ravel(),
+                                          np.tile(x, [nz, nt, 1]).transpose(1, 0, 2).ravel())).T
+                ft = RegularGridInterpolator((coarse.time.time, coarse.grid.depth, coarse.grid.lat, coarse.grid.lon),
+                                             getattr(coarse.data, coarse_name), method='linear',
+                                             fill_value=0)
+                # Reshape the results to match the un-ravelled boundary_grid array.
+                interpolated_coarse_data = ft(boundary_grid).reshape([nt, nz, -1])
+            else:
+                boundary_grid = np.array((z.ravel(),
+                                          np.tile(y, [nz, 1]).ravel(),
+                                          np.tile(x, [nz, 1]).ravel())).T
+                ft = RegularGridInterpolator((coarse.grid.depth, coarse.grid.lat, coarse.grid.lon),
+                                             np.squeeze(getattr(coarse.data, coarse_name)), method='linear',
+                                             fill_value=0)
+                # Reshape the results to match the un-ravelled boundary_grid array.
+                interpolated_coarse_data = ft(boundary_grid).reshape([nt, nz, -1])
 
         self.replace_variable(variable, interpolated_coarse_data)
 
