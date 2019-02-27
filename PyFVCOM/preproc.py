@@ -4133,6 +4133,9 @@ class RegularReader(FileReader):
             elif hasattr(self.dims, 'time_counter'):
                 timename = 'time_counter'
                 timedim = self.dims.time_counter
+            elif hasattr(self.dims, 't'):
+                timename = 't'
+                timedim = self.dims.t
             else:
                 raise AttributeError('Unrecognised time dimension name')
 
@@ -4195,6 +4198,10 @@ class RegularReader(FileReader):
             depthname = 'depthw'
             depthvar = 'depthw'
             depthdim = self.dims.depthw
+        elif hasattr(self.dims, 'z'):
+            depthname = 'z'
+            depthvar = 'nav_lev'
+            depthdim = self.dims.z
         else:
             raise AttributeError('Unrecognised depth dimension name')
 
