@@ -427,7 +427,7 @@ class Model(Domain):
             sst_lat = sst_file_nc.variables['lat'][:]
             time_out_dt = num2date(sst_file_nc.variables['time'][:], units=sst_file_nc.variables['time'].units)
 
-        ft = RegularGridInterpolator((sst_lon, sst_lat), sst_eo.T, method='nearest', fill_value=None)
+        ft = RegularGridInterpolator((sst_lon, sst_lat), sst_eo.T, method='linear', fill_value=None)
         interp_sst = ft(fvcom_lonlat.T)
 
         return time_out_dt, interp_sst
