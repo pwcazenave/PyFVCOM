@@ -1710,7 +1710,7 @@ class OpenBoundary(object):
         """
 
         # Make a RegularGridInterpolator from the supplied 4D data.
-        ft = RegularGridInterpolator((depth, lat, lon), data, method='nearest', fill_value=None)
+        ft = RegularGridInterpolator((depth, lat, lon), data, method='linear', fill_value=None)
         interpolated_data = ft(points)
 
         return interpolated_data
