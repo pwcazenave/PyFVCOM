@@ -4026,7 +4026,7 @@ class RegularReader(FileReader):
                             _temp = np.empty((self.dims.depth, getattr(self.dims, spatial_dimension)))
                         else:
                             _temp = np.empty(getattr(self.dims, spatial_dimension))
-                setattr(self.grid, var, _temp)
+                    setattr(self.grid, var, _temp)
 
         # Check if we've been given vertical dimensions to subset in too, and if so, do that. Check we haven't
         # already done this if the 'node' and 'nele' sections above first.
