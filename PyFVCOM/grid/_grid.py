@@ -1464,8 +1464,8 @@ class OpenBoundary(object):
         # Make a dummy first dimension since we need it for the RegularGridInterpolator but don't actually
         # interpolated along it.
         c_data = np.arange(amp_data.shape[0])
-        u_interp = RegularGridInterpolator((c_data, harmonics_lon, harmonics_lat), harmonics_u, method=interp_method, fill_value=None)
-        v_interp = RegularGridInterpolator((c_data, harmonics_lon, harmonics_lat), harmonics_v, method=interp_method, fill_value=None)
+        amplitude_interp = RegularGridInterpolator((c_data, harmonics_lon, harmonics_lat), amp_data, method='linear', fill_value=None)
+        phase_interp = RegularGridInterpolator((c_data, harmonics_lon, harmonics_lat), phase_data, method='linear', fill_value=None)
 
         # Fix our input position longitudes to be in the 0-360 range to match the harmonics data range,
         # if necessary.
