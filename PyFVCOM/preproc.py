@@ -4299,6 +4299,16 @@ class NemoRestartRegularReader(RegularReader):
         self.time._dims = self._dims
 
     def _load_grid(self, netcdf_filestr):
+        """
+        Load the model grid.
+
+        Parameters
+        ----------
+        netcdf_filestr : str
+            Ignored (for compatibility with PyFVCOM.read.FileReader).
+
+        """
+
         grid_variables = {'lon': 'nav_lon', 'lat': 'nav_lat', 'depth': 'nav_lev', 'x': 'x', 'y': 'y'}
         super()._load_grid(netcdf_filestr, grid_variables=grid_variables)
 
