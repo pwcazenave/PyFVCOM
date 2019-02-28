@@ -4264,8 +4264,9 @@ class Regular2DReader(RegularReader):
 
 class NemoRestartRegularReader(RegularReader):
     """
-    A nemo reader class for the restart files from the AMM7 nemo-ersem run aimed at making ersem restart files for fvcom using the Restart object. 
-    Since the mask is stored in a different file this needs to be added manually before loading variables e.g.
+    A nemo reader class for the restart files from the AMM7 nemo-ersem run aimed at making ersem restart files for
+    fvcom using the Restart object. Since the mask is stored in a different file this needs to be added manually
+    before loading variables e.g.
 
     nemo_data = '/data/euryale2/to_archive/momm-AMM7-HINDCAST-v0/2007/03/restart_trc.nc''
     nemo_mask = '/data/euryale4/to_archive/momm-AMM7-INPUTS/GRID/mesh_mask.nc'
@@ -4276,11 +4277,11 @@ class NemoRestartRegularReader(RegularReader):
     nemo_data_reader.data_mask = tmask
     nemo_data_reader.load_data([this_nemo])
 
-    Also since these restart files are timeless a single dummy time (2001,1,1) is put in on initialising. The replace interpolation *should* ignore
-    the time if there is only one timestep but you can always overwrite it e.g. 
+    Also since these restart files are timeless a single dummy time (2001,1,1) is put in on initialising. The replace
+    interpolation *should* ignore the time if there is only one timestep but you can always overwrite it e.g.
 
     nemo_data_reader.time = restart_file_object.time    
-    restart_file_object.replace_variable_with_regular(this_fvcom, this_nemo, nemo_data_reader, constrain_coordinates=True, mode='nodes'
+    restart_file_object.replace_variable_with_regular(this_fvcom, this_nemo, nemo_data_reader, constrain_coordinates=True, mode='nodes')
 
     """
     def _load_time(self):
