@@ -4310,8 +4310,7 @@ class NemoRestartRegularReader(RegularReader):
 
     def load_data(self, var):
         if not hasattr(self, 'data_mask'):
-            print('Need to add data mask before trying to retrieve variables')
-            return
+            raise AttributeError('Need to add data mask before trying to retrieve variables')
 
         if hasattr(self.dims, 'time'):
             del self.dims.time
