@@ -3866,6 +3866,8 @@ class RegularReader(FileReader):
 
         """
 
+        time_name = 'time'
+
         # Check we've already got all the same data objects before we start.
         if hasattr(self.dims, 'lon'):
             xname = 'lon'
@@ -3911,9 +3913,8 @@ class RegularReader(FileReader):
 
         # Copy ourselves to a new version for concatenation. self is the old so we get appended to by the new.
         idem = copy.copy(self)
-
         for var in idem.data:
-            if 'time' in idem.ds.variables[var].dimensions:
+            if time_name in idem.ds.variables[var].dimensions:
                 if debug:
                     print('Concatenating {} in time'.format(var))
                 setattr(idem.data, var, np.ma.concatenate((getattr(other.data, var), getattr(idem.data, var))))
@@ -3928,7 +3929,7 @@ class RegularReader(FileReader):
         time_mask[dupe_indices] = False
         for var in idem.data:
             # Only delete things with a time dimension.
-            if 'time' in idem.ds.variables[var].dimensions:
+            if time_name in idem.ds.variables[var].dimensions:
                 # time_axis = idem.ds.variables[var].dimensions.index('time')
                 setattr(idem.data, var, getattr(idem.data, var)[time_mask, ...])  # assume time is first
                 # setattr(idem.data, var, np.delete(getattr(idem.data, var), dupe_indices, axis=time_axis))
