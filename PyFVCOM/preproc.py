@@ -1114,10 +1114,11 @@ class Model(Domain):
         # can be defined on a finer time series than other data.
         time = self.open_boundaries[0].tide.time
         zeta = np.full((len(time), self.dims.open_boundary_nodes), np.nan)
-        for id, boundary in enumerate(self.open_boundaries):
-            start_index = id * len(boundary.nodes)
+        start_index = 0
+        for boundary in self.open_boundaries:
             end_index = start_index + len(boundary.nodes)
             zeta[:, start_index:end_index] = boundary.tide.zeta
+            start_index = end_index
 
         globals = {'type': 'FVCOM TIME SERIES ELEVATION FORCING FILE',
                    'title': 'TPXO tides',
@@ -3947,24 +3948,25 @@ class RegularReader(FileReader):
         """
         self.time = _TimeReaderReg(self.ds, dims=self._dims)
 
-    def _load_grid(self, netcdf_filestr):
+    def _load_grid(self, netcdf_filestr, grid_variables=None):
         """
         Load the grid data.
 
         Convert from UTM to spherical if we haven't got those data in the existing output file.
 
         """
+        if grid_variables is None:
+            grid_variables = {'lon':'lon', 'lat':'lat', 'x':'x', 'y':'y', 'depth':'depth', 'Longitude':'Longitude', 'Latitude':'Latitude'}
 
-        grid_variables = ['lon', 'lat', 'x', 'y', 'depth', 'Longitude', 'Latitude']
         self.grid = _passive_data_store()
         # Get the grid data.
-        for grid in grid_variables:
+        for grid, nc_grid in grid_variables.items():
             try:
-                setattr(self.grid, grid, self.ds.variables[grid][:])
+                setattr(self.grid, grid, self.ds.variables[nc_grid][:])
                 # Save the attributes.
                 attributes = _passive_data_store()
-                for attribute in self.ds.variables[grid].ncattrs():
-                    setattr(attributes, attribute, getattr(self.ds.variables[grid], attribute))
+                for attribute in self.ds.variables[nc_grid].ncattrs():
+                    setattr(attributes, attribute, getattr(self.ds.variables[nc_grid], attribute))
                 #setattr(self.atts, grid, attributes)
             except KeyError:
                 # Make zeros for this missing variable so we can convert from the non-missing data below.
@@ -3977,7 +3979,7 @@ class RegularReader(FileReader):
             except ValueError as value_error_message:
                 warn('Variable {} has a problem with the data. Setting value as all zeros.'.format(grid))
                 print(value_error_message)
-                setattr(self.grid, grid, np.zeros(self.ds.variables[grid].shape))
+                setattr(self.grid, grid, np.zeros(self.ds.variables[nc_grid].shape))
 
         # Make the grid data the right shape for us to assume it's an FVCOM-style data set.
         # self.grid.lon, self.grid.lat = np.meshgrid(self.grid.lon, self.grid.lat)
@@ -4131,6 +4133,9 @@ class RegularReader(FileReader):
             elif hasattr(self.dims, 'time_counter'):
                 timename = 'time_counter'
                 timedim = self.dims.time_counter
+            elif hasattr(self.dims, 't'):
+                timename = 't'
+                timedim = self.dims.t
             else:
                 raise AttributeError('Unrecognised time dimension name')
 
@@ -4193,6 +4198,10 @@ class RegularReader(FileReader):
             depthname = 'depthw'
             depthvar = 'depthw'
             depthdim = self.dims.depthw
+        elif hasattr(self.dims, 'z'):
+            depthname = 'z'
+            depthvar = 'nav_lev'
+            depthdim = self.dims.z
         else:
             raise AttributeError('Unrecognised depth dimension name')
 
@@ -4249,6 +4258,58 @@ class Regular2DReader(RegularReader):
     """
     def _get_depth_dim(self):
         return None, None, None, True
+
+class NemoRestartRegularReader(RegularReader):
+    """
+    A nemo reader class for the restart files from the AMM7 nemo-ersem run aimed at making ersem restart files for fvcom using the Restart object. 
+    Since the mask is stored in a different file this needs to be added manually before loading variables e.g.
+
+    nemo_data = '/data/euryale2/to_archive/momm-AMM7-HINDCAST-v0/2007/03/restart_trc.nc''
+    nemo_mask = '/data/euryale4/to_archive/momm-AMM7-INPUTS/GRID/mesh_mask.nc'
+
+    tmask = nc.Dataset(nemo_mask_file).variables['tmask'][:] == 0
+
+    nemo_data_reader = pf.preproc.NemoRestartRegularReader(nemo_data_file)
+    nemo_data_reader.data_mask = tmask
+    nemo_data_reader.load_data([this_nemo])
+
+    Also since these restart files are timeless a single dummy time (2001,1,1) is put in on initialising. The replace interpolation *should* ignore
+    the time if there is only one timestep but you can always overwrite it e.g. 
+
+    nemo_data_reader.time = restart_file_object.time    
+    restart_file_object.replace_variable_with_regular(this_fvcom, this_nemo, nemo_data_reader, constrain_coordinates=True, mode='nodes'
+
+    """
+    def _load_time(self):
+        """
+        Populate a time object with additional useful time representations from the netCDF time data.
+        """
+        self.time = _passive_data_store()
+        self.time.time = datetime(2001,1,1)
+        self.time._dims = self._dims
+
+    def _load_grid(self, netcdf_filestr):
+        grid_variables = {'lon':'nav_lon', 'lat':'nav_lat', 'depth':'nav_lev', 'x':'x', 'y':'y'}
+        super()._load_grid(netcdf_filestr, grid_variables=grid_variables)
+
+        self.grid.lat = np.unique(self.grid.lat)
+        self.grid.lon = np.unique(self.grid.lon)
+
+        self.dims.lon = self.dims.x
+        self.dims.lat = self.dims.y
+
+    def load_data(self, var):
+        if not hasattr(self, 'data_mask'):
+            print('Need to add data mask before trying to retrieve variables')
+            return
+
+        if hasattr(self.dims, 'time'):
+            del self.dims.time
+        super().load_data(var)
+        
+        # create mask
+        for this_var in var:
+            setattr(self.data, this_var, np.ma.masked_array(getattr(self.data,this_var), mask=self.data_mask))
 
 
 class HYCOMReader(RegularReader):
@@ -4764,24 +4825,41 @@ class Restart(FileReader):
         nz = z.shape[0]
 
         if mode == 'surface':
-            boundary_grid = np.array((np.tile(self.time.time, [nx, 1]).T.ravel(),
-                                      np.tile(y, [nt, 1]).transpose(0, 1).ravel(),
-                                      np.tile(x, [nt, 1]).transpose(0, 1).ravel())).T
-            ft = RegularGridInterpolator((coarse.time.time, coarse.grid.lat, coarse.grid.lon),
-                                         getattr(coarse.data, coarse_name), method='linear', fill_value=np.nan)
-            # Reshape the results to match the un-ravelled boundary_grid array.
-            interpolated_coarse_data = ft(boundary_grid).reshape([nt, -1])
-            # Drop the interpolated data into the nest object.
+            if nt > 1:
+                boundary_grid = np.array((np.tile(self.time.time, [nx, 1]).T.ravel(),
+                                          np.tile(y, [nt, 1]).transpose(0, 1).ravel(),
+                                          np.tile(x, [nt, 1]).transpose(0, 1).ravel())).T
+                ft = RegularGridInterpolator((coarse.time.time, coarse.grid.lat, coarse.grid.lon),
+                                             getattr(coarse.data, coarse_name), method='linear', fill_value=np.nan)
+                # Reshape the results to match the un-ravelled boundary_grid array.
+                interpolated_coarse_data = ft(boundary_grid).reshape([nt, -1])
+            else:
+                boundary_grid = np.array((y.ravel(), x.ravel())).T
+                ft = RegularGridInterpolator((coarse.grid.lat, coarse.grid.lon),
+                                             np.squeeze(getattr(coarse.data, coarse_name)), method='linear', fill_value=np.nan)
+                # Reshape the results to match the un-ravelled boundary_grid array.
+                interpolated_coarse_data = ft(boundary_grid).reshape([nt, -1])
+
         else:
-            boundary_grid = np.array((np.tile(self.time.time, [nx, nz, 1]).T.ravel(),
-                                      np.tile(z, [nt, 1, 1]).ravel(),
-                                      np.tile(y, [nz, nt, 1]).transpose(1, 0, 2).ravel(),
-                                      np.tile(x, [nz, nt, 1]).transpose(1, 0, 2).ravel())).T
-            ft = RegularGridInterpolator((coarse.time.time, coarse.grid.depth, coarse.grid.lat, coarse.grid.lon),
-                                         getattr(coarse.data, coarse_name), method='linear',
-                                         fill_value=0)
-            # Reshape the results to match the un-ravelled boundary_grid array.
-            interpolated_coarse_data = ft(boundary_grid).reshape([nt, nz, -1])
+            if nt > 1:
+                boundary_grid = np.array((np.tile(self.time.time, [nx, nz, 1]).T.ravel(),
+                                          np.tile(z, [nt, 1, 1]).ravel(),
+                                          np.tile(y, [nz, nt, 1]).transpose(1, 0, 2).ravel(),
+                                          np.tile(x, [nz, nt, 1]).transpose(1, 0, 2).ravel())).T
+                ft = RegularGridInterpolator((coarse.time.time, coarse.grid.depth, coarse.grid.lat, coarse.grid.lon),
+                                             getattr(coarse.data, coarse_name), method='linear',
+                                             fill_value=0)
+                # Reshape the results to match the un-ravelled boundary_grid array.
+                interpolated_coarse_data = ft(boundary_grid).reshape([nt, nz, -1])
+            else:
+                boundary_grid = np.array((z.ravel(),
+                                          np.tile(y, [nz, 1]).ravel(),
+                                          np.tile(x, [nz, 1]).ravel())).T
+                ft = RegularGridInterpolator((coarse.grid.depth, coarse.grid.lat, coarse.grid.lon),
+                                             np.squeeze(getattr(coarse.data, coarse_name)), method='linear',
+                                             fill_value=0)
+                # Reshape the results to match the un-ravelled boundary_grid array.
+                interpolated_coarse_data = ft(boundary_grid).reshape([nt, nz, -1])
 
         self.replace_variable(variable, interpolated_coarse_data)
 
