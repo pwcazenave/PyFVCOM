@@ -3914,7 +3914,7 @@ class RegularReader(FileReader):
 
         for var in idem.data:
             if 'time' in idem.ds.variables[var].dimensions:
-                if self._noisy:
+                if debug:
                     print('Concatenating {} in time'.format(var))
                 setattr(idem.data, var, np.ma.concatenate((getattr(other.data, var), getattr(idem.data, var))))
         for time in idem.time:
