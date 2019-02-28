@@ -988,6 +988,8 @@ class OpenBoundary(object):
 
     """
 
+    # TODO Add methods to generate casename_tsobc.nc files.
+
     def __init__(self, ids, mode='nodes'):
         """
         Given a set of open boundary nodes, initialise a new open boundary object with relevant arrays.
