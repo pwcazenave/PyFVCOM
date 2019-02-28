@@ -49,6 +49,7 @@ class Model(Domain):
     #  - Open boundaries end up held in Model.open_boundaries and Model.grid.open_boundaries which seems wrong.
     #  - Make a method to create a subdomain input file for namelist outputs over different spatial domains
     #  (NC{,AV}_SUBDOMAIN_FILES in the NML_NETCDF{,_AV} namelist section).
+    #  - Add methods to generate casename_tsobc.nc files.
 
 
     def __init__(self, start, end, *args, **kwargs):

@@ -4,7 +4,7 @@ version = '2.1.3'
 
 setup(
     name='PyFVCOM',
-    packages=['PyFVCOM', 'PyFVCOM.ctd', 'PyFVCOM.utilities'],
+    packages=['PyFVCOM', 'PyFVCOM.ctd', 'PyFVCOM.grid', 'PyFVCOM.utilities'],
     version=version,
     description=("PyFVCOM is a collection of various tools and utilities which can be used to extract, analyse and plot input and output files from FVCOM."),
     author='Pierre Cazenave',
