@@ -4015,14 +4015,12 @@ class RegularReader(FileReader):
                             var_shape[self.ds.variables[var].dimensions.index('depth')] = self.dims.siglay
                         _temp = np.empty(var_shape) * np.nan
                         if 'depth' in self.ds.variables[var].dimensions:
-                            for ni, node in enumerate(self._dims[spatial_dimension]):
-                                if 'depth' in self._dims:
-                                    _temp[..., ni] = self.ds.variables[var][self._dims['depth'], node]
-                                else:
-                                    _temp[..., ni] = self.ds.variables[var][:, node]
+                            if 'depth' in self._dims:
+                                _temp = self.ds.variables[var][self._dims['depth'], self._dims[spatial_dimension]]
+                            else:
+                                _temp = self.ds.variables[var][:, self._dims[spatial_dimension]]
                         else:
-                            for ni, node in enumerate(self._dims[spatial_dimension]):
-                                _temp[..., ni] = self.ds.variables[var][node]
+                            _temp = self.ds.variables[var][self._dims[spatial_dimension]]
                     except KeyError:
                         if 'depth' in var:
                             _temp = np.empty((self.dims.depth, getattr(self.dims, spatial_dimension)))
