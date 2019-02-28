@@ -3991,6 +3991,7 @@ class RegularReader(FileReader):
         # dimension for any variable in use in here.
         for dim in self._dims:
             if dim != 'time':
+                # TODO Add support for slices here.
                 setattr(self.dims, dim, len(self._dims[dim]))
 
         # Convert the given W/E/S/N coordinates into node and element IDs to subset.
