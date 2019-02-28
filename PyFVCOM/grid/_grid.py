@@ -1546,9 +1546,9 @@ class OpenBoundary(object):
             set to 'surface', this is then interpolated to the node positions ignoring depth coordinates.
             Defaults to 'nodes'.
         tide_adjust : bool, optional
-            Some nested forcing doesn't include tidal components and these have to be added from predictions using harmonics.
-            With this set to true the interpolated forcing has the tidal component (required to already exist in self.tide) added
-            to the final data.
+            Some nested forcing doesn't include tidal components and these have to be added from predictions using
+            harmonics. With this set to true the interpolated forcing has the tidal component (required to already
+            exist in self.tide) added to the final data.
         """
 
         # Check we have what we need.
