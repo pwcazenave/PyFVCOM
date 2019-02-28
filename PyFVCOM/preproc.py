@@ -4220,13 +4220,19 @@ class RegularReader(FileReader):
         if cartesian:
             raise ValueError('No cartesian coordinates defined')
         else:
-            lat_rav, lon_rav = np.meshgrid(self.grid.lat, self.grid.lon)
-            x, y = lon_rav.ravel(), lat_rav.ravel()
+            if np.ndim(self.grid.lon) <= 1:
+                lat_rav, lon_rav = np.meshgrid(self.grid.lat, self.grid.lon)
+                x, y = lon_rav.ravel(), lat_rav.ravel()
+            else:
+                x, y = self.grid.lon.ravel(), self.grid.lat.ravel()
 
         index = self._closest_point(x, y, x, y, where, threshold=threshold, vincenty=vincenty, haversine=haversine)
         if len(index) == 1:
             index = index[0]
-        return np.unravel_index(index, (len(self.grid.lon), len(self.grid.lat)))
+        if np.ndim(self.grid.lon) <= 1:
+            return np.unravel_index(index, (len(self.grid.lon), len(self.grid.lat)))
+        else:
+            return np.unravel_index(index, self.grid.lon.shape)
 
 
 class _TimeReaderReg(_TimeReader):
