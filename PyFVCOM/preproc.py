@@ -2147,7 +2147,7 @@ class Model(Domain):
                             tide_times_choose = np.isin(boundary.tide.time, boundary.nest.time.datetime) # The harmonics are calculated -/+ one day
                             boundary_data = boundary_data + getattr(boundary.tide, var)[tide_times_choose,:]
 
-                        out_dict[var][0][...,this_index] = boundary_data
+                        out_dict[var][0][..., this_index] = boundary_data
                     else:
                         raise ValueError('Unknown nest boundary variable {}'.format(var))
 
