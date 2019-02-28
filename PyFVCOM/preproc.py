@@ -996,8 +996,7 @@ class Model(Domain):
             Path to which to save sigma data.
 
         TODO:
-        -----
-        - Add support for writing all the sigma file formats.
+         - Add support for writing all the sigma file formats.
 
         """
 
