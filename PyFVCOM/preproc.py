@@ -3950,7 +3950,9 @@ class RegularReader(FileReader):
     def _load_time(self):
         """
         Populate a time object with additional useful time representations from the netCDF time data.
+
         """
+
         self.time = _TimeReaderReg(self.ds, dims=self._dims)
 
     def _load_grid(self, netcdf_filestr, grid_variables=None):
@@ -3972,7 +3974,6 @@ class RegularReader(FileReader):
                 attributes = _passive_data_store()
                 for attribute in self.ds.variables[nc_grid].ncattrs():
                     setattr(attributes, attribute, getattr(self.ds.variables[nc_grid], attribute))
-                #setattr(self.atts, grid, attributes)
             except KeyError:
                 # Make zeros for this missing variable so we can convert from the non-missing data below.
                 if hasattr(self.dims, 'lon') and hasattr(self.dims, 'lat'):
@@ -3985,10 +3986,6 @@ class RegularReader(FileReader):
                 warn('Variable {} has a problem with the data. Setting value as all zeros.'.format(grid))
                 print(value_error_message)
                 setattr(self.grid, grid, np.zeros(self.ds.variables[nc_grid].shape))
-
-        # Make the grid data the right shape for us to assume it's an FVCOM-style data set.
-        # self.grid.lon, self.grid.lat = np.meshgrid(self.grid.lon, self.grid.lat)
-        # self.grid.lon, self.grid.lat = self.grid.lon.ravel(), self.grid.lat.ravel()
 
         # Update dimensions to match those we've been given, if any. Omit time here as we shouldn't be touching that
         # dimension for any variable in use in here.
@@ -4264,6 +4261,7 @@ class Regular2DReader(RegularReader):
     def _get_depth_dim(self):
         return None, None, None, True
 
+
 class NemoRestartRegularReader(RegularReader):
     """
     A nemo reader class for the restart files from the AMM7 nemo-ersem run aimed at making ersem restart files for fvcom using the Restart object. 
@@ -4288,9 +4286,11 @@ class NemoRestartRegularReader(RegularReader):
     def _load_time(self):
         """
         Populate a time object with additional useful time representations from the netCDF time data.
+
         """
+
         self.time = _passive_data_store()
-        self.time.time = datetime(2001,1,1)
+        self.time.time = datetime(2001, 1, 1)
         self.time._dims = self._dims
 
     def _load_grid(self, netcdf_filestr):
@@ -4312,7 +4312,7 @@ class NemoRestartRegularReader(RegularReader):
             del self.dims.time
         super().load_data(var)
         
-        # create mask
+        # Create mask
         for this_var in var:
             setattr(self.data, this_var, np.ma.masked_array(getattr(self.data,this_var), mask=self.data_mask))
 
