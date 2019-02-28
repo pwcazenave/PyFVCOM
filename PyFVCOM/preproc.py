@@ -4029,7 +4029,7 @@ class RegularReader(FileReader):
                     setattr(self.grid, var, _temp)
 
         # Check if we've been given vertical dimensions to subset in too, and if so, do that. Check we haven't
-        # already done this if the 'node' and 'nele' sections above first.
+        # already done this in the 'node' and 'nele' sections above first.
         for var in ['depth']:
             short_dim = copy.copy(var)
             # Assume we need to subset this one unless 'node' or 'nele' are missing from self._dims. If they're in
