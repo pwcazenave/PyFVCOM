@@ -3997,10 +3997,10 @@ class RegularReader(FileReader):
         if self._bounding_box:
             # We need to use the original Dataset lon and lat values here as they have the right shape for the
             # subsetting.
-            self._dims['lon'] = np.argwhere((self.ds.variables['lon'][:] > self._dims['wesn'][0]) &
-                                            (self.ds.variables['lon'][:] < self._dims['wesn'][1]))
-            self._dims['lat'] = np.argwhere((self.ds.variables['lat'][:] > self._dims['wesn'][2]) &
-                                            (self.ds.variables['lat'][:] < self._dims['wesn'][3]))
+            self._dims['lon'] = np.argwhere((self.grid.lon > self._dims['wesn'][0]) &
+                                            (self.grid.lon < self._dims['wesn'][1]))
+            self._dims['lat'] = np.argwhere((self.grid.lat > self._dims['wesn'][2]) &
+                                            (self.grid.lat < self._dims['wesn'][3]))
 
         related_variables = {'lon': ('x', 'lon'), 'lat': ('y', 'lat')}
         for spatial_dimension in 'lon', 'lat':
