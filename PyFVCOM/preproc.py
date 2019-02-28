@@ -4284,6 +4284,10 @@ class NemoRestartRegularReader(RegularReader):
     restart_file_object.replace_variable_with_regular(this_fvcom, this_nemo, nemo_data_reader, constrain_coordinates=True, mode='nodes')
 
     """
+
+    # There has been some parallel work here - I (pica) have been working on making a NEMO-specific RegularReader
+    # whilst Mike has added this class. Not sure what can be removed.
+
     def _load_time(self):
         """
         Populate a time object with additional useful time representations from the netCDF time data.
