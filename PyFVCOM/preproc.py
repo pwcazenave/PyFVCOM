@@ -4089,6 +4089,9 @@ class RegularReader(FileReader):
             var = [var]
 
         for v in var:
+            if self._noisy:
+                print(f'Loading {v}', flush=True)
+
             if v not in self.ds.variables:
                 raise KeyError("Variable '{}' not present in {}.".format(v, self._fvcom))
 
