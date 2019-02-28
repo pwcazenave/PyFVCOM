@@ -1205,7 +1205,7 @@ class FileReader(Domain):
         try:
             return np.argmin(np.abs(self.time.datetime - when))
         except AttributeError:
-            self.load_time()
+            self._load_time()
             return np.argmin(np.abs(self.time.datetime - when))
 
     def grid_volume(self, load_zeta=False):
