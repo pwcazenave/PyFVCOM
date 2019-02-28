@@ -3855,6 +3855,10 @@ class RegularReader(FileReader):
 
     """
 
+    # TODO:
+    #  - A lot of the methods on FileReader will need to be reimplemented for these data (e.g. avg_volume_var). That
+    #  is, anything which assumes we've got an unstructured grid.
+
     def __rshift__(self, other, debug=False):
         """
         This special method means we can stack two RegularReader objects in time through a simple append (e.g. nemo
