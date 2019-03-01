@@ -620,8 +620,12 @@ class Plotter(object):
 
         # If plot extents were not given, use min/max lat/lon values
         if self.extents is None:
-            self.extents = np.array([self.lon.min(), self.lon.max(),
-                                     self.lat.min(), self.lat.max()])
+            if self.cartesian:
+                self.extents = np.array([self.x.min(), self.x.max(),
+                                         self.y.min(), self.y.max()])
+            else:
+                self.extents = np.array([self.lon.min(), self.lon.max(),
+                                         self.lat.min(), self.lat.max()])
 
         # Create basemap object
         if not self.m and not self.cartesian:
@@ -664,11 +668,15 @@ class Plotter(object):
                 warn('The y-axis tick interval is larger than the plot y-axis extent.')
 
         # Add coordinate labels to the x and y axes (except if we're doing a cartesian plot).
-        if self.tick_inc is not None and not self.cartesian:
-            meridians = np.arange(np.floor(np.min(self.extents[:2])), np.ceil(np.max(self.extents[:2])), self.tick_inc[0])
-            parallels = np.arange(np.floor(np.min(self.extents[2:])), np.ceil(np.max(self.extents[2:])), self.tick_inc[1])
-            self.m.drawparallels(parallels, labels=[1, 0, 0, 0], fontsize=self.fs, linewidth=0, ax=self.axes)
-            self.m.drawmeridians(meridians, labels=[0, 0, 0, 1], fontsize=self.fs, linewidth=0, ax=self.axes)
+        if self.tick_inc is not None:
+            if not self.cartesian:
+                meridians = np.arange(np.floor(np.min(self.extents[:2])), np.ceil(np.max(self.extents[:2])), self.tick_inc[0])
+                parallels = np.arange(np.floor(np.min(self.extents[2:])), np.ceil(np.max(self.extents[2:])), self.tick_inc[1])
+                self.m.drawparallels(parallels, labels=[1, 0, 0, 0], fontsize=self.fs, linewidth=0, ax=self.axes)
+                self.m.drawmeridians(meridians, labels=[0, 0, 0, 1], fontsize=self.fs, linewidth=0, ax=self.axes)
+            else:
+                self.axes.set_xticks(np.arange(self.extents[0], self.extents[1] + self.tick_inc[0], self.tick_inc[0]))
+                self.axes.set_yticks(np.arange(self.extents[2], self.extents[3] + self.tick_inc[1], self.tick_inc[1]))
 
     def get_colourbar_extension(self, field, clims):
         """
