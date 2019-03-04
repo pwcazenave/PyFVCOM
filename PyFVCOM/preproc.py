@@ -2003,7 +2003,7 @@ class Model(Domain):
                 number += 1
                 f.write('{}, {}, {}, {}, {}, {}\n'.format(number, x[index], y[index], index, z[grid], station))
 
-    def add_nests(self, nest_levels, nesting_type=3):
+    def add_nests(self, nest_levels, nesting_type=3, verbose=False):
         """
         Add a set of nested levels to each open boundary.
 
@@ -2013,6 +2013,8 @@ class Model(Domain):
             Number of node levels in addition to the existing open boundary.
         nesting_type : int
             FVCOM nesting type (1, 2 or 3). Defaults to 3. Currently, only 3 is supported.
+        verbose : bool, optional
+            Set to True to enable verbose output. Defaults to False.
 
         Provides
         --------
@@ -3480,7 +3482,7 @@ class Nest(object):
 
         """
 
-        self.debug = False
+        self._debug = False
         self._noisy = verbose
 
         self.grid = copy.copy(grid)
@@ -3509,10 +3511,10 @@ class Nest(object):
 
         # Add the grid and sigma data to any open boundaries we've got loaded.
         for ii, boundary in enumerate(self.boundaries):
-            if self._noisy:
-                print('adding grid info to boundary {} of {}'.format(ii + 1, len(self.boundaries)))
+            if self._debug:
+                print('Adding grid info to boundary {} of {}'.format(ii + 1, len(self.boundaries)))
             for attribute in self.grid:
-                if self._noisy:
+                if self._debug:
                     print('\t{}'.format(attribute))
                 try:
                     if 'center' not in attribute and attribute not in ['lonc', 'latc', 'xc', 'yc']:
@@ -3523,14 +3525,14 @@ class Nest(object):
                 except (IndexError, TypeError):
                     setattr(boundary.grid, attribute, getattr(self.grid, attribute))
                 except AttributeError as e:
-                    if self.debug:
+                    if self._debug:
                         print(e)
                     pass
 
-            if self._noisy:
-                print('adding sigma info to boundary {} of {}'.format(ii + 1, len(self.boundaries)))
+            if self._debug:
+                print('Adding sigma info to boundary {} of {}'.format(ii + 1, len(self.boundaries)))
             for attribute in self.sigma:
-                if self._noisy:
+                if self._debug:
                     print('\t{}'.format(attribute))
                 try:
                     if 'center' not in attribute:
@@ -3541,7 +3543,7 @@ class Nest(object):
                 except (IndexError, TypeError):
                     setattr(boundary.sigma, attribute, getattr(self.sigma, attribute))
                 except AttributeError as e:
-                    if self.debug:
+                    if self._debug:
                         print(e)
 
     def add_level(self):
@@ -3556,6 +3558,9 @@ class Nest(object):
         Adds a new PyFVCOM.grid.OpenBoundary object in self.boundaries
 
         """
+
+        if self._noisy:
+            print('Add level to the nest.')
 
         # Find all the elements connected to the last set of open boundary nodes.
         if not np.any(self.boundaries[-1].nodes):
@@ -3606,6 +3611,9 @@ class Nest(object):
 
         """
 
+        if self._noisy:
+                print('Add weights to the nested boundary.')
+
         for index, boundary in enumerate(self.boundaries):
             if power == 0:
                 weight_node = 1 / (index + 1)
@@ -3648,6 +3656,9 @@ class Nest(object):
 
         """
 
+        if self._noisy:
+            print('Interpolate TPXO tides to the nested boundary.')
+
         for boundary in self.boundaries:
             boundary.add_tpxo_tides(*args, **kwargs)
 
@@ -3655,7 +3666,7 @@ class Nest(object):
         OpenBoundary.__doc__
         for ii, boundary in enumerate(self.boundaries):
             if self._noisy:
-                print('adding nested forcing for boundary {} of {}'.format(ii + 1, len(self.boundaries)))
+                print(f'Interpolated {args[1]} nested forcing for nested boundary {ii + 1} of {len(self.boundaries)}')
             boundary.add_nested_forcing(*args, **kwargs)
 
     def add_fvcom_tides(self, *args, **kwargs):
@@ -3681,15 +3692,13 @@ class Nest(object):
 
         """
         for ii, boundary in enumerate(self.boundaries):
-            if self._noisy:
-                print('adding predicted fvcom {} for boundary {} of {}'.format(predict, ii + 1, len(self.boundaries)))
-            # Check if we have elements since outer layer of nest usually doesn't
+            # Check if we have elements since outer layer of nest doesn't
             if kwargs['predict'] in ['u', 'v', 'ua', 'va'] and not np.any(boundary.elements):
                 if self._noisy:
-                    print('skipping prediction for {} for boundary {} of {}, no elements defined'.format(kwargs['predict'], ii + 1, len(self.boundaries)))
+                    print(f'Skipping prediction of {kwargs["predict"]} for boundary {ii + 1} of {len(self.boundaries)}: no elements defined')
             else:
                 if self._noisy:
-                    print('predicting {} for boundary {} of {}'.format(kwargs['predict'], ii + 1, len(self.boundaries)))
+                    print(f'Predicting {kwargs["predict"]} for boundary {ii + 1} of {len(self.boundaries)}')
                 boundary.add_fvcom_tides(*args, **kwargs)
 
     def avg_nest_force_vel(self):
@@ -3700,7 +3709,7 @@ class Nest(object):
         for ii, boundary in enumerate(self.boundaries, 1):
             if np.any(boundary.elements):
                 if self._noisy:
-                    print('creating ua,va for boundary {} of {}'.format(ii, len(self.boundaries)))
+                    print(f'Creating ua, va for boundary {ii} of {len(self.boundaries)}')
                 boundary.avg_nest_force_vel()
 
 
