@@ -2026,7 +2026,9 @@ class Model(Domain):
         self.nest = []
 
         for boundary in self.open_boundaries:
-            self.nest.append(Nest(self.grid, self.sigma, boundary))
+            if not hasattr(self.sigma, 'levels'):
+                raise AttributeError('Missing sigma grid information. Add it before creating nests.')
+            self.nest.append(Nest(self.grid, self.sigma, boundary, verbose=verbose))
             # Add all the nested levels and assign weights as necessary.
             for _ in range(nest_levels):
                 self.nest[-1].add_level()
