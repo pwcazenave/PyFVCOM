@@ -1521,7 +1521,8 @@ class OpenBoundary(object):
 
         return zeta
 
-    def add_nested_forcing(self, fvcom_name, coarse_name, coarse, interval=1, constrain_coordinates=False, mode='nodes', tide_adjust=False):
+    def add_nested_forcing(self, fvcom_name, coarse_name, coarse, interval=1, constrain_coordinates=False,
+                           mode='nodes', tide_adjust=False, verbose=False):
         """
         Interpolate the given data onto the open boundary nodes for the period from `self.time.start' to
         `self.time.end'.
@@ -1549,6 +1550,9 @@ class OpenBoundary(object):
             Some nested forcing doesn't include tidal components and these have to be added from predictions using
             harmonics. With this set to true the interpolated forcing has the tidal component (required to already
             exist in self.tide) added to the final data.
+        verbose : bool, optional
+            Set to True to enable verbose output. Defaults to False (no verbose output).
+
         """
 
         # Check we have what we need.
