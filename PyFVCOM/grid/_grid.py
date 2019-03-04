@@ -4845,6 +4845,57 @@ def fvcom2ugrid(fvcom):
         setattr(ds, 'CoordinateProjection', 'none')
 
 
+def point_in_pixel(x, y, point):
+    """
+    Return the corner coordinate indices (x_min, x_max) and (y_min, y_max) for the pixel from (`x', `y') in which
+    the given `point' lies.
+
+    Parameters
+    ----------
+    x, y : np.ndarray
+        The coordinates of the pixels (as vectors).
+    point : tuple, list
+        The target coordinate.
+
+    Returns
+    -------
+    x_indices, y_indices : list
+        The indices of `x' and `y' for the position in `point'.
+
+    Notes
+    -----
+
+    No special attention is paid to points which lie exactly on a boundary. In that situation, the returned pixel
+    will fall either to the left of or above the point.
+
+    """
+
+    x_diff = x - point[0]
+    y_diff = y - point[1]
+
+    closest_x = np.argmin(np.abs(x_diff))
+    closest_y = np.argmin(np.abs(y_diff))
+
+    if x_diff[closest_x] >= 0:
+        # Containing pixel is right of point
+        x_bound = closest_x - 1
+    else:
+        # Containing pixel is left of point
+        x_bound = closest_x + 1
+
+    if y_diff[closest_y] >= 0:
+        # Containing pixel is above point
+        y_bound = closest_y - 1
+    else:
+        # Containing pixel is below point
+        y_bound = closest_y + 1
+
+    x_indices = sorted((closest_x, x_bound))
+    y_indices = sorted((closest_y, y_bound))
+
+    return x_indices, y_indices
+
+
 class Graph(object):
     """
     Base class for graph theoretic functions.
