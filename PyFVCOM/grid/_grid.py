@@ -1671,7 +1671,6 @@ class OpenBoundary(object):
                                          getattr(coarse.data, coarse_name), method='linear', fill_value=np.nan)
             # Reshape the results to match the un-ravelled boundary_grid array.
             interpolated_coarse_data = ft(boundary_grid).reshape([nt, -1])
-            # Drop the interpolated data into the data object.
         else:
             boundary_grid = np.array((np.tile(self.data.time.time, [nx, nz, 1]).T.ravel(),
                                       np.tile(z.T, [nt, 1, 1]).ravel(),
@@ -1682,11 +1681,11 @@ class OpenBoundary(object):
                                          fill_value=np.nan)
             # Reshape the results to match the un-ravelled boundary_grid array.
             interpolated_coarse_data = ft(boundary_grid).reshape([nt, nz, -1])
-            # Drop the interpolated data into the data object.
 
         if tide_adjust and fvcom_name in ['u', 'v', 'ua', 'va']:
             interpolated_coarse_data = interpolated_coarse_data + getattr(self.tide, fvcom_name)
 
+        # Drop the interpolated data into the data object.
         setattr(self.data, fvcom_name, interpolated_coarse_data)
 
     @staticmethod
