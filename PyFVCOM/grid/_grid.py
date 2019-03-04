@@ -1664,6 +1664,7 @@ class OpenBoundary(object):
         nz = z.shape[-1]
 
         if mode == 'surface':
+            # We should use np.meshgrid here instead of all this tiling business.
             boundary_grid = np.array((np.tile(self.data.time.time, [nx, 1]).T.ravel(),
                                       np.tile(y, [nt, 1]).transpose(0, 1).ravel(),
                                       np.tile(x, [nt, 1]).transpose(0, 1).ravel())).T
