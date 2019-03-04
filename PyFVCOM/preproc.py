@@ -3664,7 +3664,7 @@ class Nest(object):
             boundary.add_tpxo_tides(*args, **kwargs)
 
     def add_nested_forcing(self, *args, **kwargs):
-        OpenBoundary.__doc__
+        OpenBoundary.add_nested_forcing.__doc__
         for ii, boundary in enumerate(self.boundaries):
             if self._noisy:
                 print(f'Interpolated {args[1]} nested forcing for nested boundary {ii + 1} of {len(self.boundaries)}')
