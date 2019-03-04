@@ -1543,9 +1543,10 @@ class OpenBoundary(object):
             This essentially squashes the open boundary to fit inside the coarse data and is, therefore, a bit of a
             fudge! Defaults to False.
         mode : bool, optional
-            Set to 'nodes' to interpolate onto the open boundary node positions or 'elements' for the elements. For 2d data
-            set to 'surface', this is then interpolated to the node positions ignoring depth coordinates.
-            Defaults to 'nodes'.
+            Set to 'nodes' to interpolate onto the open boundary node positions or 'elements' for the elements for
+            z-level data. For 2D data, set to 'surface' (interpolates to the node positions ignoring depth
+            coordinates). Also supported are 'sigma_nodes' and `sigma_elements' which means we have spatially (and
+            optionally temporally) varying water depths (i.e. sigma layers rather than z-levels). Defaults to 'nodes'.
         tide_adjust : bool, optional
             Some nested forcing doesn't include tidal components and these have to be added from predictions using
             harmonics. With this set to true the interpolated forcing has the tidal component (required to already
@@ -1582,7 +1583,7 @@ class OpenBoundary(object):
         self.data.time.Itime2 = (getattr(self.data.time, 'time') - getattr(self.data.time, 'Itime')) * 24 * 60 * 60 * 1000  # milliseconds since midnight
         self.data.time.Times = [t.strftime('%Y-%m-%dT%H:%M:%S.%f') for t in getattr(self.data.time, 'datetime')]
 
-        if mode == 'elements':
+        if 'elements' in mode:
             boundary_points = self.elements
             x = self.grid.lonc
             y = self.grid.latc
@@ -1672,7 +1673,32 @@ class OpenBoundary(object):
                                          getattr(coarse.data, coarse_name), method='linear', fill_value=np.nan)
             # Reshape the results to match the un-ravelled boundary_grid array.
             interpolated_coarse_data = ft(boundary_grid).reshape([nt, -1])
+        elif 'sigma' in mode:
+            if verbose:
+                print('Interpolating sigma data...', end=' ')
+
+            # Serial:
+            nt = coarse.dims.time  # rename!
+            interp_args = [(boundary_points, x, y, self.sigma.layers, coarse, coarse_name, verbose, t) for t in np.arange(nt)]
+            # Parallel:
+            if hasattr(coarse, 'ds'):
+                coarse.ds.close()
+                delattr(coarse, 'ds')
+            pool = multiprocessing.Pool()
+            results = pool.map(self._brute_force_interpolator, interp_args)
+
+            # Now we have those data interpolated in space (horizontal and vertical), interpolate to match in time.
+            interp_args = [(coarse.time.time, j, self.data.time.time) for i in np.asarray(results).T for j in i]
+            results = pool.map(self._interpolate_in_time, interp_args)
+            pool.close()
+
+            interpolated_coarse_data = np.asarray(results).reshape(nx, nz, -1)
+
+            if verbose:
+                print('done.')
         else:
+            # Assume it's z-level data (e.g. HYCOM, CMEMS).
+            # We should use np.meshgrid here instead of all this tiling business.
             boundary_grid = np.array((np.tile(self.data.time.time, [nx, nz, 1]).T.ravel(),
                                       np.tile(z.T, [nt, 1, 1]).ravel(),
                                       np.tile(y, [nz, nt, 1]).transpose(1, 0, 2).ravel(),
@@ -1688,6 +1714,144 @@ class OpenBoundary(object):
 
         # Drop the interpolated data into the data object.
         setattr(self.data, fvcom_name, interpolated_coarse_data)
+
+    @staticmethod
+    def _brute_force_interpolator(args):
+        """
+        Interpolate a given time of coarse data into the current open boundary node positions and times.
+
+        The name stems from the fact we simply iterate through all the points in the current boundary rather than
+        using LinearNDInterpolator. This is because the creation of a LinearNDInterpolator for a 4D set of points is
+        hugely expensive (even compared with this brute force approach).
+
+        Parameters
+        ----------
+        args : tuple
+            The input arguments as a tuple of:
+            boundary_points : np.ndarray
+                The open boundary point indices (self.nodes or self.elements).
+            x : np.ndarray
+                The source data x positions.
+            y : np.ndarray
+                The source data y positions.
+            sigma_layers_z : np.ndarray
+                The vertical grid layer depths in metres (nx, nz) or (nx, nz, time).
+            coarse : PyFVCOM.preproc.RegularReader
+                The coarse data from which we're interpolating.
+            coarse_name : str
+                The name of the data from which we're interpolating.
+            verbose : bool
+                True for verbose output, False for none. Only really useful in serial.
+            t : int
+                The time index of the current interpolation.
+
+        Returns
+        -------
+        The interpolated boundary data at `x', `y', `sigma_layers_z' for time index `t'.
+
+        """
+
+        # MATLAB interp_coarse_to_obc.m reimplementation in Python with some tweaks. Hence the horrible variable names.
+        boundary_points, x, y, sigma_layers_z, coarse, coarse_name, verbose, t = args
+
+        fz = sigma_layers_z.shape[-1]
+
+        nf = len(boundary_points)
+        nz = coarse.grid.siglay_z.shape[0]  # rename!
+
+        if verbose:
+            print(f'Interpolating time {t} of {coarse.dims.time}')
+        # This can just be replaced by a reshape as we only load what we need up front. Check these are
+        # equivalent, though.
+        pctemp3 = np.squeeze(getattr(coarse.data, coarse_name)[t, ...]).reshape(nz, -1).T
+
+        itempz = np.full((nf, nz), np.nan)
+        idepthz = np.full((nf, nz), np.nan)
+        if np.ndim(coarse.grid.siglay_z) == 4:
+            nemo_depth = np.squeeze(coarse.grid.siglay_z[..., t].reshape((nz, -1))).T
+        else:
+            nemo_depth = np.squeeze(coarse.grid.siglay_z.reshape((nz, -1))).T
+
+        # Go through each vertical level, interpolate the coarse model depth and data to each position in the current
+        # open boundary. Make sure we remove all NaNs.
+        for j in np.arange(nz):
+            if verbose:
+                print(f'Interpolating layer {j} of {nz}')
+            tpctemp2 = pctemp3[:, j]
+            tpcdepth2 = nemo_depth[:, j]
+
+            tlon, tlat = np.meshgrid(coarse.grid.lon, coarse.grid.lat)
+            tlon, tlat = tlon.ravel(), tlat.ravel()
+
+            interpolator = LinearNDInterpolator((tlon, tlat), tpctemp2)
+            itempobc = interpolator((x, y))
+            # Update values in the triangulation so we don't have to remake it (which can be expensive).
+            interpolator.values = tpcdepth2[:, np.newaxis].astype(np.float64)
+            idepthobc = interpolator((x, y))
+
+            if np.any(np.isnan(itempobc)) or np.any(np.isnan(idepthobc)):
+                ibad = np.argwhere(np.isnan(itempobc))
+                for bb in ibad:
+                    warn(f'FVCOM boundary node at {x[bb]}, {y[bb]} returns NaN after interpolation. Using inverse distance interpolation.')
+                    w = 1 / np.hypot(tlon - x[bb], tlat - y[bb])
+                    w = w / w.max()
+                    itempobc[bb] = (tpctemp2 * w).sum() / w.sum()
+                    idepthobc[bb] = (tpcdepth2 * w).sum() / w.sum()
+
+            itempz[:, j] = itempobc
+            idepthz[:, j] = idepthobc
+
+        # Now for each point in the current open boundary points (x, y), interpolate the interpolated (in the
+        # horizontal) model data onto the FVCOM vertical grid.
+        fvtempz = np.full((nf, fz), np.nan)
+        for pp in np.arange(nf):
+            if verbose:
+                print(f'Interpolating point {pp} of {nf}')
+            tfz = sigma_layers_z[pp, :]
+            tpz = idepthz[pp, :]
+
+            norm_tpz = fix_range(tpz, tfz.min(), tfz.max())
+
+            if not np.any(np.isnan(tpz)):
+                fvtempz[pp, :] = np.interp(tfz, norm_tpz, itempz[pp, :])
+
+        # Make sure we remove any NaNs from the vertical profiles by replacing with the interpolated data from the
+        # non-NaN data in the vicinity.
+        for pp in np.arange(fz):
+            test = fvtempz[:, pp]
+            if np.any(np.isnan(test)):
+                igood = ~np.isnan(test)
+                ft = LinearNDInterpolator((x[igood], y[igood]), test[igood])
+                fvtempz[:, pp] = ft((x, y))
+
+        return fvtempz
+
+    @staticmethod
+    def _interpolate_in_time(args):
+        """
+        Worker function to interpolate the given time series in time.
+
+        Parameters
+        ----------
+        args : tuple
+            A tuple containing:
+            time_coarse : np.ndarray
+                The coarse time data.
+            data_coarse : np.ndarray
+                The coarse data.
+            time_fine : np.ndarray
+                The fine time data onto which to interpolate [time_coarse, data_coarse].
+
+        Returns
+        -------
+        data_fine : np.ndarray
+            The interpolate data time series.
+
+        """
+
+        time_coarse, data_coarse, time_fine = args
+
+        return np.interp(time_fine, time_coarse, data_coarse)
 
     @staticmethod
     def _nested_forcing_interpolator(data, lon, lat, depth, points):
