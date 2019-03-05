@@ -694,6 +694,13 @@ class Plotter(object):
             y = self.latc
         mask = (x > self.extents[0]) & (x < self.extents[1]) & (y < self.extents[3]) & (y > self.extents[2])
 
+        if all(clims) is None:
+            clims = [field[..., mask].min(), field[..., mask].max()]
+        if clims[0] is None:
+            clims[0] = field[..., mask].min()
+        if clims[1] is None:
+            clims[1] = field[..., mask].max()
+
         extend = colorbar_extension(clims[0], clims[1], field[..., mask].min(), field[..., mask].max())
 
         return extend
