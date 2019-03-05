@@ -64,6 +64,7 @@ Provides functions:
     - rhum : calculate relative humidity from dew point temperature
       and ambient temperature.
     - cfl : calculate the CFL number for some model output.
+    - turbulent_kinetic_energy : calculate the Turbulent Kinetic Energy from a velocity field.
 
 Pierre Cazenave (Plymouth Marine Laboratory)
 
@@ -1344,6 +1345,56 @@ def cfl(fvcom, timestep, depth_averaged=False, verbose=False, **kwargs):
                                  layer_ind, fvcom.time.datetime[time_ind].strftime('%Y-%m-%d %H:%M:%S')))
 
     return cfl
+
+
+def turbulent_kinetic_energy(u, v, w, debug=False):
+    """
+
+    NOTE: THIS FUNCTION IS PROBABLY WRONG.
+
+    Calculate Turbulent Kinetic Energy from a velocity field.
+
+    Parameters
+    ----------
+    u, v, w : ndarray
+        Velocity fields in the x, y and z directions. First dimension must be
+        time. Any number of dimensions is supported.
+
+    Returns
+    -------
+    tke : ndarray
+        Turbulent Kinetic Energy.
+
+    Notes
+    -----
+    Translated and cleaned up a bit from the MATLAB function at
+    http://vegetationeffects.weebly.com/matlab-codes.html.
+
+    """
+
+    # TKE values from velocity measurements
+    # 3/1/2012 retrieved from Nathan Wells, UW Madison Graduate Student
+
+    # Get time averaged means.
+    u_bar = np.mean(u, axis=0)
+    v_bar = np.mean(v, axis=0)
+    w_bar = np.mean(w, axis=0)
+
+    # Fluctuation of velocity in x, y and z.
+    u_prime = u - u_bar
+    v_prime = v - v_bar
+    w_prime = w - w_bar
+
+    u_prime_squared_ave = np.mean(u_prime**2, axis=0)
+    v_prime_squared_ave = np.mean(v_prime**2, axis=0)
+    w_prime_squared_ave = np.mean(w_prime**2, axis=0)
+
+    tke = 0.5 * (u_prime_squared_ave + v_prime_squared_ave + w_prime_squared_ave)
+
+    if debug:
+        return tke, u_prime_squared_ave, v_prime_squared_ave, w_prime_squared_ave
+    else:
+        return tke
 
 
 if __name__ == '__main__':
