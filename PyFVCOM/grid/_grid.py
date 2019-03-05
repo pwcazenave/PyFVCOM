@@ -1692,7 +1692,7 @@ class OpenBoundary(object):
             results = pool.map(self._interpolate_in_time, interp_args)
             pool.close()
 
-            interpolated_coarse_data = np.asarray(results).reshape(nx, nz, -1)
+            interpolated_coarse_data = np.asarray(results).reshape(nz, nx, -1).transpose(1, 0, 2)
 
             if verbose:
                 print('done.')
