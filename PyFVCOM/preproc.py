@@ -2171,9 +2171,6 @@ class Model(Domain):
         dims = {'nele': elements_number, 'node': nodes_number, 'time': 0, 'DateStrLen': 26, 'three': 3,
                 'siglay': self.dims.layers, 'siglev': self.dims.levels}
 
-        # Fix the triangulation for the nested region.
-        # nv = reduce_triangulation(self.grid.triangles, nodes).T + 1  # offset by one for FORTRAN indexing and transpose
-
         with WriteForcing(str(ncfile), dims, global_attributes=globals, clobber=True, format='NETCDF4', **kwargs) as nest_ncfile:
             # Add standard times.
             nest_ncfile.write_fvcom_time(self.time.datetime, ncopts=ncopts)
