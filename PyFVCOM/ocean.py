@@ -1271,8 +1271,9 @@ def cfl(fvcom, timestep, depth_averaged=False, verbose=False, **kwargs):
 
     Parameters
     ----------
-    fvcom : PyFVCOM.grid.FileReader
-        A file reader object loaded from a netCDF file. This must include 'u', 'v' and 'zeta' data.
+    fvcom : PyFVCOM.read.FileReader
+        A file reader object loaded from a netCDF file. This may optionally include 'u', 'v' and 'zeta' data. If no
+        data are loaded, they will be at run time.
     timestep : float
         The external time step used in the model.
     depth_averaged : bool, optional
@@ -1290,15 +1291,20 @@ def cfl(fvcom, timestep, depth_averaged=False, verbose=False, **kwargs):
 
     """
 
+    from PyFVCOM.grid import element_side_lengths, nodes2elems, unstructured_grid_depths
+
     g = 9.81  # acceleration due to gravity
 
-    # Load the relevant data
+    # Load the relevant data if we don't already have it.
     uname, vname = 'u', 'v'
     if depth_averaged:
         uname, vname = 'ua', 'va'
-    fvcom.load_data(uname, **kwargs)
-    fvcom.load_data(vname, **kwargs)
-    fvcom.load_data('zeta', **kwargs)
+    if not hasattr(fvcom.data, uname):
+        fvcom.load_data(uname, **kwargs)
+    if not hasattr(fvcom.data, vname):
+        fvcom.load_data(vname, **kwargs)
+    if not hasattr(fvcom.data, 'zeta'):
+        fvcom.load_data('zeta', **kwargs)
 
     u = getattr(fvcom.data, uname)
     v = getattr(fvcom.data, vname)
