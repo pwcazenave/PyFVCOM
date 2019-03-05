@@ -2810,8 +2810,7 @@ class Model(Domain):
             ncfile.add_variable('obc_salinity', out_dict['salinity'][0], ['time', 'siglay', 'nobc'], attributes=atts, ncopts=ncopts)
 
             if ersem_metadata is not None:
-                # for name in ersem_metadata:
-                for name in ['light_ADY', 'N1_p', 'N3_n', 'N4_n']:
+                for name in ersem_metadata:
                     # Convert the given metadata object to a dictionary for ncfile.add_variable. Keep only certain
                     # attributes.
                     keep_me = ('long_name', 'units')
