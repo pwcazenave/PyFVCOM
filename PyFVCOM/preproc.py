@@ -49,7 +49,6 @@ class Model(Domain):
     #  - Open boundaries end up held in Model.open_boundaries and Model.grid.open_boundaries which seems wrong.
     #  - Make a method to create a subdomain input file for namelist outputs over different spatial domains
     #  (NC{,AV}_SUBDOMAIN_FILES in the NML_NETCDF{,_AV} namelist section).
-    #  - Add methods to generate casename_tsobc.nc files.
 
 
     def __init__(self, start, end, *args, **kwargs):
@@ -2686,6 +2685,150 @@ class Model(Domain):
             mask = nodes == boundary.nodes
             setattr(boundary.tide, 'zeta', elevation[..., mask])
             setattr(boundary.tide, 'time', datetimes)
+
+    def write_tsobc(self, tsobc_file, ersem_metadata=None, **kwargs):
+        """
+        Write out the interpolated boundary data (in self.open_boundaries[*].data) into the specified netCDF file.
+
+        Parameters
+        ----------
+        tsobc_file : str, pathlib.Path
+            Path to the output netCDF file to be created.
+        ersem_metadata : PyFVCOM.utilities.general._passive_data_store, optional
+            If we have ERSEM variables in each OpenBoundary object, we need corresponding metadata. This is the
+            attributes object from the RegularReader output. If this argument is omitted but data exist in
+            self.open_boundaries[*].data, they will not be written to file.
+
+        Remaining kwargs are passed to WriteForcing with the exception of ncopts which is passed to
+        WriteForcing.add_variable.
+
+        """
+
+        nodes = np.asarray(flatten_list([boundary.nodes for boundary in self.open_boundaries]))
+        time_number = len(self.time.datetime)
+        nodes_number = len(nodes)
+
+        # Prepare the data.
+        temperature = np.full((time_number, self.dims.layers, nodes_number), np.nan)
+        salinity = np.full((time_number, self.dims.layers, nodes_number), np.nan)
+
+        # Hold in dict to simplify the next for loop
+        out_dict = {'temp': [temperature, 'nodes'], 'salinity': [salinity, 'nodes']}
+
+        for boundary in self.open_boundaries:
+            temp_nodes_index = np.isin(nodes, boundary.nodes)
+
+            for var in out_dict:
+                if var == 'time':
+                    pass
+                try:
+                    out_dict[var][0][..., temp_nodes_index] = getattr(boundary.data, var)
+                except AttributeError:
+                    continue
+                    raise AttributeError(f'Missing variable {var} from the boundary data.')
+
+        ncopts = {}
+        if 'ncopts' in kwargs:
+            ncopts = kwargs['ncopts']
+            kwargs.pop('ncopts')
+
+        # Define the global attributes
+        globals = {'type': 'FVCOM TIME SERIES OBC TS FILE',
+                   'title': 'Open boundary temperature and salinity nudging',
+                   'history': 'File created using {} from PyFVCOM'.format(inspect.stack()[0][3]),
+                   'filename': str(tsobc_file),
+                   'Conventions': 'CF-1.0'}
+
+        dims = {'nobc': nodes_number, 'time': 0, 'DateStrLen': 26, 'siglay': self.dims.layers,
+                'siglev': self.dims.levels}
+
+        with WriteForcing(str(tsobc_file), dims, global_attributes=globals, clobber=True, format='NETCDF4', **kwargs) as ncfile:
+            # Add standard times.
+            ncfile.write_fvcom_time(self.time.datetime, ncopts=ncopts)
+
+            # Add space variables.
+            if self._debug:
+                print('adding siglay to netCDF')
+            atts = {'long_name': 'Sigma Layers',
+                    'standard_name': 'ocean_sigma/general_coordinate',
+                    'positive': 'up',
+                    'valid_min': -1.,
+                    'valid_max': 0.,
+                    'formula_terms': 'sigma: siglay eta: zeta depth: h'}
+            ncfile.add_variable('siglay', self.sigma.layers[nodes, :].T, ['siglay', 'nobc'], attributes=atts, ncopts=ncopts)
+
+            if self._debug:
+                print('adding siglev to netCDF')
+            atts = {'long_name': 'Sigma Levels',
+                    'standard_name': 'ocean_sigma/general_coordinate',
+                    'positive': 'up',
+                    'valid_min': -1.,
+                    'valid_max': 0.,
+                    'formula_terms': 'sigma:siglev eta: zeta depth: h'}
+            ncfile.add_variable('siglev', self.sigma.levels[nodes, :].T, ['siglev', 'nobc'], attributes=atts, ncopts=ncopts)
+
+            if self._debug:
+                print('adding obc_nodes to netCDF')
+            atts = {'long_name': 'Open Boundary Node Number',
+                    'grid': 'obc_grid',
+                    'type': 'data'}
+            # Offset node IDs for 1-indexing in FVCOM.
+            ncfile.add_variable('obc_nodes', nodes + 1, ['nobc'], attributes=atts, ncopts=ncopts)
+
+            if self._debug:
+                print('adding obc_h to netCDF')
+            atts = {'long_name': 'Bathymetry',
+                    'standard_name': 'sea_floor_depth_below_geoid',
+                    'units': 'm',
+                    'positive': 'down',
+                    'grid': 'Bathymetry_mesh',
+                    'coordinates': 'x y',
+                    'type': 'data'}
+            ncfile.add_variable('obc_h', self.grid.h[nodes], ['nobc'], attributes=atts, ncopts=ncopts)
+
+            # Now the data.
+            if self._debug:
+                print('adding obc_temp to netCDF')
+            atts = {'long_name': 'sea_water_temperature',
+                    'standard_name': 'sea_water_temperature',
+                    'units': 'degrees Celcius',
+                    'grid': 'fvcom_grid',
+                    'coordinates': 'time siglay lat lon',
+                    'type': 'data',
+                    'location': 'node'}
+            ncfile.add_variable('obc_temp', out_dict['temp'][0], ['time', 'siglay', 'nobc'], attributes=atts, ncopts=ncopts)
+
+            if self._debug:
+                print('adding obc_salinity to netCDF')
+            atts = {'long_name': 'Salinity',
+                    'standard_name': 'sea_water_salinity',
+                    'units': '1e-3',
+                    'grid': 'fvcom_grid',
+                    'coordinates': 'time siglay lat lon',
+                    'type': 'data',
+                    'location': 'node'}
+            ncfile.add_variable('obc_salinity', out_dict['salinity'][0], ['time', 'siglay', 'nobc'], attributes=atts, ncopts=ncopts)
+
+            if ersem_metadata is not None:
+                # for name in ersem_metadata:
+                for name in ['light_ADY', 'N1_p', 'N3_n', 'N4_n']:
+                    # Convert the given metadata object to a dictionary for ncfile.add_variable. Keep only certain
+                    # attributes.
+                    keep_me = ('long_name', 'units')
+                    attribute_object = getattr(ersem_metadata, name)
+                    atts = {i: getattr(attribute_object, i) for i in attribute_object if i in keep_me}
+                    # Add the FVCOM grid type.
+                    atts['grid'] = 'obc_grid'
+                    # Collapse the data from all the open boundaries as we've done for temperature and salinity.
+                    dump = np.full((time_number, self.dims.layers, nodes_number), np.nan)
+                    for boundary in self.open_boundaries:
+                        if name == 'time':
+                            pass
+                        temp_nodes_index = np.isin(nodes, boundary.nodes)
+                        # Data are interpolated with dimensions ordered ['time', 'depth', 'space'] whereas we need to
+                        # transpose for writing out.
+                        dump[..., temp_nodes_index] = getattr(boundary.data, name).T
+                    ncfile.add_variable(name, dump, ['time', 'siglay', 'nobc'], attributes=atts, ncopts=ncopts)
 
 
 class NameListEntry(object):
