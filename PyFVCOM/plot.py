@@ -643,8 +643,8 @@ class Plotter(object):
 
             self.m.drawmapboundary()
             if self.res is not None:
-                self.m.drawcoastlines(zorder=2)
-                self.m.fillcontinents(color='0.6', zorder=2)
+                self.m.drawcoastlines(zorder=1000)
+                self.m.fillcontinents(color='0.6', zorder=1000)
 
         if self.title:
             self.axes.set_title(self.title)
