@@ -541,7 +541,7 @@ class Plotter(object):
         self.bmargs = bmargs
         self.colorbar_axis = None
 
-        # Plot instances (initialise to None/[] for truthiness test later)
+        # Plot instances to hold the plot objects.
         self.quiver_plot = None
         self.quiver_key = None
         self.scatter_plot = None
@@ -684,12 +684,12 @@ class Plotter(object):
             The colourbar extension ('neither', 'min', 'max' or 'both').
 
         """
+
         # We need to find the nodes/elements for the current variable to make sure our colour bar extends for
         # what we're plotting (not the entire data set). We'll have to guess based on shape here.
-        if self.n_nodes == field.shape[0]:
-            x = self.lon
-            y = self.lat
-        elif self.n_elems == field.shape[0]:
+        x = self.lon
+        y = self.lat
+        if self.n_elems == field.shape[0]:
             x = self.lonc
             y = self.latc
         mask = (x > self.extents[0]) & (x < self.extents[1]) & (y < self.extents[3]) & (y > self.extents[2])
