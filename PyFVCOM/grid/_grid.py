@@ -1011,6 +1011,8 @@ class OpenBoundary(object):
 
         """
 
+        self._debug = False
+
         self.nodes = None
         self.elements = None
         # Silently convert IDs from numpy arrays to lists.
@@ -1680,10 +1682,8 @@ class OpenBoundary(object):
             if verbose:
                 print('Interpolating sigma data...', end=' ')
 
-            # Serial:
             nt = coarse.dims.time  # rename!
-            interp_args = [(boundary_points, x, y, self.sigma.layers, coarse, coarse_name, verbose, t) for t in np.arange(nt)]
-            # Parallel:
+            interp_args = [(boundary_points, x, y, self.sigma.layers, coarse, coarse_name, self._debug, t) for t in np.arange(nt)]
             if hasattr(coarse, 'ds'):
                 coarse.ds.close()
                 delattr(coarse, 'ds')
