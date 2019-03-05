@@ -28,6 +28,7 @@ try:
     from mpl_toolkits.basemap import Basemap
 except ImportError:
     warn('No mpl_toolkits found in this python installation. Some functions will be disabled.')
+    Basemap = None
     have_basemap = False
 
 rcParams['mathtext.default'] = 'regular'  # use non-LaTeX fonts
@@ -441,7 +442,6 @@ class Plotter(object):
     plot_quiver
     plot_lines
     plot_scatter
-    remove_line_plots (N.B., this is mostly specific to PyLag-tools)
     add_scale
 
     Author(s)
@@ -454,9 +454,8 @@ class Plotter(object):
     """
 
     def __init__(self, dataset, figure=None, axes=None, stations=None, extents=None, vmin=None, vmax=None, mask=None,
-                 res='c', fs=10, title=None, cmap='viridis', figsize=(10., 10.), axis_position=None, edgecolors='none',
-                 s_stations=20, s_particles=20, linewidth=1.0, tick_inc=None, cb_label=None, extend='neither',
-                 norm=None, m=None, cartesian=False, **bmargs):
+                 res='c', fs=10, title=None, cmap='viridis', figsize=(10., 10.), axis_position=None, tick_inc=None,
+                 cb_label=None, extend='neither', norm=None, m=None, cartesian=False, **bmargs):
         """
         Parameters
         ----------
@@ -492,12 +491,6 @@ class Plotter(object):
             provided.
         axis_position : 1D array, optional
             Array giving axis dimensions
-        s_stations : int, optional
-            Symbol size used when producing scatter plot of station locations
-        s_particles : int, optional
-            Symbol size used when producing scatter plot of particle locations
-        linewidth : float, optional
-            Linewidth to be used when generating line plots
         tick_inc : list, optional
             Add coordinate axes (i.e. lat/long) at the intervals specified in
             the list ([lon_spacing, lat_spacing]).
@@ -539,10 +532,6 @@ class Plotter(object):
         self.cmap = cmap
         self.figsize = figsize
         self.axis_position = axis_position
-        self.edgecolors = edgecolors
-        self.s_stations = s_stations
-        self.s_particles = s_particles
-        self.linewidth = linewidth
         self.tick_inc = tick_inc
         self.cb_label = cb_label
         self.extend = extend
@@ -763,12 +752,10 @@ class Plotter(object):
                         self.tripcolor_plot.set_array(field[~kwargs['mask']])
                     return
                 else:
+                    # Nothing to do here except clear the plot and make a brand new plot (which is a lot slower),
+                    self.tripcolor_plot.remove()
                     if self._debug:
                         print('replotting')
-                    # Nothing to do here except clear the plot and make a brand new plot (which is a lot slower),
-                    # so we'll just skip out here and let the code continue.
-                    self.tripcolor_plot.remove()
-                    pass
             else:
                 if len(field) == len(self.mx):
                     self.tripcolor_plot.set_array(nodes2elems(field, self.triangles))
@@ -777,9 +764,8 @@ class Plotter(object):
                 return
 
         self.tripcolor_plot = self.axes.tripcolor(self.mx, self.my, self.triangles, np.squeeze(field), *args,
-                                                  vmin=self.vmin, vmax=self.vmax,
-                                                  cmap=self.cmap, edgecolors=self.edgecolors,
-                                                  norm=self.norm, **kwargs)
+                                                  vmin=self.vmin, vmax=self.vmax, cmap=self.cmap, norm=self.norm,
+                                                  **kwargs)
 
         if self.cartesian:
             self.axes.set_aspect('equal')
@@ -858,7 +844,7 @@ class Plotter(object):
             self.axes.set_xlim(self.mx.min(), self.mx.max())
             self.axes.set_ylim(self.my.min(), self.my.max())
 
-    def plot_lines(self, x, y, group_name='Default', colour='r', zone_number='30N'):
+    def plot_lines(self, x, y, zone_number='30N', *args, **kwargs):
         """
         Plot geographical lines.
 
@@ -868,46 +854,25 @@ class Plotter(object):
             Array of x coordinates to plot (cartesian coordinates).
         y : np.ndarray, list
             Array of y coordinates to plot (cartesian coordinates).
-        group_name : str, optional
-            Group name for this set of particles - a separate plot object is created for each group name passed in.
-            Defaults to `Default'
-        color : string, optional
-            Colour to use when making the plot. Default `r'
         zone_number : string, optional
             See PyFVCOM.coordinates documentation for a full list of supported codes. Defaults to `30N'.
 
+        Additional `args' and `kwargs' are passed to `matplotlib.pyplot.plot'.
+
         """
 
-        if not self.line_plot:
-            self.line_plot = dict()
-
-        # Remove current line plots for this group, if they exist
-        if group_name in self.line_plot:
-            if self.line_plot[group_name]:
-                self.remove_line_plots(group_name)
+        if 'color' not in kwargs:
+            kwargs['color'] = 'r'
 
         lon, lat = lonlat_from_utm(x, y, zone_number)
         if self.cartesian:
             mx, my = lon, lat
         else:
             mx, my = self.m(lon, lat)
-        self.line_plot[group_name] = self.axes.plot(mx, my, color=colour,
-                                                    linewidth=self.linewidth, alpha=0.25, zorder=2)
 
-    def remove_line_plots(self, group_name):
-        """ Remove line plots for group `group_name'
+        self.line_plot = self.axes.plot(mx, my, *args, **kwargs)
 
-        Parameters
-        ----------
-        group_name : str
-            Name of the group for which line plots should be deleted.
-
-        """
-        if self.line_plot:
-            while self.line_plot[group_name]:
-                self.line_plot[group_name].pop(0).remove()
-
-    def plot_scatter(self, x, y, group_name='Default', colour='r', zone_number='30N'):
+    def plot_scatter(self, x, y,  zone_number='30N', *args, **kwargs):
         """ Plot scatter.
 
         Parameters
@@ -916,17 +881,12 @@ class Plotter(object):
             Array of x coordinates to plot (cartesian coordinates).
         y : np.ndarray, list
             Array of y coordinates to plot (cartesian coordinates).
-        group_name : str, optional
-            Group name for this set of particles - a separate plot object is created for each group name passed in.
-            Defaults to `Default'
-        colour : string, optional
-            Colour to use when making the plot. Default `r'.
         zone_number : string, optional
             See PyFVCOM.coordinates documentation for a full list of supported codes. Defaults to `30N'.
 
+        Additional `args' and `kwargs' are passed to `matplotlib.pyplot.scatter'.
+
         """
-        if not self.scat_plot:
-            self.scat_plot = dict()
 
         lon, lat = lonlat_from_utm(x, y, zone_number)
         if self.cartesian:
@@ -934,12 +894,7 @@ class Plotter(object):
         else:
             mx, my = self.m(lon, lat)
 
-        try:
-            data = np.array([mx, my])
-            self.scat_plot[group_name].set_offsets(data.transpose())
-        except KeyError:
-            self.scat_plot[group_name] = self.axes.scatter(mx, my, s=self.s_particles, color=colour, edgecolors='none',
-                                                           zorder=3)
+        self.scatter_plot = self.axes.scatter(mx, my, *args, **kwargs)
 
     def set_title(self, title):
         """ Set the title for the current axis. """
