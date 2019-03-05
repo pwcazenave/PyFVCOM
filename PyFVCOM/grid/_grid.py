@@ -1752,7 +1752,7 @@ class OpenBoundary(object):
 
         Returns
         -------
-        The interpolated boundary data at `x', `y', `sigma_layers_z' for time index `t'.
+        The interpolated boundary data at `x', `y', `sigma_layers_z' for coarse.data.coarse_name at time index `t'.
 
         """
 
