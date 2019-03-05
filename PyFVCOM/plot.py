@@ -774,7 +774,7 @@ class Plotter(object):
 
         extend = copy.copy(self.extend)
         if extend is None:
-            extend = self.get_colourbar_extension(variable)
+            extend = self.get_colourbar_extension(field, (self.vmin, self.vmax))
 
         if self.cbar is None:
             if self.cartesian:
