@@ -1574,8 +1574,8 @@ class OpenBoundary(object):
         if raise_error:
             raise AttributeError('Add vertical sigma coordinates in order to interpolate forcing along this boundary.')
 
-        # Populate the time data.
-        self.data.time = type('time', (), {})()
+        # Populate the time data. Why did I put the time data in here rather than self.time? This is annoying.
+        self.data.time = _passive_data_store()
         self.data.time.interval = interval
         self.data.time.datetime = date_range(self.time.start, self.time.end, inc=interval)
         self.data.time.time = date2num(getattr(self.data.time, 'datetime'), units='days since 1858-11-17 00:00:00')
