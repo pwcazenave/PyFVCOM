@@ -1657,14 +1657,17 @@ class OpenBoundary(object):
                 # it's a single minimum across all the open boundary positions.
                 z[z < coarse.grid.depth.min()] = coarse.grid.depth.min()
 
-        # Make arrays of lon, lat, depth and time. Need to make the coordinates match the coarse data shape and then
-        # flatten the lot. We should be able to do the interpolation in one shot this way, but we have to be
-        # careful our coarse data covers our model domain (space and time).
         nt = len(self.data.time.time)
         nx = len(boundary_points)
         nz = z.shape[-1]
 
+        # Make arrays of lon, lat, depth and time for non-sigma interpolation. Need to make the coordinates match the
+        # coarse data shape and then flatten the lot. We should be able to do the interpolation in one shot this way,
+        # but we have to be careful our coarse data covers our model domain (space and time).
         if mode == 'surface':
+            if verbose:
+                print('Interpolating surface data...', end=' ')
+
             # We should use np.meshgrid here instead of all this tiling business.
             boundary_grid = np.array((np.tile(self.data.time.time, [nx, 1]).T.ravel(),
                                       np.tile(y, [nt, 1]).transpose(0, 1).ravel(),
@@ -1693,12 +1696,11 @@ class OpenBoundary(object):
             pool.close()
 
             interpolated_coarse_data = np.asarray(results).reshape(nz, nx, -1).transpose(1, 0, 2)
-
-            if verbose:
-                print('done.')
         else:
-            # Assume it's z-level data (e.g. HYCOM, CMEMS).
-            # We should use np.meshgrid here instead of all this tiling business.
+            if verbose:
+                print('Interpolating z-level data...', end=' ')
+            # Assume it's z-level data (e.g. HYCOM, CMEMS). We should use np.meshgrid here instead of all this tiling
+            # business.
             boundary_grid = np.array((np.tile(self.data.time.time, [nx, nz, 1]).T.ravel(),
                                       np.tile(z.T, [nt, 1, 1]).ravel(),
                                       np.tile(y, [nz, nt, 1]).transpose(1, 0, 2).ravel(),
@@ -1714,6 +1716,9 @@ class OpenBoundary(object):
 
         # Drop the interpolated data into the data object.
         setattr(self.data, fvcom_name, interpolated_coarse_data)
+
+        if verbose:
+            print('done.')
 
     @staticmethod
     def _brute_force_interpolator(args):
