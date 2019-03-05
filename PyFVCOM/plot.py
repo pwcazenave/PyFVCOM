@@ -1301,7 +1301,7 @@ class CrossPlotter(Plotter):
             raise ValueError('Unsupported number of dimensions.')
 
         nan_ext[:] = np.NaN
-        return np.append(in_array, nan_ext, axis=len(in_shape) - 1)
+        return np.append(in_array, nan_ext, axis=len(in_array.shape) - 1)
 
     @staticmethod
     def _chan_corners(chan_x, chan_y):
