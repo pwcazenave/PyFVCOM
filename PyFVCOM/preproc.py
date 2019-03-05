@@ -2134,8 +2134,9 @@ class Model(Domain):
         weight_elements = np.repeat(weight_elements, time_number, 0).reshape(time_number, -1)
 
         # Hold in dict to simplify the next for loop
-        out_dict = {'ua':[ua, 'elements'], 'va':[va, 'elements'], 'u':[u, 'elements'], 'v':[v, 'elements'],
-                        'zeta':[zeta, 'nodes'], 'temp':[temperature, 'nodes'], 'salinity':[salinity, 'nodes'], 'hyw':[hyw,'nodes']}
+        out_dict = {'ua': [ua, 'elements'], 'va': [va, 'elements'], 'u': [u, 'elements'], 'v': [v, 'elements'],
+                    'zeta': [zeta, 'nodes'], 'temp': [temperature, 'nodes'], 'salinity': [salinity, 'nodes'],
+                    'hyw': [hyw, 'nodes']}
 
         for nest in nests:
             for boundary in nest.boundaries:
