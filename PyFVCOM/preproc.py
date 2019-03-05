@@ -2094,7 +2094,7 @@ class Model(Domain):
         Parameters
         ----------
         ncfile : str, pathlib.Path
-            Path to the output netCDF file to created.
+            Path to the output netCDF file to be created.
         type : int, optional
             Type of model nesting. Currently only type 3 (indirect) is supported. Defaults to 3.
         adjust_tides : list, optional
