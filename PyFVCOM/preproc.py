@@ -418,7 +418,7 @@ class Model(Domain):
             sst_eo = np.squeeze(sst_file_nc.variables[var_name][:]) + var_offset  # Kelvin to Celsius
             mask = sst_file_nc.variables['mask']
             if len(sst_eo.shape) ==3 and len(mask) ==2:
-                sst_eo[np.tile(mask[:][np.newaxis,:],(sst_eo.shape[0],1,1)) == 1] = np.nan                
+                sst_eo[np.tile(mask[:][np.newaxis, :], (sst_eo.shape[0], 1, 1)) == 1] = np.nan
             else:
                 sst_eo[mask == 1] = np.nan
             sst_lon = sst_file_nc.variables['lon'][:]
@@ -781,7 +781,7 @@ class Model(Domain):
         dist = np.empty(levels) * np.nan
 
         if p_sigma == 1:
-            for k in range(1,levels+1):
+            for k in range(1, levels + 1):
                 dist[k -1] = -((k - 1) / (levels - 1))**p_sigma
         else:
             split = int(np.floor((levels + 1) / 2))
@@ -1407,8 +1407,8 @@ class Model(Domain):
             start_next = []
             for this_node in start_nodes:
                 attached_nodes = self.grid.coastline[np.isin(self.grid.coastline,
-                        self.grid.triangles[np.any(np.isin(self.grid.triangles, this_node), axis=1),:].flatten())]
-                attached_nodes = np.delete(attached_nodes, np.where(np.isin(attached_nodes,nodes_checked)))
+                        self.grid.triangles[np.any(np.isin(self.grid.triangles, this_node), axis=1), :].flatten())]
+                attached_nodes = np.delete(attached_nodes, np.where(np.isin(attached_nodes, nodes_checked)))
                 for this_candidate in attached_nodes:
                     if not np.any(np.isin(self.river.bad_nodes, this_candidate)) and not np.any(np.isin(self.river.node, this_candidate)):
                         if find_bad_node(self.grid.triangles, this_candidate):
@@ -2218,7 +2218,7 @@ class Model(Domain):
             if self._debug:
                 print('adding nv to netCDF')
             atts = {'long_name': 'nodes surrounding element'}
-            nest_ncfile.add_variable('nv', self.grid.nv[:,elements], ['three', 'nele'], format='i4', attributes=atts, ncopts=ncopts)
+            nest_ncfile.add_variable('nv', self.grid.nv[:, elements], ['three', 'nele'], format='i4', attributes=atts, ncopts=ncopts)
 
             if self._debug:
                 print('adding siglay to netCDF')
@@ -4818,7 +4818,7 @@ class NemoRestartRegularReader(RegularReader):
 
         # Create mask
         for this_var in var:
-            setattr(self.data, this_var, np.ma.masked_array(getattr(self.data,this_var), mask=self.data_mask))
+            setattr(self.data, this_var, np.ma.masked_array(getattr(self.data, this_var), mask=self.data_mask))
 
 
 class HYCOMReader(RegularReader):
@@ -5274,7 +5274,7 @@ class Restart(FileReader):
             # Internal landmasses also need to be dealt with, so test if a point lies within the mask of the grid and
             # move it to the nearest in grid point if so.
             if not mode == 'surface':
-                land_mask = getattr(coarse.data, coarse_name)[0, ...].mask[0,:,:]
+                land_mask = getattr(coarse.data, coarse_name)[0, ...].mask[0, :, :]
             else:
                 land_mask = getattr(coarse.data, coarse_name)[0, ...].mask
 
@@ -5282,15 +5282,15 @@ class Restart(FileReader):
             sea_points[land_mask] = np.nan
 
             ft_sea = RegularGridInterpolator((coarse.grid.lat, coarse.grid.lon), sea_points, method='linear', fill_value=np.nan)
-            internal_points = np.isnan(ft_sea(np.asarray([y,x]).T))
+            internal_points = np.isnan(ft_sea(np.asarray([y, x]).T))
 
             if np.any(internal_points):
                 xv, yv = np.meshgrid(coarse.grid.lon, coarse.grid.lat)
                 valid_ll = np.asarray([x[~internal_points], y[~internal_points]]).T
                 for this_ind in np.where(internal_points)[0]:
-                    nearest_valid_ind = np.argmin((valid_ll[:,0] - x[this_ind])**2 + (valid_ll[:,1] - y[this_ind])**2)
-                    x[this_ind] = valid_ll[nearest_valid_ind,0]
-                    y[this_ind] = valid_ll[nearest_valid_ind,1]
+                    nearest_valid_ind = np.argmin((valid_ll[:, 0] - x[this_ind])**2 + (valid_ll[:, 1] - y[this_ind])**2)
+                    x[this_ind] = valid_ll[nearest_valid_ind, 0]
+                    y[this_ind] = valid_ll[nearest_valid_ind, 1]
 
             # The depth data work differently as we need to squeeze each FVCOM water column into the available coarse
             # data. The only way to do this is to adjust each FVCOM water column in turn by comparing with the
