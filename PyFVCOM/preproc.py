@@ -50,7 +50,6 @@ class Model(Domain):
     #  - Make a method to create a subdomain input file for namelist outputs over different spatial domains
     #  (NC{,AV}_SUBDOMAIN_FILES in the NML_NETCDF{,_AV} namelist section).
 
-
     def __init__(self, start, end, *args, **kwargs):
         """
         Initialise an FVCOM model configuration object with a given start and end date.
@@ -505,14 +504,14 @@ class Model(Domain):
 
         Notes
         -----
-        TODO: Combine interpolation routines (sst, ady, etc) to make more efficient        
+        TODO: Combine interpolation routines (sst, ady, etc) to make more efficient
 
         """
 
         if isinstance(ady_dir, str):
             ady_dir = Path(ady_dir)
 
-        ady_files = list(ady_dir.glob('*.nc')) 
+        ady_files = list(ady_dir.glob('*.nc'))
 
         if noisy:
             print('To do:\n{}'.format('|' * len(ady_files)), flush=True)
@@ -543,7 +542,7 @@ class Model(Domain):
 
         ady = np.vstack(ady).T
         # FVCOM wants times at midday whilst the data are at midnight
-        dates = np.asarray([this_date + relativedelta(hours=12) for sublist in dates for this_date in sublist])    
+        dates = np.asarray([this_date + relativedelta(hours=12) for sublist in dates for this_date in sublist])
 
         # Sort by time.
         idx = np.argsort(dates)
@@ -2066,7 +2065,7 @@ class Model(Domain):
         """
         TODO: Docstring
 
-        """ 
+        """
         for i, this_nest in enumerate(self.nest):
             if fvcom_var in ['u', 'v']:
                 mode='elements'
@@ -2126,7 +2125,7 @@ class Model(Domain):
         u = np.empty((time_number, self.dims.layers, elements_number)) * np.nan
         v = np.empty((time_number, self.dims.layers, elements_number)) * np.nan
         temperature = np.empty((time_number, self.dims.layers, nodes_number)) * np.nan
-        salinity = np.empty((time_number, self.dims.layers, nodes_number)) * np.nan 
+        salinity = np.empty((time_number, self.dims.layers, nodes_number)) * np.nan
         hyw = np.zeros((time_number, self.dims.layers, nodes_number))  # we never set this to anything other than zeros
 
         weight_nodes = np.repeat(weight_nodes, time_number, 0).reshape(time_number, -1)
@@ -4771,7 +4770,7 @@ class NemoRestartRegularReader(RegularReader):
     Also since these restart files are timeless a single dummy time (2001,1,1) is put in on initialising. The replace
     interpolation *should* ignore the time if there is only one timestep but you can always overwrite it e.g.
 
-    nemo_data_reader.time = restart_file_object.time    
+    nemo_data_reader.time = restart_file_object.time
     restart_file_object.replace_variable_with_regular(this_fvcom, this_nemo, nemo_data_reader, constrain_coordinates=True, mode='nodes')
 
     """
@@ -4816,7 +4815,7 @@ class NemoRestartRegularReader(RegularReader):
         if hasattr(self.dims, 'time'):
             del self.dims.time
         super().load_data(var)
-        
+
         # Create mask
         for this_var in var:
             setattr(self.data, this_var, np.ma.masked_array(getattr(self.data,this_var), mask=self.data_mask))
