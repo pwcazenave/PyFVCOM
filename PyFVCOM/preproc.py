@@ -2153,10 +2153,19 @@ class Model(Domain):
                         pass
                     elif var in out_dict.keys():
                         this_index = getattr(boundary, 'temp_{}_index'.format(out_dict[var][1]))
-                        boundary_data = getattr(boundary.nest, var)
-                        if adjust_tides and var in adjust_tides:
-                            tide_times_choose = np.isin(boundary.tide.time, boundary.nest.time.datetime) # The harmonics are calculated -/+ one day
-                            boundary_data = boundary_data + getattr(boundary.tide, var)[tide_times_choose,:]
+                        # Skip out if we don't have any indices for this index. This happens on the first boundary for
+                        # elements.
+                        if not np.any(this_index):
+                            continue
+
+                        try:
+                            boundary_data = getattr(boundary.data, var)
+                            if adjust_tides and var in adjust_tides:
+                                # The harmonics are calculated -/+ one day
+                                tide_times_choose = np.isin(boundary.tide.time, boundary.data.time.datetime)
+                                boundary_data = boundary_data + getattr(boundary.tide, var)[tide_times_choose, :]
+                        except AttributeError:
+                            continue
 
                         out_dict[var][0][..., this_index] = boundary_data
                     else:
