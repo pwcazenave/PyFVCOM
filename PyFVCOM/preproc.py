@@ -2148,7 +2148,7 @@ class Model(Domain):
                 boundary.temp_nodes_index = np.isin(nodes, boundary.nodes)
                 boundary.temp_elements_index = np.isin(elements, boundary.elements)
 
-                for var in boundary.nest:
+                for var in out_dict:
                     if var == 'time':
                         pass
                     elif var in out_dict.keys():
