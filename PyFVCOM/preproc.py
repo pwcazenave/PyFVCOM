@@ -3886,7 +3886,7 @@ class Nest(object):
 
     def avg_nest_force_vel(self):
         """
-        Create depth-averaged velocities (`ua', `va') in the open boundary object boundary.nest data.
+        Create depth-averaged velocities (`ua', `va') in the open boundary object boundary.data data.
 
         """
         for ii, boundary in enumerate(self.boundaries, 1):
