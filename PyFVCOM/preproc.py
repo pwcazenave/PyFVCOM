@@ -24,7 +24,7 @@ import scipy.optimize
 from PyFVCOM.coordinate import utm_from_lonlat, lonlat_from_utm
 from PyFVCOM.grid import Domain, grid_metrics, read_fvcom_obc, nodes2elems
 from PyFVCOM.grid import OpenBoundary, find_connected_elements
-from PyFVCOM.grid import find_bad_node, element_side_lengths
+from PyFVCOM.grid import find_bad_node, element_side_lengths, reduce_triangulation
 from PyFVCOM.grid import write_fvcom_mesh, connectivity, haversine_distance
 from PyFVCOM.read import FileReader, _TimeReader
 from PyFVCOM.utilities.general import flatten_list, _passive_data_store
@@ -2084,6 +2084,143 @@ class Model(Domain):
         """
         for this_nest in self.nest:
             this_nest.avg_nest_force_vel()
+
+    def load_nested_forcing(self, existing_nest, variables=None, filter_times=False, filter_points=False, verbose=False):
+        """
+        Load the existing nested forcing file into the current set of nested boundaries in
+        self.nest[*].boundaries[*].data.
+
+        Parameters
+        ----------
+        existing_nest : str, pathlib.Path
+            The file from which to load the data.
+        variables : list, optional
+            Limit the loading to only the given variable names.
+        filter_times : bool, optional
+            Set to True to remove duplicate time data from the nesting file.
+        filter_points : bool, optional
+            Set to True to remove nodes not in the supplied existing nesting file from the current set of nested
+            boundaries.
+        verbose : bool, optional
+            Set to True to enable verbose output. Defaults to False.
+
+        """
+
+        with Dataset(existing_nest) as ds:
+            if variables is None:
+                variables = ds.variables.keys()
+
+            # Check the time values in the netCDF are equal to the times we've got.
+            ds_time = num2date(ds.variables['Itime'][:] + ds.variables['Itime2'][:] / 1000 / 60 / 60 / 24,
+                               units=ds.variables['Itime'].units)
+
+            if filter_times:
+                # Some nesting files have duplicated times (!?). Remove them here.
+                bad_times = np.argwhere(np.asarray([i.total_seconds() for i in np.diff(ds_time)]) == 0).ravel()
+
+                ds_time = np.delete(ds_time, bad_times)
+
+            if np.any(self.time.datetime != ds_time):
+                raise ValueError('Non-matching time data.')
+
+            # Grab the cartesian coordinates for the closest lookups. Realistically this could do spherical too by
+            # leveraging the haversine argument to closest_{node,element}. Another day, perhaps.
+            x, y = ds.variables['x'][:], ds.variables['y'][:]
+            xc, yc = ds.variables['xc'][:], ds.variables['yc'][:]
+            nodes = self.closest_node((x, y), cartesian=True)
+            elements = self.closest_element((xc, yc), cartesian=True)
+
+            nest_nodes = flatten_list([boundary.nodes for nest in self.nest for boundary in nest.boundaries])
+            nest_elements = flatten_list([boundary.elements for nest in self.nest for boundary in nest.boundaries if np.any(boundary.elements)])
+            # Identity nodes/elements only present in nest_nodes and nest_elements and then drop them from the
+            # corresponding boundary.
+            match_nodes = set(nest_nodes) - set(nodes)
+            match_elements = set(nest_elements) - set(elements)
+            if filter_points:
+                for nest in self.nest:
+                    for boundary in nest.boundaries:
+                        node_mask = np.isin(boundary.nodes, list(match_nodes))
+                        if np.any(node_mask):
+                            boundary.nodes = np.asarray(boundary.nodes)[~node_mask].tolist()
+                            for var in ('lon', 'lat', 'x', 'y', 'h', 'types'):
+                                if hasattr(boundary.grid, var):
+                                    setattr(boundary.grid, var, getattr(boundary.grid, var)[~node_mask])
+                            for var in ('layers', 'levels'):
+                                if hasattr(boundary.sigma, var):
+                                    setattr(boundary.sigma, var, getattr(boundary.sigma, var)[~node_mask])
+                        if boundary.elements is not None:
+                            element_mask = np.isin(boundary.elements, list(match_elements))
+                            if np.any(element_mask):
+                                boundary.elements = np.asarray(boundary.elements)[~element_mask].tolist()
+                                for var in ('lonc', 'latc', 'xc', 'yc', 'h_center'):
+                                    if hasattr(boundary.grid, var):
+                                        setattr(boundary.grid, var, getattr(boundary.grid, var)[~element_mask])
+                                for var in ('layers_center', 'levels_center'):
+                                    if hasattr(boundary.sigma, var):
+                                        setattr(boundary.sigma, var, getattr(boundary.sigma, var)[~element_mask])
+                        boundary.grid.triangles = reduce_triangulation(boundary.grid.triangles, boundary.grid.nodes)
+                        boundary.grid.nv = boundary.grid.triangles.T + 1
+
+                # Add any ones present in the given nesting file to the current set of nests. To pick which nested
+                # level to add it to, find the nested level which has the closest point and stick it in that.
+                nest_dist = []
+                nc_points = np.argwhere(nodes == list(set(nodes) - set(nest_nodes))).ravel()
+                for point in nc_points:
+                    px, py = x[point], y[point]
+                    for n_index, nest in enumerate(self.nest):
+                        nest_dist.append([])
+                        for b_index, boundary in enumerate(nest.boundaries):
+                            nest_dist[-1].append(np.min(np.abs(np.hypot(boundary.grid.x - px, boundary.grid.y - py))))
+
+                    target_min = np.min(flatten_list(nest_dist))
+                    for j, dist_nest in enumerate(nest_dist):
+                        for k, dist_boundary in enumerate(dist_nest):
+                            if dist_boundary == target_min:
+                                nest_index, boundary_index = j, k
+
+                    # Now add the netCDF point to that boundary.
+                    self.nest[nest_index].boundaries[boundary_index].nodes += [nodes[point]]
+                    for var in ('x', 'y'):
+                        current_value = getattr(self.nest[nest_index].boundaries[boundary_index].grid, var)
+                        current_value = np.hstack((current_value, ds.variables[var][point]))
+                        setattr(self.nest[nest_index].boundaries[boundary_index].grid, var, current_value)
+                    lon, lat = lonlat_from_utm(self.nest[nest_index].boundaries[boundary_index].grid.x,
+                                               self.nest[nest_index].boundaries[boundary_index].grid.y,
+                                               self.nest[nest_index].boundaries[boundary_index].grid.zone)
+                    self.nest[nest_index].boundaries[boundary_index].grid.lon = lon
+                    self.nest[nest_index].boundaries[boundary_index].grid.lat = lat
+                    for var in ('layers', 'levels'):
+                        current_value = getattr(self.nest[nest_index].boundaries[boundary_index].sigma, var)
+                        current_value = np.vstack((current_value, ds.variables[f'sig{var[:3]}'][..., point]))
+                        setattr(self.nest[nest_index].boundaries[boundary_index].sigma, var, current_value)
+
+                    # Redo the triangulation now.
+                    triangles = reduce_triangulation(self.grid.triangles,
+                                                     self.nest[nest_index].boundaries[boundary_index].nodes)
+                    self.nest[nest_index].boundaries[boundary_index].triangles = triangles
+                    # Also redo the elements for the current nest.
+                    self.nest[nest_index].boundaries[boundary_index].elements = np.unique(triangles.ravel())
+
+            for var in variables:
+                has_time = 'time' in ds.variables[var].dimensions
+                has_space = 'node' in ds.variables[var].dimensions or 'nele' in ds.variables[var].dimensions
+                if has_time and has_space:
+                    if verbose:
+                        print(f'Transferring {var} from the existing nesting file')
+                    for nest in self.nest:
+                        for boundary in nest.boundaries:
+                            # Split the existing nodes/elements into the current open boundary nodes.
+                            if 'node' in ds.variables[var].dimensions:
+                                data = ds.variables[var][:][..., np.isin(nodes, boundary.nodes)]
+                            else:
+                                try:
+                                    data = ds.variables[var][:][..., np.isin(elements, boundary.elements)]
+                                except AttributeError:
+                                    # This is the first boundary and thus has no element data.
+                                    continue
+                            if filter_times:
+                                data = np.delete(data, bad_times, axis=0)
+                            setattr(boundary.data, var, data.T)
 
     def write_nested_forcing(self, ncfile, type=3, adjust_tides=None, ersem_metadata=None, **kwargs):
         """
