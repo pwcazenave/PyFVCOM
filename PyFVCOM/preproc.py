@@ -2085,7 +2085,7 @@ class Model(Domain):
         for this_nest in self.nest:
             this_nest.avg_nest_force_vel()
 
-    def write_nested_forcing(self, ncfile, type=3, adjust_tides=None, **kwargs):
+    def write_nested_forcing(self, ncfile, type=3, adjust_tides=None, ersem_metadata=None, **kwargs):
         """
         Write out the given nested forcing into the specified netCDF file.
 
@@ -2097,7 +2097,14 @@ class Model(Domain):
             Type of model nesting. Currently only type 3 (indirect) is supported. Defaults to 3.
         adjust_tides : list, optional
             Which variables (if any) to adjust by adding the predicted tidal signal from the harmonics. This
-            expects that these variables exist in boundary.tide  
+            expects that these variables exist in boundary.tide
+        ersem_metadata : PyFVCOM.utilities.general._passive_data_store, optional
+            If we have ERSEM variables in each Nest OpenBoundary object, we need corresponding metadata. We use the
+            attributes object from the RegularReader output for this (worth knowing: there's a handy method on
+            RegularReader.atts (get_attribute) which will load attributes for a given variable name). If this
+            argument is omitted but data exist in self.open_boundaries[*].data, they will not be written to file. In
+            contrast, variables in the metadata which don't exist in the open boundary data will raise an error. Make
+            sure you've got your house in order!
 
         Remaining kwargs are passed to WriteForcing with the exception of ncopts which is passed to
         WriteForcing.add_variable.
@@ -2380,6 +2387,28 @@ class Model(Domain):
                     'type': 'data',
                     'coordinates': 'time siglay lat lon'}
             nest_ncfile.add_variable('hyw', out_dict['hyw'][0], ['time', 'siglay', 'node'], attributes=atts, ncopts=ncopts)
+
+            if ersem_metadata is not None:
+                for name in ersem_metadata:
+                    if self._debug:
+                        print(f'Adding {name} to netCDF')
+                    # Convert the given metadata object to a dictionary for nest_ncfile.add_variable. Keep only certain
+                    # attributes.
+                    keep_me = ('long_name', 'units')
+                    attribute_object = getattr(ersem_metadata, name)
+                    atts = {i: getattr(attribute_object, i) for i in attribute_object if i in keep_me}
+                    # Add the FVCOM grid type.
+                    atts['grid'] = 'obc_grid'
+                    # Collapse the data from all the open boundaries as we've done for temperature and salinity.
+                    dump = np.full((time_number, self.dims.layers, nodes_number), np.nan)
+                    for boundary in self.open_boundaries:
+                        if name == 'time':
+                            pass
+                        temp_nodes_index = np.isin(nodes, boundary.nodes)
+                        # Data are interpolated with dimensions ordered ['time', 'depth', 'space'] whereas we need to
+                        # transpose for writing out.
+                        dump[..., temp_nodes_index] = getattr(boundary.data, name).T
+                    nest_ncfile.add_variable(name, dump, ['time', 'siglay', 'nobc'], attributes=atts, ncopts=ncopts)
 
     def add_obc_types(self, types):
         """
