@@ -2176,52 +2176,52 @@ class Model(Domain):
 
             # Add space variables.
             if self._debug:
-                print('adding x to netCDF')
+                print('Adding x to netCDF')
             atts = {'units': 'meters', 'long_name': 'nodal x-coordinate'}
             nest_ncfile.add_variable('x', self.grid.x[nodes], ['node'], attributes=atts, ncopts=ncopts)
 
             if self._debug:
-                print('adding y to netCDF')
+                print('Adding y to netCDF')
             atts = {'units': 'meters', 'long_name': 'nodal y-coordinate'}
             nest_ncfile.add_variable('y', self.grid.y[nodes], ['node'], attributes=atts, ncopts=ncopts)
 
             if self._debug:
-                print('adding lon to netCDF')
+                print('Adding lon to netCDF')
             atts = {'units': 'degrees_east', 'standard_name': 'longitude', 'long_name': 'nodal longitude'}
             nest_ncfile.add_variable('lon', self.grid.lon[nodes], ['node'], attributes=atts, ncopts=ncopts)
 
             if self._debug:
-                print('adding lat to netCDF')
+                print('Adding lat to netCDF')
             atts = {'units': 'degrees_north', 'standard_name': 'latitude', 'long_name': 'nodal latitude'}
             nest_ncfile.add_variable('lat', self.grid.lat[nodes], ['node'], attributes=atts, ncopts=ncopts)
 
             if self._debug:
-                print('adding xc to netCDF')
+                print('Adding xc to netCDF')
             atts = {'units': 'meters', 'long_name': 'zonal x-coordinate'}
             nest_ncfile.add_variable('xc', self.grid.xc[elements], ['nele'], attributes=atts, ncopts=ncopts)
 
             if self._debug:
-                print('adding yc to netCDF')
+                print('Adding yc to netCDF')
             atts = {'units': 'meters', 'long_name': 'zonal y-coordinate'}
             nest_ncfile.add_variable('yc', self.grid.yc[elements], ['nele'], attributes=atts, ncopts=ncopts)
 
             if self._debug:
-                print('adding lonc to netCDF')
+                print('Adding lonc to netCDF')
             atts = {'units': 'degrees_east', 'standard_name': 'longitude', 'long_name': 'zonal longitude'}
             nest_ncfile.add_variable('lonc', self.grid.lonc[elements], ['nele'], attributes=atts, ncopts=ncopts)
 
             if self._debug:
-                print('adding latc to netCDF')
+                print('Adding latc to netCDF')
             atts = {'units': 'degrees_north', 'standard_name': 'latitude', 'long_name': 'zonal latitude'}
             nest_ncfile.add_variable('latc', self.grid.latc[elements], ['nele'], attributes=atts, ncopts=ncopts)
 
             if self._debug:
-                print('adding nv to netCDF')
+                print('Adding nv to netCDF')
             atts = {'long_name': 'nodes surrounding element'}
             nest_ncfile.add_variable('nv', self.grid.nv[:, elements], ['three', 'nele'], format='i4', attributes=atts, ncopts=ncopts)
 
             if self._debug:
-                print('adding siglay to netCDF')
+                print('Adding siglay to netCDF')
             atts = {'long_name': 'Sigma Layers',
                     'standard_name': 'ocean_sigma/general_coordinate',
                     'positive': 'up',
@@ -2231,7 +2231,7 @@ class Model(Domain):
             nest_ncfile.add_variable('siglay', self.sigma.layers[nodes, :].T, ['siglay', 'node'], attributes=atts, ncopts=ncopts)
 
             if self._debug:
-                print('adding siglev to netCDF')
+                print('Adding siglev to netCDF')
             atts = {'long_name': 'Sigma Levels',
                     'standard_name': 'ocean_sigma/general_coordinate',
                     'positive': 'up',
@@ -2241,7 +2241,7 @@ class Model(Domain):
             nest_ncfile.add_variable('siglev', self.sigma.levels[nodes, :].T, ['siglev', 'node'], attributes=atts, ncopts=ncopts)
 
             if self._debug:
-                print('adding siglay_center to netCDF')
+                print('Adding siglay_center to netCDF')
             atts = {'long_name': 'Sigma Layers',
                     'standard_name': 'ocean_sigma/general_coordinate',
                     'positive': 'up',
@@ -2251,7 +2251,7 @@ class Model(Domain):
             nest_ncfile.add_variable('siglay_center', self.sigma.layers_center[elements, :].T, ['siglay', 'nele'], attributes=atts, ncopts=ncopts)
 
             if self._debug:
-                print('adding siglev_center to netCDF')
+                print('Adding siglev_center to netCDF')
             atts = {'long_name': 'Sigma Levels',
                     'standard_name': 'ocean_sigma/general_coordinate',
                     'positive': 'up',
@@ -2261,7 +2261,7 @@ class Model(Domain):
             nest_ncfile.add_variable('siglev_center', self.sigma.levels_center[elements, :].T, ['siglev', 'nele'], attributes=atts, ncopts=ncopts)
 
             if self._debug:
-                print('adding h to netCDF')
+                print('Adding h to netCDF')
             atts = {'long_name': 'Bathymetry',
                     'standard_name': 'sea_floor_depth_below_geoid',
                     'units': 'm',
@@ -2272,7 +2272,7 @@ class Model(Domain):
             nest_ncfile.add_variable('h', self.grid.h[nodes], ['node'], attributes=atts, ncopts=ncopts)
 
             if self._debug:
-                print('adding h_center to netCDF')
+                print('Adding h_center to netCDF')
             atts = {'long_name': 'Bathymetry',
                     'standard_name': 'sea_floor_depth_below_geoid',
                     'units': 'm',
@@ -2284,7 +2284,7 @@ class Model(Domain):
 
             if type == 3:
                 if self._debug:
-                    print('adding weight_node to netCDF')
+                    print('Adding weight_node to netCDF')
                 atts = {'long_name': 'Weights for nodes in relaxation zone',
                         'units': 'no units',
                         'grid': 'fvcom_grid',
@@ -2292,7 +2292,7 @@ class Model(Domain):
                 nest_ncfile.add_variable('weight_node', weight_nodes, ['time', 'node'], attributes=atts, ncopts=ncopts)
 
                 if self._debug:
-                    print('adding weight_cell to netCDF')
+                    print('Adding weight_cell to netCDF')
                 atts = {'long_name': 'Weights for elements in relaxation zone',
                         'units': 'no units',
                         'grid': 'fvcom_grid',
@@ -2301,7 +2301,7 @@ class Model(Domain):
 
             # Now all the data.
             if self._debug:
-                print('adding zeta to netCDF')
+                print('Adding zeta to netCDF')
             atts = {'long_name': 'Water Surface Elevation',
                     'units': 'meters',
                     'positive': 'up',
@@ -2313,7 +2313,7 @@ class Model(Domain):
             nest_ncfile.add_variable('zeta', out_dict['zeta'][0], ['time','node'], attributes=atts, ncopts=ncopts)
 
             if self._debug:
-                print('adding ua to netCDF')
+                print('Adding ua to netCDF')
             atts = {'long_name': 'Vertically Averaged x-velocity',
                     'units': 'meters  s-1',
                     'grid': 'fvcom_grid',
@@ -2321,7 +2321,7 @@ class Model(Domain):
             nest_ncfile.add_variable('ua', out_dict['ua'][0], ['time', 'nele'], attributes=atts, ncopts=ncopts)
 
             if self._debug:
-                print('adding va to netCDF')
+                print('Adding va to netCDF')
             atts = {'long_name': 'Vertically Averaged y-velocity',
                     'units': 'meters  s-1',
                     'grid': 'fvcom_grid',
@@ -2329,7 +2329,7 @@ class Model(Domain):
             nest_ncfile.add_variable('va', out_dict['va'][0], ['time', 'nele'], attributes=atts, ncopts=ncopts)
 
             if self._debug:
-                print('adding u to netCDF')
+                print('Adding u to netCDF')
             atts = {'long_name': 'Eastward Water Velocity',
                     'units': 'meters  s-1',
                     'standard_name': 'eastward_sea_water_velocity',
@@ -2340,7 +2340,7 @@ class Model(Domain):
             nest_ncfile.add_variable('u', out_dict['u'][0], ['time', 'siglay', 'nele'], attributes=atts, ncopts=ncopts)
 
             if self._debug:
-                print('adding v to netCDF')
+                print('Adding v to netCDF')
             atts = {'long_name': 'Northward Water Velocity',
                     'units': 'meters  s-1',
                     'standard_name': 'Northward_sea_water_velocity',
@@ -2351,7 +2351,7 @@ class Model(Domain):
             nest_ncfile.add_variable('v', out_dict['v'][0], ['time', 'siglay', 'nele'], attributes=atts, ncopts=ncopts)
 
             if self._debug:
-                print('adding temp to netCDF')
+                print('Adding temp to netCDF')
             atts = {'long_name': 'Temperature',
                     'standard_name': 'sea_water_temperature',
                     'units': 'degrees Celcius',
@@ -2362,7 +2362,7 @@ class Model(Domain):
             nest_ncfile.add_variable('temp', out_dict['temp'][0], ['time', 'siglay', 'node'], attributes=atts, ncopts=ncopts)
 
             if self._debug:
-                print('adding salinity to netCDF')
+                print('Adding salinity to netCDF')
             atts = {'long_name': 'Salinity',
                     'standard_name': 'sea_water_salinity',
                     'units': '1e-3',
@@ -2373,7 +2373,7 @@ class Model(Domain):
             nest_ncfile.add_variable('salinity', out_dict['salinity'][0], ['time', 'siglay', 'node'], attributes=atts, ncopts=ncopts)
 
             if self._debug:
-                print('adding hyw to netCDF')
+                print('Adding hyw to netCDF')
             atts = {'long_name': 'hydro static vertical velocity',
                     'units': 'meters s-1',
                     'grid': 'fvcom_grid',
@@ -2747,7 +2747,7 @@ class Model(Domain):
 
             # Add space variables.
             if self._debug:
-                print('adding siglay to netCDF')
+                print('Adding siglay to netCDF')
             atts = {'long_name': 'Sigma Layers',
                     'standard_name': 'ocean_sigma/general_coordinate',
                     'positive': 'up',
@@ -2757,7 +2757,7 @@ class Model(Domain):
             ncfile.add_variable('siglay', self.sigma.layers[nodes, :].T, ['siglay', 'nobc'], attributes=atts, ncopts=ncopts)
 
             if self._debug:
-                print('adding siglev to netCDF')
+                print('Adding siglev to netCDF')
             atts = {'long_name': 'Sigma Levels',
                     'standard_name': 'ocean_sigma/general_coordinate',
                     'positive': 'up',
@@ -2767,7 +2767,7 @@ class Model(Domain):
             ncfile.add_variable('siglev', self.sigma.levels[nodes, :].T, ['siglev', 'nobc'], attributes=atts, ncopts=ncopts)
 
             if self._debug:
-                print('adding obc_nodes to netCDF')
+                print('Adding obc_nodes to netCDF')
             atts = {'long_name': 'Open Boundary Node Number',
                     'grid': 'obc_grid',
                     'type': 'data'}
@@ -2775,7 +2775,7 @@ class Model(Domain):
             ncfile.add_variable('obc_nodes', nodes + 1, ['nobc'], attributes=atts, ncopts=ncopts)
 
             if self._debug:
-                print('adding obc_h to netCDF')
+                print('Adding obc_h to netCDF')
             atts = {'long_name': 'Bathymetry',
                     'standard_name': 'sea_floor_depth_below_geoid',
                     'units': 'm',
@@ -2787,7 +2787,7 @@ class Model(Domain):
 
             # Now the data.
             if self._debug:
-                print('adding obc_temp to netCDF')
+                print('Adding obc_temp to netCDF')
             atts = {'long_name': 'sea_water_temperature',
                     'standard_name': 'sea_water_temperature',
                     'units': 'degrees Celcius',
@@ -2798,7 +2798,7 @@ class Model(Domain):
             ncfile.add_variable('obc_temp', out_dict['temp'][0], ['time', 'siglay', 'nobc'], attributes=atts, ncopts=ncopts)
 
             if self._debug:
-                print('adding obc_salinity to netCDF')
+                print('Adding obc_salinity to netCDF')
             atts = {'long_name': 'Salinity',
                     'standard_name': 'sea_water_salinity',
                     'units': '1e-3',
@@ -2812,6 +2812,8 @@ class Model(Domain):
                 for name in ersem_metadata:
                     # Convert the given metadata object to a dictionary for ncfile.add_variable. Keep only certain
                     # attributes.
+                    if self._debug:
+                        print(f'Adding {name} to netCDF')
                     keep_me = ('long_name', 'units')
                     attribute_object = getattr(ersem_metadata, name)
                     atts = {i: getattr(attribute_object, i) for i in attribute_object if i in keep_me}
