@@ -1756,7 +1756,13 @@ class OpenBoundary(object):
 
         """
 
-        # MATLAB interp_coarse_to_obc.m reimplementation in Python with some tweaks. Hence the horrible variable names.
+        # MATLAB interp_coarse_to_obc.m reimplementation in Python with some tweaks. Hence the horrible variable
+        # names.
+        #
+        # This is twice as slow as the MATLAB version and I'm not quite sure why since we end up running it in parallel
+        # (in time instead of space). Annoyingly, it gets slower the more variables you interpolate (i.e. each
+        # successive variable being interpolated increases the time it takes to interpolate). This is probably a memory
+        # overhead from using multiprocessing.Pool.map().
         boundary_points, x, y, sigma_layers_z, coarse, coarse_name, verbose, t = args
 
         fz = sigma_layers_z.shape[-1]
