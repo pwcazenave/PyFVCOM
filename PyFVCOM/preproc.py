@@ -2134,9 +2134,9 @@ class Model(Domain):
         temperature = np.empty((time_number, self.dims.layers, nodes_number)) * np.nan
         salinity = np.empty((time_number, self.dims.layers, nodes_number)) * np.nan
         hyw = np.zeros((time_number, self.dims.layers, nodes_number))  # we never set this to anything other than zeros
-
-        weight_nodes = np.repeat(weight_nodes, time_number, 0).reshape(time_number, -1)
-        weight_elements = np.repeat(weight_elements, time_number, 0).reshape(time_number, -1)
+        if type == 3:
+            weight_nodes = np.repeat(weight_nodes, time_number, 0).reshape(time_number, -1)
+            weight_elements = np.repeat(weight_elements, time_number, 0).reshape(time_number, -1)
 
         # Hold in dict to simplify the next for loop
         out_dict = {'ua': [ua, 'elements'], 'va': [va, 'elements'], 'u': [u, 'elements'], 'v': [v, 'elements'],
