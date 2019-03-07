@@ -8,6 +8,13 @@ from traceback import print_exc
 
 
 class PassiveStore(object):
+    """
+    We ab(use) this class for nesting objects within a class.
+
+    # Add the following decorator to disable a lot of "Unresolved references" warnings in PyCharm.
+    @DynamicAttrs
+
+    """
     def __init__(self):
         """ Make an empty object. """
         pass
