@@ -38,6 +38,58 @@ class Model(Domain):
     """
     Everything related to making a new model run.
 
+    Methods are, in loosely logical order:
+
+    Create inputs:
+        estimate_time_step
+        add_open_boundaries
+        add_obc_types
+        add_grid_metrics
+        add_bed_roughness
+        add_sigma_coordinates
+        sigma_generalized
+        sigma_geometric
+        sigma_tanh
+        hybrid_sigma_coordinate
+        load_elevtide
+        add_rivers
+        read_nemo_rivers
+        read_ea_river_temperature_climatology
+        check_rivers
+        add_groundwater
+        add_probes
+        add_stations
+        add_nests
+        add_nests_harmonics
+        add_nests_regular
+        avg_nest_force_vel
+        load_nested_forcing
+        subset_existing_nest
+        read_regular
+        interp_sst_assimilation
+        interp_ady
+
+    Write to file:
+        write_grid
+        write_obc
+        write_coriolis
+        write_bed_roughness
+        write_sigma
+        write_sponge
+        write_tides
+        write_tsobc
+        write_river_forcing
+        write_river_namelist
+        write_groundwater
+        write_probes
+        write_stations
+        write_nested_forcing
+        write_sstgrd
+        write_adygrd
+
+    A brief example of how to use this is in the examples directory (pyfvcom_preprocessing_example.py or
+    pyfvcom_preprocessing_example.ipynb).
+
     """
 
     # There should be more use of objects here. For example, each open boundary should be a Boundary object which has
