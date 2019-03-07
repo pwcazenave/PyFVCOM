@@ -2057,7 +2057,7 @@ class Model(Domain):
 
         """
         for ii, this_nest in enumerate(self.nest):
-            print('Adding harmonics to nest {} of {}'.format(ii +1, len(self.nest)))
+            print('Adding harmonics to nest {} of {}'.format(ii + 1, len(self.nest)))
             for this_var in harmonics_vars:
                 this_nest.add_fvcom_tides(harmonics_file, predict=this_var, constituents=constituents, interval=self.sampling, pool_size=pool_size)
 
@@ -5485,12 +5485,12 @@ class Restart(FileReader):
                     nearest_lat_ind = np.argmin((coarse.grid.lat - node[1])**2)
 
                     if node[0] < coarse.grid.lon[nearest_lon_ind]:
-                        nearest_lon_ind = [nearest_lon_ind -1, nearest_lon_ind, nearest_lon_ind -1, nearest_lon_ind]
+                        nearest_lon_ind = [nearest_lon_ind - 1, nearest_lon_ind, nearest_lon_ind - 1, nearest_lon_ind]
                     else:
                         nearest_lon_ind = [nearest_lon_ind, nearest_lon_ind + 1, nearest_lon_ind, nearest_lon_ind + 1]
 
                     if node[1] < coarse.grid.lat[nearest_lat_ind]:
-                        nearest_lat_ind = [nearest_lat_ind -1, nearest_lat_ind -1, nearest_lat_ind, nearest_lat_ind]
+                        nearest_lat_ind = [nearest_lat_ind - 1, nearest_lat_ind - 1, nearest_lat_ind, nearest_lat_ind]
                     else:
                         nearest_lat_ind = [nearest_lat_ind, nearest_lat_ind, nearest_lat_ind + 1, nearest_lat_ind + 1]
 
