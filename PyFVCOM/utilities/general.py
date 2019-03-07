@@ -85,13 +85,6 @@ def ind2sub(array_shape, index):
 
     """
 
-    # print('WARNING: Just use numpy.unravel_index!')
-    # rows = int(np.array(index, dtype=int) / array_shape[1])
-    # # Or numpy.mod(ind.astype('int'), array_shape[1])
-    # cols = int(np.array(index, dtype=int) % array_shape[1])
-    #
-    # return (rows, cols)
-
     return np.unravel_index(index, array_shape)
 
 
