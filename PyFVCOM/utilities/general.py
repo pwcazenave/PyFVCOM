@@ -20,7 +20,7 @@ class PassiveStore(object):
         pass
 
     def __iter__(self):
-        # Iterate over attributes inside this object which don't start and end with double underscores.
+        # Iterate over attributes inside this object which don't start with underscores.
         return (a for a in self.__dict__.keys() if not a.startswith('_'))
 
     def __eq__(self, other):
