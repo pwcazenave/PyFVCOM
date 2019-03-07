@@ -1164,7 +1164,7 @@ class Model(Domain):
         ersem : dict
             If supplied, a dictionary whose keys are variable names to add to the river object and whose values are
             the corresponding river data. These should match the shape of the flux, temperature and salinity data.
-        sediment : dict
+        sediments : dict
             If supplied, either dictionary whose keys are variable names to add to the river object and whose values are
             the corresponding river data. These should match the shape of the flux, temperature and salinity data.
 
@@ -3983,7 +3983,38 @@ class Nest(object):
             boundary.add_tpxo_tides(*args, **kwargs)
 
     def add_nested_forcing(self, *args, **kwargs):
-        OpenBoundary.add_nested_forcing.__doc__
+        """
+        Interpolate the given data onto the open boundary nodes for the period from `self.time.start' to
+        `self.time.end'.
+
+        Parameters
+        ----------
+        fvcom_name : str
+            The data field name to add to the nest object which will be written to netCDF for FVCOM.
+        coarse_name : str
+            The data field name to use from the coarse object.
+        coarse : RegularReader
+            The regularly gridded data to interpolate onto the open boundary nodes. This must include time, lon,
+            lat and depth data as well as the time series to interpolate (4D volume [time, depth, lat, lon]).
+        interval : float, optional
+            Time sampling interval in days. Defaults to 1 day.
+        constrain_coordinates : bool, optional
+            Set to True to constrain the open boundary coordinates (lon, lat, depth) to the supplied coarse data.
+            This essentially squashes the open boundary to fit inside the coarse data and is, therefore, a bit of a
+            fudge! Defaults to False.
+        mode : bool, optional
+            Set to 'nodes' to interpolate onto the open boundary node positions or 'elements' for the elements for
+            z-level data. For 2D data, set to 'surface' (interpolates to the node positions ignoring depth
+            coordinates). Also supported are 'sigma_nodes' and `sigma_elements' which means we have spatially (and
+            optionally temporally) varying water depths (i.e. sigma layers rather than z-levels). Defaults to 'nodes'.
+        tide_adjust : bool, optional
+            Some nested forcing doesn't include tidal components and these have to be added from predictions using
+            harmonics. With this set to true the interpolated forcing has the tidal component (required to already
+            exist in self.tide) added to the final data.
+        verbose : bool, optional
+            Set to True to enable verbose output. Defaults to False (no verbose output).
+
+        """
         for ii, boundary in enumerate(self.boundaries):
             if self._noisy:
                 print(f'Interpolating {args[1]} forcing for nested boundary {ii + 1} of {len(self.boundaries)}')
