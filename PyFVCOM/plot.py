@@ -21,7 +21,7 @@ from PyFVCOM.current import vector2scalar
 from PyFVCOM.grid import getcrossectiontriangles, unstructured_grid_depths, Domain, nodes2elems
 from PyFVCOM.ocean import depth2pressure, dens_jackett
 from PyFVCOM.read import FileReader
-from PyFVCOM.utilities.general import _passive_data_store
+from PyFVCOM.utilities.general import PassiveStore
 
 have_basemap = True
 try:
@@ -1360,10 +1360,10 @@ class MPIWorker(object):
         if variable in ('speed', 'direction'):
             self.fvcom.data.direction, self.fvcom.data.speed = vector2scalar(self.fvcom.data.u, self.fvcom.data.v)
             # Add the attributes for labelling.
-            self.fvcom.atts.speed = _passive_data_store()
+            self.fvcom.atts.speed = PassiveStore()
             self.fvcom.atts.speed.long_name = 'speed'
             self.fvcom.atts.speed.units = 'ms^{-1}'
-            self.fvcom.atts.direction = _passive_data_store()
+            self.fvcom.atts.direction = PassiveStore()
             self.fvcom.atts.direction.long_name = 'direction'
             self.fvcom.atts.direction.units = '\degree'
             self.fvcom.variable_dimension_names[variable] = self.fvcom.variable_dimension_names['u']
@@ -1372,24 +1372,24 @@ class MPIWorker(object):
             da_dir, da_speed = vector2scalar(self.fvcom.data.ua, self.fvcom.data.va)
             self.fvcom.data.depth_averaged_direction, self.fvcom.data.depth_averaged_speed = da_dir, da_speed
             # Add the attributes for labelling.
-            self.fvcom.atts.depth_averaged_speed = _passive_data_store()
+            self.fvcom.atts.depth_averaged_speed = PassiveStore()
             self.fvcom.atts.depth_averaged_speed.long_name = 'depth-averaged speed'
             self.fvcom.atts.depth_averaged_speed.units = 'ms^{-1}'
-            self.fvcom.atts.depth_averaged_direction = _passive_data_store()
+            self.fvcom.atts.depth_averaged_direction = PassiveStore()
             self.fvcom.atts.depth_averaged_direction.long_name = 'depth-averaged direction'
             self.fvcom.atts.depth_averaged_direction.units = '\degree'
             self.fvcom.variable_dimension_names[variable] = self.fvcom.variable_dimension_names['ua']
 
         if variable == 'speed_anomaly':
             self.fvcom.data.speed_anomaly = self.fvcom.data.speed.mean(axis=0) - self.fvcom.data.speed
-            self.fvcom.atts.speed = _passive_data_store()
+            self.fvcom.atts.speed = PassiveStore()
             self.fvcom.atts.speed.long_name = 'speed anomaly'
             self.fvcom.atts.speed.units = 'ms^{-1}'
             self.fvcom.variable_dimension_names[variable] = self.fvcom.variable_dimension_names['u']
 
         elif variable == 'depth_averaged_speed_anomaly':
             self.fvcom.data.depth_averaged_speed_anomaly = self.fvcom.data.uava.mean(axis=0) - self.fvcom.data.uava
-            self.fvcom.atts.depth_averaged_speed_anomaly = _passive_data_store()
+            self.fvcom.atts.depth_averaged_speed_anomaly = PassiveStore()
             self.fvcom.atts.depth_averaged_speed_anomaly.long_name = 'depth-averaged speed anomaly'
             self.fvcom.atts.depth_averaged_speed_anomaly.units = 'ms^{-1}'
             self.fvcom.variable_dimension_names[variable] = self.fvcom.variable_dimension_names['ua']

@@ -36,7 +36,7 @@ from utide.utilities import Bunch
 
 from PyFVCOM.coordinate import utm_from_lonlat, lonlat_from_utm
 from PyFVCOM.ocean import zbar
-from PyFVCOM.utilities.general import _passive_data_store, fix_range
+from PyFVCOM.utilities.general import PassiveStore, fix_range
 from PyFVCOM.utilities.time import date_range
 
 
@@ -88,7 +88,7 @@ class GridReaderNetCDF(object):
             try:
                 setattr(self, grid, ds.variables[grid][:])
                 # Save the attributes.
-                attributes = _passive_data_store()
+                attributes = PassiveStore()
                 for attribute in ds.variables[grid].ncattrs():
                     setattr(attributes, attribute, getattr(ds.variables[grid], attribute))
                 # setattr(self.atts, grid, attributes)
@@ -215,7 +215,7 @@ class GridReaderNetCDF(object):
                 else:
                     setattr(self, metric, ds.variables[metric][:])
                 # Save the attributes.
-                attributes = _passive_data_store()
+                attributes = PassiveStore()
                 for attribute in ds.variables[metric].ncattrs():
                     setattr(attributes, attribute, getattr(ds.variables[metric], attribute))
                 # setattr(self.atts, metric, attributes)
@@ -238,7 +238,7 @@ class GridReaderNetCDF(object):
                 else:
                     setattr(self, var, ds.variables[var][:])
                 # Save the attributes.
-                attributes = _passive_data_store()
+                attributes = PassiveStore()
                 for attribute in ds.variables[var].ncattrs():
                     setattr(attributes, attribute, getattr(ds.variables[var], attribute))
                 # setattr(self.atts, var, attributes)
@@ -1035,11 +1035,11 @@ class OpenBoundary(object):
         self.weight_node = None
         self.weight_element = None
         # These get added to by PyFVCOM.preproc.Model and are used in the tide and nest functions below.
-        self.tide = _passive_data_store()
-        self.grid = _passive_data_store()
-        self.sigma = _passive_data_store()
-        self.time = _passive_data_store()
-        self.data = _passive_data_store()
+        self.tide = PassiveStore()
+        self.grid = PassiveStore()
+        self.sigma = PassiveStore()
+        self.time = PassiveStore()
+        self.data = PassiveStore()
 
     def __iter__(self):
         return (a for a in self.__dict__.keys() if not a.startswith('_'))
@@ -1577,7 +1577,7 @@ class OpenBoundary(object):
             raise AttributeError('Add vertical sigma coordinates in order to interpolate forcing along this boundary.')
 
         # Populate the time data. Why did I put the time data in here rather than self.time? This is annoying.
-        self.data.time = _passive_data_store()
+        self.data.time = PassiveStore()
         self.data.time.interval = interval
         self.data.time.datetime = date_range(self.time.start, self.time.end, inc=interval)
         self.data.time.time = date2num(getattr(self.data.time, 'datetime'), units='days since 1858-11-17 00:00:00')

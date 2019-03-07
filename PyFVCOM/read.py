@@ -17,7 +17,7 @@ from netCDF4 import Dataset, MFDataset, num2date, date2num
 
 from PyFVCOM.grid import Domain, control_volumes, get_area_heron
 from PyFVCOM.grid import unstructured_grid_volume, elems2nodes, GridReaderNetCDF
-from PyFVCOM.utilities.general import _passive_data_store, flatten_list
+from PyFVCOM.utilities.general import PassiveStore, flatten_list
 
 
 class _TimeReader(object):
@@ -54,7 +54,7 @@ class _TimeReader(object):
             if time in dataset.variables:
                 setattr(self, time, dataset.variables[time][:])
                 got_time.append(time)
-                attributes = _passive_data_store()
+                attributes = PassiveStore()
                 for attribute in dataset.variables[time].ncattrs():
                     setattr(attributes, attribute, getattr(dataset.variables[time], attribute))
                 # setattr(self.atts, time, attributes)
@@ -137,7 +137,7 @@ class _TimeReader(object):
                     except ValueError:
                         self.Times = np.array([datetime.strftime(d, '%Y/%m/%d %H:%M:%S.%f') for d in _dates])
                     # Add the relevant attribute for the Times variable.
-                    attributes = _passive_data_store()
+                    attributes = PassiveStore()
                     setattr(attributes, 'time_zone', 'UTC')
                     # setattr(self.atts, 'Times', attributes)
 
@@ -160,7 +160,7 @@ class _TimeReader(object):
                 # We're making Modified Julian Days here to replicate FVCOM's 'time' variable.
                 self.time = date2num(_dates, units=self._mjd_origin)
                 # Add the relevant attributes for the time variable.
-                attributes = _passive_data_store()
+                attributes = PassiveStore()
                 setattr(attributes, 'units', self._mjd_origin)
                 setattr(attributes, 'long_name', 'time')
                 setattr(attributes, 'format', 'modified julian day (MJD)')
@@ -186,12 +186,12 @@ class _TimeReader(object):
                 _datenum = date2num(_dates, units=self._mjd_origin)
                 self.Itime = np.floor(_datenum)
                 self.Itime2 = (_datenum - np.floor(_datenum)) * 1000 * 60 * 60 * 24  # microseconds since midnight
-                attributes = _passive_data_store()
+                attributes = PassiveStore()
                 setattr(attributes, 'units', self._mjd_origin)
                 setattr(attributes, 'format', 'modified julian day (MJD)')
                 setattr(attributes, 'time_zone', 'UTC')
                 # setattr(self.atts, 'Itime', attributes)
-                attributes = _passive_data_store()
+                attributes = PassiveStore()
                 setattr(attributes, 'units', 'msec since 00:00:00')
                 setattr(attributes, 'time_zone', 'UTC')
                 # setattr(self.atts, 'Itime2', attributes)
@@ -202,13 +202,13 @@ class _TimeReader(object):
                     self.datetime = np.array([datetime.strptime(d, '%Y-%m-%dT%H:%M:%S.%f') for d in self.Times])
                 except ValueError:
                     self.datetime = np.array([datetime.strptime(d, '%Y/%m/%d %H:%M:%S.%f') for d in self.Times])
-                attributes = _passive_data_store()
+                attributes = PassiveStore()
                 setattr(attributes, 'long_name', 'Python datetime.datetime')
                 # setattr(self.atts, 'datetime', attributes)
             else:
                 self.datetime = _dates
             self.matlabtime = self.time + 678942.0  # to MATLAB-indexed times from Modified Julian Date.
-            attributes = _passive_data_store()
+            attributes = PassiveStore()
             setattr(attributes, 'long_name', 'MATLAB datenum')
             # setattr(self.atts, 'matlabtime', attributes)
 
@@ -344,8 +344,8 @@ class _AttributeReader(object):
             self._ds = Dataset(self._filename, 'r')
 
         if not hasattr(self, variable):
-            # Hmmm, don't like using _passive_data_store here...
-            setattr(self, variable, _passive_data_store())
+            # Hmmm, don't like using PassiveStore here...
+            setattr(self, variable, PassiveStore())
 
         for attribute in self._ds.variables[variable].ncattrs():
             setattr(getattr(self, variable), attribute, getattr(self._ds.variables[variable], attribute))
@@ -463,8 +463,8 @@ class FileReader(Domain):
         # Prepare this object with an empty object for the data which we may populate later on. It feels like this
         # should be created by a separate class (in the same style as _MakeDimensions et al.), but I haven't got
         # around to it yet.
-        self.data = _passive_data_store()
-        self.river = _passive_data_store()
+        self.data = PassiveStore()
+        self.river = PassiveStore()
 
         if isinstance(self._fvcom, Dataset):
             self.ds = self._fvcom
@@ -1648,11 +1648,11 @@ class FileReaderFromDict(FileReader):
         self._variables = list(fvcom.keys())
 
         # Prepare this object with all the objects we'll need later on (data, dims, time, grid, atts).
-        self.grid = _passive_data_store()
-        self.time = _passive_data_store()
-        self.data = _passive_data_store()
-        self.dims = _passive_data_store()
-        self.atts = _passive_data_store()
+        self.grid = PassiveStore()
+        self.time = PassiveStore()
+        self.data = PassiveStore()
+        self.dims = PassiveStore()
+        self.atts = PassiveStore()
 
         # If we've been given a file name, we can do a much more passable impression of a FileReader object.
         if filename is not None:

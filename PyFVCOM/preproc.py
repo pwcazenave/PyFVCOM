@@ -27,7 +27,7 @@ from PyFVCOM.grid import OpenBoundary, find_connected_elements
 from PyFVCOM.grid import find_bad_node, element_side_lengths, reduce_triangulation
 from PyFVCOM.grid import write_fvcom_mesh, connectivity, haversine_distance
 from PyFVCOM.read import FileReader, _TimeReader
-from PyFVCOM.utilities.general import flatten_list, _passive_data_store
+from PyFVCOM.utilities.general import flatten_list, PassiveStore
 from PyFVCOM.utilities.time import date_range
 from dateutil.relativedelta import relativedelta
 from netCDF4 import Dataset, date2num, num2date, stringtochar
@@ -102,15 +102,15 @@ class Model(Domain):
             self.noisy = kwargs['noisy']
 
         # Initialise things so we can add attributes to them later.
-        self.time = _passive_data_store()
-        self.sigma = _passive_data_store()
-        self.sst = _passive_data_store()
-        self.nest = _passive_data_store()
-        self.stations = _passive_data_store()
-        self.probes = _passive_data_store()
-        self.ady = _passive_data_store()
+        self.time = PassiveStore()
+        self.sigma = PassiveStore()
+        self.sst = PassiveStore()
+        self.nest = PassiveStore()
+        self.stations = PassiveStore()
+        self.probes = PassiveStore()
+        self.ady = PassiveStore()
         self.regular = None
-        self.groundwater = _passive_data_store()
+        self.groundwater = PassiveStore()
 
         # Make some potentially useful time representations.
         self.start = start
@@ -134,7 +134,7 @@ class Model(Domain):
 
     def __prep_rivers(self):
         """ Create a few object and attributes which are useful for the river data. """
-        self.river = _passive_data_store()
+        self.river = PassiveStore()
         self.dims.river = 0  # assume no rivers.
 
         self.river.history = ''
@@ -607,7 +607,7 @@ class Model(Domain):
         sigma_file = str(sigma_file)
 
         # Make an object to store the sigma data.
-        self.sigma = _passive_data_store()
+        self.sigma = PassiveStore()
 
         with open(sigma_file, 'r') as f:
             lines = f.readlines()
@@ -880,7 +880,7 @@ class Model(Domain):
         """
 
         # Make an object to store the sigma data.
-        self.sigma = _passive_data_store()
+        self.sigma = PassiveStore()
 
         self.dims.levels = levels
         self.dims.layers = self.dims.levels - 1
@@ -1802,7 +1802,7 @@ class Model(Domain):
         """
 
         # Store everything in an object to make it cleaner passing stuff around.
-        self.probes = _passive_data_store()
+        self.probes = PassiveStore()
 
         self.probes.interval = interval  # currently assuming the same for all probes
 
@@ -1950,7 +1950,7 @@ class Model(Domain):
         """
 
         # Store everything in an object to make it cleaner passing stuff around.
-        self.stations = _passive_data_store()
+        self.stations = PassiveStore()
         self.stations.name = []
         self.stations.grid_node = []
         self.stations.grid_element = []
@@ -2235,7 +2235,7 @@ class Model(Domain):
         adjust_tides : list, optional
             Which variables (if any) to adjust by adding the predicted tidal signal from the harmonics. This
             expects that these variables exist in boundary.tide
-        ersem_metadata : PyFVCOM.utilities.general._passive_data_store, optional
+        ersem_metadata : PyFVCOM.utilities.general.PassiveStore, optional
             If we have ERSEM variables in each Nest OpenBoundary object, we need corresponding metadata. We use the
             attributes object from the RegularReader output for this (worth knowing: there's a handy method on
             RegularReader.atts (get_attribute) which will load attributes for a given variable name). If this
@@ -2868,7 +2868,7 @@ class Model(Domain):
         ----------
         tsobc_file : str, pathlib.Path
             Path to the output netCDF file to be created.
-        ersem_metadata : PyFVCOM.utilities.general._passive_data_store, optional
+        ersem_metadata : PyFVCOM.utilities.general.PassiveStore, optional
             If we have ERSEM variables in each OpenBoundary object, we need corresponding metadata. This is the
             attributes object from the RegularReader output. If this argument is omitted but data exist in
             self.open_boundaries[*].data, they will not be written to file.
@@ -4294,13 +4294,13 @@ class RegularReader(FileReader):
         if grid_variables is None:
             grid_variables = {'lon':'lon', 'lat':'lat', 'x':'x', 'y':'y', 'depth':'depth', 'Longitude':'Longitude', 'Latitude':'Latitude'}
 
-        self.grid = _passive_data_store()
+        self.grid = PassiveStore()
         # Get the grid data.
         for grid, nc_grid in grid_variables.items():
             try:
                 setattr(self.grid, grid, self.ds.variables[nc_grid][:])
                 # Save the attributes.
-                attributes = _passive_data_store()
+                attributes = PassiveStore()
                 for attribute in self.ds.variables[nc_grid].ncattrs():
                     setattr(attributes, attribute, getattr(self.ds.variables[nc_grid], attribute))
             except KeyError:
@@ -4502,7 +4502,7 @@ class RegularReader(FileReader):
                 # Should we error here or carry on having warned?
                 warn("{} does not contain a `time' dimension.".format(v))
 
-            attributes = _passive_data_store()
+            attributes = PassiveStore()
             for attribute in self.ds.variables[v].ncattrs():
                 setattr(attributes, attribute, getattr(self.ds.variables[v], attribute))
             setattr(self.atts, v, attributes)
@@ -4684,13 +4684,13 @@ class NEMOReader(RegularReader):
             grid_variables = {'lon': 'nav_lon', 'nav_lat': 'lat', 'x': 'x', 'y': 'y', 'depth': 'depth',
                               'Longitude': 'Longitude', 'Latitude': 'Latitude'}
 
-        self.grid = _passive_data_store()
+        self.grid = PassiveStore()
         # Get the grid data.
         for grid, nc_grid in grid_variables.items():
             try:
                 setattr(self.grid, grid, self.ds.variables[nc_grid][:])
                 # Save the attributes.
-                attributes = _passive_data_store()
+                attributes = PassiveStore()
                 for attribute in self.ds.variables[nc_grid].ncattrs():
                     setattr(attributes, attribute, getattr(self.ds.variables[nc_grid], attribute))
             except KeyError:
@@ -4886,7 +4886,7 @@ class NEMOReader(RegularReader):
                 # Should we error here or carry on having warned?
                 warn("{} does not contain a `time' or `time_counter' dimension.".format(v))
 
-            attributes = _passive_data_store()
+            attributes = PassiveStore()
             for attribute in self.ds.variables[v].ncattrs():
                 setattr(attributes, attribute, getattr(self.ds.variables[v], attribute))
             setattr(self.atts, v, attributes)
@@ -4961,7 +4961,7 @@ class NemoRestartRegularReader(RegularReader):
 
         """
 
-        self.time = _passive_data_store()
+        self.time = PassiveStore()
         self.time.time = datetime(2001, 1, 1)
         self.time._dims = self._dims
 
@@ -5131,7 +5131,7 @@ class HYCOMReader(RegularReader):
             try:
                 setattr(self.grid, grid, self.ds.variables[grid][:])
                 # Save the attributes.
-                attributes = _passive_data_store()
+                attributes = PassiveStore()
                 for attribute in self.ds.variables[grid].ncattrs():
                     setattr(attributes, attribute, getattr(self.ds.variables[grid], attribute))
                 setattr(self.atts, grid, attributes)
@@ -5325,7 +5325,7 @@ class HYCOMReader(RegularReader):
                 # Should we error here or carry on having warned?
                 warn("{} does not contain an `MT' (time) dimension.".format(v))
 
-            attributes = _passive_data_store()
+            attributes = PassiveStore()
             for attribute in self.ds.variables[v].ncattrs():
                 setattr(attributes, attribute, getattr(self.ds.variables[v], attribute))
             setattr(self.atts, v, attributes)

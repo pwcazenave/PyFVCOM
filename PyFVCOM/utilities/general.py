@@ -7,7 +7,7 @@ from sys import stderr
 from traceback import print_exc
 
 
-class _passive_data_store(object):
+class PassiveStore(object):
     def __init__(self):
         """ Make an empty object. """
         pass
