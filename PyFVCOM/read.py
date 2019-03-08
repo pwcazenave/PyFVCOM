@@ -385,6 +385,7 @@ class FileReader(Domain):
     Author(s)
     ---------
     Pierre Cazenave (Plymouth Marine Laboratory)
+    Mike Bedington (Plymouth Marine Laboratory)
 
     Credits
     -------
