@@ -16,9 +16,9 @@ from matplotlib.animation import FuncAnimation
 from matplotlib.dates import DateFormatter, date2num
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
-from PyFVCOM.coordinate import lonlat_from_utm
+from PyFVCOM.coordinate import lonlat_from_utm, utm_from_lonlat
 from PyFVCOM.current import vector2scalar
-from PyFVCOM.grid import getcrossectiontriangles, unstructured_grid_depths, Domain, nodes2elems
+from PyFVCOM.grid import getcrossectiontriangles, unstructured_grid_depths, Domain, nodes2elems, mp_interp_func
 from PyFVCOM.ocean import depth2pressure, dens_jackett
 from PyFVCOM.read import FileReader
 from PyFVCOM.utilities.general import PassiveStore
@@ -442,6 +442,7 @@ class Plotter(object):
     plot_quiver
     plot_lines
     plot_scatter
+    plot_streamlines
     add_scale
 
     Author(s)
@@ -547,6 +548,7 @@ class Plotter(object):
         self.scatter_plot = None
         self.tripcolor_plot = None
         self.line_plot = None
+        self.streamline_plot = None
         self.tri = None
         self.masked_tris = None
         self.cbar = None
@@ -902,6 +904,169 @@ class Plotter(object):
             mx, my = self.m(lon, lat)
 
         self.scatter_plot = self.axes.scatter(mx, my, *args, **kwargs)
+
+    def plot_streamlines(self, u, v, dx=1000, dy=None, **kwargs):
+        """
+        Plot streamlines of the given u and v data.
+
+        The data will be interpolated to a regular grid (the streamline plotting function does not support
+        unstructured grids.
+
+        Parameters
+        ----------
+        u, v : np.ndarray
+            Unstructured arrays of a velocity field. Single time and depth only.
+        dx : float, optional
+            Grid spacing for the interpolation in the x direction in metres. Defaults to 1000 metres.
+        dy : float, optional
+            Grid spacing for the interpolation in the y direction in metres. Defaults to 1000 metres. If `dy' is
+            omitted, it is assumed to be equal to `dx'.
+
+        Additional `kwargs' are passed to `matplotlib.pyplot.streamplot'.
+
+        Notes
+        -----
+        - This method must interpolate the FVCOM grid onto a regular grid prior to plotting, which obviously has a
+        performance penalty.
+        - The `density' keyword argument for is set by default to [2.5, 5] which seems to work OK for my data. Change
+        by passing a different value if performance is dire.
+
+        """
+
+        if dx is not None and dy is None:
+            dy = dx
+
+        if self.streamline_plot is not None:
+            # Clear the current streamline plot.
+            try:
+                self.streamline_plot.lines.remove()
+            except ValueError:
+                pass
+
+        # Set a decent initial density if we haven't been given one in kwargs.
+        if 'density' not in kwargs:
+            kwargs['density'] = [2.5, 5]
+
+        if 'cmap' in kwargs and self.cmap is not None:
+            kwargs.pop('cmap', None)
+            warn('Ignoring the given colour map as one has been supplied during initialisation.')
+
+        if not hasattr(self, '_mask_for_regular'):
+            self._make_regular_grid(dx, dy)
+
+        # Remove singleton dimensions because they break the masking.
+        u = np.squeeze(u)
+        v = np.squeeze(v)
+
+        if self.cartesian:
+            plot_x, plot_y = self._regular_x, self._regular_y
+            fvcom_x, fvcom_y = self.xc[self._mask_for_regular], self.yc[self._mask_for_regular]
+        else:
+            plot_x, plot_y = self.m(self._regular_x, self._regular_y)
+            fvcom_x, fvcom_y = self.lonc[self._mask_for_regular], self.latc[self._mask_for_regular]
+
+        # Interpolate whatever positions we have (spherical/cartesian).
+        ua_r = mp_interp_func((fvcom_x, fvcom_y, u[self._mask_for_regular], self._regular_x, self._regular_y))
+        va_r = mp_interp_func((fvcom_x, fvcom_y, v[self._mask_for_regular], self._regular_x, self._regular_y))
+
+        # Check for a colour map in kwargs and if we have one, make a magnitude array for the plot. Check we haven't
+        # been given a color array in kwargs too.
+        speed_r = None
+        if self.cmap is not None:
+            if 'color' in kwargs:
+                speed_r = mp_interp_func((fvcom_x, fvcom_y, np.squeeze(kwargs['color'])[self._mask_for_regular], self._regular_x, self._regular_y))
+                kwargs.pop('color', None)
+            else:
+                speed_r = np.hypot(ua_r, va_r)
+
+        # Now we have some data, do the streamline plot.
+        self.streamline_plot = self.axes.streamplot(plot_x, plot_y, ua_r, va_r, color=speed_r, cmap=self.cmap, **kwargs)
+
+        if self.cmap is not None:
+            extend = copy.copy(self.extend)
+            if extend is None:
+                extend = self.get_colourbar_extension(speed_r, (self.vmin, self.vmax))
+
+            if self.cbar is None:
+                if self.cartesian:
+                    divider = make_axes_locatable(self.axes)
+                    cax = divider.append_axes("right", size="3%", pad=0.1)
+                    self.cbar = self.figure.colorbar(self.streamline_plot.lines, cax=cax, extend=extend)
+                else:
+                    self.cbar = self.m.colorbar(self.streamline_plot.lines, extend=extend)
+                self.cbar.ax.tick_params(labelsize=self.fs)
+
+            if self.cb_label:
+                self.cbar.set_label(self.cb_label)
+
+        if self.cartesian:
+            self.axes.set_aspect('equal')
+            self.axes.set_xlim(plot_x.min(), plot_x.max())
+            self.axes.set_ylim(plot_y.min(), plot_y.max())
+
+    def _make_regular_grid(self, dx, dy):
+        """
+        Make a regular grid at intervals of dx, dy for the current plot domain. Supports both spherical and cartesian
+        grids.
+
+        Parameters
+        ----------
+        dx : float
+            Grid spacing in the x-direction in metres.
+        dy :
+            Grid spacing in the y-direction in metres.
+
+        Returns
+        -------
+
+        Provides
+        --------
+        self._regular_x
+            The regularly gridded x positions.
+        self._regular_y
+            The regularly gridded y positions.
+        self._mask_for_regular : np.ndarray
+            The mask for the unstructured positions within the current plot domain.
+
+        """
+
+        # To speed things up, extract only the positions actually within the mapping domain.
+        if self.cartesian:
+            x = self.xc
+            y = self.yc
+
+            self._mask_for_regular = (x > self.extents[0]) & (x < self.extents[1]) & \
+                                     (y > self.extents[2]) * (y < self.extents[3])
+        else:
+            x = self.lonc
+            y = self.latc
+
+            self._mask_for_regular = (x > self.m.llcrnrlon) & (x < self.m.urcrnrlon) & \
+                                     (y > self.m.llcrnrlat) * (y < self.m.urcrnrlat)
+
+        if self.cartesian:
+            # Easy peasy, just return the relevant set of numbers with the given increments.
+            reg_x = np.arange(x[self._mask_for_regular].min(), x[self._mask_for_regular].max() + dx, dx)
+            reg_y = np.arange(y[self._mask_for_regular].min(), y[self._mask_for_regular].max() + dy, dy)
+        else:
+            # Convert dx and dy into spherical distances so we can do a regular grid on the lonc/latc arrays. This is a
+            # pretty hacky way of going about this.
+            xref, yref = self.xc[self._mask_for_regular].mean(), self.yc[self._mask_for_regular].mean()
+            # Get the zone we're in for the mean position.
+            _, _, zone = utm_from_lonlat(x[self._mask_for_regular].mean(), y[self._mask_for_regular].mean())
+            start_x, start_y = lonlat_from_utm(xref, yref, zone=zone[0])
+            _, end_y = lonlat_from_utm(xref, yref + dy, zone=zone[0])
+            end_x, _ = lonlat_from_utm(xref + dx, yref, zone=zone[0])
+            dx_spherical = end_x - start_x
+            dy_spherical = end_y - start_y
+            reg_x = np.arange(x[self._mask_for_regular].min(),
+                              x[self._mask_for_regular].max() + dx_spherical,
+                              dx_spherical)
+            reg_y = np.arange(y[self._mask_for_regular].min(),
+                              y[self._mask_for_regular].max() + dy_spherical,
+                              dy_spherical)
+
+        self._regular_x, self._regular_y = np.meshgrid(reg_x, reg_y)
 
     def set_title(self, title):
         """ Set the title for the current axis. """
