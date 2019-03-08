@@ -789,7 +789,7 @@ class Plotter(object):
             if self.cartesian:
                 divider = make_axes_locatable(self.axes)
                 cax = divider.append_axes("right", size="3%", pad=0.1)
-                self.cbar = self.figure.colorbar(self.tripcolor_plot, cax=cax)
+                self.cbar = self.figure.colorbar(self.tripcolor_plot, cax=cax, extend=extend)
             else:
                 self.cbar = self.m.colorbar(self.tripcolor_plot, extend=extend)
             self.cbar.ax.tick_params(labelsize=self.fs)
