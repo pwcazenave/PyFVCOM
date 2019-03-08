@@ -796,7 +796,7 @@ class Plotter(object):
         if self.cb_label:
             self.cbar.set_label(self.cb_label)
 
-    def plot_quiver(self, u, v, field=False, add_key=True, scale=1.0, label=None, *args, **kwargs):
+    def plot_quiver(self, u, v, field=False, dx=None, dy=None, add_key=True, scale=1.0, label=None, *args, **kwargs):
         """ Produce quiver plot using u and v velocity components.
 
         Parameters
@@ -810,6 +810,9 @@ class Plotter(object):
             cmap, if provided.
         add_key : bool, optional
             Add key for the quiver plot. Defaults to True.
+        dx, dy : float, optional
+            If given, the vectors will be plotted on a regular grid at intervals of `dx' and `dy'. If `dy' is omitted,
+            it is assumed to be the same as `dx'.
         scale : float, optional
             Scaling to be provided to arrows with scale_units of inches. Defaults to 1.0.
         label : str, optional
@@ -818,6 +821,27 @@ class Plotter(object):
         Additional `args' and `kwargs' are passed to `matplotlib.pyplot.quiver'.
 
         """
+
+        xy_mask = np.full((len(self.lonc), len(self.latc)))
+        if dx is not None:
+            if dy is None:
+                dy = dx
+            if not hasattr(self, '_regular_lon'):
+                self._make_regular_grid(dx, dy)
+                xy_mask = self._mask_for_regular
+
+            if self.cartesian:
+                mxc, myc = self._regular_x, self._regular_y
+            else:
+                mxc, myc = self.m(self._regular_x, self._regular_y)
+
+        else:
+            mxc, myc = self.mxc, self.myc
+
+        u = u[xy_mask]
+        v = v[xy_mask]
+        if np.any(field):
+            field = field[xy_mask]
 
         if self.quiver_plot:
             if np.any(field):
@@ -830,28 +854,26 @@ class Plotter(object):
             label = '{} '.format(scale) + r'$\mathrm{ms^{-1}}$'
 
         if np.any(field):
-            self.quiver_plot = self.axes.quiver(self.mxc, self.myc, u, v, field,
+            self.quiver_plot = self.axes.quiver(mxc, myc, u, v, field,
                                                 cmap=self.cmap,
                                                 units='inches',
                                                 scale_units='inches',
                                                 scale=scale,
                                                 *args, **kwargs)
-            divider = make_axes_locatable(self.axes)
-            cax = divider.append_axes("right", size="5%", pad=0.05)
-            self.cbar = self.figure.colorbar(self.quiver_plot, cax=cax)
+            self.cbar = self.m(self.quiver_plot)
             self.cbar.ax.tick_params(labelsize=self.fs)
             if self.cb_label:
                 self.cbar.set_label(self.cb_label)
         else:
-            self.quiver_plot = self.axes.quiver(self.mxc, self.myc, u, v, units='inches', scale_units='inches', scale=scale)
+            self.quiver_plot = self.axes.quiver(mxc, myc, u, v, units='inches', scale_units='inches', scale=scale)
 
         if add_key:
             self.quiver_key = plt.quiverkey(self.quiver_plot, 0.9, 0.9, scale, label, coordinates='axes')
 
         if self.cartesian:
             self.axes.set_aspect('equal')
-            self.axes.set_xlim(self.mx.min(), self.mx.max())
-            self.axes.set_ylim(self.my.min(), self.my.max())
+            self.axes.set_xlim(mxc.min(), mxc.max())
+            self.axes.set_ylim(myc.min(), myc.max())
 
     def plot_lines(self, x, y, zone_number='30N', *args, **kwargs):
         """
