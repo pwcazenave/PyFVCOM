@@ -1470,14 +1470,6 @@ class OpenBoundary(object):
         return amplitudes.T, phases.T
 
     @staticmethod
-    def _interpolator_function(input):
-        """ Pass me to a multiprocessing.Pool().map() to quickly interpolate data with LinearNDInterpolator. """
-        lon, lat, data, x, y = input
-        interp = LinearNDInterpolator((lon, lat), data)
-
-        return interp((x, y))
-
-    @staticmethod
     def _predict_tide(args):
         """
         For the given time and coefficients (in coef) reconstruct the tidal elevation or current component time
