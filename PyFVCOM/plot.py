@@ -1,5 +1,7 @@
 """ Plotting class for FVCOM results. """
 
+# TODO: Replace Basemap with cartopy. The former is being deprecated and the latter is its suggested replacement.
+
 from __future__ import print_function
 
 import copy
@@ -449,8 +451,6 @@ class Plotter(object):
     ---------
     James Clark (Plymouth Marine Laboratory)
     Pierre Cazenave (Plymouth Marine Laboratory)
-
-    TODO: Replace Basemap with cartopy. The former is being deprecated and the latter is its suggested replacement.
 
     """
 
