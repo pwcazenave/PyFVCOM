@@ -945,8 +945,7 @@ class Plotter(object):
         dx : float, optional
             Grid spacing for the interpolation in the x direction in metres. Defaults to 1000 metres.
         dy : float, optional
-            Grid spacing for the interpolation in the y direction in metres. Defaults to 1000 metres. If `dy' is
-            omitted, it is assumed to be equal to `dx'.
+            Grid spacing for the interpolation in the y direction in metres. Defaults to `dx'.
 
         Additional `kwargs' are passed to `matplotlib.pyplot.streamplot'.
 
@@ -1074,7 +1073,6 @@ class Plotter(object):
         if self.cartesian:
             x = self.xc
             y = self.yc
-
             if self.extents is not None:
                 west, east, south, north = self.extents
             else:
