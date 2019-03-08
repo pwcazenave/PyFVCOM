@@ -797,15 +797,16 @@ class Plotter(object):
             self.cbar.set_label(self.cb_label)
 
     def plot_quiver(self, u, v, field=False, dx=None, dy=None, add_key=True, scale=1.0, label=None, *args, **kwargs):
-        """ Produce quiver plot using u and v velocity components.
+        """
+        Quiver plot using velocity components.
 
         Parameters
         ----------
-        u : 1D or 2D array
+        u : np.ndarray
             u-component of the velocity field.
-        v : 1D or 2D array
+        v : np.ndarray
             v-component of the velocity field
-        field : 1D or 2D array
+        field : np.ndarray
             velocity magnitude field. Used to colour the vectors. Also adds a colour bar which uses the cb_label and
             cmap, if provided.
         add_key : bool, optional
@@ -904,7 +905,8 @@ class Plotter(object):
         self.line_plot = self.axes.plot(mx, my, *args, **kwargs)
 
     def plot_scatter(self, x, y,  zone_number='30N', *args, **kwargs):
-        """ Plot scatter.
+        """
+        Plot scatter points.
 
         Parameters
         ----------
