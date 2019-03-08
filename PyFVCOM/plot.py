@@ -17,10 +17,12 @@ from matplotlib import rcParams
 from matplotlib.animation import FuncAnimation
 from matplotlib.dates import DateFormatter, date2num
 from mpl_toolkits.axes_grid1 import make_axes_locatable
+from shapely.geometry import Polygon, Point
 
 from PyFVCOM.coordinate import lonlat_from_utm, utm_from_lonlat
 from PyFVCOM.current import vector2scalar
 from PyFVCOM.grid import getcrossectiontriangles, unstructured_grid_depths, Domain, nodes2elems, mp_interp_func
+from PyFVCOM.grid import get_boundary_polygons
 from PyFVCOM.ocean import depth2pressure, dens_jackett
 from PyFVCOM.read import FileReader
 from PyFVCOM.utilities.general import PassiveStore
@@ -829,7 +831,7 @@ class Plotter(object):
                 dy = dx
             if not hasattr(self, '_regular_lon'):
                 self._make_regular_grid(dx, dy)
-                xy_mask = self._mask_for_regular
+                xy_mask = self._mask_for_unstructured
 
             if self.cartesian:
                 mxc, myc = self._regular_x, self._regular_y
@@ -975,7 +977,7 @@ class Plotter(object):
             kwargs.pop('cmap', None)
             warn('Ignoring the given colour map as one has been supplied during initialisation.')
 
-        if not hasattr(self, '_mask_for_regular'):
+        if not hasattr(self, '_mask_for_unstructured'):
             self._make_regular_grid(dx, dy)
 
         # Remove singleton dimensions because they break the masking.
@@ -984,24 +986,30 @@ class Plotter(object):
 
         if self.cartesian:
             plot_x, plot_y = self._regular_x, self._regular_y
-            fvcom_x, fvcom_y = self.xc[self._mask_for_regular], self.yc[self._mask_for_regular]
+            fvcom_x, fvcom_y = self.xc[self._mask_for_unstructured], self.yc[self._mask_for_unstructured]
         else:
             plot_x, plot_y = self.m(self._regular_x, self._regular_y)
-            fvcom_x, fvcom_y = self.lonc[self._mask_for_regular], self.latc[self._mask_for_regular]
+            fvcom_x, fvcom_y = self.lonc[self._mask_for_unstructured], self.latc[self._mask_for_unstructured]
 
         # Interpolate whatever positions we have (spherical/cartesian).
-        ua_r = mp_interp_func((fvcom_x, fvcom_y, u[self._mask_for_regular], self._regular_x, self._regular_y))
-        va_r = mp_interp_func((fvcom_x, fvcom_y, v[self._mask_for_regular], self._regular_x, self._regular_y))
+        ua_r = mp_interp_func((fvcom_x, fvcom_y, u[self._mask_for_unstructured], self._regular_x, self._regular_y))
+        va_r = mp_interp_func((fvcom_x, fvcom_y, v[self._mask_for_unstructured], self._regular_x, self._regular_y))
 
         # Check for a colour map in kwargs and if we have one, make a magnitude array for the plot. Check we haven't
         # been given a color array in kwargs too.
         speed_r = None
         if self.cmap is not None:
             if 'color' in kwargs:
-                speed_r = mp_interp_func((fvcom_x, fvcom_y, np.squeeze(kwargs['color'])[self._mask_for_regular], self._regular_x, self._regular_y))
+                speed_r = mp_interp_func((fvcom_x, fvcom_y, np.squeeze(kwargs['color'])[self._mask_for_unstructured], self._regular_x, self._regular_y))
                 kwargs.pop('color', None)
             else:
                 speed_r = np.hypot(ua_r, va_r)
+
+        # Mask off arrays as appropriate.
+        ua_r = np.ma.array(ua_r, mask=self._mask_for_regular)
+        va_r = np.ma.array(va_r, mask=self._mask_for_regular)
+        if self.cmap is not None:
+            speed_r = np.ma.array(speed_r, mask=self._mask_for_regular)
 
         # Now we have some data, do the streamline plot.
         self.streamline_plot = self.axes.streamplot(plot_x, plot_y, ua_r, va_r, color=speed_r, cmap=self.cmap, **kwargs)
@@ -1030,8 +1038,14 @@ class Plotter(object):
 
     def _make_regular_grid(self, dx, dy):
         """
-        Make a regular grid at intervals of dx, dy for the current plot domain. Supports both spherical and cartesian
-        grids.
+        Make a regular grid at intervals of `dx', `dy' for the current plot domain. Supports both spherical and
+        cartesian grids.
+
+        Locations which are either outside the model domain (defined as the largest polygon by area) or on islands
+        are stored in the self._mask_for_regular array.
+
+        Locations in the FVCOM grid which are outside the plotting extent are masked in the
+        self._mask_for_unstructured array.
 
         Parameters
         ----------
@@ -1049,7 +1063,9 @@ class Plotter(object):
             The regularly gridded x positions.
         self._regular_y
             The regularly gridded y positions.
-        self._mask_for_regular : np.ndarray
+        self._mask_for_regular
+            The mask for the regular grid positions.
+        self._mask_for_unstructured : np.ndarray
             The mask for the unstructured positions within the current plot domain.
 
         """
@@ -1059,38 +1075,75 @@ class Plotter(object):
             x = self.xc
             y = self.yc
 
-            self._mask_for_regular = (x > self.extents[0]) & (x < self.extents[1]) & \
-                                     (y > self.extents[2]) * (y < self.extents[3])
+            if self.extents is not None:
+                west, east, south, north = self.extents
+            else:
+                west, east, south, north = self.x.min(), self.x.max(), self.y.min(), self.y.max()
         else:
             x = self.lonc
             y = self.latc
+            west, east, south, north = self.m.llcrnrlon, self.m.urcrnrlon, self.m.llcrnrlat, self.m.urcrnrlat
 
-            self._mask_for_regular = (x > self.m.llcrnrlon) & (x < self.m.urcrnrlon) & \
-                                     (y > self.m.llcrnrlat) * (y < self.m.urcrnrlat)
+        self._mask_for_unstructured = (x >= west) & (x <= east) & (y >= south) * (y <= north)
+
+        x = x[self._mask_for_unstructured]
+        y = y[self._mask_for_unstructured]
 
         if self.cartesian:
             # Easy peasy, just return the relevant set of numbers with the given increments.
-            reg_x = np.arange(x[self._mask_for_regular].min(), x[self._mask_for_regular].max() + dx, dx)
-            reg_y = np.arange(y[self._mask_for_regular].min(), y[self._mask_for_regular].max() + dy, dy)
+            reg_x = np.arange(x.min(), x.max() + dx, dx)
+            reg_y = np.arange(y.min(), y.max() + dy, dy)
         else:
             # Convert dx and dy into spherical distances so we can do a regular grid on the lonc/latc arrays. This is a
             # pretty hacky way of going about this.
-            xref, yref = self.xc[self._mask_for_regular].mean(), self.yc[self._mask_for_regular].mean()
+            xref, yref = self.xc[self._mask_for_unstructured].mean(), self.yc[self._mask_for_unstructured].mean()
             # Get the zone we're in for the mean position.
-            _, _, zone = utm_from_lonlat(x[self._mask_for_regular].mean(), y[self._mask_for_regular].mean())
+            _, _, zone = utm_from_lonlat(x.mean(), y.mean())
             start_x, start_y = lonlat_from_utm(xref, yref, zone=zone[0])
             _, end_y = lonlat_from_utm(xref, yref + dy, zone=zone[0])
             end_x, _ = lonlat_from_utm(xref + dx, yref, zone=zone[0])
             dx_spherical = end_x - start_x
             dy_spherical = end_y - start_y
-            reg_x = np.arange(x[self._mask_for_regular].min(),
-                              x[self._mask_for_regular].max() + dx_spherical,
-                              dx_spherical)
-            reg_y = np.arange(y[self._mask_for_regular].min(),
-                              y[self._mask_for_regular].max() + dy_spherical,
-                              dy_spherical)
+            reg_x = np.arange(x.min(), x.max() + dx_spherical, dx_spherical)
+            reg_y = np.arange(y.min(), y.max() + dy_spherical, dy_spherical)
 
         self._regular_x, self._regular_y = np.meshgrid(reg_x, reg_y)
+
+        # Make a mask for the regular grid. This uses the model domain to identify points which are outside the grid.
+        # Those are set to False whereas those in the domain are True. We assume the longest polygon is the model
+        # boundary and all other polygons are islands within it.
+        model_boundaries = get_boundary_polygons(self.triangles)
+        model_polygons = [Polygon(np.asarray((self.lon[i], self.lat[i])).T) for i in model_boundaries]
+        polygon_areas = [i.area for i in model_polygons]
+        main_polygon_index = polygon_areas.index(max(polygon_areas))
+        self._mask_for_regular = np.full(self._regular_x.shape, False)
+        # Find locations outside the main model domain.
+        ocean_indices, land_indices = [], []
+        for index, sample in enumerate(zip(np.array((self._regular_x.ravel(), self._regular_y.ravel())).T)):
+            point = Point(sample[0])
+            if point.intersects(model_polygons[main_polygon_index]):
+                ocean_indices.append(index)
+            else:
+                land_indices.append(index)
+
+        # Mask off indices outside the main model domain.
+        ocean_row, ocean_column = np.unravel_index(ocean_indices, self._regular_x.shape)
+        land_row, land_column = np.unravel_index(land_indices, self._regular_x.shape)
+        self._mask_for_regular[land_row, land_column] = True
+
+        # To remove the sampling stations on islands, identify points which intersect the remaining polygons,
+        # and then remove them from the sampling site list.
+        land_indices = []
+        # Exclude the main polygon from the list of polygons.
+        for polygon in [i for count, i in enumerate(model_polygons) if count != main_polygon_index]:
+            for row, column, index in zip(ocean_row, ocean_column, ocean_indices):
+                point = Point((self._regular_x[row, column], self._regular_y[row, column]))
+                if point.intersects(polygon):
+                    land_indices.append(index)
+
+        # Mask off island indices.
+        land_row, land_column = np.unravel_index(land_indices, self._regular_x.shape)
+        self._mask_for_regular[land_row, land_column] = True
 
     def set_title(self, title):
         """ Set the title for the current axis. """
