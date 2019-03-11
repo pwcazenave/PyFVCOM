@@ -7,13 +7,20 @@ from sys import stderr
 from traceback import print_exc
 
 
-class _passive_data_store(object):
+class PassiveStore(object):
+    """
+    We ab(use) this class for nesting objects within a class.
+
+    # Add the following decorator to disable a lot of "Unresolved references" warnings in PyCharm.
+    @DynamicAttrs
+
+    """
     def __init__(self):
         """ Make an empty object. """
         pass
 
     def __iter__(self):
-        # Iterate over attributes inside this object which don't start and end with double underscores.
+        # Iterate over attributes inside this object which don't start with underscores.
         return (a for a in self.__dict__.keys() if not a.startswith('_'))
 
     def __eq__(self, other):
@@ -77,13 +84,6 @@ def ind2sub(array_shape, index):
         `array_shape'.
 
     """
-
-    # print('WARNING: Just use numpy.unravel_index!')
-    # rows = int(np.array(index, dtype=int) / array_shape[1])
-    # # Or numpy.mod(ind.astype('int'), array_shape[1])
-    # cols = int(np.array(index, dtype=int) % array_shape[1])
-    #
-    # return (rows, cols)
 
     return np.unravel_index(index, array_shape)
 

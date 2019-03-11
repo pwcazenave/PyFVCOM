@@ -24,10 +24,10 @@ import scipy.optimize
 from PyFVCOM.coordinate import utm_from_lonlat, lonlat_from_utm
 from PyFVCOM.grid import Domain, grid_metrics, read_fvcom_obc, nodes2elems
 from PyFVCOM.grid import OpenBoundary, find_connected_elements
-from PyFVCOM.grid import find_bad_node, element_side_lengths
+from PyFVCOM.grid import find_bad_node, element_side_lengths, reduce_triangulation
 from PyFVCOM.grid import write_fvcom_mesh, connectivity, haversine_distance
 from PyFVCOM.read import FileReader, _TimeReader
-from PyFVCOM.utilities.general import flatten_list, _passive_data_store
+from PyFVCOM.utilities.general import flatten_list, PassiveStore
 from PyFVCOM.utilities.time import date_range
 from dateutil.relativedelta import relativedelta
 from netCDF4 import Dataset, date2num, num2date, stringtochar
@@ -37,6 +37,58 @@ from scipy.interpolate import RegularGridInterpolator
 class Model(Domain):
     """
     Everything related to making a new model run.
+
+    Methods are, in loosely logical order:
+
+    Create inputs:
+        estimate_time_step
+        add_open_boundaries
+        add_obc_types
+        add_grid_metrics
+        add_bed_roughness
+        add_sigma_coordinates
+        sigma_generalized
+        sigma_geometric
+        sigma_tanh
+        hybrid_sigma_coordinate
+        load_elevtide
+        add_rivers
+        read_nemo_rivers
+        read_ea_river_temperature_climatology
+        check_rivers
+        add_groundwater
+        add_probes
+        add_stations
+        add_nests
+        add_nests_harmonics
+        add_nests_regular
+        avg_nest_force_vel
+        load_nested_forcing
+        subset_existing_nest
+        read_regular
+        interp_sst_assimilation
+        interp_ady
+
+    Write to file:
+        write_grid
+        write_obc
+        write_coriolis
+        write_bed_roughness
+        write_sigma
+        write_sponge
+        write_tides
+        write_tsobc
+        write_river_forcing
+        write_river_namelist
+        write_groundwater
+        write_probes
+        write_stations
+        write_nested_forcing
+        write_sstgrd
+        write_adygrd
+
+    A brief example of how to use this is in the examples directory (pyfvcom_preprocessing_example.py or
+    pyfvcom_preprocessing_example.ipynb).
 
     """
 
@@ -49,7 +101,6 @@ class Model(Domain):
     #  - Open boundaries end up held in Model.open_boundaries and Model.grid.open_boundaries which seems wrong.
     #  - Make a method to create a subdomain input file for namelist outputs over different spatial domains
     #  (NC{,AV}_SUBDOMAIN_FILES in the NML_NETCDF{,_AV} namelist section).
-
 
     def __init__(self, start, end, *args, **kwargs):
         """
@@ -98,20 +149,20 @@ class Model(Domain):
         super().__init__(*args, **kwargs)
 
         self.noisy = False
-        self.debug = False
+        self._debug = False
         if 'noisy' in kwargs:
             self.noisy = kwargs['noisy']
 
         # Initialise things so we can add attributes to them later.
-        self.time = _passive_data_store()
-        self.sigma = _passive_data_store()
-        self.sst = _passive_data_store()
-        self.nest = _passive_data_store()
-        self.stations = _passive_data_store()
-        self.probes = _passive_data_store()
-        self.ady = _passive_data_store()
+        self.time = PassiveStore()
+        self.sigma = PassiveStore()
+        self.sst = PassiveStore()
+        self.nest = PassiveStore()
+        self.stations = PassiveStore()
+        self.probes = PassiveStore()
+        self.ady = PassiveStore()
         self.regular = None
-        self.groundwater = _passive_data_store()
+        self.groundwater = PassiveStore()
 
         # Make some potentially useful time representations.
         self.start = start
@@ -135,7 +186,7 @@ class Model(Domain):
 
     def __prep_rivers(self):
         """ Create a few object and attributes which are useful for the river data. """
-        self.river = _passive_data_store()
+        self.river = PassiveStore()
         self.dims.river = 0  # assume no rivers.
 
         self.river.history = ''
@@ -419,14 +470,14 @@ class Model(Domain):
             sst_eo = np.squeeze(sst_file_nc.variables[var_name][:]) + var_offset  # Kelvin to Celsius
             mask = sst_file_nc.variables['mask']
             if len(sst_eo.shape) ==3 and len(mask) ==2:
-                sst_eo[np.tile(mask[:][np.newaxis,:],(sst_eo.shape[0],1,1)) == 1] = np.nan                
+                sst_eo[np.tile(mask[:][np.newaxis, :], (sst_eo.shape[0], 1, 1)) == 1] = np.nan
             else:
                 sst_eo[mask == 1] = np.nan
             sst_lon = sst_file_nc.variables['lon'][:]
             sst_lat = sst_file_nc.variables['lat'][:]
             time_out_dt = num2date(sst_file_nc.variables['time'][:], units=sst_file_nc.variables['time'].units)
 
-        ft = RegularGridInterpolator((sst_lon, sst_lat), sst_eo.T, method='nearest', fill_value=None)
+        ft = RegularGridInterpolator((sst_lon, sst_lat), sst_eo.T, method='linear', fill_value=None)
         interp_sst = ft(fvcom_lonlat.T)
 
         return time_out_dt, interp_sst
@@ -505,14 +556,14 @@ class Model(Domain):
 
         Notes
         -----
-        TODO: Combine interpolation routines (sst, ady, etc) to make more efficient        
+        TODO: Combine interpolation routines (sst, ady, etc) to make more efficient
 
         """
 
         if isinstance(ady_dir, str):
             ady_dir = Path(ady_dir)
 
-        ady_files = list(ady_dir.glob('*.nc')) 
+        ady_files = list(ady_dir.glob('*.nc'))
 
         if noisy:
             print('To do:\n{}'.format('|' * len(ady_files)), flush=True)
@@ -543,7 +594,7 @@ class Model(Domain):
 
         ady = np.vstack(ady).T
         # FVCOM wants times at midday whilst the data are at midnight
-        dates = np.asarray([this_date + relativedelta(hours=12) for sublist in dates for this_date in sublist])    
+        dates = np.asarray([this_date + relativedelta(hours=12) for sublist in dates for this_date in sublist])
 
         # Sort by time.
         idx = np.argsort(dates)
@@ -608,7 +659,7 @@ class Model(Domain):
         sigma_file = str(sigma_file)
 
         # Make an object to store the sigma data.
-        self.sigma = _passive_data_store()
+        self.sigma = PassiveStore()
 
         with open(sigma_file, 'r') as f:
             lines = f.readlines()
@@ -782,7 +833,7 @@ class Model(Domain):
         dist = np.empty(levels) * np.nan
 
         if p_sigma == 1:
-            for k in range(1,levels+1):
+            for k in range(1, levels + 1):
                 dist[k -1] = -((k - 1) / (levels - 1))**p_sigma
         else:
             split = int(np.floor((levels + 1) / 2))
@@ -881,7 +932,7 @@ class Model(Domain):
         """
 
         # Make an object to store the sigma data.
-        self.sigma = _passive_data_store()
+        self.sigma = PassiveStore()
 
         self.dims.levels = levels
         self.dims.layers = self.dims.levels - 1
@@ -995,8 +1046,7 @@ class Model(Domain):
             Path to which to save sigma data.
 
         TODO:
-        -----
-        - Add support for writing all the sigma file formats.
+         - Add support for writing all the sigma file formats.
 
         """
 
@@ -1166,7 +1216,7 @@ class Model(Domain):
         ersem : dict
             If supplied, a dictionary whose keys are variable names to add to the river object and whose values are
             the corresponding river data. These should match the shape of the flux, temperature and salinity data.
-        sediment : dict
+        sediments : dict
             If supplied, either dictionary whose keys are variable names to add to the river object and whose values are
             the corresponding river data. These should match the shape of the flux, temperature and salinity data.
 
@@ -1409,8 +1459,8 @@ class Model(Domain):
             start_next = []
             for this_node in start_nodes:
                 attached_nodes = self.grid.coastline[np.isin(self.grid.coastline,
-                        self.grid.triangles[np.any(np.isin(self.grid.triangles, this_node), axis=1),:].flatten())]
-                attached_nodes = np.delete(attached_nodes, np.where(np.isin(attached_nodes,nodes_checked)))
+                        self.grid.triangles[np.any(np.isin(self.grid.triangles, this_node), axis=1), :].flatten())]
+                attached_nodes = np.delete(attached_nodes, np.where(np.isin(attached_nodes, nodes_checked)))
                 for this_candidate in attached_nodes:
                     if not np.any(np.isin(self.river.bad_nodes, this_candidate)) and not np.any(np.isin(self.river.node, this_candidate)):
                         if find_bad_node(self.grid.triangles, this_candidate):
@@ -1804,7 +1854,7 @@ class Model(Domain):
         """
 
         # Store everything in an object to make it cleaner passing stuff around.
-        self.probes = _passive_data_store()
+        self.probes = PassiveStore()
 
         self.probes.interval = interval  # currently assuming the same for all probes
 
@@ -1952,7 +2002,7 @@ class Model(Domain):
         """
 
         # Store everything in an object to make it cleaner passing stuff around.
-        self.stations = _passive_data_store()
+        self.stations = PassiveStore()
         self.stations.name = []
         self.stations.grid_node = []
         self.stations.grid_element = []
@@ -2003,7 +2053,7 @@ class Model(Domain):
                 number += 1
                 f.write('{}, {}, {}, {}, {}, {}\n'.format(number, x[index], y[index], index, z[grid], station))
 
-    def add_nests(self, nest_levels, nesting_type=3):
+    def add_nests(self, nest_levels, nesting_type=3, verbose=False):
         """
         Add a set of nested levels to each open boundary.
 
@@ -2013,6 +2063,8 @@ class Model(Domain):
             Number of node levels in addition to the existing open boundary.
         nesting_type : int
             FVCOM nesting type (1, 2 or 3). Defaults to 3. Currently, only 3 is supported.
+        verbose : bool, optional
+            Set to True to enable verbose output. Defaults to False.
 
         Provides
         --------
@@ -2024,7 +2076,9 @@ class Model(Domain):
         self.nest = []
 
         for boundary in self.open_boundaries:
-            self.nest.append(Nest(self.grid, self.sigma, boundary))
+            if not hasattr(self.sigma, 'levels'):
+                raise AttributeError('Missing sigma grid information. Add it before creating nests.')
+            self.nest.append(Nest(self.grid, self.sigma, boundary, verbose=verbose))
             # Add all the nested levels and assign weights as necessary.
             for _ in range(nest_levels):
                 self.nest[-1].add_level()
@@ -2055,15 +2109,15 @@ class Model(Domain):
 
         """
         for ii, this_nest in enumerate(self.nest):
-            print('Adding harmonics to nest {} of {}'.format(ii +1, len(self.nest)))
+            print('Adding harmonics to nest {} of {}'.format(ii + 1, len(self.nest)))
             for this_var in harmonics_vars:
                 this_nest.add_fvcom_tides(harmonics_file, predict=this_var, constituents=constituents, interval=self.sampling, pool_size=pool_size)
 
     def add_nests_regular(self, fvcom_var, regular_reader, regular_var, **kwargs):
         """
-        Docstring
+        TODO: Docstring
 
-        """ 
+        """
         for i, this_nest in enumerate(self.nest):
             if fvcom_var in ['u', 'v']:
                 mode='elements'
@@ -2083,24 +2137,169 @@ class Model(Domain):
         for this_nest in self.nest:
             this_nest.avg_nest_force_vel()
 
-    def write_nested_forcing(self, ncfile, type=3, adjust_tides=None, **kwargs):
+    def load_nested_forcing(self, existing_nest, variables=None, filter_times=False, filter_points=False, verbose=False):
+        """
+        Load the existing nested forcing file into the current set of nested boundaries in
+        self.nest[*].boundaries[*].data.
+
+        Parameters
+        ----------
+        existing_nest : str, pathlib.Path
+            The file from which to load the data.
+        variables : list, optional
+            Limit the loading to only the given variable names.
+        filter_times : bool, optional
+            Set to True to remove duplicate time data from the nesting file.
+        filter_points : bool, optional
+            Set to True to remove nodes not in the supplied existing nesting file from the current set of nested
+            boundaries.
+        verbose : bool, optional
+            Set to True to enable verbose output. Defaults to False.
+
+        """
+
+        with Dataset(existing_nest) as ds:
+            if variables is None:
+                variables = ds.variables.keys()
+
+            # Check the time values in the netCDF are equal to the times we've got.
+            ds_time = num2date(ds.variables['Itime'][:] + ds.variables['Itime2'][:] / 1000 / 60 / 60 / 24,
+                               units=ds.variables['Itime'].units)
+
+            if filter_times:
+                # Some nesting files have duplicated times (!?). Remove them here.
+                bad_times = np.argwhere(np.asarray([i.total_seconds() for i in np.diff(ds_time)]) == 0).ravel()
+
+                ds_time = np.delete(ds_time, bad_times)
+
+            if np.any(self.time.datetime != ds_time):
+                raise ValueError('Non-matching time data.')
+
+            # Grab the cartesian coordinates for the closest lookups. Realistically this could do spherical too by
+            # leveraging the haversine argument to closest_{node,element}. Another day, perhaps.
+            x, y = ds.variables['x'][:], ds.variables['y'][:]
+            xc, yc = ds.variables['xc'][:], ds.variables['yc'][:]
+            nodes = self.closest_node((x, y), cartesian=True)
+            elements = self.closest_element((xc, yc), cartesian=True)
+
+            nest_nodes = flatten_list([boundary.nodes for nest in self.nest for boundary in nest.boundaries])
+            nest_elements = flatten_list([boundary.elements for nest in self.nest for boundary in nest.boundaries if np.any(boundary.elements)])
+            # Identity nodes/elements only present in nest_nodes and nest_elements and then drop them from the
+            # corresponding boundary.
+            match_nodes = set(nest_nodes) - set(nodes)
+            match_elements = set(nest_elements) - set(elements)
+            if filter_points:
+                for nest in self.nest:
+                    for boundary in nest.boundaries:
+                        node_mask = np.isin(boundary.nodes, list(match_nodes))
+                        if np.any(node_mask):
+                            boundary.nodes = np.asarray(boundary.nodes)[~node_mask].tolist()
+                            for var in ('lon', 'lat', 'x', 'y', 'h', 'types'):
+                                if hasattr(boundary.grid, var):
+                                    setattr(boundary.grid, var, getattr(boundary.grid, var)[~node_mask])
+                            for var in ('layers', 'levels'):
+                                if hasattr(boundary.sigma, var):
+                                    setattr(boundary.sigma, var, getattr(boundary.sigma, var)[~node_mask])
+                        if boundary.elements is not None:
+                            element_mask = np.isin(boundary.elements, list(match_elements))
+                            if np.any(element_mask):
+                                boundary.elements = np.asarray(boundary.elements)[~element_mask].tolist()
+                                for var in ('lonc', 'latc', 'xc', 'yc', 'h_center'):
+                                    if hasattr(boundary.grid, var):
+                                        setattr(boundary.grid, var, getattr(boundary.grid, var)[~element_mask])
+                                for var in ('layers_center', 'levels_center'):
+                                    if hasattr(boundary.sigma, var):
+                                        setattr(boundary.sigma, var, getattr(boundary.sigma, var)[~element_mask])
+                        boundary.grid.triangles = reduce_triangulation(boundary.grid.triangles, boundary.grid.nodes)
+                        boundary.grid.nv = boundary.grid.triangles.T + 1
+
+                # Add any ones present in the given nesting file to the current set of nests. To pick which nested
+                # level to add it to, find the nested level which has the closest point and stick it in that.
+                nest_dist = []
+                nc_points = np.argwhere(nodes == list(set(nodes) - set(nest_nodes))).ravel()
+                for point in nc_points:
+                    px, py = x[point], y[point]
+                    for n_index, nest in enumerate(self.nest):
+                        nest_dist.append([])
+                        for b_index, boundary in enumerate(nest.boundaries):
+                            nest_dist[-1].append(np.min(np.abs(np.hypot(boundary.grid.x - px, boundary.grid.y - py))))
+
+                    target_min = np.min(flatten_list(nest_dist))
+                    for j, dist_nest in enumerate(nest_dist):
+                        for k, dist_boundary in enumerate(dist_nest):
+                            if dist_boundary == target_min:
+                                nest_index, boundary_index = j, k
+
+                    # Now add the netCDF point to that boundary.
+                    self.nest[nest_index].boundaries[boundary_index].nodes += [nodes[point]]
+                    for var in ('x', 'y'):
+                        current_value = getattr(self.nest[nest_index].boundaries[boundary_index].grid, var)
+                        current_value = np.hstack((current_value, ds.variables[var][point]))
+                        setattr(self.nest[nest_index].boundaries[boundary_index].grid, var, current_value)
+                    lon, lat = lonlat_from_utm(self.nest[nest_index].boundaries[boundary_index].grid.x,
+                                               self.nest[nest_index].boundaries[boundary_index].grid.y,
+                                               self.nest[nest_index].boundaries[boundary_index].grid.zone)
+                    self.nest[nest_index].boundaries[boundary_index].grid.lon = lon
+                    self.nest[nest_index].boundaries[boundary_index].grid.lat = lat
+                    for var in ('layers', 'levels'):
+                        current_value = getattr(self.nest[nest_index].boundaries[boundary_index].sigma, var)
+                        current_value = np.vstack((current_value, ds.variables[f'sig{var[:3]}'][..., point]))
+                        setattr(self.nest[nest_index].boundaries[boundary_index].sigma, var, current_value)
+
+                    # Redo the triangulation now.
+                    triangles = reduce_triangulation(self.grid.triangles,
+                                                     self.nest[nest_index].boundaries[boundary_index].nodes)
+                    self.nest[nest_index].boundaries[boundary_index].triangles = triangles
+                    # Also redo the elements for the current nest.
+                    self.nest[nest_index].boundaries[boundary_index].elements = np.unique(triangles.ravel())
+
+            for var in variables:
+                has_time = 'time' in ds.variables[var].dimensions
+                has_space = 'node' in ds.variables[var].dimensions or 'nele' in ds.variables[var].dimensions
+                if has_time and has_space:
+                    if verbose:
+                        print(f'Transferring {var} from the existing nesting file')
+                    for nest in self.nest:
+                        for boundary in nest.boundaries:
+                            # Split the existing nodes/elements into the current open boundary nodes.
+                            if 'node' in ds.variables[var].dimensions:
+                                data = ds.variables[var][:][..., np.isin(nodes, boundary.nodes)]
+                            else:
+                                try:
+                                    data = ds.variables[var][:][..., np.isin(elements, boundary.elements)]
+                                except AttributeError:
+                                    # This is the first boundary and thus has no element data.
+                                    continue
+                            if filter_times:
+                                data = np.delete(data, bad_times, axis=0)
+                            setattr(boundary.data, var, data.T)
+
+    def write_nested_forcing(self, ncfile, type=3, adjust_tides=None, ersem_metadata=None, **kwargs):
         """
         Write out the given nested forcing into the specified netCDF file.
 
         Parameters
         ----------
         ncfile : str, pathlib.Path
-            Path to the output netCDF file to created.
+            Path to the output netCDF file to be created.
         type : int, optional
             Type of model nesting. Currently only type 3 (indirect) is supported. Defaults to 3.
         adjust_tides : list, optional
             Which variables (if any) to adjust by adding the predicted tidal signal from the harmonics. This
-            expects that these variables exist in boundary.tide  
+            expects that these variables exist in boundary.tide
+        ersem_metadata : PyFVCOM.utilities.general.PassiveStore, optional
+            If we have ERSEM variables in each Nest OpenBoundary object, we need corresponding metadata. We use the
+            attributes object from the RegularReader output for this (worth knowing: there's a handy method on
+            RegularReader.atts (get_attribute) which will load attributes for a given variable name). If this
+            argument is omitted but data exist in self.open_boundaries[*].data, they will not be written to file. In
+            contrast, variables in the metadata which don't exist in the open boundary data will raise an error. Make
+            sure you've got your house in order!
 
         Remaining kwargs are passed to WriteForcing with the exception of ncopts which is passed to
         WriteForcing.add_variable.
 
         """
+
         nests = self.nest
         # Get all the nodes, elements and weights ready for dumping to netCDF.
         nodes = flatten_list([boundary.nodes for nest in nests for boundary in nest.boundaries])
@@ -2122,32 +2321,42 @@ class Model(Domain):
         u = np.empty((time_number, self.dims.layers, elements_number)) * np.nan
         v = np.empty((time_number, self.dims.layers, elements_number)) * np.nan
         temperature = np.empty((time_number, self.dims.layers, nodes_number)) * np.nan
-        salinity = np.empty((time_number, self.dims.layers, nodes_number)) * np.nan 
+        salinity = np.empty((time_number, self.dims.layers, nodes_number)) * np.nan
         hyw = np.zeros((time_number, self.dims.layers, nodes_number))  # we never set this to anything other than zeros
-
-        weight_nodes = np.repeat(weight_nodes, time_number, 0).reshape(time_number, -1)
-        weight_elements = np.repeat(weight_elements, time_number, 0).reshape(time_number, -1)
+        if type == 3:
+            weight_nodes = np.repeat(weight_nodes, time_number, 0).reshape(time_number, -1)
+            weight_elements = np.repeat(weight_elements, time_number, 0).reshape(time_number, -1)
 
         # Hold in dict to simplify the next for loop
-        out_dict = {'ua':[ua, 'elements'], 'va':[va, 'elements'], 'u':[u, 'elements'], 'v':[v, 'elements'],
-                        'zeta':[zeta, 'nodes'], 'temp':[temperature, 'nodes'], 'salinity':[salinity, 'nodes'], 'hyw':[hyw,'nodes']}
+        out_dict = {'ua': [ua, 'elements'], 'va': [va, 'elements'], 'u': [u, 'elements'], 'v': [v, 'elements'],
+                    'zeta': [zeta, 'nodes'], 'temp': [temperature, 'nodes'], 'salinity': [salinity, 'nodes'],
+                    'hyw': [hyw, 'nodes']}
 
         for nest in nests:
             for boundary in nest.boundaries:
                 boundary.temp_nodes_index = np.isin(nodes, boundary.nodes)
                 boundary.temp_elements_index = np.isin(elements, boundary.elements)
 
-                for var in boundary.nest:
+                for var in out_dict:
                     if var == 'time':
                         pass
                     elif var in out_dict.keys():
                         this_index = getattr(boundary, 'temp_{}_index'.format(out_dict[var][1]))
-                        boundary_data = getattr(boundary.nest, var)
-                        if adjust_tides and var in adjust_tides:
-                            tide_times_choose = np.isin(boundary.tide.time, boundary.nest.time.datetime) # The harmonics are calculated -/+ one day
-                            boundary_data = boundary_data + getattr(boundary.tide, var)[tide_times_choose,:]
+                        # Skip out if we don't have any indices for this index. This happens on the first boundary for
+                        # elements.
+                        if not np.any(this_index):
+                            continue
 
-                        out_dict[var][0][...,this_index] = boundary_data
+                        try:
+                            boundary_data = getattr(boundary.data, var)
+                            if adjust_tides and var in adjust_tides:
+                                # The harmonics are calculated -/+ one day
+                                tide_times_choose = np.isin(boundary.tide.time, boundary.data.time.datetime)
+                                boundary_data = boundary_data + getattr(boundary.tide, var)[tide_times_choose, :]
+                        except AttributeError:
+                            continue
+
+                        out_dict[var][0][..., this_index] = boundary_data
                     else:
                         raise ValueError('Unknown nest boundary variable {}'.format(var))
 
@@ -2166,61 +2375,58 @@ class Model(Domain):
         dims = {'nele': elements_number, 'node': nodes_number, 'time': 0, 'DateStrLen': 26, 'three': 3,
                 'siglay': self.dims.layers, 'siglev': self.dims.levels}
 
-        # Fix the triangulation for the nested region.
-        # nv = reduce_triangulation(self.grid.triangles, nodes).T + 1  # offset by one for FORTRAN indexing and transpose
-
         with WriteForcing(str(ncfile), dims, global_attributes=globals, clobber=True, format='NETCDF4', **kwargs) as nest_ncfile:
             # Add standard times.
             nest_ncfile.write_fvcom_time(self.time.datetime, ncopts=ncopts)
 
             # Add space variables.
-            if self.debug:
-                print('adding x to netCDF')
+            if self._debug:
+                print('Adding x to netCDF')
             atts = {'units': 'meters', 'long_name': 'nodal x-coordinate'}
             nest_ncfile.add_variable('x', self.grid.x[nodes], ['node'], attributes=atts, ncopts=ncopts)
 
-            if self.debug:
-                print('adding y to netCDF')
+            if self._debug:
+                print('Adding y to netCDF')
             atts = {'units': 'meters', 'long_name': 'nodal y-coordinate'}
             nest_ncfile.add_variable('y', self.grid.y[nodes], ['node'], attributes=atts, ncopts=ncopts)
 
-            if self.debug:
-                print('adding lon to netCDF')
+            if self._debug:
+                print('Adding lon to netCDF')
             atts = {'units': 'degrees_east', 'standard_name': 'longitude', 'long_name': 'nodal longitude'}
             nest_ncfile.add_variable('lon', self.grid.lon[nodes], ['node'], attributes=atts, ncopts=ncopts)
 
-            if self.debug:
-                print('adding lat to netCDF')
+            if self._debug:
+                print('Adding lat to netCDF')
             atts = {'units': 'degrees_north', 'standard_name': 'latitude', 'long_name': 'nodal latitude'}
             nest_ncfile.add_variable('lat', self.grid.lat[nodes], ['node'], attributes=atts, ncopts=ncopts)
 
-            if self.debug:
-                print('adding xc to netCDF')
+            if self._debug:
+                print('Adding xc to netCDF')
             atts = {'units': 'meters', 'long_name': 'zonal x-coordinate'}
             nest_ncfile.add_variable('xc', self.grid.xc[elements], ['nele'], attributes=atts, ncopts=ncopts)
 
-            if self.debug:
-                print('adding yc to netCDF')
+            if self._debug:
+                print('Adding yc to netCDF')
             atts = {'units': 'meters', 'long_name': 'zonal y-coordinate'}
             nest_ncfile.add_variable('yc', self.grid.yc[elements], ['nele'], attributes=atts, ncopts=ncopts)
 
-            if self.debug:
-                print('adding lonc to netCDF')
+            if self._debug:
+                print('Adding lonc to netCDF')
             atts = {'units': 'degrees_east', 'standard_name': 'longitude', 'long_name': 'zonal longitude'}
             nest_ncfile.add_variable('lonc', self.grid.lonc[elements], ['nele'], attributes=atts, ncopts=ncopts)
 
-            if self.debug:
-                print('adding latc to netCDF')
+            if self._debug:
+                print('Adding latc to netCDF')
             atts = {'units': 'degrees_north', 'standard_name': 'latitude', 'long_name': 'zonal latitude'}
             nest_ncfile.add_variable('latc', self.grid.latc[elements], ['nele'], attributes=atts, ncopts=ncopts)
 
-            if self.debug:
-                print('adding nv to netCDF')
+            if self._debug:
+                print('Adding nv to netCDF')
             atts = {'long_name': 'nodes surrounding element'}
-            nest_ncfile.add_variable('nv', self.grid.nv[:,elements], ['three', 'nele'], format='i4', attributes=atts, ncopts=ncopts)
+            nest_ncfile.add_variable('nv', self.grid.nv[:, elements], ['three', 'nele'], format='i4', attributes=atts, ncopts=ncopts)
 
-            if self.debug:
-                print('adding siglay to netCDF')
+            if self._debug:
+                print('Adding siglay to netCDF')
             atts = {'long_name': 'Sigma Layers',
                     'standard_name': 'ocean_sigma/general_coordinate',
                     'positive': 'up',
@@ -2229,8 +2435,8 @@ class Model(Domain):
                     'formula_terms': 'sigma: siglay eta: zeta depth: h'}
             nest_ncfile.add_variable('siglay', self.sigma.layers[nodes, :].T, ['siglay', 'node'], attributes=atts, ncopts=ncopts)
 
-            if self.debug:
-                print('adding siglev to netCDF')
+            if self._debug:
+                print('Adding siglev to netCDF')
             atts = {'long_name': 'Sigma Levels',
                     'standard_name': 'ocean_sigma/general_coordinate',
                     'positive': 'up',
@@ -2239,8 +2445,8 @@ class Model(Domain):
                     'formula_terms': 'sigma:siglev eta: zeta depth: h'}
             nest_ncfile.add_variable('siglev', self.sigma.levels[nodes, :].T, ['siglev', 'node'], attributes=atts, ncopts=ncopts)
 
-            if self.debug:
-                print('adding siglay_center to netCDF')
+            if self._debug:
+                print('Adding siglay_center to netCDF')
             atts = {'long_name': 'Sigma Layers',
                     'standard_name': 'ocean_sigma/general_coordinate',
                     'positive': 'up',
@@ -2249,8 +2455,8 @@ class Model(Domain):
                     'formula_terms': 'sigma: siglay_center eta: zeta_center depth: h_center'}
             nest_ncfile.add_variable('siglay_center', self.sigma.layers_center[elements, :].T, ['siglay', 'nele'], attributes=atts, ncopts=ncopts)
 
-            if self.debug:
-                print('adding siglev_center to netCDF')
+            if self._debug:
+                print('Adding siglev_center to netCDF')
             atts = {'long_name': 'Sigma Levels',
                     'standard_name': 'ocean_sigma/general_coordinate',
                     'positive': 'up',
@@ -2259,8 +2465,8 @@ class Model(Domain):
                     'formula_terms': 'sigma: siglev_center eta: zeta_center depth: h_center'}
             nest_ncfile.add_variable('siglev_center', self.sigma.levels_center[elements, :].T, ['siglev', 'nele'], attributes=atts, ncopts=ncopts)
 
-            if self.debug:
-                print('adding h to netCDF')
+            if self._debug:
+                print('Adding h to netCDF')
             atts = {'long_name': 'Bathymetry',
                     'standard_name': 'sea_floor_depth_below_geoid',
                     'units': 'm',
@@ -2270,8 +2476,8 @@ class Model(Domain):
                     'type': 'data'}
             nest_ncfile.add_variable('h', self.grid.h[nodes], ['node'], attributes=atts, ncopts=ncopts)
 
-            if self.debug:
-                print('adding h_center to netCDF')
+            if self._debug:
+                print('Adding h_center to netCDF')
             atts = {'long_name': 'Bathymetry',
                     'standard_name': 'sea_floor_depth_below_geoid',
                     'units': 'm',
@@ -2282,16 +2488,16 @@ class Model(Domain):
             nest_ncfile.add_variable('h_center', self.grid.h_center[elements], ['nele'], attributes=atts, ncopts=ncopts)
 
             if type == 3:
-                if self.debug:
-                    print('adding weight_node to netCDF')
+                if self._debug:
+                    print('Adding weight_node to netCDF')
                 atts = {'long_name': 'Weights for nodes in relaxation zone',
                         'units': 'no units',
                         'grid': 'fvcom_grid',
                         'type': 'data'}
                 nest_ncfile.add_variable('weight_node', weight_nodes, ['time', 'node'], attributes=atts, ncopts=ncopts)
 
-                if self.debug:
-                    print('adding weight_cell to netCDF')
+                if self._debug:
+                    print('Adding weight_cell to netCDF')
                 atts = {'long_name': 'Weights for elements in relaxation zone',
                         'units': 'no units',
                         'grid': 'fvcom_grid',
@@ -2299,8 +2505,8 @@ class Model(Domain):
                 nest_ncfile.add_variable('weight_cell', weight_elements, ['time', 'nele'], attributes=atts, ncopts=ncopts)
 
             # Now all the data.
-            if self.debug:
-                print('adding zeta to netCDF')
+            if self._debug:
+                print('Adding zeta to netCDF')
             atts = {'long_name': 'Water Surface Elevation',
                     'units': 'meters',
                     'positive': 'up',
@@ -2311,24 +2517,24 @@ class Model(Domain):
                     'location': 'node'}
             nest_ncfile.add_variable('zeta', out_dict['zeta'][0], ['time','node'], attributes=atts, ncopts=ncopts)
 
-            if self.debug:
-                print('adding ua to netCDF')
+            if self._debug:
+                print('Adding ua to netCDF')
             atts = {'long_name': 'Vertically Averaged x-velocity',
                     'units': 'meters  s-1',
                     'grid': 'fvcom_grid',
                     'type': 'data'}
             nest_ncfile.add_variable('ua', out_dict['ua'][0], ['time', 'nele'], attributes=atts, ncopts=ncopts)
 
-            if self.debug:
-                print('adding va to netCDF')
+            if self._debug:
+                print('Adding va to netCDF')
             atts = {'long_name': 'Vertically Averaged y-velocity',
                     'units': 'meters  s-1',
                     'grid': 'fvcom_grid',
                     'type': 'data'}
             nest_ncfile.add_variable('va', out_dict['va'][0], ['time', 'nele'], attributes=atts, ncopts=ncopts)
 
-            if self.debug:
-                print('adding u to netCDF')
+            if self._debug:
+                print('Adding u to netCDF')
             atts = {'long_name': 'Eastward Water Velocity',
                     'units': 'meters  s-1',
                     'standard_name': 'eastward_sea_water_velocity',
@@ -2338,8 +2544,8 @@ class Model(Domain):
                     'location': 'face'}
             nest_ncfile.add_variable('u', out_dict['u'][0], ['time', 'siglay', 'nele'], attributes=atts, ncopts=ncopts)
 
-            if self.debug:
-                print('adding v to netCDF')
+            if self._debug:
+                print('Adding v to netCDF')
             atts = {'long_name': 'Northward Water Velocity',
                     'units': 'meters  s-1',
                     'standard_name': 'Northward_sea_water_velocity',
@@ -2349,8 +2555,8 @@ class Model(Domain):
                     'location': 'face'}
             nest_ncfile.add_variable('v', out_dict['v'][0], ['time', 'siglay', 'nele'], attributes=atts, ncopts=ncopts)
 
-            if self.debug:
-                print('adding temp to netCDF')
+            if self._debug:
+                print('Adding temp to netCDF')
             atts = {'long_name': 'Temperature',
                     'standard_name': 'sea_water_temperature',
                     'units': 'degrees Celcius',
@@ -2360,8 +2566,8 @@ class Model(Domain):
                     'location': 'node'}
             nest_ncfile.add_variable('temp', out_dict['temp'][0], ['time', 'siglay', 'node'], attributes=atts, ncopts=ncopts)
 
-            if self.debug:
-                print('adding salinity to netCDF')
+            if self._debug:
+                print('Adding salinity to netCDF')
             atts = {'long_name': 'Salinity',
                     'standard_name': 'sea_water_salinity',
                     'units': '1e-3',
@@ -2371,14 +2577,36 @@ class Model(Domain):
                     'location': 'node'}
             nest_ncfile.add_variable('salinity', out_dict['salinity'][0], ['time', 'siglay', 'node'], attributes=atts, ncopts=ncopts)
 
-            if self.debug:
-                print('adding hyw to netCDF')
+            if self._debug:
+                print('Adding hyw to netCDF')
             atts = {'long_name': 'hydro static vertical velocity',
                     'units': 'meters s-1',
                     'grid': 'fvcom_grid',
                     'type': 'data',
                     'coordinates': 'time siglay lat lon'}
             nest_ncfile.add_variable('hyw', out_dict['hyw'][0], ['time', 'siglay', 'node'], attributes=atts, ncopts=ncopts)
+
+            if ersem_metadata is not None:
+                for name in ersem_metadata:
+                    if self._debug:
+                        print(f'Adding {name} to netCDF')
+                    # Convert the given metadata object to a dictionary for nest_ncfile.add_variable. Keep only certain
+                    # attributes.
+                    keep_me = ('long_name', 'units')
+                    attribute_object = getattr(ersem_metadata, name)
+                    atts = {i: getattr(attribute_object, i) for i in attribute_object if i in keep_me}
+                    # Add the FVCOM grid type.
+                    atts['grid'] = 'obc_grid'
+                    # Collapse the data from all the open boundaries as we've done for temperature and salinity.
+                    dump = np.full((time_number, self.dims.layers, nodes_number), np.nan)
+                    for boundary in self.open_boundaries:
+                        if name == 'time':
+                            pass
+                        temp_nodes_index = np.isin(nodes, boundary.nodes)
+                        # Data are interpolated with dimensions ordered ['time', 'depth', 'space'] whereas we need to
+                        # transpose for writing out.
+                        dump[..., temp_nodes_index] = getattr(boundary.data, name).T
+                    nest_ncfile.add_variable(name, dump, ['time', 'siglay', 'nobc'], attributes=atts, ncopts=ncopts)
 
     def add_obc_types(self, types):
         """
@@ -2683,6 +2911,151 @@ class Model(Domain):
             mask = nodes == boundary.nodes
             setattr(boundary.tide, 'zeta', elevation[..., mask])
             setattr(boundary.tide, 'time', datetimes)
+
+    def write_tsobc(self, tsobc_file, ersem_metadata=None, **kwargs):
+        """
+        Write out the interpolated boundary data (in self.open_boundaries[*].data) into the specified netCDF file.
+
+        Parameters
+        ----------
+        tsobc_file : str, pathlib.Path
+            Path to the output netCDF file to be created.
+        ersem_metadata : PyFVCOM.utilities.general.PassiveStore, optional
+            If we have ERSEM variables in each OpenBoundary object, we need corresponding metadata. This is the
+            attributes object from the RegularReader output. If this argument is omitted but data exist in
+            self.open_boundaries[*].data, they will not be written to file.
+
+        Remaining kwargs are passed to WriteForcing with the exception of ncopts which is passed to
+        WriteForcing.add_variable.
+
+        """
+
+        nodes = np.asarray(flatten_list([boundary.nodes for boundary in self.open_boundaries]))
+        time_number = len(self.time.datetime)
+        nodes_number = len(nodes)
+
+        # Prepare the data.
+        temperature = np.full((time_number, self.dims.layers, nodes_number), np.nan)
+        salinity = np.full((time_number, self.dims.layers, nodes_number), np.nan)
+
+        # Hold in dict to simplify the next for loop
+        out_dict = {'temp': [temperature, 'nodes'], 'salinity': [salinity, 'nodes']}
+
+        for boundary in self.open_boundaries:
+            temp_nodes_index = np.isin(nodes, boundary.nodes)
+
+            for var in out_dict:
+                if var == 'time':
+                    pass
+                try:
+                    out_dict[var][0][..., temp_nodes_index] = getattr(boundary.data, var)
+                except AttributeError:
+                    continue
+                    raise AttributeError(f'Missing variable {var} from the boundary data.')
+
+        ncopts = {}
+        if 'ncopts' in kwargs:
+            ncopts = kwargs['ncopts']
+            kwargs.pop('ncopts')
+
+        # Define the global attributes
+        globals = {'type': 'FVCOM TIME SERIES OBC TS FILE',
+                   'title': 'Open boundary temperature and salinity nudging',
+                   'history': 'File created using {} from PyFVCOM'.format(inspect.stack()[0][3]),
+                   'filename': str(tsobc_file),
+                   'Conventions': 'CF-1.0'}
+
+        dims = {'nobc': nodes_number, 'time': 0, 'DateStrLen': 26, 'siglay': self.dims.layers,
+                'siglev': self.dims.levels}
+
+        with WriteForcing(str(tsobc_file), dims, global_attributes=globals, clobber=True, format='NETCDF4', **kwargs) as ncfile:
+            # Add standard times.
+            ncfile.write_fvcom_time(self.time.datetime, ncopts=ncopts)
+
+            # Add space variables.
+            if self._debug:
+                print('Adding siglay to netCDF')
+            atts = {'long_name': 'Sigma Layers',
+                    'standard_name': 'ocean_sigma/general_coordinate',
+                    'positive': 'up',
+                    'valid_min': -1.,
+                    'valid_max': 0.,
+                    'formula_terms': 'sigma: siglay eta: zeta depth: h'}
+            ncfile.add_variable('siglay', self.sigma.layers[nodes, :].T, ['siglay', 'nobc'], attributes=atts, ncopts=ncopts)
+
+            if self._debug:
+                print('Adding siglev to netCDF')
+            atts = {'long_name': 'Sigma Levels',
+                    'standard_name': 'ocean_sigma/general_coordinate',
+                    'positive': 'up',
+                    'valid_min': -1.,
+                    'valid_max': 0.,
+                    'formula_terms': 'sigma:siglev eta: zeta depth: h'}
+            ncfile.add_variable('siglev', self.sigma.levels[nodes, :].T, ['siglev', 'nobc'], attributes=atts, ncopts=ncopts)
+
+            if self._debug:
+                print('Adding obc_nodes to netCDF')
+            atts = {'long_name': 'Open Boundary Node Number',
+                    'grid': 'obc_grid',
+                    'type': 'data'}
+            # Offset node IDs for 1-indexing in FVCOM.
+            ncfile.add_variable('obc_nodes', nodes + 1, ['nobc'], attributes=atts, ncopts=ncopts)
+
+            if self._debug:
+                print('Adding obc_h to netCDF')
+            atts = {'long_name': 'Bathymetry',
+                    'standard_name': 'sea_floor_depth_below_geoid',
+                    'units': 'm',
+                    'positive': 'down',
+                    'grid': 'Bathymetry_mesh',
+                    'coordinates': 'x y',
+                    'type': 'data'}
+            ncfile.add_variable('obc_h', self.grid.h[nodes], ['nobc'], attributes=atts, ncopts=ncopts)
+
+            # Now the data.
+            if self._debug:
+                print('Adding obc_temp to netCDF')
+            atts = {'long_name': 'sea_water_temperature',
+                    'standard_name': 'sea_water_temperature',
+                    'units': 'degrees Celcius',
+                    'grid': 'fvcom_grid',
+                    'coordinates': 'time siglay lat lon',
+                    'type': 'data',
+                    'location': 'node'}
+            ncfile.add_variable('obc_temp', out_dict['temp'][0], ['time', 'siglay', 'nobc'], attributes=atts, ncopts=ncopts)
+
+            if self._debug:
+                print('Adding obc_salinity to netCDF')
+            atts = {'long_name': 'Salinity',
+                    'standard_name': 'sea_water_salinity',
+                    'units': '1e-3',
+                    'grid': 'fvcom_grid',
+                    'coordinates': 'time siglay lat lon',
+                    'type': 'data',
+                    'location': 'node'}
+            ncfile.add_variable('obc_salinity', out_dict['salinity'][0], ['time', 'siglay', 'nobc'], attributes=atts, ncopts=ncopts)
+
+            if ersem_metadata is not None:
+                for name in ersem_metadata:
+                    # Convert the given metadata object to a dictionary for ncfile.add_variable. Keep only certain
+                    # attributes.
+                    if self._debug:
+                        print(f'Adding {name} to netCDF')
+                    keep_me = ('long_name', 'units')
+                    attribute_object = getattr(ersem_metadata, name)
+                    atts = {i: getattr(attribute_object, i) for i in attribute_object if i in keep_me}
+                    # Add the FVCOM grid type.
+                    atts['grid'] = 'obc_grid'
+                    # Collapse the data from all the open boundaries as we've done for temperature and salinity.
+                    dump = np.full((time_number, self.dims.layers, nodes_number), np.nan)
+                    for boundary in self.open_boundaries:
+                        if name == 'time':
+                            pass
+                        temp_nodes_index = np.isin(nodes, boundary.nodes)
+                        # Data are interpolated with dimensions ordered ['time', 'depth', 'space'] whereas we need to
+                        # transpose for writing out.
+                        dump[..., temp_nodes_index] = getattr(boundary.data, name).T
+                    ncfile.add_variable(name, dump, ['time', 'siglay', 'nobc'], attributes=atts, ncopts=ncopts)
 
 
 class NameListEntry(object):
@@ -3480,7 +3853,7 @@ class Nest(object):
 
         """
 
-        self.debug = False
+        self._debug = False
         self._noisy = verbose
 
         self.grid = copy.copy(grid)
@@ -3492,7 +3865,8 @@ class Nest(object):
             self.boundaries = [boundary]
         else:
             raise ValueError("Unsupported boundary type {}. Supply PyFVCOM.grid.OpenBoundary or `list'.".format(type(boundary)))
-        # Add the sigma and grid structure attributes.
+        # Add the sigma and grid structure attributes. This is a bit inefficient as we end up doing it for every
+        # boundary each time we add a new boundary.
         self.__update_open_boundaries()
 
     def __iter__(self):
@@ -3509,10 +3883,10 @@ class Nest(object):
 
         # Add the grid and sigma data to any open boundaries we've got loaded.
         for ii, boundary in enumerate(self.boundaries):
-            if self._noisy:
-                print('adding grid info to boundary {} of {}'.format(ii + 1, len(self.boundaries)))
+            if self._debug:
+                print('Adding grid info to boundary {} of {}'.format(ii + 1, len(self.boundaries)))
             for attribute in self.grid:
-                if self._noisy:
+                if self._debug:
                     print('\t{}'.format(attribute))
                 try:
                     if 'center' not in attribute and attribute not in ['lonc', 'latc', 'xc', 'yc']:
@@ -3523,14 +3897,14 @@ class Nest(object):
                 except (IndexError, TypeError):
                     setattr(boundary.grid, attribute, getattr(self.grid, attribute))
                 except AttributeError as e:
-                    if self.debug:
+                    if self._debug:
                         print(e)
                     pass
 
-            if self._noisy:
-                print('adding sigma info to boundary {} of {}'.format(ii + 1, len(self.boundaries)))
+            if self._debug:
+                print('Adding sigma info to boundary {} of {}'.format(ii + 1, len(self.boundaries)))
             for attribute in self.sigma:
-                if self._noisy:
+                if self._debug:
                     print('\t{}'.format(attribute))
                 try:
                     if 'center' not in attribute:
@@ -3541,7 +3915,7 @@ class Nest(object):
                 except (IndexError, TypeError):
                     setattr(boundary.sigma, attribute, getattr(self.sigma, attribute))
                 except AttributeError as e:
-                    if self.debug:
+                    if self._debug:
                         print(e)
 
     def add_level(self):
@@ -3556,6 +3930,9 @@ class Nest(object):
         Adds a new PyFVCOM.grid.OpenBoundary object in self.boundaries
 
         """
+
+        if self._noisy:
+            print('Add level to the nest.')
 
         # Find all the elements connected to the last set of open boundary nodes.
         if not np.any(self.boundaries[-1].nodes):
@@ -3606,6 +3983,9 @@ class Nest(object):
 
         """
 
+        if self._noisy:
+                print('Add weights to the nested boundary.')
+
         for index, boundary in enumerate(self.boundaries):
             if power == 0:
                 weight_node = 1 / (index + 1)
@@ -3648,14 +4028,48 @@ class Nest(object):
 
         """
 
+        if self._noisy:
+            print('Interpolate TPXO tides to the nested boundary.')
+
         for boundary in self.boundaries:
             boundary.add_tpxo_tides(*args, **kwargs)
 
     def add_nested_forcing(self, *args, **kwargs):
-        OpenBoundary.__doc__
+        """
+        Interpolate the given data onto the open boundary nodes for the period from `self.time.start' to
+        `self.time.end'.
+
+        Parameters
+        ----------
+        fvcom_name : str
+            The data field name to add to the nest object which will be written to netCDF for FVCOM.
+        coarse_name : str
+            The data field name to use from the coarse object.
+        coarse : RegularReader
+            The regularly gridded data to interpolate onto the open boundary nodes. This must include time, lon,
+            lat and depth data as well as the time series to interpolate (4D volume [time, depth, lat, lon]).
+        interval : float, optional
+            Time sampling interval in days. Defaults to 1 day.
+        constrain_coordinates : bool, optional
+            Set to True to constrain the open boundary coordinates (lon, lat, depth) to the supplied coarse data.
+            This essentially squashes the open boundary to fit inside the coarse data and is, therefore, a bit of a
+            fudge! Defaults to False.
+        mode : bool, optional
+            Set to 'nodes' to interpolate onto the open boundary node positions or 'elements' for the elements for
+            z-level data. For 2D data, set to 'surface' (interpolates to the node positions ignoring depth
+            coordinates). Also supported are 'sigma_nodes' and `sigma_elements' which means we have spatially (and
+            optionally temporally) varying water depths (i.e. sigma layers rather than z-levels). Defaults to 'nodes'.
+        tide_adjust : bool, optional
+            Some nested forcing doesn't include tidal components and these have to be added from predictions using
+            harmonics. With this set to true the interpolated forcing has the tidal component (required to already
+            exist in self.tide) added to the final data.
+        verbose : bool, optional
+            Set to True to enable verbose output. Defaults to False (no verbose output).
+
+        """
         for ii, boundary in enumerate(self.boundaries):
             if self._noisy:
-                print('adding nested forcing for boundary {} of {}'.format(ii + 1, len(self.boundaries)))
+                print(f'Interpolating {args[1]} forcing for nested boundary {ii + 1} of {len(self.boundaries)}')
             boundary.add_nested_forcing(*args, **kwargs)
 
     def add_fvcom_tides(self, *args, **kwargs):
@@ -3681,26 +4095,24 @@ class Nest(object):
 
         """
         for ii, boundary in enumerate(self.boundaries):
-            if self._noisy:
-                print('adding predicted fvcom {} for boundary {} of {}'.format(predict, ii + 1, len(self.boundaries)))
-            # Check if we have elements since outer layer of nest usually doesn't
+            # Check if we have elements since outer layer of nest doesn't
             if kwargs['predict'] in ['u', 'v', 'ua', 'va'] and not np.any(boundary.elements):
                 if self._noisy:
-                    print('skipping prediction for {} for boundary {} of {}, no elements defined'.format(kwargs['predict'], ii + 1, len(self.boundaries)))
+                    print(f'Skipping prediction of {kwargs["predict"]} for boundary {ii + 1} of {len(self.boundaries)}: no elements defined')
             else:
                 if self._noisy:
-                    print('predicting {} for boundary {} of {}'.format(kwargs['predict'], ii + 1, len(self.boundaries)))
+                    print(f'Predicting {kwargs["predict"]} for boundary {ii + 1} of {len(self.boundaries)}')
                 boundary.add_fvcom_tides(*args, **kwargs)
 
     def avg_nest_force_vel(self):
         """
-        Create depth-averaged velocities (`ua', `va') in the open boundary object boundary.nest data.
+        Create depth-averaged velocities (`ua', `va') in the open boundary object boundary.data data.
 
         """
         for ii, boundary in enumerate(self.boundaries, 1):
             if np.any(boundary.elements):
                 if self._noisy:
-                    print('creating ua,va for boundary {} of {}'.format(ii, len(self.boundaries)))
+                    print(f'Creating ua, va for boundary {ii} of {len(self.boundaries)}')
                 boundary.avg_nest_force_vel()
 
 
@@ -3855,12 +4267,18 @@ class RegularReader(FileReader):
 
     """
 
+    # TODO:
+    #  - A lot of the methods on FileReader will need to be reimplemented for these data (e.g. avg_volume_var). That
+    #  is, anything which assumes we've got an unstructured grid.
+
     def __rshift__(self, other, debug=False):
         """
         This special method means we can stack two RegularReader objects in time through a simple append (e.g. nemo
         = nemo2 >> nemo1).
 
         """
+
+        time_name = 'time'
 
         # Check we've already got all the same data objects before we start.
         if hasattr(self.dims, 'lon'):
@@ -3907,10 +4325,9 @@ class RegularReader(FileReader):
 
         # Copy ourselves to a new version for concatenation. self is the old so we get appended to by the new.
         idem = copy.copy(self)
-
         for var in idem.data:
-            if 'time' in idem.ds.variables[var].dimensions:
-                if self._noisy:
+            if time_name in idem.ds.variables[var].dimensions:
+                if debug:
                     print('Concatenating {} in time'.format(var))
                 setattr(idem.data, var, np.ma.concatenate((getattr(other.data, var), getattr(idem.data, var))))
         for time in idem.time:
@@ -3924,7 +4341,7 @@ class RegularReader(FileReader):
         time_mask[dupe_indices] = False
         for var in idem.data:
             # Only delete things with a time dimension.
-            if 'time' in idem.ds.variables[var].dimensions:
+            if time_name in idem.ds.variables[var].dimensions:
                 # time_axis = idem.ds.variables[var].dimensions.index('time')
                 setattr(idem.data, var, getattr(idem.data, var)[time_mask, ...])  # assume time is first
                 # setattr(idem.data, var, np.delete(getattr(idem.data, var), dupe_indices, axis=time_axis))
@@ -3945,7 +4362,9 @@ class RegularReader(FileReader):
     def _load_time(self):
         """
         Populate a time object with additional useful time representations from the netCDF time data.
+
         """
+
         self.time = _TimeReaderReg(self.ds, dims=self._dims)
 
     def _load_grid(self, netcdf_filestr, grid_variables=None):
@@ -3958,16 +4377,15 @@ class RegularReader(FileReader):
         if grid_variables is None:
             grid_variables = {'lon':'lon', 'lat':'lat', 'x':'x', 'y':'y', 'depth':'depth', 'Longitude':'Longitude', 'Latitude':'Latitude'}
 
-        self.grid = _passive_data_store()
+        self.grid = PassiveStore()
         # Get the grid data.
         for grid, nc_grid in grid_variables.items():
             try:
                 setattr(self.grid, grid, self.ds.variables[nc_grid][:])
                 # Save the attributes.
-                attributes = _passive_data_store()
+                attributes = PassiveStore()
                 for attribute in self.ds.variables[nc_grid].ncattrs():
                     setattr(attributes, attribute, getattr(self.ds.variables[nc_grid], attribute))
-                #setattr(self.atts, grid, attributes)
             except KeyError:
                 # Make zeros for this missing variable so we can convert from the non-missing data below.
                 if hasattr(self.dims, 'lon') and hasattr(self.dims, 'lat'):
@@ -3981,24 +4399,21 @@ class RegularReader(FileReader):
                 print(value_error_message)
                 setattr(self.grid, grid, np.zeros(self.ds.variables[nc_grid].shape))
 
-        # Make the grid data the right shape for us to assume it's an FVCOM-style data set.
-        # self.grid.lon, self.grid.lat = np.meshgrid(self.grid.lon, self.grid.lat)
-        # self.grid.lon, self.grid.lat = self.grid.lon.ravel(), self.grid.lat.ravel()
-
         # Update dimensions to match those we've been given, if any. Omit time here as we shouldn't be touching that
         # dimension for any variable in use in here.
         for dim in self._dims:
             if dim != 'time':
+                # TODO Add support for slices here.
                 setattr(self.dims, dim, len(self._dims[dim]))
 
         # Convert the given W/E/S/N coordinates into node and element IDs to subset.
         if self._bounding_box:
             # We need to use the original Dataset lon and lat values here as they have the right shape for the
             # subsetting.
-            self._dims['lon'] = np.argwhere((self.ds.variables['lon'][:] > self._dims['wesn'][0]) &
-                                            (self.ds.variables['lon'][:] < self._dims['wesn'][1]))
-            self._dims['lat'] = np.argwhere((self.ds.variables['lat'][:] > self._dims['wesn'][2]) &
-                                            (self.ds.variables['lat'][:] < self._dims['wesn'][3]))
+            self._dims['lon'] = np.argwhere((self.grid.lon > self._dims['wesn'][0]) &
+                                            (self.grid.lon < self._dims['wesn'][1]))
+            self._dims['lat'] = np.argwhere((self.grid.lat > self._dims['wesn'][2]) &
+                                            (self.grid.lat < self._dims['wesn'][3]))
 
         related_variables = {'lon': ('x', 'lon'), 'lat': ('y', 'lat')}
         for spatial_dimension in 'lon', 'lat':
@@ -4013,20 +4428,408 @@ class RegularReader(FileReader):
                             var_shape[self.ds.variables[var].dimensions.index('depth')] = self.dims.siglay
                         _temp = np.empty(var_shape) * np.nan
                         if 'depth' in self.ds.variables[var].dimensions:
-                            for ni, node in enumerate(self._dims[spatial_dimension]):
-                                if 'depth' in self._dims:
-                                    _temp[..., ni] = self.ds.variables[var][self._dims['depth'], node]
-                                else:
-                                    _temp[..., ni] = self.ds.variables[var][:, node]
+                            if 'depth' in self._dims:
+                                _temp = self.ds.variables[var][self._dims['depth'], self._dims[spatial_dimension]]
+                            else:
+                                _temp = self.ds.variables[var][:, self._dims[spatial_dimension]]
                         else:
-                            for ni, node in enumerate(self._dims[spatial_dimension]):
-                                _temp[..., ni] = self.ds.variables[var][node]
+                            _temp = self.ds.variables[var][self._dims[spatial_dimension]]
                     except KeyError:
                         if 'depth' in var:
                             _temp = np.empty((self.dims.depth, getattr(self.dims, spatial_dimension)))
                         else:
                             _temp = np.empty(getattr(self.dims, spatial_dimension))
-                setattr(self.grid, var, _temp)
+                    setattr(self.grid, var, _temp)
+
+        # Check if we've been given vertical dimensions to subset in too, and if so, do that. Check we haven't
+        # already done this in the 'node' and 'nele' sections above first.
+        for var in ['depth']:
+            short_dim = copy.copy(var)
+            # Assume we need to subset this one unless 'node' or 'nele' are missing from self._dims. If they're in
+            # self._dims, we've already subsetted in the 'node' and 'nele' sections above, so doing it again here
+            # would fail.
+            subset_variable = True
+            if 'lon' in self._dims or 'lat' in self._dims:
+                subset_variable = False
+            # Strip off the _center to match the dimension name.
+            if short_dim.endswith('_center'):
+                short_dim = short_dim.split('_')[0]
+            if short_dim in self._dims:
+                if short_dim in self.ds.variables[var].dimensions and subset_variable:
+                    _temp = getattr(self.grid, var)[self._dims[short_dim], ...]
+                    setattr(self.grid, var, _temp)
+
+        # Check ranges and if zero assume we're missing that particular type, so convert from the other accordingly.
+        self.grid.lon_range = np.ptp(self.grid.lon)
+        self.grid.lat_range = np.ptp(self.grid.lat)
+        self.grid.x_range = np.ptp(self.grid.x)
+        self.grid.y_range = np.ptp(self.grid.y)
+
+        # Only do the conversions when we have more than a single point since the relevant ranges will be zero with
+        # only one position.
+        if hasattr(self.dims, 'lon') and hasattr(self.dims, 'lat'):
+            if self.dims.lon > 1 and self.dims.lat > 1:
+                if self.grid.lon_range == 0 and self.grid.lat_range == 0:
+                    self.grid.lon, self.grid.lat = lonlat_from_utm(self.grid.x, self.grid.y, zone=self._zone)
+                    self.grid.lon_range = np.ptp(self.grid.lon)
+                    self.grid.lat_range = np.ptp(self.grid.lat)
+                if self.grid.lon_range == 0 and self.grid.lat_range == 0:
+                    self.grid.x, self.grid.y, _ = utm_from_lonlat(self.grid.lon.ravel(), self.grid.lat.ravel())
+                    self.grid.x = np.reshape(self.grid.x, self.grid.lon.shape)
+                    self.grid.y = np.reshape(self.grid.y, self.grid.lat.shape)
+                    self.grid.x_range = np.ptp(self.grid.x)
+                    self.grid.y_range = np.ptp(self.grid.y)
+
+        # Make a bounding box variable too (spherical coordinates): W/E/S/N
+        self.grid.bounding_box = (np.min(self.grid.lon), np.max(self.grid.lon),
+                                  np.min(self.grid.lat), np.max(self.grid.lat))
+
+    def load_data(self, var):
+        """
+        Load the given variable/variables.
+
+        Parameters
+        ----------
+        var : list-like, str
+            List of variables to load.
+
+        """
+
+        # Check if we've got iterable variables and make one if not.
+        try:
+            _ = (e for e in var)
+        except TypeError:
+            var = [var]
+
+        for v in var:
+            if self._noisy:
+                print(f'Loading {v}', flush=True)
+
+            if v not in self.ds.variables:
+                raise KeyError("Variable '{}' not present in {}.".format(v, self._fvcom))
+
+            # Get this variable's dimensions
+            var_dim = self.ds.variables[v].dimensions
+            variable_shape = self.ds.variables[v].shape
+            variable_indices = [np.arange(i) for i in variable_shape]
+            for dimension in var_dim:
+                if dimension in self._dims:
+                    # Replace their size with anything we've been given in dims.
+                    variable_index = var_dim.index(dimension)
+                    variable_indices[variable_index] = self._dims[dimension]
+
+            # Check the data we're loading is the same shape as our existing dimensions.
+            if hasattr(self.dims, 'lon'):
+                xname = 'lon'
+                xvar = 'lon'
+                xdim = self.dims.lon
+            elif hasattr(self.dims, 'x'):
+                xname = 'x'
+                xvar = 'Longitude'
+                xdim = self.dims.x
+            else:
+                raise AttributeError('Unrecognised longitude dimension name')
+
+            if hasattr(self.dims, 'lat'):
+                yname = 'lat'
+                yvar = 'lat'
+                ydim = self.dims.lat
+            elif hasattr(self.dims, 'y'):
+                yname = 'y'
+                yvar = 'Latitude'
+                ydim = self.dims.y
+            else:
+                raise AttributeError('Unrecognised latitude dimension name')
+
+            depthname, depthvar, depthdim, depth_compare = self._get_depth_dim()
+
+            if hasattr(self.dims, 'time'):
+                timename = 'time'
+                timedim = self.dims.time
+            elif hasattr(self.dims, 'time_counter'):
+                timename = 'time_counter'
+                timedim = self.dims.time_counter
+            elif hasattr(self.dims, 't'):
+                timename = 't'
+                timedim = self.dims.t
+            else:
+                raise AttributeError('Unrecognised time dimension name')
+
+            lon_compare = self.ds.dimensions[xname].size == xdim
+            lat_compare = self.ds.dimensions[yname].size == ydim
+            time_compare = self.ds.dimensions[timename].size == timedim
+            # Check again if we've been asked to subset in any dimension.
+            if xname in self._dims:
+                lon_compare = len(self.ds.variables[xvar][self._dims[xname]]) == xdim
+            if yname in self._dims:
+                lat_compare = len(self.ds.variables[yvar][self._dims[yname]]) == ydim
+            if depthname in self._dims:
+                depth_compare = len(self.ds.variables[depthvar][self._dims[depthname]]) == depthdim
+            if timename in self._dims:
+                time_compare = len(self.ds.variables['time'][self._dims[timename]]) == timedim
+
+            if not lon_compare:
+                raise ValueError('Longitude data are incompatible. You may be trying to load data after having already '
+                                 'concatenated a RegularReader object, which is unsupported.')
+            if not lat_compare:
+                raise ValueError('Latitude data are incompatible. You may be trying to load data after having already '
+                                 'concatenated a RegularReader object, which is unsupported.')
+            if not depth_compare:
+                raise ValueError('Vertical depth layers are incompatible. You may be trying to load data after having '
+                                 'already concatenated a RegularReader object, which is unsupported.')
+            if not time_compare:
+                raise ValueError('Time period is incompatible. You may be trying to load data after having already '
+                                 'concatenated a RegularReader object, which is unsupported.')
+
+            if 'time' not in var_dim:
+                # Should we error here or carry on having warned?
+                warn("{} does not contain a `time' dimension.".format(v))
+
+            attributes = PassiveStore()
+            for attribute in self.ds.variables[v].ncattrs():
+                setattr(attributes, attribute, getattr(self.ds.variables[v], attribute))
+            setattr(self.atts, v, attributes)
+
+            data = self.ds.variables[v][variable_indices]  # data are automatically masked
+            setattr(self.data, v, data)
+
+    def _get_depth_dim(self):
+        if hasattr(self.dims, 'depth'):
+            depthname = 'depth'
+            depthvar = 'depth'
+            depthdim = self.dims.depth
+        elif hasattr(self.dims, 'deptht'):
+            depthname = 'deptht'
+            depthvar = 'deptht'
+            depthdim = self.dims.deptht
+        elif hasattr(self.dims, 'depthu'):
+            depthname = 'depthu'
+            depthvar = 'depthu'
+            depthdim = self.dims.depthu
+        elif hasattr(self.dims, 'depthv'):
+            depthname = 'depthv'
+            depthvar = 'depthv'
+            depthdim = self.dims.depthv
+        elif hasattr(self.dims, 'depthw'):
+            depthname = 'depthw'
+            depthvar = 'depthw'
+            depthdim = self.dims.depthw
+        elif hasattr(self.dims, 'z'):
+            depthname = 'z'
+            depthvar = 'nav_lev'
+            depthdim = self.dims.z
+        else:
+            raise AttributeError('Unrecognised depth dimension name')
+
+        depth_compare = self.ds.dimensions[depthname].size == depthdim
+
+        return depthname, depthvar, depthdim, depth_compare
+
+    def closest_element(self, *args, **kwargs):
+        """ Compatibility function. """
+        return self.closest_node(*args, **kwargs)
+
+    def closest_node(self, where, cartesian=False, threshold=np.inf, vincenty=False, haversine=False):
+        if cartesian:
+            raise ValueError('No cartesian coordinates defined')
+        else:
+            if np.ndim(self.grid.lon) <= 1:
+                lat_rav, lon_rav = np.meshgrid(self.grid.lat, self.grid.lon)
+                x, y = lon_rav.ravel(), lat_rav.ravel()
+            else:
+                x, y = self.grid.lon.ravel(), self.grid.lat.ravel()
+
+        index = self._closest_point(x, y, x, y, where, threshold=threshold, vincenty=vincenty, haversine=haversine)
+        if len(index) == 1:
+            index = index[0]
+        if np.ndim(self.grid.lon) <= 1:
+            return np.unravel_index(index, (len(self.grid.lon), len(self.grid.lat)))
+        else:
+            return np.unravel_index(index, self.grid.lon.shape)
+
+
+class NEMOReader(RegularReader):
+    """
+    Class to read in regularly gridded model output. This provides a similar interface to a PyFVCOM.read.FileReader
+    object but with an extra spatial dimension. This is currently based on CMEMS model outputs (i.e. NEMO).
+
+    Author(s)
+    ---------
+    Pierre Cazenave (Plymouth Marine Laboratory)
+
+    Credits
+    -------
+    This code leverages ideas (and in some cases, code) from PySeidon (https://github.com/GrumpyNounours/PySeidon)
+    and PyLag-tools (https://gitlab.em.pml.ac.uk/PyLag/PyLag-tools).
+
+    """
+
+    # TODO:
+    #  - A lot of the methods on FileReader will need to be reimplemented for these data (e.g. avg_volume_var). That
+    #  is, anything which assumes we've got an unstructured grid.
+
+    def __rshift__(self, other, debug=False):
+        """
+        This special method means we can stack two RegularReader objects in time through a simple append (e.g. nemo
+        = nemo2 >> nemo1).
+
+        """
+
+        time_name = 'time_counter'
+
+        # Check we've already got all the same data objects before we start.
+        if hasattr(self.dims, 'lon'):
+            xname = 'lon'
+            xdim = self.dims.lon
+        elif hasattr(self.dims, 'x'):
+            xname = 'x'
+            xdim = self.dims.x
+        else:
+            raise AttributeError('Unrecognised longitude dimension name')
+
+        if hasattr(self.dims, 'lat'):
+            yname = 'lat'
+            ydim = self.dims.lat
+        elif hasattr(self.dims, 'x'):
+            yname = 'y'
+            ydim = self.dims.y
+        else:
+            raise AttributeError('Unrecognised latitude dimension name')
+
+        depthname, depthvar, depthdim, depth_compare = self._get_depth_dim()
+
+        lon_compare = xdim == getattr(other.dims, xname)
+        lat_compare = ydim == getattr(other.dims, yname)
+        time_compare = other.time.datetime[-1] <= self.time.datetime[0]
+        old_data = [i for i in other.data]
+        new_data = [i for i in self.data]
+        data_compare = new_data == old_data
+        if not lon_compare:
+            raise ValueError('Horizontal longitude data are incompatible.')
+        if not lat_compare:
+            raise ValueError('Horizontal latitude data are incompatible.')
+        if not depth_compare:
+            raise ValueError('Vertical depth layers are incompatible.')
+        if not time_compare:
+            raise ValueError("Time periods are incompatible (`fvcom2' must be greater than or equal to `fvcom1')."
+                             "`fvcom1' has end {} and `fvcom2' has start {}".format(other.time.datetime[-1],
+                                                                                    self.time.datetime[0]))
+        if not data_compare:
+            raise ValueError('Loaded data sets for each RegularReader class must match.')
+        if not (old_data == new_data) and (old_data or new_data):
+            warn('Subsequent attempts to load data for this merged object will only load data from the first object. '
+                 'Load data into each object before merging them.')
+
+        # Copy ourselves to a new version for concatenation. self is the old so we get appended to by the new.
+        idem = copy.copy(self)
+        for var in idem.data:
+            if time_name in idem.ds.variables[var].dimensions:
+                if debug:
+                    print('Concatenating {} in time'.format(var))
+                setattr(idem.data, var, np.ma.concatenate((getattr(other.data, var), getattr(idem.data, var))))
+        for time in idem.time:
+            setattr(idem.time, time, np.concatenate((getattr(other.time, time), getattr(idem.time, time))))
+
+        # Remove duplicate times.
+        time_indices = np.arange(len(idem.time.time))
+        _, dupes = np.unique(idem.time.time, return_index=True)
+        dupe_indices = np.setdiff1d(time_indices, dupes)
+        time_mask = np.ones(time_indices.shape, dtype=bool)
+        time_mask[dupe_indices] = False
+        for var in idem.data:
+            # Only delete things with a time dimension.
+            if time_name in idem.ds.variables[var].dimensions:
+                # time_axis = idem.ds.variables[var].dimensions.index('time')
+                setattr(idem.data, var, getattr(idem.data, var)[time_mask, ...])  # assume time is first
+                # setattr(idem.data, var, np.delete(getattr(idem.data, var), dupe_indices, axis=time_axis))
+        for time in idem.time:
+            try:
+                time_axis = idem.ds.variables[time].dimensions.index('time')
+                setattr(idem.time, time, np.delete(getattr(idem.time, time), dupe_indices, axis=time_axis))
+            except KeyError:
+                # This is hopefully one of the additional time variables which doesn't exist in the netCDF dataset.
+                # Just delete the relevant indices by assuming that time is the first axis.
+                setattr(idem.time, time, np.delete(getattr(idem.time, time), dupe_indices, axis=0))
+
+        # Update dimensions accordingly.
+        idem.dims.time = len(idem.time.time)
+
+        return idem
+
+    def _load_grid(self, netcdf_filestr, grid_variables=None):
+        """
+        Load the grid data.
+
+        Convert from UTM to spherical if we haven't got those data in the existing output file.
+
+        """
+        if grid_variables is None:
+            grid_variables = {'lon': 'nav_lon', 'nav_lat': 'lat', 'x': 'x', 'y': 'y', 'depth': 'depth',
+                              'Longitude': 'Longitude', 'Latitude': 'Latitude'}
+
+        self.grid = PassiveStore()
+        # Get the grid data.
+        for grid, nc_grid in grid_variables.items():
+            try:
+                setattr(self.grid, grid, self.ds.variables[nc_grid][:])
+                # Save the attributes.
+                attributes = PassiveStore()
+                for attribute in self.ds.variables[nc_grid].ncattrs():
+                    setattr(attributes, attribute, getattr(self.ds.variables[nc_grid], attribute))
+            except KeyError:
+                # Make zeros for this missing variable so we can convert from the non-missing data below.
+                if hasattr(self.dims, 'lon') and hasattr(self.dims, 'lat'):
+                    setattr(self.grid, grid, np.zeros((self.dims.lon, self.dims.lat)))
+                elif hasattr(self.dims, 'x') and hasattr(self.dims, 'y'):
+                    setattr(self.grid, grid, np.zeros((self.dims.x, self.dims.y)))
+                else:
+                    raise AttributeError('Unknown grid dimension names.')
+            except ValueError as value_error_message:
+                warn('Variable {} has a problem with the data. Setting value as all zeros.'.format(grid))
+                print(value_error_message)
+                setattr(self.grid, grid, np.zeros(self.ds.variables[nc_grid].shape))
+
+        # Link the NEMO dimension names to the CMEMS-style ones to the rest of the code works as is.
+        if 'x' in self._dims:
+            self._dims['lon'] = self._dims['x']
+        if 'y' in self._dims:
+            self._dims['lat'] = self._dims['y']
+        if 'deptht' in self._dims:
+            self._dims['depth'] = self._dims['deptht']
+
+        # Update dimensions to match those we've been given, if any. Omit time here as we shouldn't be touching that
+        # dimension for any variable in use in here.
+        for dim in self._dims:
+            if dim != 'time':
+                # TODO Add support for slices here.
+                setattr(self.dims, dim, len(self._dims[dim]))
+
+        # Convert the given W/E/S/N coordinates into node and element IDs to subset.
+        if self._bounding_box:
+            # We need to use the original Dataset lon and lat values here as they have the right shape for the
+            # subsetting.
+            self._dims['lon'] = np.argwhere((self.grid.lon > self._dims['wesn'][0]) &
+                                            (self.grid.lon < self._dims['wesn'][1]))
+            self._dims['lat'] = np.argwhere((self.grid.lat > self._dims['wesn'][2]) &
+                                            (self.grid.lat < self._dims['wesn'][3]))
+
+        # Slicing with 2D arrays needs a meshgrid. Make the missing dimension arrays and then meshgrid those.
+        xdim = np.arange(self.ds.variables['nav_lon'].shape[1])
+        ydim = np.arange(self.ds.variables['nav_lat'].shape[0])
+        if 'x' in self._dims:
+            xdim = self._dims['x']
+        if 'y' in self._dims:
+            ydim = self._dims['y']
+        yy, xx = np.meshgrid(ydim, xdim)
+
+        for var in 'nav_lon', 'nav_lat':
+            _tmp = self.ds.variables[var][:]
+            setattr(self.grid, var, _tmp[yy, xx])
+            del _tmp
+
+        # Make 1D arrays of the positions since that's the case for CMEMS data.
+        self.grid.lon = np.unique(self.grid.nav_lon)
+        self.grid.lat = np.unique(self.grid.nav_lat)
 
         # Check if we've been given vertical dimensions to subset in too, and if so, do that. Check we haven't
         # already done this if the 'node' and 'nele' sections above first.
@@ -4089,6 +4892,9 @@ class RegularReader(FileReader):
             var = [var]
 
         for v in var:
+            if self._noisy:
+                print(f'Loading {v}', flush=True)
+
             if v not in self.ds.variables:
                 raise KeyError("Variable '{}' not present in {}.".format(v, self._fvcom))
 
@@ -4102,42 +4908,36 @@ class RegularReader(FileReader):
                     variable_index = var_dim.index(dimension)
                     variable_indices[variable_index] = self._dims[dimension]
 
-            # Check the data we're loading is the same shape as our existing dimensions.
-            if hasattr(self.dims, 'lon'):
+            # Check the data we're loading is the same shape as our existing dimensions. Do NEMO checks first so we
+            # fall back on the CMEMS ones.
+            if hasattr(self.dims, 'x'):
+                xname = 'x'
+                # We need to discriminate between CMEMS and original NEMO here.
+                xvar = 'nav_lon'
+                xdim = self.dims.x
+            elif hasattr(self.dims, 'lon'):
                 xname = 'lon'
                 xvar = 'lon'
                 xdim = self.dims.lon
-            elif hasattr(self.dims, 'x'):
-                xname = 'x'
-                xvar = 'Longitude'
-                xdim = self.dims.x
             else:
                 raise AttributeError('Unrecognised longitude dimension name')
 
-            if hasattr(self.dims, 'lat'):
+            if hasattr(self.dims, 'y'):
+                yname = 'y'
+                # We need to discriminate between CMEMS and original NEMO here.
+                yvar = 'nav_lat'
+                ydim = self.dims.y
+            elif hasattr(self.dims, 'lat'):
                 yname = 'lat'
                 yvar = 'lat'
                 ydim = self.dims.lat
-            elif hasattr(self.dims, 'x'):
-                yname = 'y'
-                yvar = 'Latitude'
-                ydim = self.dims.y
             else:
                 raise AttributeError('Unrecognised latitude dimension name')
 
             depthname, depthvar, depthdim, depth_compare = self._get_depth_dim()
 
-            if hasattr(self.dims, 'time'):
-                timename = 'time'
-                timedim = self.dims.time
-            elif hasattr(self.dims, 'time_counter'):
-                timename = 'time_counter'
-                timedim = self.dims.time_counter
-            elif hasattr(self.dims, 't'):
-                timename = 't'
-                timedim = self.dims.t
-            else:
-                raise AttributeError('Unrecognised time dimension name')
+            timename = 'time_counter'
+            timedim = self.dims.time_counter
 
             lon_compare = self.ds.dimensions[xname].size == xdim
             lat_compare = self.ds.dimensions[yname].size == ydim
@@ -4165,65 +4965,17 @@ class RegularReader(FileReader):
                 raise ValueError('Time period is incompatible. You may be trying to load data after having already '
                                  'concatenated a RegularReader object, which is unsupported.')
 
-            if 'time' not in var_dim:
+            if 'time' not in var_dim and 'time_counter' not in var_dim:
                 # Should we error here or carry on having warned?
-                warn("{} does not contain a `time' dimension.".format(v))
+                warn("{} does not contain a `time' or `time_counter' dimension.".format(v))
 
-            attributes = _passive_data_store()
+            attributes = PassiveStore()
             for attribute in self.ds.variables[v].ncattrs():
                 setattr(attributes, attribute, getattr(self.ds.variables[v], attribute))
             setattr(self.atts, v, attributes)
 
             data = self.ds.variables[v][variable_indices]  # data are automatically masked
             setattr(self.data, v, data)
-
-    def _get_depth_dim(self):
-        if hasattr(self.dims, 'depth'):
-            depthname = 'depth'
-            depthvar = 'depth'
-            depthdim = self.dims.depth
-        elif hasattr(self.dims, 'deptht'):
-            depthname = 'deptht'
-            depthvar = 'deptht'
-            depthdim = self.dims.deptht
-        elif hasattr(self.dims, 'depthu'):
-            depthname = 'depthu'
-            depthvar = 'depthu'
-            depthdim = self.dims.depthu
-        elif hasattr(self.dims, 'depthv'):
-            depthname = 'depthv'
-            depthvar = 'depthv'
-            depthdim = self.dims.depthv
-        elif hasattr(self.dims, 'depthw'):
-            depthname = 'depthw'
-            depthvar = 'depthw'
-            depthdim = self.dims.depthw
-        elif hasattr(self.dims, 'z'):
-            depthname = 'z'
-            depthvar = 'nav_lev'
-            depthdim = self.dims.z
-        else:
-            raise AttributeError('Unrecognised depth dimension name')
-
-        depth_compare = self.ds.dimensions[depthname].size == depthdim
-
-        return depthname, depthvar, depthdim, depth_compare
-
-    def closest_element(self, *args, **kwargs):
-        """ Compatibility function. """
-        return self.closest_node(*args, **kwargs)
-
-    def closest_node(self, where, cartesian=False, threshold=np.inf, vincenty=False, haversine=False):
-        if cartesian:
-            raise ValueError('No cartesian coordinates defined')
-        else:
-            lat_rav, lon_rav = np.meshgrid(self.grid.lat, self.grid.lon)
-            x, y = lon_rav.ravel(), lat_rav.ravel()
-
-        index = self._closest_point(x, y, x, y, where, threshold=threshold, vincenty=vincenty, haversine=haversine)
-        if len(index) == 1:
-            index = index[0]
-        return np.unravel_index(index, (len(self.grid.lon), len(self.grid.lat)))
 
 
 class _TimeReaderReg(_TimeReader):
@@ -4259,10 +5011,12 @@ class Regular2DReader(RegularReader):
     def _get_depth_dim(self):
         return None, None, None, True
 
+
 class NemoRestartRegularReader(RegularReader):
     """
-    A nemo reader class for the restart files from the AMM7 nemo-ersem run aimed at making ersem restart files for fvcom using the Restart object. 
-    Since the mask is stored in a different file this needs to be added manually before loading variables e.g.
+    A nemo reader class for the restart files from the AMM7 nemo-ersem run aimed at making ersem restart files for
+    fvcom using the Restart object. Since the mask is stored in a different file this needs to be added manually
+    before loading variables e.g.
 
     nemo_data = '/data/euryale2/to_archive/momm-AMM7-HINDCAST-v0/2007/03/restart_trc.nc''
     nemo_mask = '/data/euryale4/to_archive/momm-AMM7-INPUTS/GRID/mesh_mask.nc'
@@ -4273,23 +5027,39 @@ class NemoRestartRegularReader(RegularReader):
     nemo_data_reader.data_mask = tmask
     nemo_data_reader.load_data([this_nemo])
 
-    Also since these restart files are timeless a single dummy time (2001,1,1) is put in on initialising. The replace interpolation *should* ignore
-    the time if there is only one timestep but you can always overwrite it e.g. 
+    Also since these restart files are timeless a single dummy time (2001,1,1) is put in on initialising. The replace
+    interpolation *should* ignore the time if there is only one timestep but you can always overwrite it e.g.
 
-    nemo_data_reader.time = restart_file_object.time    
-    restart_file_object.replace_variable_with_regular(this_fvcom, this_nemo, nemo_data_reader, constrain_coordinates=True, mode='nodes'
+    nemo_data_reader.time = restart_file_object.time
+    restart_file_object.replace_variable_with_regular(this_fvcom, this_nemo, nemo_data_reader, constrain_coordinates=True, mode='nodes')
 
     """
+
+    # There has been some parallel work here - I (pica) have been working on making a NEMO-specific RegularReader
+    # whilst Mike has added this class. Not sure what can be removed.
+
     def _load_time(self):
         """
         Populate a time object with additional useful time representations from the netCDF time data.
+
         """
-        self.time = _passive_data_store()
-        self.time.time = datetime(2001,1,1)
+
+        self.time = PassiveStore()
+        self.time.time = datetime(2001, 1, 1)
         self.time._dims = self._dims
 
     def _load_grid(self, netcdf_filestr):
-        grid_variables = {'lon':'nav_lon', 'lat':'nav_lat', 'depth':'nav_lev', 'x':'x', 'y':'y'}
+        """
+        Load the model grid.
+
+        Parameters
+        ----------
+        netcdf_filestr : str
+            Ignored (for compatibility with PyFVCOM.read.FileReader).
+
+        """
+
+        grid_variables = {'lon': 'nav_lon', 'lat': 'nav_lat', 'depth': 'nav_lev', 'x': 'x', 'y': 'y'}
         super()._load_grid(netcdf_filestr, grid_variables=grid_variables)
 
         self.grid.lat = np.unique(self.grid.lat)
@@ -4300,16 +5070,15 @@ class NemoRestartRegularReader(RegularReader):
 
     def load_data(self, var):
         if not hasattr(self, 'data_mask'):
-            print('Need to add data mask before trying to retrieve variables')
-            return
+            raise AttributeError('Need to add data mask before trying to retrieve variables')
 
         if hasattr(self.dims, 'time'):
             del self.dims.time
         super().load_data(var)
-        
-        # create mask
+
+        # Create mask
         for this_var in var:
-            setattr(self.data, this_var, np.ma.masked_array(getattr(self.data,this_var), mask=self.data_mask))
+            setattr(self.data, this_var, np.ma.masked_array(getattr(self.data, this_var), mask=self.data_mask))
 
 
 class HYCOMReader(RegularReader):
@@ -4445,7 +5214,7 @@ class HYCOMReader(RegularReader):
             try:
                 setattr(self.grid, grid, self.ds.variables[grid][:])
                 # Save the attributes.
-                attributes = _passive_data_store()
+                attributes = PassiveStore()
                 for attribute in self.ds.variables[grid].ncattrs():
                     setattr(attributes, attribute, getattr(self.ds.variables[grid], attribute))
                 setattr(self.atts, grid, attributes)
@@ -4639,7 +5408,7 @@ class HYCOMReader(RegularReader):
                 # Should we error here or carry on having warned?
                 warn("{} does not contain an `MT' (time) dimension.".format(v))
 
-            attributes = _passive_data_store()
+            attributes = PassiveStore()
             for attribute in self.ds.variables[v].ncattrs():
                 setattr(attributes, attribute, getattr(self.ds.variables[v], attribute))
             setattr(self.atts, v, attributes)
@@ -4765,7 +5534,7 @@ class Restart(FileReader):
             # Internal landmasses also need to be dealt with, so test if a point lies within the mask of the grid and
             # move it to the nearest in grid point if so.
             if not mode == 'surface':
-                land_mask = getattr(coarse.data, coarse_name)[0, ...].mask[0,:,:]
+                land_mask = getattr(coarse.data, coarse_name)[0, ...].mask[0, :, :]
             else:
                 land_mask = getattr(coarse.data, coarse_name)[0, ...].mask
 
@@ -4773,15 +5542,15 @@ class Restart(FileReader):
             sea_points[land_mask] = np.nan
 
             ft_sea = RegularGridInterpolator((coarse.grid.lat, coarse.grid.lon), sea_points, method='linear', fill_value=np.nan)
-            internal_points = np.isnan(ft_sea(np.asarray([y,x]).T))
+            internal_points = np.isnan(ft_sea(np.asarray([y, x]).T))
 
             if np.any(internal_points):
                 xv, yv = np.meshgrid(coarse.grid.lon, coarse.grid.lat)
                 valid_ll = np.asarray([x[~internal_points], y[~internal_points]]).T
                 for this_ind in np.where(internal_points)[0]:
-                    nearest_valid_ind = np.argmin((valid_ll[:,0] - x[this_ind])**2 + (valid_ll[:,1] - y[this_ind])**2)
-                    x[this_ind] = valid_ll[nearest_valid_ind,0]
-                    y[this_ind] = valid_ll[nearest_valid_ind,1]
+                    nearest_valid_ind = np.argmin((valid_ll[:, 0] - x[this_ind])**2 + (valid_ll[:, 1] - y[this_ind])**2)
+                    x[this_ind] = valid_ll[nearest_valid_ind, 0]
+                    y[this_ind] = valid_ll[nearest_valid_ind, 1]
 
             # The depth data work differently as we need to squeeze each FVCOM water column into the available coarse
             # data. The only way to do this is to adjust each FVCOM water column in turn by comparing with the
@@ -4799,12 +5568,12 @@ class Restart(FileReader):
                     nearest_lat_ind = np.argmin((coarse.grid.lat - node[1])**2)
 
                     if node[0] < coarse.grid.lon[nearest_lon_ind]:
-                        nearest_lon_ind = [nearest_lon_ind -1, nearest_lon_ind, nearest_lon_ind -1, nearest_lon_ind]
+                        nearest_lon_ind = [nearest_lon_ind - 1, nearest_lon_ind, nearest_lon_ind - 1, nearest_lon_ind]
                     else:
                         nearest_lon_ind = [nearest_lon_ind, nearest_lon_ind + 1, nearest_lon_ind, nearest_lon_ind + 1]
 
                     if node[1] < coarse.grid.lat[nearest_lat_ind]:
-                        nearest_lat_ind = [nearest_lat_ind -1, nearest_lat_ind -1, nearest_lat_ind, nearest_lat_ind]
+                        nearest_lat_ind = [nearest_lat_ind - 1, nearest_lat_ind - 1, nearest_lat_ind, nearest_lat_ind]
                     else:
                         nearest_lat_ind = [nearest_lat_ind, nearest_lat_ind, nearest_lat_ind + 1, nearest_lat_ind + 1]
 
