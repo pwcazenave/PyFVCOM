@@ -1103,7 +1103,7 @@ class OpenBoundary(object):
         # Feels a bit ridiculous having a whole method for this...
         setattr(self, 'type', obc_type)
 
-    def add_tpxo_tides(self, tpxo_harmonics, predict='zeta', interval=1 / 24, constituents=['M2'], serial=False, pool_size=None, noisy=False):
+    def add_tpxo_tides(self, tpxo_harmonics, predict='zeta', interval=1 / 24, constituents=['M2'], serial=False, pool_size=None, noisy=False, interp_method='nearest'):
         """
         Add TPXO tides at the open boundary nodes.
 
@@ -1152,7 +1152,7 @@ class OpenBoundary(object):
         harmonics_lon, harmonics_lat, amplitudes, phases, available_constituents = self._load_harmonics(tpxo_harmonics, constituents, names)
         interpolated_amplitudes, interpolated_phases = self._interpolate_tpxo_harmonics(x, y,
                                                                                         amplitudes, phases,
-                                                                                        harmonics_lon, harmonics_lat)
+                                                                                        harmonics_lon, harmonics_lat, interp_method=interp_method)
 
         self.tide.constituents = available_constituents
 
@@ -1361,7 +1361,7 @@ class OpenBoundary(object):
         return np.all(is_matched), np.asarray(match_indices, dtype=int)
 
     @staticmethod
-    def _interpolate_tpxo_harmonics(x, y, amp_data, phase_data, harmonics_lon, harmonics_lat):
+    def _interpolate_tpxo_harmonics(x, y, amp_data, phase_data, harmonics_lon, harmonics_lat, interp_method):
         """
         Interpolate from the harmonics data onto the current open boundary positions.
 
@@ -1392,8 +1392,8 @@ class OpenBoundary(object):
         # Make a dummy first dimension since we need it for the RegularGridInterpolator but don't actually
         # interpolated along it.
         c_data = np.arange(amp_data.shape[0])
-        amplitude_interp = RegularGridInterpolator((c_data, harmonics_lon, harmonics_lat), amp_data, method='nearest', fill_value=None)
-        phase_interp = RegularGridInterpolator((c_data, harmonics_lon, harmonics_lat), phase_data, method='nearest', fill_value=None)
+        amplitude_interp = RegularGridInterpolator((c_data, harmonics_lon, harmonics_lat), amp_data, method=interp_method, fill_value=None)
+        phase_interp = RegularGridInterpolator((c_data, harmonics_lon, harmonics_lat), phase_data, method=interp_method, fill_value=None)
 
         # Fix our input position longitudes to be in the 0-360 range to match the harmonics data range,
         # if necessary.
