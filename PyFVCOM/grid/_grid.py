@@ -1107,7 +1107,7 @@ class OpenBoundary(object):
         # Feels a bit ridiculous having a whole method for this...
         setattr(self, 'type', obc_type)
 
-    def add_tpxo_tides(self, tpxo_harmonics, predict='zeta', interval=1 / 24, constituents=['M2'], serial=False, pool_size=None, noisy=False):
+    def add_tpxo_tides(self, tpxo_harmonics, predict='zeta', interval=1 / 24, constituents=['M2'], serial=False, pool_size=None, noisy=False, interp_method='nearest'):
         """
         Add TPXO tides at the open boundary nodes.
 
@@ -1156,7 +1156,7 @@ class OpenBoundary(object):
         harmonics_lon, harmonics_lat, amplitudes, phases, available_constituents = self._load_harmonics(tpxo_harmonics, constituents, names)
         interpolated_amplitudes, interpolated_phases = self._interpolate_tpxo_harmonics(x, y,
                                                                                         amplitudes, phases,
-                                                                                        harmonics_lon, harmonics_lat)
+                                                                                        harmonics_lon, harmonics_lat, interp_method=interp_method)
 
         self.tide.constituents = available_constituents
 
@@ -1365,7 +1365,7 @@ class OpenBoundary(object):
         return np.all(is_matched), np.asarray(match_indices, dtype=int)
 
     @staticmethod
-    def _interpolate_tpxo_harmonics(x, y, amp_data, phase_data, harmonics_lon, harmonics_lat):
+    def _interpolate_tpxo_harmonics(x, y, amp_data, phase_data, harmonics_lon, harmonics_lat, interp_method):
         """
         Interpolate from the harmonics data onto the current open boundary positions.
 
@@ -1396,8 +1396,8 @@ class OpenBoundary(object):
         # Make a dummy first dimension since we need it for the RegularGridInterpolator but don't actually
         # interpolated along it.
         c_data = np.arange(amp_data.shape[0])
-        amplitude_interp = RegularGridInterpolator((c_data, harmonics_lon, harmonics_lat), amp_data, method='linear', fill_value=None)
-        phase_interp = RegularGridInterpolator((c_data, harmonics_lon, harmonics_lat), phase_data, method='linear', fill_value=None)
+        amplitude_interp = RegularGridInterpolator((c_data, harmonics_lon, harmonics_lat), amp_data, method=interp_method, fill_value=None)
+        phase_interp = RegularGridInterpolator((c_data, harmonics_lon, harmonics_lat), phase_data, method=interp_method, fill_value=None)
 
         # Fix our input position longitudes to be in the 0-360 range to match the harmonics data range,
         # if necessary.
@@ -3959,7 +3959,7 @@ def rotate_points(x, y, origin, angle):
     return xr, yr
 
 
-def get_boundary_polygons(triangle, noisy=False):
+def get_boundary_polygons(triangle, noisy=False, nodes=None):
     """
     Gets a list of the grid boundary nodes ordered correctly.
 
@@ -3972,11 +3972,20 @@ def get_boundary_polygons(triangle, noisy=False):
         The triangle connectivity matrix as produced by the read_fvcom_mesh
         function.
 
+    nodes : optional, np.ndarray
+        Optionally a 2 x n array of coordinates for nodes in the grid, if passed the function will
+        additionally return a boolean of whether the polygons are boundaries (domain on interior)
+        or islands (domain on the exterior)
+
     Returns
     -------
     boundary_polygon_list : list
         List of integer arrays. Each array is one closed boundary polygon with
         the integers referring to node number.
+
+    islands_list : list
+        Optional, only returned if an array is passed for nodes. A boolean list of whether the
+        polygons are boundaries (domain on interior) or islands (domain on the exterior)
 
     """
 
@@ -4013,7 +4022,25 @@ def get_boundary_polygons(triangle, noisy=False):
         boundary_polygon_list.append(np.asarray(boundary_node_list))
         nodes_lt_4 = np.asarray(list(set(nodes_lt_4) - set(boundary_node_list)), dtype=int)
 
-    return boundary_polygon_list
+    if nodes is None:
+        return boundary_polygon_list
+
+    else:
+        all_poly_nodes = np.asarray([y for x in boundary_polygon_list for y in x])
+        reduce_nodes =  nodes[:, ~all_poly_nodes]
+        reduce_nodes_pts = [shapely.geometry.Point(this_ll) for this_ll in reduce_nodes]
+
+        islands_list = []
+        for this_poly_nodes in boundary_polygon_list:
+            this_poly = shapely.geometry.polygon(nodes[:, this_poly_nodes])
+            this_poly_contain = np.asarray([this_poly.contains(this_pt) for this_pt in reduce_nodes_pts])
+
+            if np.any(this_poly_contain):
+                island_list.appen(False)
+            else:
+                island_list.append(True)
+
+        return [boundary_polygon_list, islands_list]
 
 
 def get_attached_unique_nodes(this_node, trinodes):
