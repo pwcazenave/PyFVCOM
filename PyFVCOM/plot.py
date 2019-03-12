@@ -722,6 +722,7 @@ class Plotter(object):
         self.quiver_plot = None
         self.quiver_key = None
         self.scatter_plot = None
+        self.streamline_plot = None
 
     def plot_field(self, field, *args, **kwargs):
         """
@@ -961,12 +962,12 @@ class Plotter(object):
         if dx is not None and dy is None:
             dy = dx
 
+        # In theory, changing the x and y positions as well as the colours is possible via a few self.stream_plot
+        # methods (set_offsets, set_array), I've found this to be particularly unstable. In addition, removing the
+        # lines is easy enough (self.streamline_plot.lines.remove()) but the equivalent method for
+        # self.streamline_plot.arrows returns "not yet implemented". So, we'll just nuke the plot and start again.
         if self.streamline_plot is not None:
-            # Clear the current streamline plot.
-            try:
-                self.streamline_plot.lines.remove()
-            except ValueError:
-                pass
+            self.replot()
 
         # Set a decent initial density if we haven't been given one in kwargs.
         if 'density' not in kwargs:
