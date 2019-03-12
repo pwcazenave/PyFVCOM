@@ -1695,7 +1695,8 @@ class MPIWorker(object):
                                          self.field[..., grid_mask].min(), self.field[..., grid_mask].max())
 
     def plot_field(self, fvcom_file, time_indices, variable, figures_directory, label=None, set_title=False,
-                   dimensions=None, clims=None, norm=None, mask=False, figure_index=None, *args, **kwargs):
+                   dimensions=None, clims=None, norm=None, mask=False, figure_index=None, figure_stem=None,
+                   *args, **kwargs):
         """
         Plot a given horizontal surface for `variable' for the time indices in `time_indices'.
 
@@ -1722,6 +1723,8 @@ class MPIWorker(object):
         figure_index : int
             Give a starting index for the figure names. This is useful if you're calling this function in a loop over
             multiple files.
+        figure_stem : str
+            Give a file name prefix for the saved figures. Defaults to f'{variable}_streamline'.
 
         Additional args and kwargs are passed to PyFVCOM.plot.Plotter.
 
@@ -1754,7 +1757,9 @@ class MPIWorker(object):
             if set_title:
                 title_string = self.fvcom.time.datetime[local_time].strftime('%Y-%m-%d %H:%M:%S')
                 local_plot.set_title(title_string)
-            local_plot.figure.savefig(str(Path(figures_directory, f'{variable}_{figure_index + global_time + 1:04d}.png')),
+            if figure_stem is None:
+                figure_stem = f'{variable}_streamline'
+            local_plot.figure.savefig(str(Path(figures_directory, f'{figure_stem}_{figure_index + global_time + 1:04d}.png')),
                                       bbox_inches='tight',
                                       pad_inches=0.2,
                                       dpi=120)
