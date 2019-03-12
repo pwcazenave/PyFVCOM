@@ -1010,6 +1010,14 @@ class Plotter(object):
             else:
                 speed_r = np.hypot(ua_r, va_r)
 
+        # Apparently, really tiny velocities fail to plot, so skip if we are in that situation. Exclude NaNs in this
+        # check. I'm not a fan of this hardcoded threshold...
+        # Nope, don't do this, let the calling script handle the error.
+        # if np.all(np.hypot(u[np.isfinite(u)], v[np.isfinite(v)]) < 0.04):
+        #     if self._debug:
+        #         print('Skipping due to all tiny values in the input vector components.')
+        #     return
+
         # Mask off arrays as appropriate.
         ua_r = np.ma.array(ua_r, mask=self._mask_for_regular)
         va_r = np.ma.array(va_r, mask=self._mask_for_regular)
