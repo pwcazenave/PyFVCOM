@@ -722,6 +722,7 @@ class Plotter(object):
         self.quiver_plot = None
         self.quiver_key = None
         self.scatter_plot = None
+        self.streamline_plot = None
 
     def plot_field(self, field, *args, **kwargs):
         """
@@ -961,12 +962,12 @@ class Plotter(object):
         if dx is not None and dy is None:
             dy = dx
 
+        # In theory, changing the x and y positions as well as the colours is possible via a few self.stream_plot
+        # methods (set_offsets, set_array), I've found this to be particularly unstable. In addition, removing the
+        # lines is easy enough (self.streamline_plot.lines.remove()) but the equivalent method for
+        # self.streamline_plot.arrows returns "not yet implemented". So, we'll just nuke the plot and start again.
         if self.streamline_plot is not None:
-            # Clear the current streamline plot.
-            try:
-                self.streamline_plot.lines.remove()
-            except ValueError:
-                pass
+            self.replot()
 
         # Set a decent initial density if we haven't been given one in kwargs.
         if 'density' not in kwargs:
@@ -999,7 +1000,9 @@ class Plotter(object):
         speed_r = None
         if self.cmap is not None:
             if 'color' in kwargs:
-                speed_r = mp_interp_func((fvcom_x, fvcom_y, np.squeeze(kwargs['color'])[self._mask_for_unstructured], self._regular_x, self._regular_y))
+                speed_r = mp_interp_func((fvcom_x, fvcom_y,
+                                          np.squeeze(kwargs['color'])[self._mask_for_unstructured],
+                                          self._regular_x, self._regular_y))
                 kwargs.pop('color', None)
             else:
                 speed_r = np.hypot(ua_r, va_r)
@@ -1052,9 +1055,6 @@ class Plotter(object):
             Grid spacing in the x-direction in metres.
         dy :
             Grid spacing in the y-direction in metres.
-
-        Returns
-        -------
 
         Provides
         --------
@@ -1133,6 +1133,7 @@ class Plotter(object):
         # and then remove them from the sampling site list.
         land_indices = []
         # Exclude the main polygon from the list of polygons.
+        # TODO: This is ripe for parallelisation, especially as it's pretty slow in serial.
         for polygon in [i for count, i in enumerate(model_polygons) if count != main_polygon_index]:
             for row, column, index in zip(ocean_row, ocean_column, ocean_indices):
                 point = Point((self._regular_x[row, column], self._regular_y[row, column]))
@@ -1557,6 +1558,10 @@ class MPIWorker(object):
         self.root = root
         self._noisy = verbose
 
+        self.field = None
+        self.label = None
+        self.clims = None
+
     def __loader(self, fvcom_file, variable):
         """
         Function to load and make meta-variables, if appropriate, which can then be plotted by `plot_*'.
@@ -1652,8 +1657,54 @@ class MPIWorker(object):
         if self._noisy and self.rank == self.root:
             print(f'done.', flush=True)
 
+    def _figure_prep(self, fvcom_file, variable, dimensions, time_indices, clims, label, **kwargs):
+        """ Initialise a bunch of things which can be shared across different plot types. """
+
+        # Should this loading stuff be outside this function?
+        self.dims = dimensions
+        if self.dims is None:
+            self.dims = {}
+        self.dims.update({'time': time_indices})
+
+        self.__loader(fvcom_file, variable)
+        self.field = np.squeeze(getattr(self.fvcom.data, variable))
+
+        # Find out what the range of data is so we can set the colour limits automatically, if necessary.
+        if self.clims is None:
+            if self.have_mpi:
+                global_min = self.comm.reduce(np.nanmin(self.field), op=self.MPI.MIN)
+                global_max = self.comm.reduce(np.nanmax(self.field), op=self.MPI.MAX)
+            else:
+                # Fall back to local extremes.
+                global_min = np.nanmin(self.field)
+                global_max = np.nanmax(self.field)
+            self.clims = [global_min, global_max]
+            if self.have_mpi:
+                self.clims = self.comm.bcast(clims, root=0)
+
+        if self.label is None:
+            self.label = f'{getattr(self.fvcom.atts, variable).long_name.title()} ' \
+                    f'(${getattr(self.fvcom.atts, variable).units}$)'
+
+        grid_mask = np.ones(self.field[0].shape[0], dtype=bool)
+        if 'extents' in kwargs:
+            # We need to find the nodes/elements for the current variable to make sure our colour bar extends for
+            # what we're plotting (not the entire data set).
+            if 'node' in self.fvcom.variable_dimension_names[variable]:
+                x = self.fvcom.grid.lon
+                y = self.fvcom.grid.lat
+            elif 'nele' in self.fvcom.variable_dimension_names[variable]:
+                x = self.fvcom.grid.lonc
+                y = self.fvcom.grid.latc
+            extents = kwargs['extents']
+            grid_mask = (x > extents[0]) & (x < extents[1]) & (y < extents[3]) & (y > extents[2])
+
+        self.extend = colorbar_extension(clims[0], clims[1],
+                                         self.field[..., grid_mask].min(), self.field[..., grid_mask].max())
+
     def plot_field(self, fvcom_file, time_indices, variable, figures_directory, label=None, set_title=False,
-                   dimensions=None, clims=None, norm=None, mask=False, figure_index=None, *args, **kwargs):
+                   dimensions=None, clims=None, norm=None, mask=False, figure_index=None, figure_stem=None,
+                   *args, **kwargs):
         """
         Plot a given horizontal surface for `variable' for the time indices in `time_indices'.
 
@@ -1680,65 +1731,27 @@ class MPIWorker(object):
         figure_index : int
             Give a starting index for the figure names. This is useful if you're calling this function in a loop over
             multiple files.
+        figure_stem : str
+            Give a file name prefix for the saved figures. Defaults to f'{variable}_streamline'.
 
         Additional args and kwargs are passed to PyFVCOM.plot.Plotter.
 
         """
 
-        self.dims = dimensions
-        if self.dims is None:
-            self.dims = {}
-        self.dims.update({'time': time_indices})
+        self._figure_prep(fvcom_file, variable, dimensions, time_indices, clims, label, **kwargs)
 
-        self.__loader(fvcom_file, variable)
-        field = np.squeeze(getattr(self.fvcom.data, variable))
-
-        # Find out what the range of data is so we can set the colour limits automatically, if necessary.
-        if clims is None:
-            if self.have_mpi:
-                global_min = self.comm.reduce(np.nanmin(field), op=self.MPI.MIN)
-                global_max = self.comm.reduce(np.nanmax(field), op=self.MPI.MAX)
-            else:
-                # Fall back to local extremes.
-                global_min = np.nanmin(field)
-                global_max = np.nanmax(field)
-            clims = [global_min, global_max]
-            if self.have_mpi:
-                clims = self.comm.bcast(clims, root=0)
-
-        if label is None:
-            label = f'{getattr(self.fvcom.atts, variable).long_name.title()} ' \
-                    f'(${getattr(self.fvcom.atts, variable).units}$)'
-
-        grid_mask = np.ones(field[0].shape[0], dtype=bool)
-        if 'extents' in kwargs:
-            # We need to find the nodes/elements for the current variable to make sure our colour bar extends for
-            # what we're plotting (not the entire data set).
-            if 'node' in self.fvcom.variable_dimension_names[variable]:
-                x = self.fvcom.grid.lon
-                y = self.fvcom.grid.lat
-            elif 'nele' in self.fvcom.variable_dimension_names[variable]:
-                x = self.fvcom.grid.lonc
-                y = self.fvcom.grid.latc
-            extents = kwargs['extents']
-            grid_mask = (x > extents[0]) & (x < extents[1]) & (y < extents[3]) & (y > extents[2])
-
-        extend = colorbar_extension(clims[0], clims[1], field[..., grid_mask].min(), field[..., grid_mask].max())
-        if not 'extend' in kwargs:
-            kwargs['extend'] = extend
-
-        local_plot = Plotter(self.fvcom, cb_label=label, *args, **kwargs)
+        local_plot = Plotter(self.fvcom, cb_label=self.label, *args, **kwargs)
 
         if norm is not None:
             # Check for zero and negative values if we're LogNorm'ing the data and replace with the colour limit
             # minimum.
-            invalid = field <= 0
+            invalid = self.field <= 0
             if np.any(invalid):
-                if clims is None or clims[0] <= 0:
+                if self.clims is None or self.clims[0] <= 0:
                     raise ValueError("For log-scaling data with zero or negative values, we need a floor with which "
                                      "to replace those values. This is provided through the `clims' argument, "
                                      "which hasn't been supplied, or which has a zero (or below) minimum.")
-                field[invalid] = clims[0]
+                self.field[invalid] = self.clims[0]
 
         if figure_index is None:
             figure_index = 0
@@ -1747,12 +1760,95 @@ class MPIWorker(object):
                 local_mask = getattr(self.fvcom.data, 'wet_cells')[local_time] == 0
             else:
                 local_mask = np.zeros(self.fvcom.dims.nele, dtype=bool)
-            local_plot.plot_field(field[local_time], mask=local_mask)
+            local_plot.plot_field(self.field[local_time], mask=local_mask)
             local_plot.tripcolor_plot.set_clim(*clims)
             if set_title:
                 title_string = self.fvcom.time.datetime[local_time].strftime('%Y-%m-%d %H:%M:%S')
                 local_plot.set_title(title_string)
-            local_plot.figure.savefig(str(Path(figures_directory, f'{variable}_{figure_index + global_time + 1:04d}.png')),
+            if figure_stem is None:
+                figure_stem = f'{variable}_streamline'
+            local_plot.figure.savefig(str(Path(figures_directory, f'{figure_stem}_{figure_index + global_time + 1:04d}.png')),
+                                      bbox_inches='tight',
+                                      pad_inches=0.2,
+                                      dpi=120)
+
+    def plot_streamlines(self, fvcom_file, time_indices, variable, figures_directory, dx=None, dy=None, label=None,
+                         set_title=False, dimensions=None, clims=None, mask=False, figure_index=None, figure_stem=None,
+                         *args, **kwargs):
+        """
+        Plot a given horizontal surface for `variable' for the time indices in `time_indices'.
+
+        fvcom_file : str, pathlib.Path
+            The file to load.
+        time_indices : list-like
+            The time indices to load from the `fvcom_file'.
+        variable : str
+            The variable name to load from `fvcom_file'.
+        figures_directory : str, pathlib.Path
+            Where to save the figures. Figure files are named f'{variable}_streamlines_{time_index + 1}.png'.
+        dx, dy : float, optional
+            If given, the streamlines will be plotted on a regular grid at intervals of `dx' and `dy'. If `dy' is
+            omitted, it is assumed to be the same as `dx'.
+        label : str, optional
+            What label to use for the colour bar. If omitted, uses the variable's `long_name' and `units'.
+        set_title : bool, optional
+            Add a title comprised of each time (formatted as '%Y-%m-%d %H:%M:%S').
+        dimensions : str, optional
+            What additional dimensions to load (time is handled by the `time_indices' argument).
+        clims : tuple, list, optional
+            Limit the colour range to these values.
+        mask : bool
+            Set to True to enable masking with the FVCOM wet/dry data.
+        figure_index : int
+            Give a starting index for the figure names. This is useful if you're calling this function in a loop over
+            multiple files.
+        figure_stem : str
+            Give a file name prefix for the saved figures. Defaults to f'{variable}_streamline'.
+
+        Additional args and kwargs are passed to PyFVCOM.plot.Plotter.
+
+        """
+
+        if dx is not None and dy is None:
+            dy = dx
+
+        self._figure_prep(fvcom_file, variable, dimensions, time_indices, clims, label, **kwargs)
+
+        local_plot = Plotter(self.fvcom, cb_label=self.label, *args, **kwargs)
+
+        # Get the vector field of interest based on the variable name.
+        if 'depth_averaged' in variable:
+            u, v = self.fvcom.data.ua, self.fvcom.data.va
+        else:
+            u, v = np.squeeze(self.fvcom.data.u), np.squeeze(self.fvcom.data.v)
+
+        if figure_index is None:
+            figure_index = 0
+        for local_time, global_time in enumerate(time_indices):
+            if mask:
+                local_mask = getattr(self.fvcom.data, 'wet_cells')[local_time] == 0
+            else:
+                local_mask = np.full(self.fvcom.dims.nele, False)
+            u_local = np.ma.masked_array(u[local_time], mask=local_mask)
+            v_local = np.ma.masked_array(v[local_time], mask=local_mask)
+            magnitude = np.ma.masked_array(self.field[local_time], mask=local_mask)
+            try:
+                local_plot.plot_streamlines(u_local, v_local, color=magnitude, dx=dx, dy=dy) # , amin=clims[0], amax=clims[1])
+            except ValueError:
+                # The plot failed (sometimes due to teeny tiny velocities. Save what we've got anyway.
+                pass
+            # If we got all zeros for the streamline plot, the associated object will be none, so check that here and
+            # only update colours if we definitely plotted something.
+            if local_plot.streamline_plot is not None:
+                # The lines are a LineCollection and we can update the colour limits in one shot. The arrows need
+                # iterating.
+                local_plot.streamline_plot.lines.set_clim(*clims)
+                if set_title:
+                    title_string = self.fvcom.time.datetime[local_time].strftime('%Y-%m-%d %H:%M:%S')
+                    local_plot.set_title(title_string)
+            if figure_stem is None:
+                figure_stem = f'{variable}_streamline'
+            local_plot.figure.savefig(str(Path(figures_directory, f'{figure_stem}_{figure_index + global_time + 1:04d}.png')),
                                       bbox_inches='tight',
                                       pad_inches=0.2,
                                       dpi=120)
