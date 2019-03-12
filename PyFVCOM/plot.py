@@ -1781,7 +1781,7 @@ class MPIWorker(object):
 
     def plot_streamlines(self, fvcom_file, time_indices, variable, figures_directory, dx=None, dy=None, label=None,
                          set_title=False, dimensions=None, clims=None, mask=False, figure_index=None, figure_stem=None,
-                         *args, **kwargs):
+                         stkwargs=None, *args, **kwargs):
         """
         Plot a given horizontal surface for `variable' for the time indices in `time_indices'.
 
@@ -1811,10 +1811,15 @@ class MPIWorker(object):
             multiple files.
         figure_stem : str
             Give a file name prefix for the saved figures. Defaults to f'{variable}_streamline'.
+        stkwargs : dict, optional
+            Additional streamplot keyword arguments to pass.
 
         Additional args and kwargs are passed to PyFVCOM.plot.Plotter.
 
         """
+
+        if stkwargs is None:
+            stkwargs = {}
 
         if dx is not None and dy is None:
             dy = dx
@@ -1840,7 +1845,7 @@ class MPIWorker(object):
             v_local = np.ma.masked_array(v[local_time], mask=local_mask)
             magnitude = np.ma.masked_array(self.field[local_time], mask=local_mask)
             try:
-                local_plot.plot_streamlines(u_local, v_local, color=magnitude, dx=dx, dy=dy)
+                local_plot.plot_streamlines(u_local, v_local, color=magnitude, dx=dx, dy=dy, **stkwargs)
             except ValueError:
                 # The plot failed (sometimes due to teeny tiny velocities. Save what we've got anyway.
                 pass
