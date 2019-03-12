@@ -1017,7 +1017,8 @@ class Plotter(object):
             speed_r = np.ma.array(speed_r, mask=self._mask_for_regular)
 
         # Now we have some data, do the streamline plot.
-        self.streamline_plot = self.axes.streamplot(plot_x, plot_y, ua_r, va_r, color=speed_r, cmap=self.cmap, **kwargs)
+        self.streamline_plot = self.axes.streamplot(plot_x, plot_y, ua_r, va_r, color=speed_r,
+                                                    cmap=self.cmap, norm=self.norm, **kwargs)
 
         if self.cmap is not None:
             extend = copy.copy(self.extend)
