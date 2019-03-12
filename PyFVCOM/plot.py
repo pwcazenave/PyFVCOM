@@ -956,6 +956,9 @@ class Plotter(object):
         performance penalty.
         - The `density' keyword argument for is set by default to [2.5, 5] which seems to work OK for my data. Change
         by passing a different value if performance is dire.
+        - To set the colour limits for the arrows, pass a matplotlib.colors.Normalize object with the min/max values
+        to PyFVCOM.plot.Plotter. Don't bother trying to do it via self.streamline_plot.arrows.set_clim(). The
+        equivalent method on self.streamline_plot.lines works fine, but the arrows one doesn't.
 
         """
 
