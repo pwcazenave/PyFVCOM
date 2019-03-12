@@ -1767,6 +1767,87 @@ class MPIWorker(object):
                                       pad_inches=0.2,
                                       dpi=120)
 
+    def plot_streamlines(self, fvcom_file, time_indices, variable, figures_directory, dx=None, dy=None, label=None,
+                         set_title=False, dimensions=None, clims=None, mask=False, figure_index=None, figure_stem=None,
+                         *args, **kwargs):
+        """
+        Plot a given horizontal surface for `variable' for the time indices in `time_indices'.
+
+        fvcom_file : str, pathlib.Path
+            The file to load.
+        time_indices : list-like
+            The time indices to load from the `fvcom_file'.
+        variable : str
+            The variable name to load from `fvcom_file'.
+        figures_directory : str, pathlib.Path
+            Where to save the figures. Figure files are named f'{variable}_streamlines_{time_index + 1}.png'.
+        dx, dy : float, optional
+            If given, the streamlines will be plotted on a regular grid at intervals of `dx' and `dy'. If `dy' is
+            omitted, it is assumed to be the same as `dx'.
+        label : str, optional
+            What label to use for the colour bar. If omitted, uses the variable's `long_name' and `units'.
+        set_title : bool, optional
+            Add a title comprised of each time (formatted as '%Y-%m-%d %H:%M:%S').
+        dimensions : str, optional
+            What additional dimensions to load (time is handled by the `time_indices' argument).
+        clims : tuple, list, optional
+            Limit the colour range to these values.
+        mask : bool
+            Set to True to enable masking with the FVCOM wet/dry data.
+        figure_index : int
+            Give a starting index for the figure names. This is useful if you're calling this function in a loop over
+            multiple files.
+        figure_stem : str
+            Give a file name prefix for the saved figures. Defaults to f'{variable}_streamline'.
+
+        Additional args and kwargs are passed to PyFVCOM.plot.Plotter.
+
+        """
+
+        if dx is not None and dy is None:
+            dy = dx
+
+        self._figure_prep(fvcom_file, variable, dimensions, time_indices, clims, label, **kwargs)
+
+        local_plot = Plotter(self.fvcom, cb_label=self.label, *args, **kwargs)
+
+        # Get the vector field of interest based on the variable name.
+        if 'depth_averaged' in variable:
+            u, v = self.fvcom.data.ua, self.fvcom.data.va
+        else:
+            u, v = np.squeeze(self.fvcom.data.u), np.squeeze(self.fvcom.data.v)
+
+        if figure_index is None:
+            figure_index = 0
+        for local_time, global_time in enumerate(time_indices):
+            if mask:
+                local_mask = getattr(self.fvcom.data, 'wet_cells')[local_time] == 0
+            else:
+                local_mask = np.full(self.fvcom.dims.nele, False)
+            u_local = np.ma.masked_array(u[local_time], mask=local_mask)
+            v_local = np.ma.masked_array(v[local_time], mask=local_mask)
+            magnitude = np.ma.masked_array(self.field[local_time], mask=local_mask)
+            try:
+                local_plot.plot_streamlines(u_local, v_local, color=magnitude, dx=dx, dy=dy) # , amin=clims[0], amax=clims[1])
+            except ValueError:
+                # The plot failed (sometimes due to teeny tiny velocities. Save what we've got anyway.
+                pass
+            # If we got all zeros for the streamline plot, the associated object will be none, so check that here and
+            # only update colours if we definitely plotted something.
+            if local_plot.streamline_plot is not None:
+                # The lines are a LineCollection and we can update the colour limits in one shot. The arrows need
+                # iterating.
+                local_plot.streamline_plot.lines.set_clim(*clims)
+                if set_title:
+                    title_string = self.fvcom.time.datetime[local_time].strftime('%Y-%m-%d %H:%M:%S')
+                    local_plot.set_title(title_string)
+            if figure_stem is None:
+                figure_stem = f'{variable}_streamline'
+            local_plot.figure.savefig(str(Path(figures_directory, f'{figure_stem}_{figure_index + global_time + 1:04d}.png')),
+                                      bbox_inches='tight',
+                                      pad_inches=0.2,
+                                      dpi=120)
+
 
 class Player(FuncAnimation):
     """ Animation class for FVCOM outputs. Shamelessly lifted from https://stackoverflow.com/a/46327978 """
