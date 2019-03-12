@@ -1804,12 +1804,12 @@ class MPIWorker(object):
             What additional dimensions to load (time is handled by the `time_indices' argument).
         clims : tuple, list, optional
             Limit the colour range to these values.
-        mask : bool
+        mask : bool, optional
             Set to True to enable masking with the FVCOM wet/dry data.
-        figure_index : int
+        figure_index : int, optional
             Give a starting index for the figure names. This is useful if you're calling this function in a loop over
             multiple files.
-        figure_stem : str
+        figure_stem : str, optional
             Give a file name prefix for the saved figures. Defaults to f'{variable}_streamline'.
         stkwargs : dict, optional
             Additional streamplot keyword arguments to pass.
