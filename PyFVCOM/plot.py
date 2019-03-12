@@ -966,8 +966,8 @@ class Plotter(object):
             dy = dx
 
         # In theory, changing the x and y positions as well as the colours is possible via a few self.stream_plot
-        # methods (set_offsets, set_array), I've found this to be particularly unstable. In addition, removing the
-        # lines is easy enough (self.streamline_plot.lines.remove()) but the equivalent method for
+        # methods (set_offsets, set_array), I've not found the correct way of doing this, however. In addition,
+        # removing the lines is easy enough (self.streamline_plot.lines.remove()) but the equivalent method for
         # self.streamline_plot.arrows returns "not yet implemented". So, we'll just nuke the plot and start again.
         if self.streamline_plot is not None:
             self.replot()
