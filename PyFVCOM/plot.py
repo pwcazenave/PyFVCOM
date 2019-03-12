@@ -1555,6 +1555,10 @@ class MPIWorker(object):
         self.root = root
         self._noisy = verbose
 
+        self.field = None
+        self.label = None
+        self.clims = None
+
     def __loader(self, fvcom_file, variable):
         """
         Function to load and make meta-variables, if appropriate, which can then be plotted by `plot_*'.
@@ -1645,6 +1649,51 @@ class MPIWorker(object):
         if self._noisy and self.rank == self.root:
             print(f'done.', flush=True)
 
+    def _figure_prep(self, fvcom_file, variable, dimensions, time_indices, clims, label, **kwargs):
+        """ Initialise a bunch of things which can be shared across different plot types. """
+
+        # Should this loading stuff be outside this function?
+        self.dims = dimensions
+        if self.dims is None:
+            self.dims = {}
+        self.dims.update({'time': time_indices})
+
+        self.__loader(fvcom_file, variable)
+        self.field = np.squeeze(getattr(self.fvcom.data, variable))
+
+        # Find out what the range of data is so we can set the colour limits automatically, if necessary.
+        if self.clims is None:
+            if self.have_mpi:
+                global_min = self.comm.reduce(np.nanmin(self.field), op=self.MPI.MIN)
+                global_max = self.comm.reduce(np.nanmax(self.field), op=self.MPI.MAX)
+            else:
+                # Fall back to local extremes.
+                global_min = np.nanmin(self.field)
+                global_max = np.nanmax(self.field)
+            self.clims = [global_min, global_max]
+            if self.have_mpi:
+                self.clims = self.comm.bcast(clims, root=0)
+
+        if self.label is None:
+            self.label = f'{getattr(self.fvcom.atts, variable).long_name.title()} ' \
+                    f'(${getattr(self.fvcom.atts, variable).units}$)'
+
+        grid_mask = np.ones(self.field[0].shape[0], dtype=bool)
+        if 'extents' in kwargs:
+            # We need to find the nodes/elements for the current variable to make sure our colour bar extends for
+            # what we're plotting (not the entire data set).
+            if 'node' in self.fvcom.variable_dimension_names[variable]:
+                x = self.fvcom.grid.lon
+                y = self.fvcom.grid.lat
+            elif 'nele' in self.fvcom.variable_dimension_names[variable]:
+                x = self.fvcom.grid.lonc
+                y = self.fvcom.grid.latc
+            extents = kwargs['extents']
+            grid_mask = (x > extents[0]) & (x < extents[1]) & (y < extents[3]) & (y > extents[2])
+
+        self.extend = colorbar_extension(clims[0], clims[1],
+                                         self.field[..., grid_mask].min(), self.field[..., grid_mask].max())
+
     def plot_field(self, fvcom_file, time_indices, variable, figures_directory, label=None, set_title=False,
                    dimensions=None, clims=None, norm=None, mask=False, figure_index=None, *args, **kwargs):
         """
@@ -1678,60 +1727,20 @@ class MPIWorker(object):
 
         """
 
-        self.dims = dimensions
-        if self.dims is None:
-            self.dims = {}
-        self.dims.update({'time': time_indices})
+        self._figure_prep(fvcom_file, variable, dimensions, time_indices, clims, label, **kwargs)
 
-        self.__loader(fvcom_file, variable)
-        field = np.squeeze(getattr(self.fvcom.data, variable))
-
-        # Find out what the range of data is so we can set the colour limits automatically, if necessary.
-        if clims is None:
-            if self.have_mpi:
-                global_min = self.comm.reduce(np.nanmin(field), op=self.MPI.MIN)
-                global_max = self.comm.reduce(np.nanmax(field), op=self.MPI.MAX)
-            else:
-                # Fall back to local extremes.
-                global_min = np.nanmin(field)
-                global_max = np.nanmax(field)
-            clims = [global_min, global_max]
-            if self.have_mpi:
-                clims = self.comm.bcast(clims, root=0)
-
-        if label is None:
-            label = f'{getattr(self.fvcom.atts, variable).long_name.title()} ' \
-                    f'(${getattr(self.fvcom.atts, variable).units}$)'
-
-        grid_mask = np.ones(field[0].shape[0], dtype=bool)
-        if 'extents' in kwargs:
-            # We need to find the nodes/elements for the current variable to make sure our colour bar extends for
-            # what we're plotting (not the entire data set).
-            if 'node' in self.fvcom.variable_dimension_names[variable]:
-                x = self.fvcom.grid.lon
-                y = self.fvcom.grid.lat
-            elif 'nele' in self.fvcom.variable_dimension_names[variable]:
-                x = self.fvcom.grid.lonc
-                y = self.fvcom.grid.latc
-            extents = kwargs['extents']
-            grid_mask = (x > extents[0]) & (x < extents[1]) & (y < extents[3]) & (y > extents[2])
-
-        extend = colorbar_extension(clims[0], clims[1], field[..., grid_mask].min(), field[..., grid_mask].max())
-        if not 'extend' in kwargs:
-            kwargs['extend'] = extend
-
-        local_plot = Plotter(self.fvcom, cb_label=label, *args, **kwargs)
+        local_plot = Plotter(self.fvcom, cb_label=self.label, *args, **kwargs)
 
         if norm is not None:
             # Check for zero and negative values if we're LogNorm'ing the data and replace with the colour limit
             # minimum.
-            invalid = field <= 0
+            invalid = self.field <= 0
             if np.any(invalid):
-                if clims is None or clims[0] <= 0:
+                if self.clims is None or self.clims[0] <= 0:
                     raise ValueError("For log-scaling data with zero or negative values, we need a floor with which "
                                      "to replace those values. This is provided through the `clims' argument, "
                                      "which hasn't been supplied, or which has a zero (or below) minimum.")
-                field[invalid] = clims[0]
+                self.field[invalid] = self.clims[0]
 
         if figure_index is None:
             figure_index = 0
@@ -1740,7 +1749,7 @@ class MPIWorker(object):
                 local_mask = getattr(self.fvcom.data, 'wet_cells')[local_time] == 0
             else:
                 local_mask = np.zeros(self.fvcom.dims.nele, dtype=bool)
-            local_plot.plot_field(field[local_time], mask=local_mask)
+            local_plot.plot_field(self.field[local_time], mask=local_mask)
             local_plot.tripcolor_plot.set_clim(*clims)
             if set_title:
                 title_string = self.fvcom.time.datetime[local_time].strftime('%Y-%m-%d %H:%M:%S')
