@@ -1586,15 +1586,20 @@ class MPIWorker(object):
             load_verbose = True
             print(f'Loading {variable} data from netCDF...', end=' ', flush=True)
 
-        load_vars = [variable, 'wet_cells']
+        load_vars = [variable]
         if variable in ('speed', 'direction', 'speed_anomaly'):
-            load_vars = ['u', 'v', 'wet_cells']
+            load_vars = ['u', 'v']
         elif variable in ('depth_averaged_speed', 'depth_averaged_direction', 'depth_averaged_speed_anomaly'):
-            load_vars = ['ua', 'va', 'wet_cells']
+            load_vars = ['ua', 'va']
         elif variable == 'tauc':
-            load_vars = [variable, 'temp', 'salinity', 'wet_cells']
+            load_vars = [variable, 'temp', 'salinity']
 
         self.fvcom = FileReader(fvcom_file, variables=load_vars, dims=self.dims, verbose=load_verbose)
+
+        try:
+            self.fvcom.load_data(['wet_cells'])
+        except NameError:
+            print('No wetting and drying in model')
 
         # Make the meta-variable data.
         if variable in ('speed', 'direction'):
