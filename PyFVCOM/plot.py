@@ -1828,7 +1828,7 @@ class MPIWorker(object):
             v_local = np.ma.masked_array(v[local_time], mask=local_mask)
             magnitude = np.ma.masked_array(self.field[local_time], mask=local_mask)
             try:
-                local_plot.plot_streamlines(u_local, v_local, color=magnitude, dx=dx, dy=dy) # , amin=clims[0], amax=clims[1])
+                local_plot.plot_streamlines(u_local, v_local, color=magnitude, dx=dx, dy=dy)
             except ValueError:
                 # The plot failed (sometimes due to teeny tiny velocities. Save what we've got anyway.
                 pass
