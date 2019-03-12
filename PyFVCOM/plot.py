@@ -1054,9 +1054,6 @@ class Plotter(object):
         dy :
             Grid spacing in the y-direction in metres.
 
-        Returns
-        -------
-
         Provides
         --------
         self._regular_x
