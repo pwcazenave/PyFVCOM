@@ -1131,6 +1131,7 @@ class Plotter(object):
         # and then remove them from the sampling site list.
         land_indices = []
         # Exclude the main polygon from the list of polygons.
+        # TODO: This is ripe for parallelisation, especially as it's pretty slow in serial.
         for polygon in [i for count, i in enumerate(model_polygons) if count != main_polygon_index]:
             for row, column, index in zip(ocean_row, ocean_column, ocean_indices):
                 point = Point((self._regular_x[row, column], self._regular_y[row, column]))
