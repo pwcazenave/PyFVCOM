@@ -1000,7 +1000,9 @@ class Plotter(object):
         speed_r = None
         if self.cmap is not None:
             if 'color' in kwargs:
-                speed_r = mp_interp_func((fvcom_x, fvcom_y, np.squeeze(kwargs['color'])[self._mask_for_unstructured], self._regular_x, self._regular_y))
+                speed_r = mp_interp_func((fvcom_x, fvcom_y,
+                                          np.squeeze(kwargs['color'])[self._mask_for_unstructured],
+                                          self._regular_x, self._regular_y))
                 kwargs.pop('color', None)
             else:
                 speed_r = np.hypot(ua_r, va_r)
