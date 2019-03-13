@@ -4028,17 +4028,17 @@ def get_boundary_polygons(triangle, noisy=False, nodes=None):
     else:
         all_poly_nodes = np.asarray([y for x in boundary_polygon_list for y in x])
         reduce_nodes =  nodes[:, ~all_poly_nodes]
-        reduce_nodes_pts = [shapely.geometry.Point(this_ll) for this_ll in reduce_nodes]
+        reduce_nodes_pts = [shapely.geometry.Point(this_ll) for this_ll in reduce_nodes.T]
 
         islands_list = []
         for this_poly_nodes in boundary_polygon_list:
-            this_poly = shapely.geometry.polygon(nodes[:, this_poly_nodes])
+            this_poly = shapely.geometry.Polygon(nodes[:, this_poly_nodes].T)
             this_poly_contain = np.asarray([this_poly.contains(this_pt) for this_pt in reduce_nodes_pts])
 
             if np.any(this_poly_contain):
-                island_list.appen(False)
+                islands_list.append(False)
             else:
-                island_list.append(True)
+                islands_list.append(True)
 
         return [boundary_polygon_list, islands_list]
 
