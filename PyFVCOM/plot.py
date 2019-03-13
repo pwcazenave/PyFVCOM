@@ -956,6 +956,9 @@ class Plotter(object):
         performance penalty.
         - The `density' keyword argument for is set by default to [2.5, 5] which seems to work OK for my data. Change
         by passing a different value if performance is dire.
+        - To set the colour limits for the arrows, pass a matplotlib.colors.Normalize object with the min/max values
+        to PyFVCOM.plot.Plotter. Don't bother trying to do it via self.streamline_plot.arrows.set_clim(). The
+        equivalent method on self.streamline_plot.lines works fine, but the arrows one doesn't.
 
         """
 
@@ -963,8 +966,8 @@ class Plotter(object):
             dy = dx
 
         # In theory, changing the x and y positions as well as the colours is possible via a few self.stream_plot
-        # methods (set_offsets, set_array), I've found this to be particularly unstable. In addition, removing the
-        # lines is easy enough (self.streamline_plot.lines.remove()) but the equivalent method for
+        # methods (set_offsets, set_array), I've not found the correct way of doing this, however. In addition,
+        # removing the lines is easy enough (self.streamline_plot.lines.remove()) but the equivalent method for
         # self.streamline_plot.arrows returns "not yet implemented". So, we'll just nuke the plot and start again.
         if self.streamline_plot is not None:
             self.replot()
@@ -1007,6 +1010,14 @@ class Plotter(object):
             else:
                 speed_r = np.hypot(ua_r, va_r)
 
+        # Apparently, really tiny velocities fail to plot, so skip if we are in that situation. Exclude NaNs in this
+        # check. I'm not a fan of this hardcoded threshold...
+        # Nope, don't do this, let the calling script handle the error.
+        # if np.all(np.hypot(u[np.isfinite(u)], v[np.isfinite(v)]) < 0.04):
+        #     if self._debug:
+        #         print('Skipping due to all tiny values in the input vector components.')
+        #     return
+
         # Mask off arrays as appropriate.
         ua_r = np.ma.array(ua_r, mask=self._mask_for_regular)
         va_r = np.ma.array(va_r, mask=self._mask_for_regular)
@@ -1014,7 +1025,8 @@ class Plotter(object):
             speed_r = np.ma.array(speed_r, mask=self._mask_for_regular)
 
         # Now we have some data, do the streamline plot.
-        self.streamline_plot = self.axes.streamplot(plot_x, plot_y, ua_r, va_r, color=speed_r, cmap=self.cmap, **kwargs)
+        self.streamline_plot = self.axes.streamplot(plot_x, plot_y, ua_r, va_r, color=speed_r,
+                                                    cmap=self.cmap, norm=self.norm, **kwargs)
 
         if self.cmap is not None:
             extend = copy.copy(self.extend)
@@ -1774,7 +1786,7 @@ class MPIWorker(object):
 
     def plot_streamlines(self, fvcom_file, time_indices, variable, figures_directory, dx=None, dy=None, label=None,
                          set_title=False, dimensions=None, clims=None, mask=False, figure_index=None, figure_stem=None,
-                         *args, **kwargs):
+                         stkwargs=None, *args, **kwargs):
         """
         Plot a given horizontal surface for `variable' for the time indices in `time_indices'.
 
@@ -1797,17 +1809,22 @@ class MPIWorker(object):
             What additional dimensions to load (time is handled by the `time_indices' argument).
         clims : tuple, list, optional
             Limit the colour range to these values.
-        mask : bool
+        mask : bool, optional
             Set to True to enable masking with the FVCOM wet/dry data.
-        figure_index : int
+        figure_index : int, optional
             Give a starting index for the figure names. This is useful if you're calling this function in a loop over
             multiple files.
-        figure_stem : str
+        figure_stem : str, optional
             Give a file name prefix for the saved figures. Defaults to f'{variable}_streamline'.
+        stkwargs : dict, optional
+            Additional streamplot keyword arguments to pass.
 
         Additional args and kwargs are passed to PyFVCOM.plot.Plotter.
 
         """
+
+        if stkwargs is None:
+            stkwargs = {}
 
         if dx is not None and dy is None:
             dy = dx
@@ -1833,7 +1850,7 @@ class MPIWorker(object):
             v_local = np.ma.masked_array(v[local_time], mask=local_mask)
             magnitude = np.ma.masked_array(self.field[local_time], mask=local_mask)
             try:
-                local_plot.plot_streamlines(u_local, v_local, color=magnitude, dx=dx, dy=dy) # , amin=clims[0], amax=clims[1])
+                local_plot.plot_streamlines(u_local, v_local, color=magnitude, dx=dx, dy=dy, **stkwargs)
             except ValueError:
                 # The plot failed (sometimes due to teeny tiny velocities. Save what we've got anyway.
                 pass
