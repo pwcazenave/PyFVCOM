@@ -554,6 +554,7 @@ class Plotter(object):
         self.streamline_plot = None
         self.tri = None
         self.masked_tris = None
+        self.colorbar_axis = None
         self.cbar = None
 
         # Are we working with a FileReader object or a bog-standard netCDF4 Dataset?
