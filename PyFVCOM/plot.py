@@ -416,7 +416,7 @@ class Time(object):
         if not self.surface_plot:
             self.surface_plot = self.axes.pcolormesh(np.tile(self.time, [depth.shape[-1], 1]).T,
                                                      depth,
-                                                     np.fliplr(time_series),  # TODO: fix as this is wrong, I think.
+                                                     time_series,
                                                      cmap=self.cmap,
                                                      **kwargs)
 
