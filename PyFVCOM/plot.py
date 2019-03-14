@@ -1078,11 +1078,11 @@ class Plotter(object):
 
         Provides
         --------
-        self._regular_x
-            The regularly gridded x positions.
-        self._regular_y
-            The regularly gridded y positions.
-        self._mask_for_regular
+        self._regular_x : np.ma.ndarray
+            The regularly gridded x positions as a masked array.
+        self._regular_y : np.ma.ndarray
+            The regularly gridded y positions as a masked array.
+        self._mask_for_regular : np.ndarray
             The mask for the regular grid positions.
         self._mask_for_unstructured : np.ndarray
             The mask for the unstructured positions within the current plot domain.
@@ -1245,7 +1245,6 @@ class CrossPlotter(Plotter):
     #  - Sort left hand channel justification for multiple channels.
     #  - Error handling for no wet/dry, no land
     #  - Plus a lot of other stuff. And tidy it up.
-
 
     def __init__(self):
 
