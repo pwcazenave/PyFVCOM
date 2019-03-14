@@ -516,6 +516,7 @@ class Plotter(object):
         ---------
         James Clark (PML)
         Pierre Cazenave (PML)
+        Mike Bedington (PML)
 
         """
 
