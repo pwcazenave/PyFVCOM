@@ -823,6 +823,8 @@ class Plotter(object):
             Scaling to be provided to arrows with scale_units of inches. Defaults to 1.0.
         label : str, optional
             Give label to use for the quiver key (defaults to "`scale' ms^{-1}").
+        mask_land : bool, optional
+            Set to False to disable the (slow) masking of regular locations outside the model domain. Defaults to True.
 
         Additional `args' and `kwargs' are passed to `matplotlib.pyplot.quiver'.
 
@@ -833,7 +835,7 @@ class Plotter(object):
             if dy is None:
                 dy = dx
             if not hasattr(self, '_regular_lon'):
-                self._make_regular_grid(dx, dy)
+                self._make_regular_grid(dx, dy, mask_land=mask_land)
                 xy_mask = self._mask_for_unstructured
 
             if self.cartesian:
@@ -934,7 +936,7 @@ class Plotter(object):
 
         self.scatter_plot = self.axes.scatter(mx, my, *args, **kwargs)
 
-    def plot_streamlines(self, u, v, dx=1000, dy=None, **kwargs):
+    def plot_streamlines(self, u, v, dx=1000, dy=None, mask_land=True, **kwargs):
         """
         Plot streamlines of the given u and v data.
 
@@ -949,6 +951,8 @@ class Plotter(object):
             Grid spacing for the interpolation in the x direction in metres. Defaults to 1000 metres.
         dy : float, optional
             Grid spacing for the interpolation in the y direction in metres. Defaults to `dx'.
+        mask_land : bool, optional
+            Set to False to disable the (slow) masking of regular locations outside the model domain. Defaults to True.
 
         Additional `kwargs' are passed to `matplotlib.pyplot.streamplot'.
 
@@ -983,7 +987,7 @@ class Plotter(object):
             warn('Ignoring the given colour map as one has been supplied during initialisation.')
 
         if not hasattr(self, '_mask_for_unstructured'):
-            self._make_regular_grid(dx, dy)
+            self._make_regular_grid(dx, dy, mask_land=mask_land)
 
         # Remove singleton dimensions because they break the masking.
         u = np.squeeze(u)
@@ -1052,7 +1056,7 @@ class Plotter(object):
             self.axes.set_xlim(plot_x.min(), plot_x.max())
             self.axes.set_ylim(plot_y.min(), plot_y.max())
 
-    def _make_regular_grid(self, dx, dy):
+    def _make_regular_grid(self, dx, dy, mask_land=True):
         """
         Make a regular grid at intervals of `dx', `dy' for the current plot domain. Supports both spherical and
         cartesian grids.
@@ -1069,6 +1073,8 @@ class Plotter(object):
             Grid spacing in the x-direction in metres.
         dy :
             Grid spacing in the y-direction in metres.
+        mask_land : bool, optional
+            Set to False to disable the (slow) masking of regular locations outside the model domain. Defaults to True.
 
         Provides
         --------
@@ -1121,42 +1127,51 @@ class Plotter(object):
 
         self._regular_x, self._regular_y = np.meshgrid(reg_x, reg_y)
 
-        # Make a mask for the regular grid. This uses the model domain to identify points which are outside the grid.
-        # Those are set to False whereas those in the domain are True. We assume the longest polygon is the model
-        # boundary and all other polygons are islands within it.
-        model_boundaries = get_boundary_polygons(self.triangles)
-        model_polygons = [Polygon(np.asarray((self.lon[i], self.lat[i])).T) for i in model_boundaries]
-        polygon_areas = [i.area for i in model_polygons]
-        main_polygon_index = polygon_areas.index(max(polygon_areas))
         self._mask_for_regular = np.full(self._regular_x.shape, False)
-        # Find locations outside the main model domain.
-        ocean_indices, land_indices = [], []
-        for index, sample in enumerate(zip(np.array((self._regular_x.ravel(), self._regular_y.ravel())).T)):
-            point = Point(sample[0])
-            if point.intersects(model_polygons[main_polygon_index]):
-                ocean_indices.append(index)
-            else:
-                land_indices.append(index)
-
-        # Mask off indices outside the main model domain.
-        ocean_row, ocean_column = np.unravel_index(ocean_indices, self._regular_x.shape)
-        land_row, land_column = np.unravel_index(land_indices, self._regular_x.shape)
-        self._mask_for_regular[land_row, land_column] = True
-
-        # To remove the sampling stations on islands, identify points which intersect the remaining polygons,
-        # and then remove them from the sampling site list.
-        land_indices = []
-        # Exclude the main polygon from the list of polygons.
-        # TODO: This is ripe for parallelisation, especially as it's pretty slow in serial.
-        for polygon in [i for count, i in enumerate(model_polygons) if count != main_polygon_index]:
-            for row, column, index in zip(ocean_row, ocean_column, ocean_indices):
-                point = Point((self._regular_x[row, column], self._regular_y[row, column]))
-                if point.intersects(polygon):
+        if mask_land:
+            # Make a mask for the regular grid. This uses the model domain to identify points which are outside the
+            # grid. Those are set to False whereas those in the domain are True. We assume the longest polygon is the
+            # model boundary and all other polygons are islands within it.
+            model_boundaries = get_boundary_polygons(self.triangles)
+            model_polygons = [Polygon(np.asarray((self.lon[i], self.lat[i])).T) for i in model_boundaries]
+            polygon_areas = [i.area for i in model_polygons]
+            main_polygon_index = polygon_areas.index(max(polygon_areas))
+            # Find locations outside the main model domain.
+            ocean_indices, land_indices = [], []
+            for index, sample in enumerate(zip(np.array((self._regular_x.ravel(), self._regular_y.ravel())).T)):
+                point = Point(sample[0])
+                if self._debug:
+                    print(f'Checking outside domain point {index} of {len(self._regular_x.ravel())}', flush=True)
+                if point.intersects(model_polygons[main_polygon_index]):
+                    ocean_indices.append(index)
+                else:
                     land_indices.append(index)
 
-        # Mask off island indices.
-        land_row, land_column = np.unravel_index(land_indices, self._regular_x.shape)
-        self._mask_for_regular[land_row, land_column] = True
+            # Mask off indices outside the main model domain.
+            ocean_row, ocean_column = np.unravel_index(ocean_indices, self._regular_x.shape)
+            land_row, land_column = np.unravel_index(land_indices, self._regular_x.shape)
+            self._mask_for_regular[land_row, land_column] = True
+
+            # To remove the sampling stations on islands, identify points which intersect the remaining polygons,
+            # and then remove them from the sampling site list.
+            land_indices = []
+            # Exclude the main polygon from the list of polygons.
+            # TODO: This is ripe for parallelisation, especially as it's pretty slow in serial.
+            for pi, polygon in enumerate([i for count, i in enumerate(model_polygons) if count != main_polygon_index]):
+                for oi, (row, column, index) in enumerate(zip(ocean_row, ocean_column, ocean_indices)):
+                    point = Point((self._regular_x[row, column], self._regular_y[row, column]))
+                    if self._debug:
+                        print(f'Polygon {pi + 1} of {len(model_polygons) - 1}: '
+                              f'ocean point {oi} of {len(ocean_indices)}', flush=True)
+                    if point.intersects(polygon):
+                        land_indices.append(index)
+
+            # Mask off island indices.
+            land_row, land_column = np.unravel_index(land_indices, self._regular_x.shape)
+            self._mask_for_regular[land_row, land_column] = True
+
+            self._regular_x = np.ma.masked_array(self._regular_x, mask=self._mask_for_regular)
+            self._regular_y = np.ma.masked_array(self._regular_y, mask=self._mask_for_regular)
 
     def set_title(self, title):
         """ Set the title for the current axis. """
@@ -1788,7 +1803,7 @@ class MPIWorker(object):
 
     def plot_streamlines(self, fvcom_file, time_indices, variable, figures_directory, dx=None, dy=None, label=None,
                          set_title=False, dimensions=None, clims=None, mask=False, figure_index=None, figure_stem=None,
-                         stkwargs=None, *args, **kwargs):
+                         stkwargs=None, mask_land=True, *args, **kwargs):
         """
         Plot a given horizontal surface for `variable' for the time indices in `time_indices'.
 
@@ -1818,6 +1833,8 @@ class MPIWorker(object):
             multiple files.
         figure_stem : str, optional
             Give a file name prefix for the saved figures. Defaults to f'{variable}_streamline'.
+        mask_land : bool, optional
+            Set to False to disable the (slow) masking of regular locations outside the model domain. Defaults to True.
         stkwargs : dict, optional
             Additional streamplot keyword arguments to pass.
 
@@ -1852,7 +1869,8 @@ class MPIWorker(object):
             v_local = np.ma.masked_array(v[local_time], mask=local_mask)
             magnitude = np.ma.masked_array(self.field[local_time], mask=local_mask)
             try:
-                local_plot.plot_streamlines(u_local, v_local, color=magnitude, dx=dx, dy=dy, **stkwargs)
+                local_plot.plot_streamlines(u_local, v_local, color=magnitude, dx=dx, dy=dy, mask_land=mask_land,
+                                            **stkwargs)
             except ValueError:
                 # The plot failed (sometimes due to teeny tiny velocities. Save what we've got anyway.
                 pass
