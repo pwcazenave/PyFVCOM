@@ -9,6 +9,7 @@ from __future__ import print_function
 from datetime import datetime
 from pathlib import Path
 from warnings import warn
+from PyFVCOM.utilities.general import PassiveStore
 
 import numpy as np
 
@@ -276,7 +277,7 @@ class Buoy(object):
                     values[values == self._missing] = np.nan
                     setattr(self.data, name, values)
 
-    class _Read(object):
+    class _Read(PassiveStore):
         def __init__(self, lines, noisy=False):
             """
             Initialise parsing the buoy time series data so we can subclass this for the header and data reading.
