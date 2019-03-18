@@ -9,6 +9,7 @@ from __future__ import print_function
 from datetime import datetime
 from pathlib import Path
 from warnings import warn
+from netCDF4 import date2num
 from PyFVCOM.utilities.general import PassiveStore
 
 import numpy as np
@@ -398,6 +399,17 @@ class Buoy(object):
                 # CCO format.
                 for date in getattr(self, 'Date/Time_GMT'):
                     self.datetime.append(datetime.strptime(date, '%d-%b-%Y %H:%M:%S'))
+
+        def _fvcom_time_representations(self):
+            """
+            Convert the datetime object into FVCOM time representations (`time', `Itime' and `Itime2').
+
+            """
+            if np.any(self.datetime):
+                self.time = date2num(self.datetime, units='days since 1858-11-17 00:00:00')
+                self.Itime = np.floor(self.time)
+                self.Itime2 = (self.time - self.Itime) * 60 * 60 * 1000
+
 
     class _ReadPosition:
         """ Add the position for the buoy. """
