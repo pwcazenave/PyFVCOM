@@ -5340,3 +5340,15 @@ class GraphFVCOMdepth(Graph):
         _, red_node_list = red_graph.shortest_path(start_node, end_node)
 
         return np.asarray(self.node_index[np.asarray(red_node_list)])
+
+def node_to_centre(field, filereader):
+    tt = Triangulation(filereader.grid.x, filereader.grid.y, filereader.grid.triangles)
+    interped_out = []
+    if len(field.shape) == 1:
+        field = field[np.newaxis, :]
+
+    for this_t in field:
+        ct = CubicTriInterpolator(tt, this_t)
+        interped_out.append(ct(filereader.grid.xc, filereader.grid.yc))
+
+    return np.asarray(interped_out)
