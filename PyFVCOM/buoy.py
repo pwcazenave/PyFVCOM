@@ -313,8 +313,8 @@ class Buoy(object):
 
             Provides
             --------
-            Attributes in self which are named for each variable found in `self._lines'. Each attribute contains a single
-            time series as a numpy array.
+            Attributes in self which are named for each variable found in `self._lines'. Each attribute contains a
+            single time series as a numpy array.
 
             """
 
