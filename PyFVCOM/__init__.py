@@ -29,6 +29,7 @@ from PyFVCOM import preproc
 from PyFVCOM import read
 from PyFVCOM import utilities
 from PyFVCOM import validation
+from PyFVCOM import interpolate
 
 if sys.version_info.major < 3 and sys.version_info.minor < 6:
     raise Exception('Must be using Python 3.6 or greater')
