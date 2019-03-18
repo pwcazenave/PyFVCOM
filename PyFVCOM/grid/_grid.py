@@ -1560,7 +1560,8 @@ class OpenBoundary(object):
         raise_error = False
         if mode == 'nodes':
             if not np.any(self.nodes):
-                print('No nodes on which to interpolate on this boundary'.format(mode))
+                if verbose:
+                    print(f'No {mode} on which to interpolate on this boundary')
                 return
             if not hasattr(self.sigma, 'layers'):
                 raise_error = True
@@ -1568,7 +1569,8 @@ class OpenBoundary(object):
             if not hasattr(self.sigma, 'layers_center'):
                 raise_error = True
             if not np.any(self.elements):
-                print('No elements on which to interpolate on this boundary'.format(mode))
+                if verbose:
+                    print(f'No {mode} on which to interpolate on this boundary')
                 return
 
         if raise_error:

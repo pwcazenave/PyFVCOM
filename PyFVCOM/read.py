@@ -2520,7 +2520,7 @@ def write_probes(file, mjd, timeseries, datatype, site, depth, sigma=(-1, -1), l
             f.write(fmt.format(*line))
 
 
-def get_river_config(file_name, noisy=False, zeroindex=False):
+def get_river_config(file_name, noisy=False, zeroindex=True):
     """
     Parse an FVCOM river namelist file to extract the parameters and their values. Returns a dict of the parameters
     with the associated values for all the rivers defined in the namelist.
@@ -2532,20 +2532,14 @@ def get_river_config(file_name, noisy=False, zeroindex=False):
     noisy : bool, optional
         Set to True to enable verbose output. Defaults to False.
     zeroindex : bool, optional
-        Set to True to convert indices from 1-based to 0-based. Defaults to False.
+        Set to False to keep indices as 1-based rather than converting to 0-based. Defaults to True (i.e. return
+        zero-indexed indices).
 
     Returns
     -------
     rivers : dict
         Dict of the parameters for each river defined in the name list.
         Dictionary keys are the name list parameter names (e.g. RIVER_NAME).
-
-    Notes
-    -----
-
-    The indices returned in RIVER_GRID_LOCATION are 1-based (i.e. read in raw
-    from the nml file). For use in Python, you can either subtract 1 yourself,
-    or pass zeroindex=True to this function.
 
     """
 
