@@ -334,7 +334,12 @@ class Buoy(object):
                         try:
                             setattr(self, name.strip().replace(' ', '_').replace('(', '').replace(')', ''), np.asarray(data, dtype=float))
                         except ValueError:
-                            # Probably strings so just leave as is.
+                            # Probably strings so just leave as is. Check for clearly nonsense values, and if we get
+                            # them, replace with NaN.
+                            if any(['*' in i for i in data]):
+                                data = np.asarray(data)
+                                data[data == '*******'] = np.nan
+                                data = data.tolist()
                             setattr(self, name.strip().replace(' ', '_').replace('(', '').replace(')', ''), np.asarray(data))
 
     class _ReadTime(_Read):
