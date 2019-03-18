@@ -321,7 +321,6 @@ class Buoy(object):
 
             # We want everything bar the time column names.
             num_lines = len(self._lines) - self._header_length
-            num_columns = len(self._header)
             if num_lines > 1:
                 for name in self._header:
                     if name not in self._time_header:
