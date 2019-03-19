@@ -2265,9 +2265,9 @@ class Model(Domain):
                             if 'node' in ds.variables[var].dimensions:
                                 data = ds.variables[var][:][..., np.isin(nodes, boundary.nodes)]
                             else:
-                                try:
+                                if boundary.elements is not None:
                                     data = ds.variables[var][:][..., np.isin(elements, boundary.elements)]
-                                except AttributeError:
+                                else:
                                     # This is the first boundary and thus has no element data.
                                     continue
                             if filter_times:
