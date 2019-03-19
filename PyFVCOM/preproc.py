@@ -2270,6 +2270,13 @@ class Model(Domain):
                                 else:
                                     # This is the first boundary and thus has no element data.
                                     continue
+
+                            # Check if we got any valid points here. We won't get any on the last boundary. That
+                            # raises the question why does it even have elements associated with it? Another day,
+                            # perhaps.
+                            if data.shape[-1] == 0:
+                                continue
+
                             if filter_times:
                                 data = np.delete(data, bad_times, axis=0)
 
