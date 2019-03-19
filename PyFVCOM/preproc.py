@@ -2253,14 +2253,15 @@ class Model(Domain):
                     # Also redo the elements for the current nest.
                     self.nest[nest_index].boundaries[boundary_index].elements = np.unique(triangles.ravel())
 
-            for var in variables:
-                has_time = 'time' in ds.variables[var].dimensions
-                has_space = 'node' in ds.variables[var].dimensions or 'nele' in ds.variables[var].dimensions
-                if has_time and has_space:
-                    if verbose:
-                        print(f'Transferring {var} from the existing nesting file')
-                    for nest in self.nest:
-                        for boundary in nest.boundaries:
+            for nest in self.nest:
+                for boundary in nest.boundaries:
+                    for var in variables:
+                        has_time = 'time' in ds.variables[var].dimensions
+                        has_space = 'node' in ds.variables[var].dimensions or 'nele' in ds.variables[var].dimensions
+                        if has_time and has_space:
+                            if verbose:
+                                print(f'Transferring {var} from the existing nesting file')
+
                             # Split the existing nodes/elements into the current open boundary nodes.
                             if 'node' in ds.variables[var].dimensions:
                                 data = ds.variables[var][:][..., np.isin(nodes, boundary.nodes)]
