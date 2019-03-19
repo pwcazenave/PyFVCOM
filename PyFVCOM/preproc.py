@@ -2272,7 +2272,8 @@ class Model(Domain):
                                     continue
                             if filter_times:
                                 data = np.delete(data, bad_times, axis=0)
-                            setattr(boundary.data, var, data.T)
+
+                            setattr(boundary.data, var, data)
 
     def write_nested_forcing(self, ncfile, type=3, adjust_tides=None, ersem_metadata=None, **kwargs):
         """
@@ -2603,10 +2604,8 @@ class Model(Domain):
                         if name == 'time':
                             pass
                         temp_nodes_index = np.isin(nodes, boundary.nodes)
-                        # Data are interpolated with dimensions ordered ['time', 'depth', 'space'] whereas we need to
-                        # transpose for writing out.
-                        dump[..., temp_nodes_index] = getattr(boundary.data, name).T
-                    nest_ncfile.add_variable(name, dump, ['time', 'siglay', 'nobc'], attributes=atts, ncopts=ncopts)
+                        dump[..., temp_nodes_index] = getattr(boundary.data, name)
+                    nest_ncfile.add_variable(name, dump, ['time', 'siglay', 'node'], attributes=atts, ncopts=ncopts)
 
     def add_obc_types(self, types):
         """
