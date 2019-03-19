@@ -547,7 +547,6 @@ class Plotter(object):
         self.m = m
         self.cartesian = cartesian
         self.bmargs = bmargs
-        self.colorbar_axis = None
 
         # Plot instances to hold the plot objects.
         self.quiver_plot = None
