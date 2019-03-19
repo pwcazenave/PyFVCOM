@@ -2323,7 +2323,7 @@ class Model(Domain):
         v = np.empty((time_number, self.dims.layers, elements_number)) * np.nan
         temperature = np.empty((time_number, self.dims.layers, nodes_number)) * np.nan
         salinity = np.empty((time_number, self.dims.layers, nodes_number)) * np.nan
-        hyw = np.zeros((time_number, self.dims.layers, nodes_number))  # we never set this to anything other than zeros
+        hyw = np.zeros((time_number, self.dims.levels, nodes_number))  # we never set this to anything other than zeros
         if type == 3:
             weight_nodes = np.repeat(weight_nodes, time_number, 0).reshape(time_number, -1)
             weight_elements = np.repeat(weight_elements, time_number, 0).reshape(time_number, -1)
@@ -2584,8 +2584,8 @@ class Model(Domain):
                     'units': 'meters s-1',
                     'grid': 'fvcom_grid',
                     'type': 'data',
-                    'coordinates': 'time siglay lat lon'}
-            nest_ncfile.add_variable('hyw', out_dict['hyw'][0], ['time', 'siglay', 'node'], attributes=atts, ncopts=ncopts)
+                    'coordinates': 'time siglev lat lon'}
+            nest_ncfile.add_variable('hyw', out_dict['hyw'][0], ['time', 'siglev', 'node'], attributes=atts, ncopts=ncopts)
 
             if ersem_metadata is not None:
                 for name in ersem_metadata:
