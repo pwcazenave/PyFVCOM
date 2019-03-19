@@ -2350,12 +2350,13 @@ class Model(Domain):
 
                         try:
                             boundary_data = getattr(boundary.data, var)
-                            if adjust_tides and var in adjust_tides:
-                                # The harmonics are calculated -/+ one day
-                                tide_times_choose = np.isin(boundary.tide.time, boundary.data.time.datetime)
-                                boundary_data = boundary_data + getattr(boundary.tide, var)[tide_times_choose, :]
                         except AttributeError:
                             continue
+
+                        if adjust_tides is not None and var in adjust_tides:
+                            # The harmonics are calculated -/+ one day
+                            tide_times_choose = np.isin(boundary.tide.time, boundary.data.time.datetime)
+                            boundary_data = boundary_data + getattr(boundary.tide, var)[tide_times_choose, :]
 
                         out_dict[var][0][..., this_index] = boundary_data
                     else:
