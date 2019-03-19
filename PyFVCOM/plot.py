@@ -448,11 +448,15 @@ class Plotter(object):
     plot_scatter
     plot_streamlines
     add_scale
+    set_title
+    replot
+    close
 
     Author(s)
     ---------
     James Clark (Plymouth Marine Laboratory)
     Pierre Cazenave (Plymouth Marine Laboratory)
+    Mike Bedington (Plymouth Marine Laboratory)
 
     """
 
@@ -514,9 +518,9 @@ class Plotter(object):
 
         Author(s)
         ---------
-        James Clark (PML)
-        Pierre Cazenave (PML)
-        Mike Bedington (PML)
+        James Clark (Plymouth Marine Laboratory)
+        Pierre Cazenave (Plymouth Marine Laboratory)
+        Mike Bedington (Plymouth Marine Laboratory)
 
         """
 
