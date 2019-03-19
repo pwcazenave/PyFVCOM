@@ -168,13 +168,13 @@ class Model(Domain):
         self.start = start
         self.end = end
         self.sampling = sampling
-        self.__add_time()
+        self._add_time()
 
         # Initialise the open boundary objects from the nodes we've read in from the grid (if any).
-        self.__initialise_open_boundaries_on_nodes()
+        self._initialise_open_boundaries_on_nodes()
 
         # Initialise the river structure.
-        self.__prep_rivers()
+        self._prep_rivers()
 
         # Add the coastline to the grid object for use later on.
         *_, bnd = connectivity(np.array((self.grid.lon, self.grid.lat)).T, self.grid.triangles)
@@ -184,7 +184,7 @@ class Model(Domain):
             land_only = np.isin(np.squeeze(np.argwhere(bnd)), flatten_list(self.grid.open_boundary_nodes), invert=True)
             self.grid.coastline = np.squeeze(self.grid.coastline[land_only])
 
-    def __prep_rivers(self):
+    def _prep_rivers(self):
         """ Create a few object and attributes which are useful for the river data. """
         self.river = PassiveStore()
         self.dims.river = 0  # assume no rivers.
@@ -193,7 +193,7 @@ class Model(Domain):
         self.river.info = ''
         self.river.source = ''
 
-    def __add_time(self):
+    def _add_time(self):
         """
         Add time variables we might need for the various bits of processing.
 
@@ -205,7 +205,7 @@ class Model(Domain):
         self.time.Itime2 = (getattr(self.time, 'time') - getattr(self.time, 'Itime')) * 24 * 60 * 60 * 1000  # milliseconds since midnight
         self.time.Times = [t.strftime('%Y-%m-%dT%H:%M:%S.%f') for t in getattr(self.time, 'datetime')]
 
-    def __initialise_open_boundaries_on_nodes(self):
+    def _initialise_open_boundaries_on_nodes(self):
         """ Add the relevant node-based grid information for any open boundaries we've got. """
 
         self.open_boundaries = []
@@ -225,7 +225,7 @@ class Model(Domain):
                 setattr(self.open_boundaries[-1].time, 'start', self.start)
                 setattr(self.open_boundaries[-1].time, 'end', self.end)
 
-    def __update_open_boundaries(self):
+    def _update_open_boundaries(self):
         """
         Call this when we've done something which affects the open boundary objects and we need to update their
         properties.
@@ -771,7 +771,7 @@ class Model(Domain):
                 print('zkl\t{:d}\n'.format(zkl))
 
         # Update the open boundaries.
-        self.__update_open_boundaries()
+        self._update_open_boundaries()
 
     def sigma_generalized(self, levels, dl, du, h, hmin):
         """
@@ -985,7 +985,7 @@ class Model(Domain):
         self.sigma.levels_center_z = self.grid.h_center[:, np.newaxis]  * self.sigma.levels_center
 
         # Update the open boundaries.
-        self.__update_open_boundaries()
+        self._update_open_boundaries()
 
     def __hybrid_coordinate_hmin(self, h, levels, du, dl, ku, kl, zku, zkl):
         """
