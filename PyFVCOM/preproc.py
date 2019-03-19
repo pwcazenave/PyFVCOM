@@ -2267,9 +2267,6 @@ class Model(Domain):
                         has_time = 'time' in ds.variables[var].dimensions
                         has_space = 'node' in ds.variables[var].dimensions or 'nele' in ds.variables[var].dimensions
                         if has_time and has_space:
-                            if verbose:
-                                print(f'Transferring {var} from the existing nesting file')
-
                             # Split the existing nodes/elements into the current open boundary nodes.
                             if 'node' in ds.variables[var].dimensions:
                                 # Holy nested indexing, Batman!
@@ -2290,6 +2287,9 @@ class Model(Domain):
 
                             if filter_times:
                                 data = np.delete(data, bad_times, axis=0)
+
+                            if verbose:
+                                print(f'Transferring {var} from the existing nesting file')
 
                             setattr(boundary.data, var, data)
 
