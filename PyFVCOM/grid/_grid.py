@@ -1700,7 +1700,7 @@ class OpenBoundary(object):
             pool.close()
 
             # Reshape and transpose to be the correct size for writing to netCDF (time, depth, node).
-            interpolated_coarse_data = np.asarray(results).reshape(nz, nx, -1).transpose(2, 0, 1)
+            interpolated_coarse_data = np.asarray(results).reshape(nx, nz, -1).transpose(2, 1, 0)
         else:
             if verbose:
                 print('Interpolating z-level data...', end=' ')
