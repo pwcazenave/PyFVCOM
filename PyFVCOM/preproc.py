@@ -2254,6 +2254,13 @@ class Model(Domain):
                     # Also redo the elements for the current nest.
                     self.nest[nest_index].boundaries[boundary_index].elements = np.unique(triangles.ravel())
 
+            # Fix the order of the positions in the data from the netCDF file to match those in the boundaries.
+            nest_nodes = flatten_list([boundary.nodes for nest in self.nest for boundary in nest.boundaries])
+            nest_elements = flatten_list([boundary.elements for nest in self.nest for boundary in nest.boundaries if np.any(boundary.elements)])
+            nc_node_order = [nc_nodes.tolist().index(i) for i in nest_nodes]
+            nc_nodes[nc_node_order]
+            nc_element_order = [nc_elements.tolist().index(i) for i in nest_elements if i in nc_elements]
+
             for nest in self.nest:
                 for boundary in nest.boundaries:
                     for var in variables:
@@ -2265,10 +2272,12 @@ class Model(Domain):
 
                             # Split the existing nodes/elements into the current open boundary nodes.
                             if 'node' in ds.variables[var].dimensions:
-                                data = ds.variables[var][:][..., np.isin(nodes, boundary.nodes)]
+                                # Holy nested indexing, Batman!
+                                data = ds.variables[var][:][..., nc_node_order][..., np.isin(nc_nodes[nc_node_order], boundary.nodes)]
                             else:
                                 if boundary.elements is not None:
-                                    data = ds.variables[var][:][..., np.isin(elements, boundary.elements)]
+                                    # Holy nested indexing, Batman!
+                                    data = ds.variables[var][:][..., nc_element_order][..., np.isin(nc_elements[nc_element_order], boundary.elements)]
                                 else:
                                     # This is the first boundary and thus has no element data.
                                     continue
