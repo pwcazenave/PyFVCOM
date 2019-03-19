@@ -1015,7 +1015,11 @@ class OpenBoundary(object):
 
         self.nodes = None
         self.elements = None
-        # Silently convert IDs from numpy arrays to lists.
+        # Silently convert IDs from numpy arrays to lists. If the first and last node ID are the same, drop the last
+        # one too to match the behaviour of the MATLAB preprocessing tools (and I'm sure there's an actual reason,
+        # I just can't remember it at the moment).
+        if ids[0] == ids[-1]:
+            ids = ids[:-1]
         if mode == 'nodes':
             try:
                 ids = ids.tolist()
