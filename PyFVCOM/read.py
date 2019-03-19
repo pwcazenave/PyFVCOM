@@ -1735,14 +1735,14 @@ class SubDomainReader(FileReader):
 
         """
         vol_cells_ext = np.hstack([self._dims['nele'], -1])  # closed boundaries are given a -1 in the nbe matrix
-        open_sides = np.where(~np.isin(self.grid.nbe, vol_cells_ext))
+        open_sides = np.where(np.isin(self.grid.nbe, vol_cells_ext, invert=True))
         open_side_cells = open_sides[0]
 
         open_side_rows = self.grid.triangles[open_side_cells, :]
         open_side_nodes = []
         row_choose = np.asarray([0, 1, 2])
         for this_row, this_not in zip(open_side_rows, open_sides[1]):
-            this_row_choose = row_choose[~np.isin(row_choose, this_not)]
+            this_row_choose = row_choose[np.isin(row_choose, this_not, invert=True)]
             open_side_nodes.append(this_row[this_row_choose])
         open_side_nodes = np.asarray(open_side_nodes)
 

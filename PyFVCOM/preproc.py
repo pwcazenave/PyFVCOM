@@ -2191,25 +2191,25 @@ class Model(Domain):
             if filter_points:
                 for nest in self.nest:
                     for boundary in nest.boundaries:
-                        node_mask = np.isin(boundary.nodes, list(match_nodes))
+                        node_mask = np.isin(boundary.nodes, list(match_nodes), invert=True)
                         if np.any(node_mask):
-                            boundary.nodes = np.asarray(boundary.nodes)[~node_mask].tolist()
+                            boundary.nodes = np.asarray(boundary.nodes)[node_mask].tolist()
                             for var in ('lon', 'lat', 'x', 'y', 'h', 'types'):
                                 if hasattr(boundary.grid, var):
-                                    setattr(boundary.grid, var, getattr(boundary.grid, var)[~node_mask])
+                                    setattr(boundary.grid, var, getattr(boundary.grid, var)[node_mask])
                             for var in ('layers', 'levels'):
                                 if hasattr(boundary.sigma, var):
-                                    setattr(boundary.sigma, var, getattr(boundary.sigma, var)[~node_mask])
+                                    setattr(boundary.sigma, var, getattr(boundary.sigma, var)[node_mask])
                         if boundary.elements is not None:
                             element_mask = np.isin(boundary.elements, list(match_elements))
                             if np.any(element_mask):
-                                boundary.elements = np.asarray(boundary.elements)[~element_mask].tolist()
+                                boundary.elements = np.asarray(boundary.elements)[element_mask].tolist()
                                 for var in ('lonc', 'latc', 'xc', 'yc', 'h_center'):
                                     if hasattr(boundary.grid, var):
-                                        setattr(boundary.grid, var, getattr(boundary.grid, var)[~element_mask])
+                                        setattr(boundary.grid, var, getattr(boundary.grid, var)[element_mask])
                                 for var in ('layers_center', 'levels_center'):
                                     if hasattr(boundary.sigma, var):
-                                        setattr(boundary.sigma, var, getattr(boundary.sigma, var)[~element_mask])
+                                        setattr(boundary.sigma, var, getattr(boundary.sigma, var)[element_mask])
                         boundary.grid.triangles = reduce_triangulation(boundary.grid.triangles, boundary.grid.nodes)
                         boundary.grid.nv = boundary.grid.triangles.T + 1
 
