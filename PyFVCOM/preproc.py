@@ -2335,14 +2335,14 @@ class Model(Domain):
 
         for nest in nests:
             for boundary in nest.boundaries:
-                boundary.temp_nodes_index = np.isin(nodes, boundary.nodes)
-                boundary.temp_elements_index = np.isin(elements, boundary.elements)
+                temp_indices = {'nodes': np.isin(nodes, boundary.nodes),
+                                'elements': np.isin(elements, boundary.elements)}
 
                 for var in out_dict:
                     if var == 'time':
                         pass
                     elif var in out_dict.keys():
-                        this_index = getattr(boundary, 'temp_{}_index'.format(out_dict[var][1]))
+                        this_index = temp_indices[out_dict[var][1]]
                         # Skip out if we don't have any indices for this index. This happens on the first boundary for
                         # elements.
                         if not np.any(this_index):
