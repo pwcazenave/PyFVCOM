@@ -209,5 +209,3 @@ class MPIRegularInterpolateWorker():
     def _Interpolater(self):
         grid_z2 = si.griddata(this_var_fvcom_ll[:,this_depth_layer_points].T, depth_lay_data[this_depth_lay_ind,~np.isnan(depth_lay_data[this_depth_lay_ind,:])], (grid_mesh_lons, grid_mesh_lats), method='cubic') 
 
-
-"""
