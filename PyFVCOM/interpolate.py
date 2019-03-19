@@ -7,13 +7,73 @@ import numpy as np
 #from mpi4py import MPI
 
 
-def mask_to_fvcom(fvcom_ll, fvcom_tri, grid_mesh_lons, grid_mesh_lats, split_domain_check=False):
+def mask_to_fvcom(fvcom_ll, fvcom_tri, lons, lats, split_domain_check=False):
     """
-    Constructs a mask for a regular grid which is true for points lying outside the specified fvcom domain and false for those
+    Constructs a mask for a list of points which is true for points lying outside the specified fvcom domain and false for those
     within. The split_domain_check is more intensive to calculate but can handle cases where the FVCOM domain is non-contiguous or node/element 0
     is not in the exterior boundary 
     
 
+    Parameters
+    ----------
+    fvcom_ll : array
+        Px2 array of the lon lat positions of the FVCOM grid nodes
+    fvcom_tri : array
+        Qx3 python indexed triangulation array for the FVCOM grid
+    lons : array
+        1d array of the longitudes to mask
+    grid_mesh_lats : array  
+        1d array of latitudes to mask
+    split_domain_check : boolean, optional
+        The default version of the algorithm makes two assumptions, 1) That the first polygon returned by pf.grid.get_boundary_polygons
+        is the exterior of the FVCOM domain (certainly true if the OBC nodes start at 0) and 2) The FVCOM domain is one contiguous piece
+        of water. These are normally the case but sometimes, e.g, when slicing by a depth level which makes the domain non-contiguos then
+        this should be set to True to do a more thorough job of checking each point
+
+    Returns
+    -------
+    out_of_domain_mask : array
+        A 1d boolean array true for points outside the FVCOM domain and false for those within
+
+
+    """
+    out_of_domain_mask = np.zeros(lons.size, dtype=bool)
+    grid_point_list = [sg.Point(this_ll) for this_ll in np.asarray([lons, lats]).T]
+
+    if split_domain_check:
+        boundary_polygon_list, islands_list = get_boundary_polygons(fvcom_tri, nodes=fvcom_ll)
+
+        loc_code = np.zeros(len(grid_point_list))
+
+        for is_island, this_poly_pts in zip(islands_list, boundary_polygon_list):
+            this_poly = sg.Polygon(fvcom_ll[this_poly_pts,:])
+            for i, this_pt in enumerate(grid_point_list):
+                if is_island and this_poly.contains(this_pt):
+                    loc_code[i] = 1
+                elif not is_island and this_poly.contains(this_pt) and loc_code[i] != 1:
+                    loc_code[i] = 2
+
+        out_of_domain_mask = np.logical_or(loc_code == 0, loc_code == 1)
+         
+
+    else:
+        boundary_polygon_list = get_boundary_polygons(fvcom_tri)
+        boundary_polys = [sg.Polygon(fvcom_ll[this_poly_pts,:]) for this_poly_pts in boundary_polygon_list]
+    
+        out_of_domain_mask = np.ones(lons.size, dtype=bool)
+
+        for i, this_pt in enumerate(grid_point_list):
+            if boundary_polys[0].contains(this_pt):
+                out_of_domain_mask[i] = False
+                for this_poly in boundary_polys[1:]:
+                    if this_poly.contains(this_pt):
+                        out_of_domain_mask[i] = True
+
+    return out_of_domain_mask
+
+
+def mask_to_fvcom_meshgrid(fvcom_ll, fvcom_tri, grid_mesh_lons, grid_mesh_lats, split_domain_check=False):
+    """
     Parameters
     ----------
     fvcom_ll : array
@@ -35,50 +95,16 @@ def mask_to_fvcom(fvcom_ll, fvcom_tri, grid_mesh_lons, grid_mesh_lats, split_dom
     grid_land_mask : array
         An NxM boolean array true for points outside the FVCOM domain and false for those within
 
-
     """
-    grid_land_mask = np.zeros(grid_mesh_lons.size, dtype=bool)
-    grid_point_list = [sg.Point(this_ll) for this_ll in np.asarray([grid_mesh_lons.ravel(), grid_mesh_lats.ravel()]).T]
 
-    if split_domain_check:
-        boundary_polygon_list, islands_list = get_boundary_polygons(fvcom_tri, nodes=fvcom_ll)
-
-        loc_code = np.zeros(len(grid_point_list))
-
-        for is_island, this_poly_pts in zip(islands_list, boundary_polygon_list):
-            this_poly = sg.Polygon(fvcom_ll[this_poly_pts,:])
-            for i, this_pt in enumerate(grid_point_list):
-                if is_island and this_poly.contains(this_pt):
-                    loc_code[i] = 1
-                elif not is_island and this_poly.contains(this_pt) and loc_code[i] != 1:
-                    loc_code[i] = 2
-
-        grid_land_mask = np.logical_or(loc_code == 0, loc_code == 1)
-         
-
-    else:
-        boundary_polygon_list = get_boundary_polygons(fvcom_tri)
-        boundary_polys = [sg.Polygon(fvcom_ll[this_poly_pts,:]) for this_poly_pts in boundary_polygon_list]
-    
-        grid_land_mask = np.ones(grid_mesh_lons.size, dtype=bool)
-
-        for i, this_pt in enumerate(grid_point_list):
-            if boundary_polys[0].contains(this_pt):
-                grid_land_mask[i] = False
-                for this_poly in boundary_polys[1:]:
-                    if this_poly.contains(this_pt):
-                        grid_land_mask[i] = True
-
-    grid_land_mask = np.reshape(grid_land_mask, grid_mesh_lons.shape)
+    lons = grid_mesh_lons.ravel()
+    lats = grid_mesh_lats.ravel()
+    points_mask = mask_to_fvcom(fvcom_ll, fvcom_tri, lons, lats, split_domain_check=False)
+ 
+    grid_land_mask = np.reshape(points_mask, grid_mesh_lons.shape)
 
     return grid_land_mask
 
-
-
-
-
-
-"""
 
 
 
