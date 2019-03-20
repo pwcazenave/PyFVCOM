@@ -168,13 +168,13 @@ class Model(Domain):
         self.start = start
         self.end = end
         self.sampling = sampling
-        self.__add_time()
+        self._add_time()
 
         # Initialise the open boundary objects from the nodes we've read in from the grid (if any).
-        self.__initialise_open_boundaries_on_nodes()
+        self._initialise_open_boundaries_on_nodes()
 
         # Initialise the river structure.
-        self.__prep_rivers()
+        self._prep_rivers()
 
         # Add the coastline to the grid object for use later on.
         *_, bnd = connectivity(np.array((self.grid.lon, self.grid.lat)).T, self.grid.triangles)
@@ -184,7 +184,7 @@ class Model(Domain):
             land_only = np.isin(np.squeeze(np.argwhere(bnd)), flatten_list(self.grid.open_boundary_nodes), invert=True)
             self.grid.coastline = np.squeeze(self.grid.coastline[land_only])
 
-    def __prep_rivers(self):
+    def _prep_rivers(self):
         """ Create a few object and attributes which are useful for the river data. """
         self.river = PassiveStore()
         self.dims.river = 0  # assume no rivers.
@@ -193,7 +193,7 @@ class Model(Domain):
         self.river.info = ''
         self.river.source = ''
 
-    def __add_time(self):
+    def _add_time(self):
         """
         Add time variables we might need for the various bits of processing.
 
@@ -205,7 +205,7 @@ class Model(Domain):
         self.time.Itime2 = (getattr(self.time, 'time') - getattr(self.time, 'Itime')) * 24 * 60 * 60 * 1000  # milliseconds since midnight
         self.time.Times = [t.strftime('%Y-%m-%dT%H:%M:%S.%f') for t in getattr(self.time, 'datetime')]
 
-    def __initialise_open_boundaries_on_nodes(self):
+    def _initialise_open_boundaries_on_nodes(self):
         """ Add the relevant node-based grid information for any open boundaries we've got. """
 
         self.open_boundaries = []
@@ -225,7 +225,7 @@ class Model(Domain):
                 setattr(self.open_boundaries[-1].time, 'start', self.start)
                 setattr(self.open_boundaries[-1].time, 'end', self.end)
 
-    def __update_open_boundaries(self):
+    def _update_open_boundaries(self):
         """
         Call this when we've done something which affects the open boundary objects and we need to update their
         properties.
@@ -771,7 +771,7 @@ class Model(Domain):
                 print('zkl\t{:d}\n'.format(zkl))
 
         # Update the open boundaries.
-        self.__update_open_boundaries()
+        self._update_open_boundaries()
 
     def sigma_generalized(self, levels, dl, du, h, hmin):
         """
@@ -985,7 +985,7 @@ class Model(Domain):
         self.sigma.levels_center_z = self.grid.h_center[:, np.newaxis]  * self.sigma.levels_center
 
         # Update the open boundaries.
-        self.__update_open_boundaries()
+        self._update_open_boundaries()
 
     def __hybrid_coordinate_hmin(self, h, levels, du, dl, ku, kl, zku, zkl):
         """
@@ -2253,26 +2253,35 @@ class Model(Domain):
                     # Also redo the elements for the current nest.
                     self.nest[nest_index].boundaries[boundary_index].elements = np.unique(triangles.ravel())
 
-            for var in variables:
-                has_time = 'time' in ds.variables[var].dimensions
-                has_space = 'node' in ds.variables[var].dimensions or 'nele' in ds.variables[var].dimensions
-                if has_time and has_space:
-                    if verbose:
-                        print(f'Transferring {var} from the existing nesting file')
-                    for nest in self.nest:
-                        for boundary in nest.boundaries:
+            for nest in self.nest:
+                for boundary in nest.boundaries:
+                    for var in variables:
+                        has_time = 'time' in ds.variables[var].dimensions
+                        has_space = 'node' in ds.variables[var].dimensions or 'nele' in ds.variables[var].dimensions
+                        if has_time and has_space:
+                            if verbose:
+                                print(f'Transferring {var} from the existing nesting file')
+
                             # Split the existing nodes/elements into the current open boundary nodes.
                             if 'node' in ds.variables[var].dimensions:
                                 data = ds.variables[var][:][..., np.isin(nodes, boundary.nodes)]
                             else:
-                                try:
+                                if boundary.elements is not None:
                                     data = ds.variables[var][:][..., np.isin(elements, boundary.elements)]
-                                except AttributeError:
+                                else:
                                     # This is the first boundary and thus has no element data.
                                     continue
+
+                            # Check if we got any valid points here. We won't get any on the last boundary. That
+                            # raises the question why does it even have elements associated with it? Another day,
+                            # perhaps.
+                            if data.shape[-1] == 0:
+                                continue
+
                             if filter_times:
                                 data = np.delete(data, bad_times, axis=0)
-                            setattr(boundary.data, var, data.T)
+
+                            setattr(boundary.data, var, data)
 
     def write_nested_forcing(self, ncfile, type=3, adjust_tides=None, ersem_metadata=None, **kwargs):
         """
@@ -2322,7 +2331,7 @@ class Model(Domain):
         v = np.empty((time_number, self.dims.layers, elements_number)) * np.nan
         temperature = np.empty((time_number, self.dims.layers, nodes_number)) * np.nan
         salinity = np.empty((time_number, self.dims.layers, nodes_number)) * np.nan
-        hyw = np.zeros((time_number, self.dims.layers, nodes_number))  # we never set this to anything other than zeros
+        hyw = np.zeros((time_number, self.dims.levels, nodes_number))  # we never set this to anything other than zeros
         if type == 3:
             weight_nodes = np.repeat(weight_nodes, time_number, 0).reshape(time_number, -1)
             weight_elements = np.repeat(weight_elements, time_number, 0).reshape(time_number, -1)
@@ -2334,14 +2343,14 @@ class Model(Domain):
 
         for nest in nests:
             for boundary in nest.boundaries:
-                boundary.temp_nodes_index = np.isin(nodes, boundary.nodes)
-                boundary.temp_elements_index = np.isin(elements, boundary.elements)
+                temp_indices = {'nodes': np.isin(nodes, boundary.nodes),
+                                'elements': np.isin(elements, boundary.elements)}
 
                 for var in out_dict:
                     if var == 'time':
                         pass
                     elif var in out_dict.keys():
-                        this_index = getattr(boundary, 'temp_{}_index'.format(out_dict[var][1]))
+                        this_index = temp_indices[out_dict[var][1]]
                         # Skip out if we don't have any indices for this index. This happens on the first boundary for
                         # elements.
                         if not np.any(this_index):
@@ -2349,12 +2358,13 @@ class Model(Domain):
 
                         try:
                             boundary_data = getattr(boundary.data, var)
-                            if adjust_tides and var in adjust_tides:
-                                # The harmonics are calculated -/+ one day
-                                tide_times_choose = np.isin(boundary.tide.time, boundary.data.time.datetime)
-                                boundary_data = boundary_data + getattr(boundary.tide, var)[tide_times_choose, :]
                         except AttributeError:
                             continue
+
+                        if adjust_tides is not None and var in adjust_tides:
+                            # The harmonics are calculated -/+ one day
+                            tide_times_choose = np.isin(boundary.tide.time, boundary.data.time.datetime)
+                            boundary_data = boundary_data + getattr(boundary.tide, var)[tide_times_choose, :]
 
                         out_dict[var][0][..., this_index] = boundary_data
                     else:
@@ -2583,8 +2593,8 @@ class Model(Domain):
                     'units': 'meters s-1',
                     'grid': 'fvcom_grid',
                     'type': 'data',
-                    'coordinates': 'time siglay lat lon'}
-            nest_ncfile.add_variable('hyw', out_dict['hyw'][0], ['time', 'siglay', 'node'], attributes=atts, ncopts=ncopts)
+                    'coordinates': 'time siglev lat lon'}
+            nest_ncfile.add_variable('hyw', out_dict['hyw'][0], ['time', 'siglev', 'node'], attributes=atts, ncopts=ncopts)
 
             if ersem_metadata is not None:
                 for name in ersem_metadata:
@@ -2603,10 +2613,8 @@ class Model(Domain):
                         if name == 'time':
                             pass
                         temp_nodes_index = np.isin(nodes, boundary.nodes)
-                        # Data are interpolated with dimensions ordered ['time', 'depth', 'space'] whereas we need to
-                        # transpose for writing out.
-                        dump[..., temp_nodes_index] = getattr(boundary.data, name).T
-                    nest_ncfile.add_variable(name, dump, ['time', 'siglay', 'nobc'], attributes=atts, ncopts=ncopts)
+                        dump[..., temp_nodes_index] = getattr(boundary.data, name)
+                    nest_ncfile.add_variable(name, dump, ['time', 'siglay', 'node'], attributes=atts, ncopts=ncopts)
 
     def add_obc_types(self, types):
         """

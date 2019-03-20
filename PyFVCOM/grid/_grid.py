@@ -1015,7 +1015,11 @@ class OpenBoundary(object):
 
         self.nodes = None
         self.elements = None
-        # Silently convert IDs from numpy arrays to lists.
+        # Silently convert IDs from numpy arrays to lists. If the first and last node ID are the same, drop the last
+        # one too to match the behaviour of the MATLAB preprocessing tools (and I'm sure there's an actual reason,
+        # I just can't remember it at the moment).
+        if ids[0] == ids[-1]:
+            ids = ids[:-1]
         if mode == 'nodes':
             try:
                 ids = ids.tolist()
@@ -1695,7 +1699,8 @@ class OpenBoundary(object):
             results = pool.map(self._interpolate_in_time, interp_args)
             pool.close()
 
-            interpolated_coarse_data = np.asarray(results).reshape(nz, nx, -1).transpose(1, 0, 2)
+            # Reshape and transpose to be the correct size for writing to netCDF (time, depth, node).
+            interpolated_coarse_data = np.asarray(results).reshape(nz, nx, -1).transpose(2, 0, 1)
         else:
             if verbose:
                 print('Interpolating z-level data...', end=' ')
@@ -1708,7 +1713,7 @@ class OpenBoundary(object):
             ft = RegularGridInterpolator((coarse.time.time, coarse.grid.depth, coarse.grid.lat, coarse.grid.lon),
                                          np.ma.filled(getattr(coarse.data, coarse_name), np.nan), method='linear',
                                          fill_value=np.nan)
-            # Reshape the results to match the un-ravelled boundary_grid array.
+            # Reshape the results to match the un-ravelled boundary_grid array (time, depth, node).
             interpolated_coarse_data = ft(boundary_grid).reshape([nt, nz, -1])
 
         if tide_adjust and fvcom_name in ['u', 'v', 'ua', 'va']:
