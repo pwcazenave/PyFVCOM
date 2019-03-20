@@ -1706,8 +1706,8 @@ class OpenBoundary(object):
                 zero_depth_water = np.where(np.logical_and(coarse_depths == 0, ~coarse_depths.mask))
                 if zero_depth_water[0].size:
                     data_mod = getattr(coarse.data, coarse_name)
-                    data_mod[:, 1, zero_depth_water[0], zero_depth_water[1]] = data_mod[:, 0, zero_depth_water[0], zero_depth_water[1]]
-                    data_mod.mask[:, 1, zero_depth_water[0], zero_depth_water[1]] = False
+                    data_mod[:,1,zero_depth_water[0], zero_depth_water[1]] = data_mod[:,0,zero_depth_water[0], zero_depth_water[1]]
+                    data_mod.mask[:,1,zero_depth_water[0], zero_depth_water[1]] = False
                     setattr(coarse.data, coarse_name, data_mod) # Probably isn't needed cos pointers but for clarity
 
                 coarse_depths = np.ma.filled(coarse_depths, 0)
