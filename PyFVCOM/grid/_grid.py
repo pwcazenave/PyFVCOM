@@ -3,6 +3,9 @@ Tools for manipulating and converting unstructured grids in a range of formats.
 
 """
 
+# TODO: This is a massive sprawling collection of functions. We should split it up into more sensible subdivisions
+#  within PyFVCOM.grid to make it more manageable and generally more useable.
+
 from __future__ import print_function, division
 
 import copy
@@ -14,11 +17,12 @@ from collections import defaultdict, deque
 from functools import partial
 from warnings import warn
 
-import matplotlib.pyplot as plt
 import matplotlib.path as mpath
+import matplotlib.pyplot as plt
 import networkx
 import numpy as np
 import scipy.spatial
+import shapefile
 import shapely.geometry
 from dateutil.relativedelta import relativedelta
 from matplotlib.dates import date2num as mtime
@@ -32,7 +36,7 @@ from utide.utilities import Bunch
 
 from PyFVCOM.coordinate import utm_from_lonlat, lonlat_from_utm
 from PyFVCOM.ocean import zbar
-from PyFVCOM.utilities.general import _passive_data_store, fix_range
+from PyFVCOM.utilities.general import PassiveStore, fix_range, cart2pol, pol2cart
 from PyFVCOM.utilities.time import date_range
 
 
@@ -84,7 +88,7 @@ class GridReaderNetCDF(object):
             try:
                 setattr(self, grid, ds.variables[grid][:])
                 # Save the attributes.
-                attributes = _passive_data_store()
+                attributes = PassiveStore()
                 for attribute in ds.variables[grid].ncattrs():
                     setattr(attributes, attribute, getattr(ds.variables[grid], attribute))
                 # setattr(self.atts, grid, attributes)
@@ -144,8 +148,29 @@ class GridReaderNetCDF(object):
                         print('Elements not specified but reducing to only those within the triangulation of selected nodes')
                     self._dims['nele'] = new_ele
                 elif not np.array_equal(np.sort(new_ele), np.sort(self._dims['nele'])):
-                    if self._noisy:
-                        print('Mismatch between given elements and nodes for triangulation, retaining original elements')
+                    # Try culling some elements as what may happen is we have asked for some nodes which form an
+                    # element but we haven't asked for that element.
+                    #        a
+                    #        /\
+                    #       /  \
+                    #      / 1  \
+                    #    b/______\c
+                    #
+                    # That is, we've asked for nodes a, b and c but not element 1. The way to check this is to find
+                    # all the nodes in the triangulation for the given elements and if those match the nodes we've
+                    # asked for, use the elements to cull the triangulation object.
+                    triangulation_nodes = np.unique(self.triangles[self._dims['nele']])
+                    if np.all(triangulation_nodes == np.sort(self._dims['node'])):
+                        new_tri = self.triangles[self._dims['nele']]
+                        # Remap nodes to a new index. Work on a copy so we don't end up replacing a value more than
+                        # once.
+                        new_index = np.arange(0, len(self._dims['node']))
+                        original_tri = new_tri.copy()
+                        for this_old, this_new in zip(self._dims['node'], new_index):
+                            new_tri[original_tri == this_old] = this_new
+                    else:
+                        if self._noisy:
+                            print('Mismatch between given elements and nodes for triangulation, retaining original elements')
             else:
                 if self._noisy:
                     print('Nodes not specified but reducing to only those within the triangulation of selected elements')
@@ -190,7 +215,7 @@ class GridReaderNetCDF(object):
                 else:
                     setattr(self, metric, ds.variables[metric][:])
                 # Save the attributes.
-                attributes = _passive_data_store()
+                attributes = PassiveStore()
                 for attribute in ds.variables[metric].ncattrs():
                     setattr(attributes, attribute, getattr(ds.variables[metric], attribute))
                 # setattr(self.atts, metric, attributes)
@@ -213,7 +238,7 @@ class GridReaderNetCDF(object):
                 else:
                     setattr(self, var, ds.variables[var][:])
                 # Save the attributes.
-                attributes = _passive_data_store()
+                attributes = PassiveStore()
                 for attribute in ds.variables[var].ncattrs():
                     setattr(attributes, attribute, getattr(ds.variables[var], attribute))
                 # setattr(self.atts, var, attributes)
@@ -232,11 +257,11 @@ class GridReaderNetCDF(object):
                     if self._noisy:
                         print('{} cannot be migrated to element centres (invalid triangulation). Setting to zero.'.format(var))
                     if var == 'siglev_center':
-                        setattr(self, var, np.zeros((ds.dimensions['siglev'].size, nele)))
+                        setattr(self, var, np.zeros((ds.dimensions['siglev'].size, dims.nele)))
                     elif var == 'siglay_center':
-                        setattr(self, var, np.zeros((ds.dimensions['siglay'].size, nele)))
+                        setattr(self, var, np.zeros((ds.dimensions['siglay'].size, dims.nele)))
                     elif var == 'h_center':
-                        setattr(self, var, np.zeros((nele)))
+                        setattr(self, var, np.zeros((dims.nele)))
                     else:
                         raise ValueError('Inexplicably, we have a variable not in the loop we have defined.')
 
@@ -566,6 +591,9 @@ class Domain(object):
                 self.dims.open_boundary_nodes = len(self.grid.open_boundary_nodes)
                 self.dims.open_boundary = 1
 
+    def __iter__(self):
+        return (a for a in self.__dict__.keys() if not a.startswith('_'))
+
     @staticmethod
     def _closest_point(x, y, lon, lat, where, threshold=np.inf, vincenty=False, haversine=False):
         """
@@ -763,9 +791,9 @@ class Domain(object):
         Returns
         -------
         nodes : np.ndarray
-            List of the nodes within the given polygon.
+            List of the node IDs from the original `triangles' array within the given polygon.
         elements : np.ndarray
-            List of the elements within the given polygon.
+            List of the element IDs from the original `triangles' array within the given polygon.
         triangles : np.ndarray
             The reduced triangulation.
 
@@ -960,6 +988,8 @@ class OpenBoundary(object):
 
     """
 
+    # TODO Add methods to generate casename_tsobc.nc files.
+
     def __init__(self, ids, mode='nodes'):
         """
         Given a set of open boundary nodes, initialise a new open boundary object with relevant arrays.
@@ -981,11 +1011,26 @@ class OpenBoundary(object):
 
         """
 
+        self._debug = False
+
         self.nodes = None
         self.elements = None
+        # Silently convert IDs from numpy arrays to lists. If the first and last node ID are the same, drop the last
+        # one too to match the behaviour of the MATLAB preprocessing tools (and I'm sure there's an actual reason,
+        # I just can't remember it at the moment).
+        if ids[0] == ids[-1]:
+            ids = ids[:-1]
         if mode == 'nodes':
+            try:
+                ids = ids.tolist()
+            except AttributeError:
+                pass
             self.nodes = ids
         else:
+            try:
+                ids = ids.tolist()
+            except AttributeError:
+                pass
             self.elements = ids
         self.sponge_coefficient = None
         self.sponge_radius = None
@@ -994,11 +1039,11 @@ class OpenBoundary(object):
         self.weight_node = None
         self.weight_element = None
         # These get added to by PyFVCOM.preproc.Model and are used in the tide and nest functions below.
-        self.tide = _passive_data_store()
-        self.grid = _passive_data_store()
-        self.sigma = _passive_data_store()
-        self.time = _passive_data_store()
-        self.nest = _passive_data_store()
+        self.tide = PassiveStore()
+        self.grid = PassiveStore()
+        self.sigma = PassiveStore()
+        self.time = PassiveStore()
+        self.data = PassiveStore()
 
     def __iter__(self):
         return (a for a in self.__dict__.keys() if not a.startswith('_'))
@@ -1066,7 +1111,7 @@ class OpenBoundary(object):
         # Feels a bit ridiculous having a whole method for this...
         setattr(self, 'type', obc_type)
 
-    def add_tpxo_tides(self, tpxo_harmonics, predict='zeta', interval=1 / 24, constituents=['M2'], serial=False, pool_size=None, noisy=False):
+    def add_tpxo_tides(self, tpxo_harmonics, predict='zeta', interval=1 / 24, constituents=['M2'], serial=False, pool_size=None, noisy=False, interp_method='nearest'):
         """
         Add TPXO tides at the open boundary nodes.
 
@@ -1115,7 +1160,7 @@ class OpenBoundary(object):
         harmonics_lon, harmonics_lat, amplitudes, phases, available_constituents = self._load_harmonics(tpxo_harmonics, constituents, names)
         interpolated_amplitudes, interpolated_phases = self._interpolate_tpxo_harmonics(x, y,
                                                                                         amplitudes, phases,
-                                                                                        harmonics_lon, harmonics_lat)
+                                                                                        harmonics_lon, harmonics_lat, interp_method=interp_method)
 
         self.tide.constituents = available_constituents
 
@@ -1324,7 +1369,7 @@ class OpenBoundary(object):
         return np.all(is_matched), np.asarray(match_indices, dtype=int)
 
     @staticmethod
-    def _interpolate_tpxo_harmonics(x, y, amp_data, phase_data, harmonics_lon, harmonics_lat):
+    def _interpolate_tpxo_harmonics(x, y, amp_data, phase_data, harmonics_lon, harmonics_lat, interp_method):
         """
         Interpolate from the harmonics data onto the current open boundary positions.
 
@@ -1352,11 +1397,14 @@ class OpenBoundary(object):
             harmonics_lon = np.unique(harmonics_lon)
             harmonics_lat = np.unique(harmonics_lat)
 
+        # Since interpolating phase directly is a bad idea (cos of the 360 -> 0 degree thing) convert to vectors first
+        harmonics_u, harmonics_v = pol2cart(amp_data, phase_data, degrees=True) 
+
         # Make a dummy first dimension since we need it for the RegularGridInterpolator but don't actually
         # interpolated along it.
         c_data = np.arange(amp_data.shape[0])
-        amplitude_interp = RegularGridInterpolator((c_data, harmonics_lon, harmonics_lat), amp_data, method='nearest', fill_value=None)
-        phase_interp = RegularGridInterpolator((c_data, harmonics_lon, harmonics_lat), phase_data, method='nearest', fill_value=None)
+        u_interp = RegularGridInterpolator((c_data, harmonics_lon, harmonics_lat), harmonics_u, method=interp_method, fill_value=None)
+        v_interp = RegularGridInterpolator((c_data, harmonics_lon, harmonics_lat), harmonics_v, method=interp_method, fill_value=None)
 
         # Fix our input position longitudes to be in the 0-360 range to match the harmonics data range,
         # if necessary.
@@ -1374,8 +1422,11 @@ class OpenBoundary(object):
         xx = np.tile(x, [amp_data.shape[0], 1])
         yy = np.tile(y, [amp_data.shape[0], 1])
         ccidx = np.tile(c_data, [len(x), 1]).T
-        amplitudes = amplitude_interp((ccidx, xx, yy)).T
-        phases = phase_interp((ccidx, xx, yy)).T
+        u = u_interp((ccidx, xx, yy)).T
+        v = v_interp((ccidx, xx, yy)).T
+
+        # And convert back to amplitude and phase
+        amplitudes, phases = cart2pol(u, v, degrees=True)        
 
         return amplitudes, phases
 
@@ -1429,14 +1480,6 @@ class OpenBoundary(object):
         return amplitudes.T, phases.T
 
     @staticmethod
-    def _interpolater_function(input):
-        """ Pass me to a multiprocessing.Pool().map() to quickly interpolate data with LinearNDInterpolator. """
-        lon, lat, data, x, y = input
-        interp = LinearNDInterpolator((lon, lat), data)
-
-        return interp((x, y))
-
-    @staticmethod
     def _predict_tide(args):
         """
         For the given time and coefficients (in coef) reconstruct the tidal elevation or current component time
@@ -1482,7 +1525,8 @@ class OpenBoundary(object):
 
         return zeta
 
-    def add_nested_forcing(self, fvcom_name, coarse_name, coarse, interval=1, constrain_coordinates=False, mode='nodes', tide_adjust=False):
+    def add_nested_forcing(self, fvcom_name, coarse_name, coarse, interval=1, constrain_coordinates=False,
+                           mode='nodes', tide_adjust=False, verbose=False):
         """
         Interpolate the given data onto the open boundary nodes for the period from `self.time.start' to
         `self.time.end'.
@@ -1503,20 +1547,25 @@ class OpenBoundary(object):
             This essentially squashes the open boundary to fit inside the coarse data and is, therefore, a bit of a
             fudge! Defaults to False.
         mode : bool, optional
-            Set to 'nodes' to interpolate onto the open boundary node positions or 'elements' for the elements. For 2d data
-            set to 'surface', this is then interpolated to the node positions ignoring depth coordinates.
-            Defaults to 'nodes'.
+            Set to 'nodes' to interpolate onto the open boundary node positions or 'elements' for the elements for
+            z-level data. For 2D data, set to 'surface' (interpolates to the node positions ignoring depth
+            coordinates). Also supported are 'sigma_nodes' and `sigma_elements' which means we have spatially (and
+            optionally temporally) varying water depths (i.e. sigma layers rather than z-levels). Defaults to 'nodes'.
         tide_adjust : bool, optional
-            Some nested forcing doesn't include tidal components and these have to be added from predictions using harmonics.
-            With this set to true the interpolated forcing has the tidal component (required to already exist in self.tide) added
-            to the final data.
+            Some nested forcing doesn't include tidal components and these have to be added from predictions using
+            harmonics. With this set to true the interpolated forcing has the tidal component (required to already
+            exist in self.tide) added to the final data.
+        verbose : bool, optional
+            Set to True to enable verbose output. Defaults to False (no verbose output).
+
         """
 
         # Check we have what we need.
         raise_error = False
         if mode == 'nodes':
             if not np.any(self.nodes):
-                print('No nodes on which to interpolate on this boundary'.format(mode))
+                if verbose:
+                    print(f'No {mode} on which to interpolate on this boundary')
                 return
             if not hasattr(self.sigma, 'layers'):
                 raise_error = True
@@ -1524,22 +1573,23 @@ class OpenBoundary(object):
             if not hasattr(self.sigma, 'layers_center'):
                 raise_error = True
             if not np.any(self.elements):
-                print('No elements on which to interpolate on this boundary'.format(mode))
+                if verbose:
+                    print(f'No {mode} on which to interpolate on this boundary')
                 return
 
         if raise_error:
             raise AttributeError('Add vertical sigma coordinates in order to interpolate forcing along this boundary.')
 
-        # Populate the time data.
-        self.nest.time = type('time', (), {})()
-        self.nest.time.interval = interval
-        self.nest.time.datetime = date_range(self.time.start, self.time.end, inc=interval)
-        self.nest.time.time = date2num(getattr(self.nest.time, 'datetime'), units='days since 1858-11-17 00:00:00')
-        self.nest.time.Itime = np.floor(getattr(self.nest.time, 'time'))  # integer Modified Julian Days
-        self.nest.time.Itime2 = (getattr(self.nest.time, 'time') - getattr(self.nest.time, 'Itime')) * 24 * 60 * 60 * 1000  # milliseconds since midnight
-        self.nest.time.Times = [t.strftime('%Y-%m-%dT%H:%M:%S.%f') for t in getattr(self.nest.time, 'datetime')]
+        # Populate the time data. Why did I put the time data in here rather than self.time? This is annoying.
+        self.data.time = PassiveStore()
+        self.data.time.interval = interval
+        self.data.time.datetime = date_range(self.time.start, self.time.end, inc=interval)
+        self.data.time.time = date2num(getattr(self.data.time, 'datetime'), units='days since 1858-11-17 00:00:00')
+        self.data.time.Itime = np.floor(getattr(self.data.time, 'time'))  # integer Modified Julian Days
+        self.data.time.Itime2 = (getattr(self.data.time, 'time') - getattr(self.data.time, 'Itime')) * 24 * 60 * 60 * 1000  # milliseconds since midnight
+        self.data.time.Times = [t.strftime('%Y-%m-%dT%H:%M:%S.%f') for t in getattr(self.data.time, 'datetime')]
 
-        if mode == 'elements':
+        if 'elements' in mode:
             boundary_points = self.elements
             x = self.grid.lonc
             y = self.grid.latc
@@ -1558,10 +1608,10 @@ class OpenBoundary(object):
             y[y < coarse.grid.lat.min()] = coarse.grid.lat.min()
             y[y > coarse.grid.lat.max()] = coarse.grid.lat.max()
 
-            # Internal landmasses also need to be dealt with, so test if a point lies within the mask of the grid and move it to the nearest in grid
-            # point if so.            
+            # Internal landmasses also need to be dealt with, so test if a point lies within the mask of the grid and
+            # move it to the nearest in grid point if so.
             if not mode == 'surface':
-                land_mask = getattr(coarse.data, coarse_name)[0, ...].mask[0,:,:]
+                land_mask = getattr(coarse.data, coarse_name)[0, ...].mask[0, :, :]
             else:
                 land_mask = getattr(coarse.data, coarse_name)[0, ...].mask
 
@@ -1622,38 +1672,211 @@ class OpenBoundary(object):
                 # it's a single minimum across all the open boundary positions.
                 z[z < coarse.grid.depth.min()] = coarse.grid.depth.min()
 
-        # Make arrays of lon, lat, depth and time. Need to make the coordinates match the coarse data shape and then
-        # flatten the lot. We should be able to do the interpolation in one shot this way, but we have to be
-        # careful our coarse data covers our model domain (space and time).
-        nt = len(self.nest.time.time)
+        nt = len(self.data.time.time)
         nx = len(boundary_points)
         nz = z.shape[-1]
 
+        # Make arrays of lon, lat, depth and time for non-sigma interpolation. Need to make the coordinates match the
+        # coarse data shape and then flatten the lot. We should be able to do the interpolation in one shot this way,
+        # but we have to be careful our coarse data covers our model domain (space and time).
         if mode == 'surface':
-            boundary_grid = np.array((np.tile(self.nest.time.time, [nx, 1]).T.ravel(),
+            if verbose:
+                print('Interpolating surface data...', end=' ')
+
+            # We should use np.meshgrid here instead of all this tiling business.
+            boundary_grid = np.array((np.tile(self.data.time.time, [nx, 1]).T.ravel(),
                                       np.tile(y, [nt, 1]).transpose(0, 1).ravel(),
                                       np.tile(x, [nt, 1]).transpose(0, 1).ravel())).T
             ft = RegularGridInterpolator((coarse.time.time, coarse.grid.lat, coarse.grid.lon),
                                          getattr(coarse.data, coarse_name), method='linear', fill_value=np.nan)
             # Reshape the results to match the un-ravelled boundary_grid array.
             interpolated_coarse_data = ft(boundary_grid).reshape([nt, -1])
-            # Drop the interpolated data into the nest object.
+        elif 'sigma' in mode:
+            if verbose:
+                print('Interpolating sigma data...', end=' ')
+
+            nt = coarse.dims.time  # rename!
+            interp_args = [(boundary_points, x, y, self.sigma.layers, coarse, coarse_name, self._debug, t) for t in np.arange(nt)]
+            if hasattr(coarse, 'ds'):
+                coarse.ds.close()
+                delattr(coarse, 'ds')
+            pool = multiprocessing.Pool()
+            results = pool.map(self._brute_force_interpolator, interp_args)
+
+            # Now we have those data interpolated in space (horizontal and vertical), interpolate to match in time.
+            interp_args = [(coarse.time.time, j, self.data.time.time) for i in np.asarray(results).T for j in i]
+            results = pool.map(self._interpolate_in_time, interp_args)
+            pool.close()
+
+            # Reshape and transpose to be the correct size for writing to netCDF (time, depth, node).
+            interpolated_coarse_data = np.asarray(results).reshape(nz, nx, -1).transpose(2, 0, 1)
         else:
-            boundary_grid = np.array((np.tile(self.nest.time.time, [nx, nz, 1]).T.ravel(),
+            if verbose:
+                print('Interpolating z-level data...', end=' ')
+            # Assume it's z-level data (e.g. HYCOM, CMEMS). We should use np.meshgrid here instead of all this tiling
+            # business.
+            boundary_grid = np.array((np.tile(self.data.time.time, [nx, nz, 1]).T.ravel(),
                                       np.tile(z.T, [nt, 1, 1]).ravel(),
                                       np.tile(y, [nz, nt, 1]).transpose(1, 0, 2).ravel(),
                                       np.tile(x, [nz, nt, 1]).transpose(1, 0, 2).ravel())).T
             ft = RegularGridInterpolator((coarse.time.time, coarse.grid.depth, coarse.grid.lat, coarse.grid.lon),
                                          np.ma.filled(getattr(coarse.data, coarse_name), np.nan), method='linear',
                                          fill_value=np.nan)
-            # Reshape the results to match the un-ravelled boundary_grid array.
+            # Reshape the results to match the un-ravelled boundary_grid array (time, depth, node).
             interpolated_coarse_data = ft(boundary_grid).reshape([nt, nz, -1])
-            # Drop the interpolated data into the nest object.
 
         if tide_adjust and fvcom_name in ['u', 'v', 'ua', 'va']:
             interpolated_coarse_data = interpolated_coarse_data + getattr(self.tide, fvcom_name)
 
-        setattr(self.nest, fvcom_name, interpolated_coarse_data)
+        # Drop the interpolated data into the data object.
+        setattr(self.data, fvcom_name, interpolated_coarse_data)
+
+        if verbose:
+            print('done.')
+
+    @staticmethod
+    def _brute_force_interpolator(args):
+        """
+        Interpolate a given time of coarse data into the current open boundary node positions and times.
+
+        The name stems from the fact we simply iterate through all the points in the current boundary rather than
+        using LinearNDInterpolator. This is because the creation of a LinearNDInterpolator for a 4D set of points is
+        hugely expensive (even compared with this brute force approach).
+
+        Parameters
+        ----------
+        args : tuple
+            The input arguments as a tuple of:
+            boundary_points : np.ndarray
+                The open boundary point indices (self.nodes or self.elements).
+            x : np.ndarray
+                The source data x positions.
+            y : np.ndarray
+                The source data y positions.
+            sigma_layers_z : np.ndarray
+                The vertical grid layer depths in metres (nx, nz) or (nx, nz, time).
+            coarse : PyFVCOM.preproc.RegularReader
+                The coarse data from which we're interpolating.
+            coarse_name : str
+                The name of the data from which we're interpolating.
+            verbose : bool
+                True for verbose output, False for none. Only really useful in serial.
+            t : int
+                The time index of the current interpolation.
+
+        Returns
+        -------
+        The interpolated boundary data at `x', `y', `sigma_layers_z' for coarse.data.coarse_name at time index `t'.
+
+        """
+
+        # MATLAB interp_coarse_to_obc.m reimplementation in Python with some tweaks. Hence the horrible variable
+        # names.
+        #
+        # This is twice as slow as the MATLAB version and I'm not quite sure why since we end up running it in parallel
+        # (in time instead of space). Annoyingly, it gets slower the more variables you interpolate (i.e. each
+        # successive variable being interpolated increases the time it takes to interpolate). This is probably a memory
+        # overhead from using multiprocessing.Pool.map().
+        boundary_points, x, y, sigma_layers_z, coarse, coarse_name, verbose, t = args
+
+        fz = sigma_layers_z.shape[-1]
+
+        nf = len(boundary_points)
+        nz = coarse.grid.siglay_z.shape[0]  # rename!
+
+        if verbose:
+            print(f'Interpolating time {t} of {coarse.dims.time}')
+        # This can just be replaced by a reshape as we only load what we need up front. Check these are
+        # equivalent, though.
+        pctemp3 = np.squeeze(getattr(coarse.data, coarse_name)[t, ...]).reshape(nz, -1).T
+
+        itempz = np.full((nf, nz), np.nan)
+        idepthz = np.full((nf, nz), np.nan)
+        if np.ndim(coarse.grid.siglay_z) == 4:
+            nemo_depth = np.squeeze(coarse.grid.siglay_z[..., t].reshape((nz, -1))).T
+        else:
+            nemo_depth = np.squeeze(coarse.grid.siglay_z.reshape((nz, -1))).T
+
+        # Go through each vertical level, interpolate the coarse model depth and data to each position in the current
+        # open boundary. Make sure we remove all NaNs.
+        for j in np.arange(nz):
+            if verbose:
+                print(f'Interpolating layer {j} of {nz}')
+            tpctemp2 = pctemp3[:, j]
+            tpcdepth2 = nemo_depth[:, j]
+
+            tlon, tlat = np.meshgrid(coarse.grid.lon, coarse.grid.lat)
+            tlon, tlat = tlon.ravel(), tlat.ravel()
+
+            interpolator = LinearNDInterpolator((tlon, tlat), tpctemp2)
+            itempobc = interpolator((x, y))
+            # Update values in the triangulation so we don't have to remake it (which can be expensive).
+            interpolator.values = tpcdepth2[:, np.newaxis].astype(np.float64)
+            idepthobc = interpolator((x, y))
+
+            if np.any(np.isnan(itempobc)) or np.any(np.isnan(idepthobc)):
+                ibad = np.argwhere(np.isnan(itempobc))
+                for bb in ibad:
+                    warn(f'FVCOM boundary node at {x[bb]}, {y[bb]} returns NaN after interpolation. Using inverse distance interpolation.')
+                    w = 1 / np.hypot(tlon - x[bb], tlat - y[bb])
+                    w = w / w.max()
+                    itempobc[bb] = (tpctemp2 * w).sum() / w.sum()
+                    idepthobc[bb] = (tpcdepth2 * w).sum() / w.sum()
+
+            itempz[:, j] = itempobc
+            idepthz[:, j] = idepthobc
+
+        # Now for each point in the current open boundary points (x, y), interpolate the interpolated (in the
+        # horizontal) model data onto the FVCOM vertical grid.
+        fvtempz = np.full((nf, fz), np.nan)
+        for pp in np.arange(nf):
+            if verbose:
+                print(f'Interpolating point {pp} of {nf}')
+            tfz = sigma_layers_z[pp, :]
+            tpz = idepthz[pp, :]
+
+            norm_tpz = fix_range(tpz, tfz.min(), tfz.max())
+
+            if not np.any(np.isnan(tpz)):
+                fvtempz[pp, :] = np.interp(tfz, norm_tpz, itempz[pp, :])
+
+        # Make sure we remove any NaNs from the vertical profiles by replacing with the interpolated data from the
+        # non-NaN data in the vicinity.
+        for pp in np.arange(fz):
+            test = fvtempz[:, pp]
+            if np.any(np.isnan(test)):
+                igood = ~np.isnan(test)
+                ft = LinearNDInterpolator((x[igood], y[igood]), test[igood])
+                fvtempz[:, pp] = ft((x, y))
+
+        return fvtempz
+
+    @staticmethod
+    def _interpolate_in_time(args):
+        """
+        Worker function to interpolate the given time series in time.
+
+        Parameters
+        ----------
+        args : tuple
+            A tuple containing:
+            time_coarse : np.ndarray
+                The coarse time data.
+            data_coarse : np.ndarray
+                The coarse data.
+            time_fine : np.ndarray
+                The fine time data onto which to interpolate [time_coarse, data_coarse].
+
+        Returns
+        -------
+        data_fine : np.ndarray
+            The interpolate data time series.
+
+        """
+
+        time_coarse, data_coarse, time_fine = args
+
+        return np.interp(time_fine, time_coarse, data_coarse)
 
     @staticmethod
     def _nested_forcing_interpolator(data, lon, lat, depth, points):
@@ -1682,19 +1905,19 @@ class OpenBoundary(object):
         """
 
         # Make a RegularGridInterpolator from the supplied 4D data.
-        ft = RegularGridInterpolator((depth, lat, lon), data, method='nearest', fill_value=None)
+        ft = RegularGridInterpolator((depth, lat, lon), data, method='linear', fill_value=None)
         interpolated_data = ft(points)
 
         return interpolated_data
 
     def avg_nest_force_vel(self):
         """
-        Create depth-averaged velocities (`ua', `va') in the current self.nest data.
+        Create depth-averaged velocities (`ua', `va') in the current self.data data.
 
         """
         layer_thickness = self.sigma.levels_center.T[0:-1, :] - self.sigma.levels_center.T[1:, :]
-        self.nest.ua = zbar(self.nest.u, layer_thickness)
-        self.nest.va = zbar(self.nest.v, layer_thickness)
+        self.data.ua = zbar(self.data.u, layer_thickness)
+        self.data.va = zbar(self.data.v, layer_thickness)
 
 
 def read_sms_mesh(mesh, nodestrings=False):
@@ -1936,6 +2159,52 @@ def read_fvcom_mesh(mesh):
     Z = np.asarray(z)
 
     return triangle, nodes, X, Y, Z
+
+
+def read_smesh_mesh(mesh):
+    """
+    Reads output of the smeshing tool. This is (close) to the fort.14 file format.
+
+    Parameters
+    ----------
+    mesh : str
+        Full path to the smesh output file
+
+    Returns
+    -------
+    triangle : np.ndarray
+        Integer array of shape (ntri, 3). Each triangle is composed of three points and this contains the three node
+        numbers which refer to the coordinates in `x' and `y' (see below).
+    x, y : np.ndarray
+        Coordinates of each grid node
+
+    """
+
+    with open(mesh, 'r') as file_read:
+        # Skip the file header line
+        lines = file_read.readlines()[1:]
+
+    triangles = []
+    x = []
+    y = []
+
+    for line in lines:
+        ttt = line.strip().split()
+        if len(ttt) == 3:
+            t1 = int(ttt[0])
+            t2 = int(ttt[1])
+            t3 = int(ttt[2])
+            triangles.append([t1, t2, t3])
+        elif len(ttt) == 2:
+            x.append(float(ttt[0]))
+            y.append(float(ttt[1]))
+
+    # Convert to numpy arrays.
+    triangle = np.asarray(triangles)
+    x = np.asarray(x)
+    y = np.asarray(y)
+
+    return triangle, x, y
 
 
 def read_mike_mesh(mesh, flipZ=True):
@@ -2192,6 +2461,66 @@ def parse_obc_sections(obc_node_array, triangle):
         start_end_nodes.remove(list(set(start_end_nodes).intersection(this_obc_section_nodes)))
 
     return nodestrings
+
+
+def read_sms_cst(cst):
+    """
+    Read a CST file and store the vertices in a dict.
+
+    Parameters
+    ----------
+    cst : str
+        Path to the CST file to load in.
+
+    Returns
+    -------
+    vert : dict
+        Dictionary with the coordinates of the vertices of the arcs defined in
+        the CST file.
+
+    """
+
+    f = open(cst, 'r')
+    lines = f.readlines()
+    f.close()
+
+    vert = {}
+    c = 0
+    for line in lines:
+        line = line.strip()
+        if line.startswith('COAST'):
+            pass
+        else:
+            # Split the line on tabs and work based on that output.
+            line = line.split('\t')
+            if len(line) == 1:
+                # Number of arcs. We don't especially need to know this.
+                pass
+
+            elif len(line) == 2:
+                # Number of nodes within a single arc. Store the current index
+                # and use as the key for the dict.
+                nv = int(line[0])
+                id = str(c)    # dict key
+                vert[id] = []  # initialise the vert list
+                c += 1         # arc counter
+
+            elif len(line) == 3:
+                coords = [float(x) for x in line[:-1]]
+                # Skip the last position if we've already got some data in the
+                # dict for this arc.
+                if vert[id]:
+                    if len(vert[id]) != nv - 1:
+                        vert[id].append(coords)
+                    else:
+                        # We're at the end of this arc, so convert the
+                        # coordinates we've got to a numpy array for easier
+                        # handling later on.
+                        vert[id] = np.asarray(vert[id])
+                else:
+                    vert[id].append(coords)
+
+    return vert
 
 
 def write_sms_mesh(triangles, nodes, x, y, z, types, mesh):
@@ -2494,6 +2823,145 @@ def write_fvcom_mesh(triangles, nodes, x, y, z, mesh, extra_depth=None):
             f.write('Node Number = {:d}\n'.format(len(x)))
             for node in zip(x, y, z):
                 f.write('{:.6f} {:.6f} {:.6f}\n'.format(*node))
+
+
+def write_sms_cst(obc, file, sort=False):
+    """
+    Read a CST file and store the vertices in a dict.
+
+    Parameters
+    ----------
+    obc : dict
+        Dict with each entry as a NumPy array of coordinates (x, y).
+    file : str
+        Path to the CST file to which to write (overwrites existing files).
+    sort : bool, optional
+        Optionally sort the output coordinates (by x then y). This might break
+        things with complicated open boundary geometries.
+
+    """
+
+    nb = len(obc)
+
+    with open(file, 'w') as f:
+        # Header
+        f.write('COAST\n')
+        f.write('{:d}\n'.format(nb))
+
+        for _, bb in obc:  # each boundary
+            nn = len(bb)
+
+            # The current arc's header
+            f.write('{:d}\t0.0\n'.format(nn))
+
+            if sort:
+                idx = np.lexsort(bb.transpose())
+                bb = bb[idx, :]
+
+            for xy in bb:
+                f.write('\t{:.6f}\t{:.6f}\t0.0\n'.format(xy[0], xy[1]))
+
+        f.close
+
+
+def MIKEarc2cst(file, output):
+    """
+    Read in a set of MIKE arc files and export to CST format compatible with
+    SMS.
+
+    MIKE format is:
+
+        x, y, position, z(?), ID
+
+    where position is 1 = along arc and 0 = end of arc.
+
+    In the CST format, the depth is typically zero, but we'll read it from the
+    MIKE z value and add it to the output file nevertheless. For the
+    conversion, we don't need the ID, so we can ignore that.
+
+    Parameters
+    ----------
+    file : str
+        Full path to the DHI MIKE21 arc files.
+    output : str
+        Full path to the output file.
+
+    """
+
+    with open(file, 'r') as file_in:
+        lines = file_in.readlines()
+
+    with open(output, 'w') as file_out:
+        # Add the easy header
+        file_out.write('COAST\n')
+        # This isn't pretty, but assuming you're coastline isn't millions of
+        # points, it should be ok...
+        num_arcs = 0
+        for line in lines:
+            x, y, pos, z, arc_id = line.strip().split(' ')
+            if int(pos) == 0:
+                num_arcs += 1
+
+        file_out.write('{}\n'.format(int(num_arcs)))
+
+        arc = []
+        n = 1
+
+        for line in lines:
+
+            x, y, pos, z, arc_id = line.strip().split(' ')
+            if int(pos) == 1:
+                arc.append([x, y])
+                n += 1
+            elif int(pos) == 0:
+                arc.append([x, y])
+                # We're at the end of an arc, so write out to file. Start with
+                # number of nodes and z
+                file_out.write('{}\t{}\n'.format(int(n), float(z)))
+                for arc_position in arc:
+                    file_out.write('\t{}\t{}\t{}\n'.format(float(arc_position[0]), float(arc_position[1]), float(z)))
+                # Reset n and arc for new arc
+                n = 1
+                arc = []
+
+
+def shp2cst(file, output_file):
+    """
+    Convert ESRI ShapeFiles to SMS-compatible CST files.
+
+    Parameters
+    ----------
+    file : str
+        Full path to the ESRI ShapeFile to convert.
+    output_file : str
+        Full path to the output file.
+
+    Notes
+    -----
+    There's no particular reason this function should exist as SMS can read shapefiles natively. I imagine I didn't
+    know that when I wrote this.
+
+    """
+
+    sf = shapefile.Reader(file)
+    shapes = sf.shapes()
+
+    nArcs = sf.numRecords
+
+    # Set up the output file
+    with open(output_file, 'w') as file_out:
+        file_out.write('COAST\n')
+        file_out.write('{}\n'.format(int(nArcs)))
+
+        z = 0
+
+        for arc in range(nArcs):
+            # Write the current arc out to file. Start with number of nodes and z
+            arcLength = len(shapes[arc].points)
+            file_out.write('{}\t{}\n'.format(arcLength, float(z)))
+            # Add the actual arc
+            for arcPos in shapes[arc].points:
+                file_out.write('\t{}\t{}\t{}\n'.format(float(arcPos[0]), float(arcPos[1]), float(z)))
 
 
 def find_nearest_point(grid_x, grid_y, x, y, maxDistance=np.inf):
@@ -3344,7 +3812,8 @@ def get_area(v1, v2, v3):
 
 def get_area_heron(s1, s2, s3):
     """
-    Calculate the area of a triangle/set of triangles based on side length (Herons formula). Could tidy by combining with get_area
+    Calculate the area of a triangle/set of triangles based on side length (Herons formula). Could tidy by combining
+    with get_area.
 
     Parameters
     ----------
@@ -3512,7 +3981,7 @@ def rotate_points(x, y, origin, angle):
     return xr, yr
 
 
-def get_boundary_polygons(triangle, noisy=False):
+def get_boundary_polygons(triangle, noisy=False, nodes=None):
     """
     Gets a list of the grid boundary nodes ordered correctly.
 
@@ -3525,11 +3994,20 @@ def get_boundary_polygons(triangle, noisy=False):
         The triangle connectivity matrix as produced by the read_fvcom_mesh
         function.
 
+    nodes : optional, np.ndarray
+        Optionally a Nx2 array of coordinates for nodes in the grid, if passed the function will
+        additionally return a boolean of whether the polygons are boundaries (domain on interior)
+        or islands (domain on the exterior)
+
     Returns
     -------
     boundary_polygon_list : list
         List of integer arrays. Each array is one closed boundary polygon with
         the integers referring to node number.
+
+    islands_list : list
+        Optional, only returned if an array is passed for nodes. A boolean list of whether the
+        polygons are boundaries (domain on interior) or islands (domain on the exterior)
 
     """
 
@@ -3566,7 +4044,25 @@ def get_boundary_polygons(triangle, noisy=False):
         boundary_polygon_list.append(np.asarray(boundary_node_list))
         nodes_lt_4 = np.asarray(list(set(nodes_lt_4) - set(boundary_node_list)), dtype=int)
 
-    return boundary_polygon_list
+    if nodes is None:
+        return boundary_polygon_list
+
+    else:
+        all_poly_nodes = np.asarray([y for x in boundary_polygon_list for y in x])
+        reduce_nodes =  nodes[~all_poly_nodes,:]
+        reduce_nodes_pts = [shapely.geometry.Point(this_ll) for this_ll in reduce_nodes]
+
+        islands_list = []
+        for this_poly_nodes in boundary_polygon_list:
+            this_poly = shapely.geometry.Polygon(nodes[this_poly_nodes, :])
+            this_poly_contain = np.asarray([this_poly.contains(this_pt) for this_pt in reduce_nodes_pts])
+
+            if np.any(this_poly_contain):
+                islands_list.append(False)
+            else:
+                islands_list.append(True)
+
+        return [boundary_polygon_list, islands_list]
 
 
 def get_attached_unique_nodes(this_node, trinodes):
@@ -4309,10 +4805,12 @@ def reduce_triangulation(tri, nodes, return_elements=False):
 
     reduced_tri = tri[np.all(np.isin(tri, nodes), axis=1), :]
 
-    # remap nodes to a new index
+    # Remap nodes to a new index. Use a copy of the reduced triangulation for the lookup so we avoid potentially
+    # remapping a node twice.
+    original_tri = reduced_tri.copy()
     new_index = np.arange(0, len(nodes))
     for this_old, this_new in zip(nodes, new_index):
-        reduced_tri[reduced_tri == this_old] = this_new
+        reduced_tri[original_tri == this_old] = this_new
 
     if return_elements:
         ele_ind = np.where(np.all(np.isin(tri, nodes), axis=1))[0]
@@ -4491,9 +4989,9 @@ def subset_domain(x, y, triangles, polygon=None):
     Returns
     -------
     nodes : np.ndarray
-        List of the nodes within the given polygon.
+        List of the node IDs from the original `triangles' array within the given polygon.
     elements : np.ndarray
-        List of the elements within the given polygon.
+        List of the element IDs from the original `triangles' array within the given polygon.
     triangles : np.ndarray
         The reduced triangulation of the new subdomain.
 
@@ -4537,6 +5035,81 @@ def subset_domain(x, y, triangles, polygon=None):
     sub_triangles = reduce_triangulation(triangles, nodes)
 
     return nodes, elements, sub_triangles
+
+
+def fvcom2ugrid(fvcom):
+    """
+    Add the necessary information to convert an FVCOM output file to one which is compatible with the UGRID format.
+
+    Parameters
+    ----------
+    fvcom : str
+        Path to an FVCOM netCDF file (can be a remote URL).
+
+    """
+
+    with Dataset(fvcom, 'a') as ds:
+        fvcom_mesh = ds.createVariable('fvcom_mesh', np.int32)
+        setattr(fvcom_mesh, 'cf_role', 'mesh_topology')
+        setattr(fvcom_mesh, 'topology_dimension', 2)
+        setattr(fvcom_mesh, 'node_coordinates', 'lon lat')
+        setattr(fvcom_mesh, 'face_coordinates', 'lonc latc')
+        setattr(fvcom_mesh, 'face_node_connectivity', 'nv')
+
+        # Add the global convention.
+        setattr(ds, 'Convention', 'UGRID-1.0')
+        setattr(ds, 'CoordinateProjection', 'none')
+
+
+def point_in_pixel(x, y, point):
+    """
+    Return the corner coordinate indices (x_min, x_max) and (y_min, y_max) for the pixel from (`x', `y') in which
+    the given `point' lies.
+
+    Parameters
+    ----------
+    x, y : np.ndarray
+        The coordinates of the pixels (as vectors).
+    point : tuple, list
+        The target coordinate.
+
+    Returns
+    -------
+    x_indices, y_indices : list
+        The indices of `x' and `y' for the position in `point'.
+
+    Notes
+    -----
+
+    No special attention is paid to points which lie exactly on a boundary. In that situation, the returned pixel
+    will fall either to the left of or above the point.
+
+    """
+
+    x_diff = x - point[0]
+    y_diff = y - point[1]
+
+    closest_x = np.argmin(np.abs(x_diff))
+    closest_y = np.argmin(np.abs(y_diff))
+
+    if x_diff[closest_x] >= 0:
+        # Containing pixel is right of point
+        x_bound = closest_x - 1
+    else:
+        # Containing pixel is left of point
+        x_bound = closest_x + 1
+
+    if y_diff[closest_y] >= 0:
+        # Containing pixel is above point
+        y_bound = closest_y - 1
+    else:
+        # Containing pixel is below point
+        y_bound = closest_y + 1
+
+    x_indices = sorted((closest_x, x_bound))
+    y_indices = sorted((closest_y, y_bound))
+
+    return x_indices, y_indices
 
 
 class Graph(object):
@@ -4783,3 +5356,15 @@ class GraphFVCOMdepth(Graph):
         _, red_node_list = red_graph.shortest_path(start_node, end_node)
 
         return np.asarray(self.node_index[np.asarray(red_node_list)])
+
+def node_to_centre(field, filereader):
+    tt = Triangulation(filereader.grid.x, filereader.grid.y, filereader.grid.triangles)
+    interped_out = []
+    if len(field.shape) == 1:
+        field = field[np.newaxis, :]
+
+    for this_t in field:
+        ct = CubicTriInterpolator(tt, this_t)
+        interped_out.append(ct(filereader.grid.xc, filereader.grid.yc))
+
+    return np.asarray(interped_out)

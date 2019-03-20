@@ -1,5 +1,7 @@
 """ Plotting class for FVCOM results. """
 
+# TODO: Replace Basemap with cartopy. The former is being deprecated and the latter is its suggested replacement.
+
 from __future__ import print_function
 
 import copy
@@ -15,19 +17,22 @@ from matplotlib import rcParams
 from matplotlib.animation import FuncAnimation
 from matplotlib.dates import DateFormatter, date2num
 from mpl_toolkits.axes_grid1 import make_axes_locatable
+from shapely.geometry import Polygon, Point
 
-from PyFVCOM.coordinate import lonlat_from_utm
+from PyFVCOM.coordinate import lonlat_from_utm, utm_from_lonlat
 from PyFVCOM.current import vector2scalar
-from PyFVCOM.grid import getcrossectiontriangles, unstructured_grid_depths, Domain, nodes2elems
+from PyFVCOM.grid import get_boundary_polygons
+from PyFVCOM.grid import getcrossectiontriangles, unstructured_grid_depths, Domain, nodes2elems, mp_interp_func
 from PyFVCOM.ocean import depth2pressure, dens_jackett
 from PyFVCOM.read import FileReader
-from PyFVCOM.utilities.general import _passive_data_store
+from PyFVCOM.utilities.general import PassiveStore
 
 have_basemap = True
 try:
     from mpl_toolkits.basemap import Basemap
 except ImportError:
     warn('No mpl_toolkits found in this python installation. Some functions will be disabled.')
+    Basemap = None
     have_basemap = False
 
 rcParams['mathtext.default'] = 'regular'  # use non-LaTeX fonts
@@ -411,7 +416,7 @@ class Time(object):
         if not self.surface_plot:
             self.surface_plot = self.axes.pcolormesh(np.tile(self.time, [depth.shape[-1], 1]).T,
                                                      depth,
-                                                     np.fliplr(time_series),  # TODO: fix as this is wrong, I think.
+                                                     time_series,
                                                      cmap=self.cmap,
                                                      **kwargs)
 
@@ -441,7 +446,7 @@ class Plotter(object):
     plot_quiver
     plot_lines
     plot_scatter
-    remove_line_plots (N.B., this is mostly specific to PyLag-tools)
+    plot_streamlines
     add_scale
 
     Author(s)
@@ -452,9 +457,8 @@ class Plotter(object):
     """
 
     def __init__(self, dataset, figure=None, axes=None, stations=None, extents=None, vmin=None, vmax=None, mask=None,
-                 res='c', fs=10, title=None, cmap='viridis', figsize=(10., 10.), axis_position=None, edgecolors='none',
-                 s_stations=20, s_particles=20, linewidth=1.0, tick_inc=None, cb_label=None, extend='neither',
-                 norm=None, m=None, cartesian=False, **bmargs):
+                 res='c', fs=10, title=None, cmap='viridis', figsize=(10., 10.), axis_position=None, tick_inc=None,
+                 cb_label=None, extend='neither', norm=None, m=None, cartesian=False, **bmargs):
         """
         Parameters
         ----------
@@ -463,8 +467,8 @@ class Plotter(object):
         stations : 2D array, optional
             List of station coordinates to be plotted ([[lons], [lats]])
         extents : 1D array, optional
-            Four element numpy array giving lon/lat limits (e.g. [-4.56, -3.76,
-            49.96, 50.44])
+            Four element numpy array giving lon/lat limits as west, east, south, north (e.g. [-4.56, -3.76, 49.96,
+            50.44])
         vmin : float, optional
             Lower bound to be used on colour bar (plot_field only).
         vmax : float, optional
@@ -490,12 +494,6 @@ class Plotter(object):
             provided.
         axis_position : 1D array, optional
             Array giving axis dimensions
-        s_stations : int, optional
-            Symbol size used when producing scatter plot of station locations
-        s_particles : int, optional
-            Symbol size used when producing scatter plot of particle locations
-        linewidth : float, optional
-            Linewidth to be used when generating line plots
         tick_inc : list, optional
             Add coordinate axes (i.e. lat/long) at the intervals specified in
             the list ([lon_spacing, lat_spacing]).
@@ -505,13 +503,12 @@ class Plotter(object):
             Set the colour bar extension ('neither', 'both', 'min', 'max').
             Defaults to 'neither').
         norm : matplotlib.colors.Normalize, optional
-            Normalise the luminance to 0,1. For example, use from
-            matplotlib.colors.LogNorm to do log plots of fields.
+            Normalise the luminance to 0,1. For example, use from matplotlib.colors.LogNorm to do log plots of fields.
         m : mpl_toolkits.basemap.Basemap, optional
             Pass a Basemap object rather than creating one on each invocation.
         cartesian : bool, optional
-            Set to True to skip using Basemap and instead return a simple
-            cartesian axis plot. Defaults to False (geographical coordinates).
+            Set to True to skip using Basemap and instead return a simple cartesian axis plot. Defaults to False
+            (geographical coordinates).
         bmargs : dict
             Additional arguments to pass to Basemap.
 
@@ -519,6 +516,7 @@ class Plotter(object):
         ---------
         James Clark (PML)
         Pierre Cazenave (PML)
+        Mike Bedington (PML)
 
         """
 
@@ -538,10 +536,6 @@ class Plotter(object):
         self.cmap = cmap
         self.figsize = figsize
         self.axis_position = axis_position
-        self.edgecolors = edgecolors
-        self.s_stations = s_stations
-        self.s_particles = s_particles
-        self.linewidth = linewidth
         self.tick_inc = tick_inc
         self.cb_label = cb_label
         self.extend = extend
@@ -551,13 +545,16 @@ class Plotter(object):
         self.bmargs = bmargs
         self.colorbar_axis = None
 
-        # Plot instances (initialise to None/[] for truthiness test later)
-        self.quiver_plot = []
-        self.scat_plot = []
-        self.tripcolor_plot = []
-        self.line_plot = []
+        # Plot instances to hold the plot objects.
+        self.quiver_plot = None
+        self.quiver_key = None
+        self.scatter_plot = None
+        self.tripcolor_plot = None
+        self.line_plot = None
+        self.streamline_plot = None
         self.tri = None
         self.masked_tris = None
+        self.colorbar_axis = None
         self.cbar = None
 
         # Are we working with a FileReader object or a bog-standard netCDF4 Dataset?
@@ -618,8 +615,12 @@ class Plotter(object):
 
         # If plot extents were not given, use min/max lat/lon values
         if self.extents is None:
-            self.extents = np.array([self.lon.min(), self.lon.max(),
-                                     self.lat.min(), self.lat.max()])
+            if self.cartesian:
+                self.extents = np.array([self.x.min(), self.x.max(),
+                                         self.y.min(), self.y.max()])
+            else:
+                self.extents = np.array([self.lon.min(), self.lon.max(),
+                                         self.lat.min(), self.lat.max()])
 
         # Create basemap object
         if not self.m and not self.cartesian:
@@ -648,8 +649,8 @@ class Plotter(object):
 
             self.m.drawmapboundary()
             if self.res is not None:
-                self.m.drawcoastlines(zorder=2)
-                self.m.fillcontinents(color='0.6', zorder=2)
+                self.m.drawcoastlines(zorder=1000)
+                self.m.fillcontinents(color='0.6', zorder=1000)
 
         if self.title:
             self.axes.set_title(self.title)
@@ -662,11 +663,15 @@ class Plotter(object):
                 warn('The y-axis tick interval is larger than the plot y-axis extent.')
 
         # Add coordinate labels to the x and y axes (except if we're doing a cartesian plot).
-        if self.tick_inc is not None and not self.cartesian:
-            meridians = np.arange(np.floor(np.min(self.extents[:2])), np.ceil(np.max(self.extents[:2])), self.tick_inc[0])
-            parallels = np.arange(np.floor(np.min(self.extents[2:])), np.ceil(np.max(self.extents[2:])), self.tick_inc[1])
-            self.m.drawparallels(parallels, labels=[1, 0, 0, 0], fontsize=self.fs, linewidth=0, ax=self.axes)
-            self.m.drawmeridians(meridians, labels=[0, 0, 0, 1], fontsize=self.fs, linewidth=0, ax=self.axes)
+        if self.tick_inc is not None:
+            if not self.cartesian:
+                meridians = np.arange(np.floor(np.min(self.extents[:2])), np.ceil(np.max(self.extents[:2])), self.tick_inc[0])
+                parallels = np.arange(np.floor(np.min(self.extents[2:])), np.ceil(np.max(self.extents[2:])), self.tick_inc[1])
+                self.m.drawparallels(parallels, labels=[1, 0, 0, 0], fontsize=self.fs, linewidth=0, ax=self.axes)
+                self.m.drawmeridians(meridians, labels=[0, 0, 0, 1], fontsize=self.fs, linewidth=0, ax=self.axes)
+            else:
+                self.axes.set_xticks(np.arange(self.extents[0], self.extents[1] + self.tick_inc[0], self.tick_inc[0]))
+                self.axes.set_yticks(np.arange(self.extents[2], self.extents[3] + self.tick_inc[1], self.tick_inc[1]))
 
     def get_colourbar_extension(self, field, clims):
         """
@@ -685,27 +690,41 @@ class Plotter(object):
             The colourbar extension ('neither', 'min', 'max' or 'both').
 
         """
+
         # We need to find the nodes/elements for the current variable to make sure our colour bar extends for
         # what we're plotting (not the entire data set). We'll have to guess based on shape here.
-        if self.n_nodes == field.shape[0]:
-            x = self.lon
-            y = self.lat
-        elif self.n_elems == field.shape[0]:
+        x = self.lon
+        y = self.lat
+        if self.n_elems == field.shape[0]:
             x = self.lonc
             y = self.latc
         mask = (x > self.extents[0]) & (x < self.extents[1]) & (y < self.extents[3]) & (y > self.extents[2])
+
+        if all(clims) is None:
+            clims = [field[..., mask].min(), field[..., mask].max()]
+        if clims[0] is None:
+            clims[0] = field[..., mask].min()
+        if clims[1] is None:
+            clims[1] = field[..., mask].max()
 
         extend = colorbar_extension(clims[0], clims[1], field[..., mask].min(), field[..., mask].max())
 
         return extend
 
     def replot(self):
+        """
+        Helper method to nuke and existing plot in the current self.axes and reset everything to clean.
+
+        """
+
         self.axes.cla()
         self._init_figure()
-        self.tripcolor_plot = []
-        self.line_plot = []
-        self.quiver_plot = []
-        self.scat_plot = []
+        self.tripcolor_plot = None
+        self.line_plot = None
+        self.quiver_plot = None
+        self.quiver_key = None
+        self.scatter_plot = None
+        self.streamline_plot = None
 
     def plot_field(self, field, *args, **kwargs):
         """
@@ -716,7 +735,7 @@ class Plotter(object):
         field : np.ndarray
             Field to plot (either on elements or nodes).
 
-        Additional arguments and keyword arguments are passed to matplotlib.pyplot.tripcolor.
+        Additional arguments and keyword arguments are passed to `matplotlib.pyplot.tripcolor'.
 
         """
 
@@ -747,12 +766,10 @@ class Plotter(object):
                         self.tripcolor_plot.set_array(field[~kwargs['mask']])
                     return
                 else:
+                    # Nothing to do here except clear the plot and make a brand new plot (which is a lot slower),
+                    self.tripcolor_plot.remove()
                     if self._debug:
                         print('replotting')
-                    # Nothing to do here except clear the plot and make a brand new plot (which is a lot slower),
-                    # so we'll just skip out here and let the code continue.
-                    self.tripcolor_plot.remove()
-                    pass
             else:
                 if len(field) == len(self.mx):
                     self.tripcolor_plot.set_array(nodes2elems(field, self.triangles))
@@ -761,9 +778,8 @@ class Plotter(object):
                 return
 
         self.tripcolor_plot = self.axes.tripcolor(self.mx, self.my, self.triangles, np.squeeze(field), *args,
-                                                  vmin=self.vmin, vmax=self.vmax,
-                                                  cmap=self.cmap, edgecolors=self.edgecolors,
-                                                  norm=self.norm, **kwargs)
+                                                  vmin=self.vmin, vmax=self.vmax, cmap=self.cmap, norm=self.norm,
+                                                  **kwargs)
 
         if self.cartesian:
             self.axes.set_aspect('equal')
@@ -772,34 +788,68 @@ class Plotter(object):
 
         extend = copy.copy(self.extend)
         if extend is None:
-            extend = self.get_colourbar_extension(variable)
+            extend = self.get_colourbar_extension(field, (self.vmin, self.vmax))
 
         if self.cbar is None:
-            self.cbar = self.m.colorbar(self.tripcolor_plot, extend=extend)
+            if self.cartesian:
+                divider = make_axes_locatable(self.axes)
+                cax = divider.append_axes("right", size="3%", pad=0.1)
+                self.cbar = self.figure.colorbar(self.tripcolor_plot, cax=cax, extend=extend)
+            else:
+                self.cbar = self.m.colorbar(self.tripcolor_plot, extend=extend)
             self.cbar.ax.tick_params(labelsize=self.fs)
         if self.cb_label:
             self.cbar.set_label(self.cb_label)
 
-    def plot_quiver(self, u, v, field=False, add_key=True, scale=1.0, label=None):
-        """ Produce quiver plot using u and v velocity components.
+    def plot_quiver(self, u, v, field=False, dx=None, dy=None, add_key=True, scale=1.0, label=None, *args, **kwargs):
+        """
+        Quiver plot using velocity components.
 
         Parameters
         ----------
-        u : 1D or 2D array
+        u : np.ndarray
             u-component of the velocity field.
-        v : 1D or 2D array
+        v : np.ndarray
             v-component of the velocity field
-        field : 1D or 2D array
+        field : np.ndarray
             velocity magnitude field. Used to colour the vectors. Also adds a colour bar which uses the cb_label and
             cmap, if provided.
         add_key : bool, optional
             Add key for the quiver plot. Defaults to True.
+        dx, dy : float, optional
+            If given, the vectors will be plotted on a regular grid at intervals of `dx' and `dy'. If `dy' is omitted,
+            it is assumed to be the same as `dx'.
         scale : float, optional
             Scaling to be provided to arrows with scale_units of inches. Defaults to 1.0.
         label : str, optional
             Give label to use for the quiver key (defaults to "`scale' ms^{-1}").
+        mask_land : bool, optional
+            Set to False to disable the (slow) masking of regular locations outside the model domain. Defaults to True.
+
+        Additional `args' and `kwargs' are passed to `matplotlib.pyplot.quiver'.
 
         """
+
+        xy_mask = np.full((len(self.lonc), len(self.latc)))
+        if dx is not None:
+            if dy is None:
+                dy = dx
+            if not hasattr(self, '_regular_lon'):
+                self._make_regular_grid(dx, dy, mask_land=mask_land)
+                xy_mask = self._mask_for_unstructured
+
+            if self.cartesian:
+                mxc, myc = self._regular_x, self._regular_y
+            else:
+                mxc, myc = self.m(self._regular_x, self._regular_y)
+
+        else:
+            mxc, myc = self.mxc, self.myc
+
+        u = u[xy_mask]
+        v = v[xy_mask]
+        if np.any(field):
+            field = field[xy_mask]
 
         if self.quiver_plot:
             if np.any(field):
@@ -812,29 +862,30 @@ class Plotter(object):
             label = '{} '.format(scale) + r'$\mathrm{ms^{-1}}$'
 
         if np.any(field):
-            self.quiver_plot = self.axes.quiver(self.mxc, self.myc, u, v, field,
+            self.quiver_plot = self.axes.quiver(mxc, myc, u, v, field,
                                                 cmap=self.cmap,
                                                 units='inches',
                                                 scale_units='inches',
-                                                scale=scale)
-            divider = make_axes_locatable(self.axes)
-            cax = divider.append_axes("right", size="5%", pad=0.05)
-            self.cbar = self.figure.colorbar(self.quiver_plot, cax=cax)
+                                                scale=scale,
+                                                *args, **kwargs)
+            self.cbar = self.m(self.quiver_plot)
             self.cbar.ax.tick_params(labelsize=self.fs)
             if self.cb_label:
                 self.cbar.set_label(self.cb_label)
         else:
-            self.quiver_plot = self.axes.quiver(self.mxc, self.myc, u, v, units='inches', scale_units='inches', scale=scale)
+            self.quiver_plot = self.axes.quiver(mxc, myc, u, v, units='inches', scale_units='inches', scale=scale)
+
         if add_key:
             self.quiver_key = plt.quiverkey(self.quiver_plot, 0.9, 0.9, scale, label, coordinates='axes')
 
         if self.cartesian:
             self.axes.set_aspect('equal')
-            self.axes.set_xlim(self.mx.min(), self.mx.max())
-            self.axes.set_ylim(self.my.min(), self.my.max())
+            self.axes.set_xlim(mxc.min(), mxc.max())
+            self.axes.set_ylim(myc.min(), myc.max())
 
-    def plot_lines(self, x, y, group_name='Default', colour='r', zone_number='30N'):
-        """ Plot path lines.
+    def plot_lines(self, x, y, zone_number='30N', *args, **kwargs):
+        """
+        Plot geographical lines.
 
         Parameters:
         -----------
@@ -842,47 +893,27 @@ class Plotter(object):
             Array of x coordinates to plot (cartesian coordinates).
         y : np.ndarray, list
             Array of y coordinates to plot (cartesian coordinates).
-        group_name : str, optional
-            Group name for this set of particles - a separate plot object is created for each group name passed in.
-            Defaults to `Default'
-        color : string, optional
-            Colour to use when making the plot. Default `r'
         zone_number : string, optional
             See PyFVCOM.coordinates documentation for a full list of supported codes. Defaults to `30N'.
 
+        Additional `args' and `kwargs' are passed to `matplotlib.pyplot.plot'.
+
         """
 
-        if not self.line_plot:
-            self.line_plot = dict()
-
-        # Remove current line plots for this group, if they exist
-        if group_name in self.line_plot:
-            if self.line_plot[group_name]:
-                self.remove_line_plots(group_name)
+        if 'color' not in kwargs:
+            kwargs['color'] = 'r'
 
         lon, lat = lonlat_from_utm(x, y, zone_number)
         if self.cartesian:
             mx, my = lon, lat
         else:
             mx, my = self.m(lon, lat)
-        self.line_plot[group_name] = self.axes.plot(mx, my, color=colour,
-                                                    linewidth=self.linewidth, alpha=0.25, zorder=2)
 
-    def remove_line_plots(self, group_name):
-        """ Remove line plots for group `group_name'
+        self.line_plot = self.axes.plot(mx, my, *args, **kwargs)
 
-        Parameters
-        ----------
-        group_name : str
-            Name of the group for which line plots should be deleted.
-
+    def plot_scatter(self, x, y,  zone_number='30N', *args, **kwargs):
         """
-        if self.line_plot:
-            while self.line_plot[group_name]:
-                self.line_plot[group_name].pop(0).remove()
-
-    def plot_scatter(self, x, y, group_name='Default', colour='r', zone_number='30N'):
-        """ Plot scatter.
+        Plot scatter points.
 
         Parameters
         ----------
@@ -890,17 +921,12 @@ class Plotter(object):
             Array of x coordinates to plot (cartesian coordinates).
         y : np.ndarray, list
             Array of y coordinates to plot (cartesian coordinates).
-        group_name : str, optional
-            Group name for this set of particles - a separate plot object is created for each group name passed in.
-            Defaults to `Default'
-        colour : string, optional
-            Colour to use when making the plot. Default `r'.
         zone_number : string, optional
             See PyFVCOM.coordinates documentation for a full list of supported codes. Defaults to `30N'.
 
+        Additional `args' and `kwargs' are passed to `matplotlib.pyplot.scatter'.
+
         """
-        if not self.scat_plot:
-            self.scat_plot = dict()
 
         lon, lat = lonlat_from_utm(x, y, zone_number)
         if self.cartesian:
@@ -908,12 +934,244 @@ class Plotter(object):
         else:
             mx, my = self.m(lon, lat)
 
-        try:
-            data = np.array([mx, my])
-            self.scat_plot[group_name].set_offsets(data.transpose())
-        except KeyError:
-            self.scat_plot[group_name] = self.axes.scatter(mx, my, s=self.s_particles, color=colour, edgecolors='none',
-                                                           zorder=3)
+        self.scatter_plot = self.axes.scatter(mx, my, *args, **kwargs)
+
+    def plot_streamlines(self, u, v, dx=1000, dy=None, mask_land=True, **kwargs):
+        """
+        Plot streamlines of the given u and v data.
+
+        The data will be interpolated to a regular grid (the streamline plotting function does not support
+        unstructured grids.
+
+        Parameters
+        ----------
+        u, v : np.ndarray
+            Unstructured arrays of a velocity field. Single time and depth only.
+        dx : float, optional
+            Grid spacing for the interpolation in the x direction in metres. Defaults to 1000 metres.
+        dy : float, optional
+            Grid spacing for the interpolation in the y direction in metres. Defaults to `dx'.
+        mask_land : bool, optional
+            Set to False to disable the (slow) masking of regular locations outside the model domain. Defaults to True.
+
+        Additional `kwargs' are passed to `matplotlib.pyplot.streamplot'.
+
+        Notes
+        -----
+        - This method must interpolate the FVCOM grid onto a regular grid prior to plotting, which obviously has a
+        performance penalty.
+        - The `density' keyword argument for is set by default to [2.5, 5] which seems to work OK for my data. Change
+        by passing a different value if performance is dire.
+        - To set the colour limits for the arrows, pass a matplotlib.colors.Normalize object with the min/max values
+        to PyFVCOM.plot.Plotter. Don't bother trying to do it via self.streamline_plot.arrows.set_clim(). The
+        equivalent method on self.streamline_plot.lines works fine, but the arrows one doesn't.
+
+        """
+
+        if dx is not None and dy is None:
+            dy = dx
+
+        # In theory, changing the x and y positions as well as the colours is possible via a few self.stream_plot
+        # methods (set_offsets, set_array), I've not found the correct way of doing this, however. In addition,
+        # removing the lines is easy enough (self.streamline_plot.lines.remove()) but the equivalent method for
+        # self.streamline_plot.arrows returns "not yet implemented". So, we'll just nuke the plot and start again.
+        if self.streamline_plot is not None:
+            self.replot()
+
+        # Set a decent initial density if we haven't been given one in kwargs.
+        if 'density' not in kwargs:
+            kwargs['density'] = [2.5, 5]
+
+        if 'cmap' in kwargs and self.cmap is not None:
+            kwargs.pop('cmap', None)
+            warn('Ignoring the given colour map as one has been supplied during initialisation.')
+
+        if not hasattr(self, '_mask_for_unstructured'):
+            self._make_regular_grid(dx, dy, mask_land=mask_land)
+
+        # Remove singleton dimensions because they break the masking.
+        u = np.squeeze(u)
+        v = np.squeeze(v)
+
+        if self.cartesian:
+            plot_x, plot_y = self._regular_x, self._regular_y
+            fvcom_x, fvcom_y = self.xc[self._mask_for_unstructured], self.yc[self._mask_for_unstructured]
+        else:
+            plot_x, plot_y = self.m(self._regular_x, self._regular_y)
+            fvcom_x, fvcom_y = self.lonc[self._mask_for_unstructured], self.latc[self._mask_for_unstructured]
+
+        # Interpolate whatever positions we have (spherical/cartesian).
+        ua_r = mp_interp_func((fvcom_x, fvcom_y, u[self._mask_for_unstructured], self._regular_x, self._regular_y))
+        va_r = mp_interp_func((fvcom_x, fvcom_y, v[self._mask_for_unstructured], self._regular_x, self._regular_y))
+
+        # Check for a colour map in kwargs and if we have one, make a magnitude array for the plot. Check we haven't
+        # been given a color array in kwargs too.
+        speed_r = None
+        if self.cmap is not None:
+            if 'color' in kwargs:
+                speed_r = mp_interp_func((fvcom_x, fvcom_y,
+                                          np.squeeze(kwargs['color'])[self._mask_for_unstructured],
+                                          self._regular_x, self._regular_y))
+                kwargs.pop('color', None)
+            else:
+                speed_r = np.hypot(ua_r, va_r)
+
+        # Apparently, really tiny velocities fail to plot, so skip if we are in that situation. Exclude NaNs in this
+        # check. I'm not a fan of this hardcoded threshold...
+        # Nope, don't do this, let the calling script handle the error.
+        # if np.all(np.hypot(u[np.isfinite(u)], v[np.isfinite(v)]) < 0.04):
+        #     if self._debug:
+        #         print('Skipping due to all tiny values in the input vector components.')
+        #     return
+
+        # Mask off arrays as appropriate.
+        ua_r = np.ma.array(ua_r, mask=self._mask_for_regular)
+        va_r = np.ma.array(va_r, mask=self._mask_for_regular)
+        if self.cmap is not None:
+            speed_r = np.ma.array(speed_r, mask=self._mask_for_regular)
+
+        # Now we have some data, do the streamline plot.
+        self.streamline_plot = self.axes.streamplot(plot_x, plot_y, ua_r, va_r, color=speed_r,
+                                                    cmap=self.cmap, norm=self.norm, **kwargs)
+
+        if self.cmap is not None:
+            extend = copy.copy(self.extend)
+            if extend is None:
+                extend = self.get_colourbar_extension(speed_r, (self.vmin, self.vmax))
+
+            if self.cbar is None:
+                if self.cartesian:
+                    divider = make_axes_locatable(self.axes)
+                    cax = divider.append_axes("right", size="3%", pad=0.1)
+                    self.cbar = self.figure.colorbar(self.streamline_plot.lines, cax=cax, extend=extend)
+                else:
+                    self.cbar = self.m.colorbar(self.streamline_plot.lines, extend=extend)
+                self.cbar.ax.tick_params(labelsize=self.fs)
+
+            if self.cb_label:
+                self.cbar.set_label(self.cb_label)
+
+        if self.cartesian:
+            self.axes.set_aspect('equal')
+            self.axes.set_xlim(plot_x.min(), plot_x.max())
+            self.axes.set_ylim(plot_y.min(), plot_y.max())
+
+    def _make_regular_grid(self, dx, dy, mask_land=True):
+        """
+        Make a regular grid at intervals of `dx', `dy' for the current plot domain. Supports both spherical and
+        cartesian grids.
+
+        Locations which are either outside the model domain (defined as the largest polygon by area) or on islands
+        are stored in the self._mask_for_regular array.
+
+        Locations in the FVCOM grid which are outside the plotting extent are masked in the
+        self._mask_for_unstructured array.
+
+        Parameters
+        ----------
+        dx : float
+            Grid spacing in the x-direction in metres.
+        dy :
+            Grid spacing in the y-direction in metres.
+        mask_land : bool, optional
+            Set to False to disable the (slow) masking of regular locations outside the model domain. Defaults to True.
+
+        Provides
+        --------
+        self._regular_x : np.ma.ndarray
+            The regularly gridded x positions as a masked array.
+        self._regular_y : np.ma.ndarray
+            The regularly gridded y positions as a masked array.
+        self._mask_for_regular : np.ndarray
+            The mask for the regular grid positions.
+        self._mask_for_unstructured : np.ndarray
+            The mask for the unstructured positions within the current plot domain.
+
+        """
+
+        # To speed things up, extract only the positions actually within the mapping domain.
+        if self.cartesian:
+            x = self.xc
+            y = self.yc
+            if self.extents is not None:
+                west, east, south, north = self.extents
+            else:
+                west, east, south, north = self.x.min(), self.x.max(), self.y.min(), self.y.max()
+        else:
+            x = self.lonc
+            y = self.latc
+            west, east, south, north = self.m.llcrnrlon, self.m.urcrnrlon, self.m.llcrnrlat, self.m.urcrnrlat
+
+        self._mask_for_unstructured = (x >= west) & (x <= east) & (y >= south) * (y <= north)
+
+        x = x[self._mask_for_unstructured]
+        y = y[self._mask_for_unstructured]
+
+        if self.cartesian:
+            # Easy peasy, just return the relevant set of numbers with the given increments.
+            reg_x = np.arange(x.min(), x.max() + dx, dx)
+            reg_y = np.arange(y.min(), y.max() + dy, dy)
+        else:
+            # Convert dx and dy into spherical distances so we can do a regular grid on the lonc/latc arrays. This is a
+            # pretty hacky way of going about this.
+            xref, yref = self.xc[self._mask_for_unstructured].mean(), self.yc[self._mask_for_unstructured].mean()
+            # Get the zone we're in for the mean position.
+            _, _, zone = utm_from_lonlat(x.mean(), y.mean())
+            start_x, start_y = lonlat_from_utm(xref, yref, zone=zone[0])
+            _, end_y = lonlat_from_utm(xref, yref + dy, zone=zone[0])
+            end_x, _ = lonlat_from_utm(xref + dx, yref, zone=zone[0])
+            dx_spherical = end_x - start_x
+            dy_spherical = end_y - start_y
+            reg_x = np.arange(x.min(), x.max() + dx_spherical, dx_spherical)
+            reg_y = np.arange(y.min(), y.max() + dy_spherical, dy_spherical)
+
+        self._regular_x, self._regular_y = np.meshgrid(reg_x, reg_y)
+
+        self._mask_for_regular = np.full(self._regular_x.shape, False)
+        if mask_land:
+            # Make a mask for the regular grid. This uses the model domain to identify points which are outside the
+            # grid. Those are set to False whereas those in the domain are True. We assume the longest polygon is the
+            # model boundary and all other polygons are islands within it.
+            model_boundaries = get_boundary_polygons(self.triangles)
+            model_polygons = [Polygon(np.asarray((self.lon[i], self.lat[i])).T) for i in model_boundaries]
+            polygon_areas = [i.area for i in model_polygons]
+            main_polygon_index = polygon_areas.index(max(polygon_areas))
+            # Find locations outside the main model domain.
+            ocean_indices, land_indices = [], []
+            for index, sample in enumerate(zip(np.array((self._regular_x.ravel(), self._regular_y.ravel())).T)):
+                point = Point(sample[0])
+                if self._debug:
+                    print(f'Checking outside domain point {index} of {len(self._regular_x.ravel())}', flush=True)
+                if point.intersects(model_polygons[main_polygon_index]):
+                    ocean_indices.append(index)
+                else:
+                    land_indices.append(index)
+
+            # Mask off indices outside the main model domain.
+            ocean_row, ocean_column = np.unravel_index(ocean_indices, self._regular_x.shape)
+            land_row, land_column = np.unravel_index(land_indices, self._regular_x.shape)
+            self._mask_for_regular[land_row, land_column] = True
+
+            # To remove the sampling stations on islands, identify points which intersect the remaining polygons,
+            # and then remove them from the sampling site list.
+            land_indices = []
+            # Exclude the main polygon from the list of polygons.
+            # TODO: This is ripe for parallelisation, especially as it's pretty slow in serial.
+            for pi, polygon in enumerate([i for count, i in enumerate(model_polygons) if count != main_polygon_index]):
+                for oi, (row, column, index) in enumerate(zip(ocean_row, ocean_column, ocean_indices)):
+                    point = Point((self._regular_x[row, column], self._regular_y[row, column]))
+                    if self._debug:
+                        print(f'Polygon {pi + 1} of {len(model_polygons) - 1}: '
+                              f'ocean point {oi} of {len(ocean_indices)}', flush=True)
+                    if point.intersects(polygon):
+                        land_indices.append(index)
+
+            # Mask off island indices.
+            land_row, land_column = np.unravel_index(land_indices, self._regular_x.shape)
+            self._mask_for_regular[land_row, land_column] = True
+
+            self._regular_x = np.ma.masked_array(self._regular_x, mask=self._mask_for_regular)
+            self._regular_y = np.ma.masked_array(self._regular_y, mask=self._mask_for_regular)
 
     def set_title(self, title):
         """ Set the title for the current axis. """
@@ -975,20 +1233,18 @@ class CrossPlotter(Plotter):
     >>> c_plot.plot_pcolor_field('temp',150)
     >>> plt.show()
 
-
-    TO DO
-    -----
-    Currently only works for scalar variables, want to get it working for vectors to do u/v/w plots
-    Sort colorbars
-    Sort left hand channel justification for multiple channels.
-    Error handling for no wet/dry, no land
-    Plus a lot of other stuff. And tidy it up.
-
     Notes
     -----
     Only works with FileReader data. No plans to change this.
 
     """
+
+    # TODO
+    #  - Currently only works for scalar variables, want to get it working for vectors to do u/v/w plots
+    #  - Sort colour bars
+    #  - Sort left hand channel justification for multiple channels.
+    #  - Error handling for no wet/dry, no land
+    #  - Plus a lot of other stuff. And tidy it up.
 
     def __init__(self):
 
@@ -1224,7 +1480,7 @@ class CrossPlotter(Plotter):
         var_sel = np.squeeze(getattr(self.ds.data, var))[..., self.sel_points]
 
         this_step_wet_points = np.asarray(self.wet_points_data[timestep, :], dtype=bool)
-        var_sel[:, ~this_step_wet_points] = np.NAN
+        var_sel[:, ~this_step_wet_points] = np.NaN
         self.var_sel = var_sel
         var_sel_ext = self._nan_extend(var_sel)
 
@@ -1275,8 +1531,8 @@ class CrossPlotter(Plotter):
         else:
             raise ValueError('Unsupported number of dimensions.')
 
-        nan_ext[:] = np.NAN
-        return np.append(in_array, nan_ext, axis=len(in_shape) - 1)
+        nan_ext[:] = np.NaN
+        return np.append(in_array, nan_ext, axis=len(in_array.shape) - 1)
 
     @staticmethod
     def _chan_corners(chan_x, chan_y):
@@ -1317,6 +1573,7 @@ class MPIWorker(object):
         self.have_mpi = True
         try:
             from mpi4py import MPI
+            self.MPI = MPI
         except ImportError:
             warn('No mpi4py found in this python installation. Some functions will be disabled.')
             self.have_mpi = False
@@ -1328,6 +1585,10 @@ class MPIWorker(object):
             self.rank = 0
         self.root = root
         self._noisy = verbose
+
+        self.field = None
+        self.label = None
+        self.clims = None
 
     def __loader(self, fvcom_file, variable):
         """
@@ -1358,24 +1619,29 @@ class MPIWorker(object):
             load_verbose = True
             print(f'Loading {variable} data from netCDF...', end=' ', flush=True)
 
-        load_vars = [variable, 'wet_cells']
+        load_vars = [variable]
         if variable in ('speed', 'direction', 'speed_anomaly'):
-            load_vars = ['u', 'v', 'wet_cells']
+            load_vars = ['u', 'v']
         elif variable in ('depth_averaged_speed', 'depth_averaged_direction', 'depth_averaged_speed_anomaly'):
-            load_vars = ['ua', 'va', 'wet_cells']
+            load_vars = ['ua', 'va']
         elif variable == 'tauc':
-            load_vars = [variable, 'temp', 'salinity', 'wet_cells']
+            load_vars = [variable, 'temp', 'salinity']
 
         self.fvcom = FileReader(fvcom_file, variables=load_vars, dims=self.dims, verbose=load_verbose)
+
+        try:
+            self.fvcom.load_data(['wet_cells'])
+        except NameError:
+            print('No wetting and drying in model')
 
         # Make the meta-variable data.
         if variable in ('speed', 'direction'):
             self.fvcom.data.direction, self.fvcom.data.speed = vector2scalar(self.fvcom.data.u, self.fvcom.data.v)
             # Add the attributes for labelling.
-            self.fvcom.atts.speed = _passive_data_store()
+            self.fvcom.atts.speed = PassiveStore()
             self.fvcom.atts.speed.long_name = 'speed'
             self.fvcom.atts.speed.units = 'ms^{-1}'
-            self.fvcom.atts.direction = _passive_data_store()
+            self.fvcom.atts.direction = PassiveStore()
             self.fvcom.atts.direction.long_name = 'direction'
             self.fvcom.atts.direction.units = '\degree'
             self.fvcom.variable_dimension_names[variable] = self.fvcom.variable_dimension_names['u']
@@ -1384,24 +1650,24 @@ class MPIWorker(object):
             da_dir, da_speed = vector2scalar(self.fvcom.data.ua, self.fvcom.data.va)
             self.fvcom.data.depth_averaged_direction, self.fvcom.data.depth_averaged_speed = da_dir, da_speed
             # Add the attributes for labelling.
-            self.fvcom.atts.depth_averaged_speed = _passive_data_store()
+            self.fvcom.atts.depth_averaged_speed = PassiveStore()
             self.fvcom.atts.depth_averaged_speed.long_name = 'depth-averaged speed'
             self.fvcom.atts.depth_averaged_speed.units = 'ms^{-1}'
-            self.fvcom.atts.depth_averaged_direction = _passive_data_store()
+            self.fvcom.atts.depth_averaged_direction = PassiveStore()
             self.fvcom.atts.depth_averaged_direction.long_name = 'depth-averaged direction'
             self.fvcom.atts.depth_averaged_direction.units = '\degree'
             self.fvcom.variable_dimension_names[variable] = self.fvcom.variable_dimension_names['ua']
 
         if variable == 'speed_anomaly':
-            self.fvcom.data.speed_anomaly = self.fvcom.data.speed.mean(axis=0) - fvcom.data.speed
-            self.fvcom.atts.speed = _passive_data_store()
+            self.fvcom.data.speed_anomaly = self.fvcom.data.speed.mean(axis=0) - self.fvcom.data.speed
+            self.fvcom.atts.speed = PassiveStore()
             self.fvcom.atts.speed.long_name = 'speed anomaly'
             self.fvcom.atts.speed.units = 'ms^{-1}'
             self.fvcom.variable_dimension_names[variable] = self.fvcom.variable_dimension_names['u']
 
         elif variable == 'depth_averaged_speed_anomaly':
-            self.fvcom.data.depth_averaged_speed_anomaly = self.fvcom.data.uava.mean(axis=0) - fvcom.data.uava
-            self.fvcom.atts.depth_averaged_speed_anomaly = _passive_data_store()
+            self.fvcom.data.depth_averaged_speed_anomaly = self.fvcom.data.uava.mean(axis=0) - self.fvcom.data.uava
+            self.fvcom.atts.depth_averaged_speed_anomaly = PassiveStore()
             self.fvcom.atts.depth_averaged_speed_anomaly.long_name = 'depth-averaged speed anomaly'
             self.fvcom.atts.depth_averaged_speed_anomaly.units = 'ms^{-1}'
             self.fvcom.variable_dimension_names[variable] = self.fvcom.variable_dimension_names['ua']
@@ -1419,8 +1685,54 @@ class MPIWorker(object):
         if self._noisy and self.rank == self.root:
             print(f'done.', flush=True)
 
+    def _figure_prep(self, fvcom_file, variable, dimensions, time_indices, clims, label, **kwargs):
+        """ Initialise a bunch of things which can be shared across different plot types. """
+
+        # Should this loading stuff be outside this function?
+        self.dims = dimensions
+        if self.dims is None:
+            self.dims = {}
+        self.dims.update({'time': time_indices})
+
+        self.__loader(fvcom_file, variable)
+        self.field = np.squeeze(getattr(self.fvcom.data, variable))
+
+        # Find out what the range of data is so we can set the colour limits automatically, if necessary.
+        if self.clims is None:
+            if self.have_mpi:
+                global_min = self.comm.reduce(np.nanmin(self.field), op=self.MPI.MIN)
+                global_max = self.comm.reduce(np.nanmax(self.field), op=self.MPI.MAX)
+            else:
+                # Fall back to local extremes.
+                global_min = np.nanmin(self.field)
+                global_max = np.nanmax(self.field)
+            self.clims = [global_min, global_max]
+            if self.have_mpi:
+                self.clims = self.comm.bcast(clims, root=0)
+
+        if self.label is None:
+            self.label = f'{getattr(self.fvcom.atts, variable).long_name.title()} ' \
+                    f'(${getattr(self.fvcom.atts, variable).units}$)'
+
+        grid_mask = np.ones(self.field[0].shape[0], dtype=bool)
+        if 'extents' in kwargs:
+            # We need to find the nodes/elements for the current variable to make sure our colour bar extends for
+            # what we're plotting (not the entire data set).
+            if 'node' in self.fvcom.variable_dimension_names[variable]:
+                x = self.fvcom.grid.lon
+                y = self.fvcom.grid.lat
+            elif 'nele' in self.fvcom.variable_dimension_names[variable]:
+                x = self.fvcom.grid.lonc
+                y = self.fvcom.grid.latc
+            extents = kwargs['extents']
+            grid_mask = (x > extents[0]) & (x < extents[1]) & (y < extents[3]) & (y > extents[2])
+
+        self.extend = colorbar_extension(clims[0], clims[1],
+                                         self.field[..., grid_mask].min(), self.field[..., grid_mask].max())
+
     def plot_field(self, fvcom_file, time_indices, variable, figures_directory, label=None, set_title=False,
-                   dimensions=None, clims=None, norm=None, mask=False, *args, **kwargs):
+                   dimensions=None, clims=None, norm=None, mask=False, figure_index=None, figure_stem=None,
+                   *args, **kwargs):
         """
         Plot a given horizontal surface for `variable' for the time indices in `time_indices'.
 
@@ -1444,79 +1756,135 @@ class MPIWorker(object):
             Apply the normalisation given to the colours in the plot.
         mask : bool
             Set to True to enable masking with the FVCOM wet/dry data.
+        figure_index : int
+            Give a starting index for the figure names. This is useful if you're calling this function in a loop over
+            multiple files.
+        figure_stem : str
+            Give a file name prefix for the saved figures. Defaults to f'{variable}_streamline'.
 
         Additional args and kwargs are passed to PyFVCOM.plot.Plotter.
 
         """
 
-        self.dims = dimensions
-        if self.dims is None:
-            self.dims = {}
-        self.dims.update({'time': time_indices})
+        self._figure_prep(fvcom_file, variable, dimensions, time_indices, clims, label, **kwargs)
 
-        self.__loader(fvcom_file, variable)
-        field = np.squeeze(getattr(self.fvcom.data, variable))
-
-        # Find out what the range of data is so we can set the colour limits automatically, if necessary.
-        if clims is None:
-            if self.have_mpi:
-                global_min = self.comm.reduce(np.nanmin(field), op=MPI.MIN)
-                global_max = self.comm.reduce(np.nanmax(field), op=MPI.MAX)
-            else:
-                # Fall back to local extremes.
-                global_min = np.nanmin(field)
-                global_max = np.nanmax(field)
-            clims = [global_min, global_max]
-            if self.have_mpi:
-                clims = self.comm.bcast(clims, root=0)
-
-        if label is None:
-            label = f'{getattr(self.fvcom.atts, variable).long_name.title()} ' \
-                    f'(${getattr(self.fvcom.atts, variable).units}$)'
-
-        grid_mask = np.ones(field[0].shape[0], dtype=bool)
-        if 'extents' in kwargs:
-            # We need to find the nodes/elements for the current variable to make sure our colour bar extends for
-            # what we're plotting (not the entire data set).
-            if 'node' in self.fvcom.variable_dimension_names[variable]:
-                x = self.fvcom.grid.lon
-                y = self.fvcom.grid.lat
-            elif 'nele' in self.fvcom.variable_dimension_names[variable]:
-                x = self.fvcom.grid.lonc
-                y = self.fvcom.grid.latc
-            extents = kwargs['extents']
-            grid_mask = (x > extents[0]) & (x < extents[1]) & (y < extents[3]) & (y > extents[2])
-
-        extend = colorbar_extension(clims[0], clims[1], field[..., grid_mask].min(), field[..., grid_mask].max())
-        if not 'extend' in kwargs:
-            kwargs['extend'] = extend
-
-        local_plot = Plotter(self.fvcom, cb_label=label, *args, **kwargs)
+        local_plot = Plotter(self.fvcom, cb_label=self.label, *args, **kwargs)
 
         if norm is not None:
             # Check for zero and negative values if we're LogNorm'ing the data and replace with the colour limit
             # minimum.
-            invalid = field <= 0
+            invalid = self.field <= 0
             if np.any(invalid):
-                if clims is None or clims[0] <= 0:
+                if self.clims is None or self.clims[0] <= 0:
                     raise ValueError("For log-scaling data with zero or negative values, we need a floor with which "
                                      "to replace those values. This is provided through the `clims' argument, "
                                      "which hasn't been supplied, or which has a zero (or below) minimum.")
-                field[invalid] = clims[0]
+                self.field[invalid] = self.clims[0]
 
+        if figure_index is None:
+            figure_index = 0
         for local_time, global_time in enumerate(time_indices):
             if mask:
                 local_mask = getattr(self.fvcom.data, 'wet_cells')[local_time] == 0
             else:
-                local_mask = np.zeros(getattr(self.fvcom.data, variable).shape, dtype=bool)
-                if 'node' in self.fvcom.variable_dimension_names[variable]:
-                    local_mask = nodes2elems(local_mask, self.fvcom.grid.triangles)
-            local_plot.plot_field(field[local_time], mask=local_mask)
+                local_mask = np.zeros(self.fvcom.dims.nele, dtype=bool)
+            local_plot.plot_field(self.field[local_time], mask=local_mask)
             local_plot.tripcolor_plot.set_clim(*clims)
             if set_title:
                 title_string = self.fvcom.time.datetime[local_time].strftime('%Y-%m-%d %H:%M:%S')
                 local_plot.set_title(title_string)
-            local_plot.figure.savefig(str(Path(figures_directory, f'{variable}_{global_time + 1:04d}.png')),
+            if figure_stem is None:
+                figure_stem = f'{variable}_streamline'
+            local_plot.figure.savefig(str(Path(figures_directory, f'{figure_stem}_{figure_index + global_time + 1:04d}.png')),
+                                      bbox_inches='tight',
+                                      pad_inches=0.2,
+                                      dpi=120)
+
+    def plot_streamlines(self, fvcom_file, time_indices, variable, figures_directory, dx=None, dy=None, label=None,
+                         set_title=False, dimensions=None, clims=None, mask=False, figure_index=None, figure_stem=None,
+                         stkwargs=None, mask_land=True, *args, **kwargs):
+        """
+        Plot a given horizontal surface for `variable' for the time indices in `time_indices'.
+
+        fvcom_file : str, pathlib.Path
+            The file to load.
+        time_indices : list-like
+            The time indices to load from the `fvcom_file'.
+        variable : str
+            The variable name to load from `fvcom_file'.
+        figures_directory : str, pathlib.Path
+            Where to save the figures. Figure files are named f'{variable}_streamlines_{time_index + 1}.png'.
+        dx, dy : float, optional
+            If given, the streamlines will be plotted on a regular grid at intervals of `dx' and `dy'. If `dy' is
+            omitted, it is assumed to be the same as `dx'.
+        label : str, optional
+            What label to use for the colour bar. If omitted, uses the variable's `long_name' and `units'.
+        set_title : bool, optional
+            Add a title comprised of each time (formatted as '%Y-%m-%d %H:%M:%S').
+        dimensions : str, optional
+            What additional dimensions to load (time is handled by the `time_indices' argument).
+        clims : tuple, list, optional
+            Limit the colour range to these values.
+        mask : bool, optional
+            Set to True to enable masking with the FVCOM wet/dry data.
+        figure_index : int, optional
+            Give a starting index for the figure names. This is useful if you're calling this function in a loop over
+            multiple files.
+        figure_stem : str, optional
+            Give a file name prefix for the saved figures. Defaults to f'{variable}_streamline'.
+        mask_land : bool, optional
+            Set to False to disable the (slow) masking of regular locations outside the model domain. Defaults to True.
+        stkwargs : dict, optional
+            Additional streamplot keyword arguments to pass.
+
+        Additional args and kwargs are passed to PyFVCOM.plot.Plotter.
+
+        """
+
+        if stkwargs is None:
+            stkwargs = {}
+
+        if dx is not None and dy is None:
+            dy = dx
+
+        self._figure_prep(fvcom_file, variable, dimensions, time_indices, clims, label, **kwargs)
+
+        local_plot = Plotter(self.fvcom, cb_label=self.label, *args, **kwargs)
+
+        # Get the vector field of interest based on the variable name.
+        if 'depth_averaged' in variable:
+            u, v = self.fvcom.data.ua, self.fvcom.data.va
+        else:
+            u, v = np.squeeze(self.fvcom.data.u), np.squeeze(self.fvcom.data.v)
+
+        if figure_index is None:
+            figure_index = 0
+        for local_time, global_time in enumerate(time_indices):
+            if mask:
+                local_mask = getattr(self.fvcom.data, 'wet_cells')[local_time] == 0
+            else:
+                local_mask = np.full(self.fvcom.dims.nele, False)
+            u_local = np.ma.masked_array(u[local_time], mask=local_mask)
+            v_local = np.ma.masked_array(v[local_time], mask=local_mask)
+            magnitude = np.ma.masked_array(self.field[local_time], mask=local_mask)
+            try:
+                local_plot.plot_streamlines(u_local, v_local, color=magnitude, dx=dx, dy=dy, mask_land=mask_land,
+                                            **stkwargs)
+            except ValueError:
+                # The plot failed (sometimes due to teeny tiny velocities. Save what we've got anyway.
+                pass
+            # If we got all zeros for the streamline plot, the associated object will be none, so check that here and
+            # only update colours if we definitely plotted something.
+            if local_plot.streamline_plot is not None:
+                # The lines are a LineCollection and we can update the colour limits in one shot. The arrows need
+                # iterating.
+                local_plot.streamline_plot.lines.set_clim(*clims)
+                if set_title:
+                    title_string = self.fvcom.time.datetime[local_time].strftime('%Y-%m-%d %H:%M:%S')
+                    local_plot.set_title(title_string)
+            if figure_stem is None:
+                figure_stem = f'{variable}_streamline'
+            local_plot.figure.savefig(str(Path(figures_directory, f'{figure_stem}_{figure_index + global_time + 1:04d}.png')),
                                       bbox_inches='tight',
                                       pad_inches=0.2,
                                       dpi=120)
@@ -1660,7 +2028,7 @@ def plot_domain(domain, mesh=False, depth=False, **kwargs):
     depth : bool
         Set to True to plot water depth. Defaults to False. If enabled, a colour bar is added to the figure.
 
-    All remaining arguments are passed to PyFVCOM.plot.Plotter.
+    Remaining keyword arguments are passed to PyFVCOM.plot.Plotter.
 
     Provides
     --------
@@ -1668,6 +2036,7 @@ def plot_domain(domain, mesh=False, depth=False, **kwargs):
         The plot object.
     mesh_plot : matplotlib.axes, optional
         The mesh axis object, if enabled.
+
     """
 
     domain.domain_plot = Plotter(domain, **kwargs)

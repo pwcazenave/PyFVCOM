@@ -72,4 +72,8 @@ class Residuals_test(TestCase):
                                        2.64697796e-23, 6.61744490e-23, -1.05879118e-22, np.nan, np.nan, np.nan, np.nan,
                                        2.64697796e-23, np.nan, np.nan, 1.58818678e-22, np.nan, np.nan, np.nan, np.nan])
         vort = vorticity(self.fvcom, depth_averaged=True)
+        # Only check the first time to make my life easier.
         test.assert_almost_equal(expected_vorticity, vort[0, :])
+
+    def test_ebb_flood(self):
+        pass

@@ -17,7 +17,7 @@ from netCDF4 import Dataset, MFDataset, num2date, date2num
 
 from PyFVCOM.grid import Domain, control_volumes, get_area_heron
 from PyFVCOM.grid import unstructured_grid_volume, elems2nodes, GridReaderNetCDF
-from PyFVCOM.utilities.general import _passive_data_store, flatten_list
+from PyFVCOM.utilities.general import PassiveStore, flatten_list
 
 
 class _TimeReader(object):
@@ -54,7 +54,7 @@ class _TimeReader(object):
             if time in dataset.variables:
                 setattr(self, time, dataset.variables[time][:])
                 got_time.append(time)
-                attributes = _passive_data_store()
+                attributes = PassiveStore()
                 for attribute in dataset.variables[time].ncattrs():
                     setattr(attributes, attribute, getattr(dataset.variables[time], attribute))
                 # setattr(self.atts, time, attributes)
@@ -137,7 +137,7 @@ class _TimeReader(object):
                     except ValueError:
                         self.Times = np.array([datetime.strftime(d, '%Y/%m/%d %H:%M:%S.%f') for d in _dates])
                     # Add the relevant attribute for the Times variable.
-                    attributes = _passive_data_store()
+                    attributes = PassiveStore()
                     setattr(attributes, 'time_zone', 'UTC')
                     # setattr(self.atts, 'Times', attributes)
 
@@ -160,7 +160,7 @@ class _TimeReader(object):
                 # We're making Modified Julian Days here to replicate FVCOM's 'time' variable.
                 self.time = date2num(_dates, units=self._mjd_origin)
                 # Add the relevant attributes for the time variable.
-                attributes = _passive_data_store()
+                attributes = PassiveStore()
                 setattr(attributes, 'units', self._mjd_origin)
                 setattr(attributes, 'long_name', 'time')
                 setattr(attributes, 'format', 'modified julian day (MJD)')
@@ -186,12 +186,12 @@ class _TimeReader(object):
                 _datenum = date2num(_dates, units=self._mjd_origin)
                 self.Itime = np.floor(_datenum)
                 self.Itime2 = (_datenum - np.floor(_datenum)) * 1000 * 60 * 60 * 24  # microseconds since midnight
-                attributes = _passive_data_store()
+                attributes = PassiveStore()
                 setattr(attributes, 'units', self._mjd_origin)
                 setattr(attributes, 'format', 'modified julian day (MJD)')
                 setattr(attributes, 'time_zone', 'UTC')
                 # setattr(self.atts, 'Itime', attributes)
-                attributes = _passive_data_store()
+                attributes = PassiveStore()
                 setattr(attributes, 'units', 'msec since 00:00:00')
                 setattr(attributes, 'time_zone', 'UTC')
                 # setattr(self.atts, 'Itime2', attributes)
@@ -202,13 +202,13 @@ class _TimeReader(object):
                     self.datetime = np.array([datetime.strptime(d, '%Y-%m-%dT%H:%M:%S.%f') for d in self.Times])
                 except ValueError:
                     self.datetime = np.array([datetime.strptime(d, '%Y/%m/%d %H:%M:%S.%f') for d in self.Times])
-                attributes = _passive_data_store()
+                attributes = PassiveStore()
                 setattr(attributes, 'long_name', 'Python datetime.datetime')
                 # setattr(self.atts, 'datetime', attributes)
             else:
                 self.datetime = _dates
             self.matlabtime = self.time + 678942.0  # to MATLAB-indexed times from Modified Julian Date.
-            attributes = _passive_data_store()
+            attributes = PassiveStore()
             setattr(attributes, 'long_name', 'MATLAB datenum')
             # setattr(self.atts, 'matlabtime', attributes)
 
@@ -217,21 +217,6 @@ class _TimeReader(object):
             # usually has sufficient precision.
             if self._using_calendar_time:
                 setattr(self, 'time', np.asarray([date2num(time, units=self._mjd_origin) for time in self.datetime]))
-
-            # Clip everything to the time indices if we've been given them. Update the time dimension too.
-            if 'time' in self._dims:
-                is_datetimes_or_str = False
-                if not isinstance(self._dims['time'], slice):
-                    is_datetimes_or_str = all([isinstance(i, (datetime, str)) for i in self._dims['time']])
-                if not isinstance(self._dims['time'], slice) and is_datetimes_or_str:
-                    # Convert datetime dimensions to indices in the currently loaded data. Assume we've got a list
-                    # and if that fails, we've probably got a single index, so convert it accordingly.
-                    try:
-                        self._dims['time'] = np.arange(*[self._time_to_index(i) for i in self._dims['time']])
-                    except TypeError:
-                        self._dims['time'] = np.arange(*[self._time_to_index(self._dims['time'])])  # make iterable
-                for time in self:
-                    setattr(self, time, getattr(self, time)[self._dims['time']])
 
             # The time of the averaged data is midnight at the end of the averaging period. Offset by half the
             # averaging interval to fix that, and update all the other time representations accordingly.
@@ -250,6 +235,21 @@ class _TimeReader(object):
                             self.Times = np.array([datetime.strftime(d, '%Y-%m-%dT%H:%M:%S.%f') for d in self.datetime])
                         except TypeError:
                             self.Times = np.array([datetime.strftime(self.datetime, '%Y-%m-%dT%H:%M:%S.%f')])
+
+            # Clip everything to the time indices if we've been given them. Update the time dimension too.
+            if 'time' in self._dims:
+                is_datetimes_or_str = False
+                if not isinstance(self._dims['time'], slice):
+                    is_datetimes_or_str = all([isinstance(i, (datetime, str)) for i in self._dims['time']])
+                if not isinstance(self._dims['time'], slice) and is_datetimes_or_str:
+                    # Convert datetime dimensions to indices in the currently loaded data. Assume we've got a list
+                    # and if that fails, we've probably got a single index, so convert it accordingly.
+                    try:
+                        self._dims['time'] = np.arange(*[self._time_to_index(i) for i in self._dims['time']])
+                    except TypeError:
+                        self._dims['time'] = np.arange(*[self._time_to_index(self._dims['time'])])  # make iterable
+                for time in self:
+                    setattr(self, time, getattr(self, time)[self._dims['time']])
 
         dataset.close()
 
@@ -344,8 +344,8 @@ class _AttributeReader(object):
             self._ds = Dataset(self._filename, 'r')
 
         if not hasattr(self, variable):
-            # Hmmm, don't like using _passive_data_store here...
-            setattr(self, variable, _passive_data_store())
+            # Hmmm, don't like using PassiveStore here...
+            setattr(self, variable, PassiveStore())
 
         for attribute in self._ds.variables[variable].ncattrs():
             setattr(getattr(self, variable), attribute, getattr(self._ds.variables[variable], attribute))
@@ -385,6 +385,7 @@ class FileReader(Domain):
     Author(s)
     ---------
     Pierre Cazenave (Plymouth Marine Laboratory)
+    Mike Bedington (Plymouth Marine Laboratory)
 
     Credits
     -------
@@ -463,8 +464,8 @@ class FileReader(Domain):
         # Prepare this object with an empty object for the data which we may populate later on. It feels like this
         # should be created by a separate class (in the same style as _MakeDimensions et al.), but I haven't got
         # around to it yet.
-        self.data = _passive_data_store()
-        self.river = _passive_data_store()
+        self.data = PassiveStore()
+        self.river = PassiveStore()
 
         if isinstance(self._fvcom, Dataset):
             self.ds = self._fvcom
@@ -492,7 +493,7 @@ class FileReader(Domain):
 
                 self._dims[dim] = [self._dims[dim]]
 
-        self.time = _TimeReader(self._fvcom, dims=self._dims)
+        self._load_time()
         self._dims = copy.deepcopy(self.time._dims)  # grab the updated dimensions from the _TimeReader object.
 
         # Update the time dimension no we've read in the time data (in case we did so with a specified dimension
@@ -1089,6 +1090,9 @@ class FileReader(Domain):
         self._dims = self.grid._dims
         delattr(self.grid, '_dims')
 
+    def _load_time(self):
+        self.time = _TimeReader(self._fvcom, dims=self._dims)
+
     def _update_dimensions(self, variables):
         # Update the dimensions based on variables we've been given. Construct a list of the unique dimensions in all
         # the given variables and use that to update self.dims.
@@ -1202,7 +1206,7 @@ class FileReader(Domain):
         try:
             return np.argmin(np.abs(self.time.datetime - when))
         except AttributeError:
-            self.load_time()
+            self._load_time()
             return np.argmin(np.abs(self.time.datetime - when))
 
     def grid_volume(self, load_zeta=False):
@@ -1645,11 +1649,11 @@ class FileReaderFromDict(FileReader):
         self._variables = list(fvcom.keys())
 
         # Prepare this object with all the objects we'll need later on (data, dims, time, grid, atts).
-        self.grid = _passive_data_store()
-        self.time = _passive_data_store()
-        self.data = _passive_data_store()
-        self.dims = _passive_data_store()
-        self.atts = _passive_data_store()
+        self.grid = PassiveStore()
+        self.time = PassiveStore()
+        self.data = PassiveStore()
+        self.dims = PassiveStore()
+        self.atts = PassiveStore()
 
         # If we've been given a file name, we can do a much more passable impression of a FileReader object.
         if filename is not None:
@@ -2516,7 +2520,7 @@ def write_probes(file, mjd, timeseries, datatype, site, depth, sigma=(-1, -1), l
             f.write(fmt.format(*line))
 
 
-def get_river_config(file_name, noisy=False, zeroindex=False):
+def get_river_config(file_name, noisy=False, zeroindex=True):
     """
     Parse an FVCOM river namelist file to extract the parameters and their values. Returns a dict of the parameters
     with the associated values for all the rivers defined in the namelist.
@@ -2528,20 +2532,14 @@ def get_river_config(file_name, noisy=False, zeroindex=False):
     noisy : bool, optional
         Set to True to enable verbose output. Defaults to False.
     zeroindex : bool, optional
-        Set to True to convert indices from 1-based to 0-based. Defaults to False.
+        Set to False to keep indices as 1-based rather than converting to 0-based. Defaults to True (i.e. return
+        zero-indexed indices).
 
     Returns
     -------
     rivers : dict
         Dict of the parameters for each river defined in the name list.
         Dictionary keys are the name list parameter names (e.g. RIVER_NAME).
-
-    Notes
-    -----
-
-    The indices returned in RIVER_GRID_LOCATION are 1-based (i.e. read in raw
-    from the nml file). For use in Python, you can either subtract 1 yourself,
-    or pass zeroindex=True to this function.
 
     """
 
@@ -2573,8 +2571,8 @@ class WriteFVCOM(object):
 
     """
 
-    def __init__(self, ncfile, fvcom, data_variables=None, title=None, type=None, affiliation=None, ncformat='NETCDF4',
-                 ncopts={'zlib': True, 'complevel': 7}):
+    def __init__(self, ncfile, fvcom, data_variables=None, global_attributes=None, ncformat='NETCDF4',
+                 ncopts={'zlib': True, 'complevel': 7}, ugrid_support=False):
         """
         Create a new FVCOM-formatted netCDF file for the given FileReader object.
 
@@ -2586,18 +2584,16 @@ class WriteFVCOM(object):
             Model data object.
         data_variables : list, optional.
             The fvcom.dadta variables to write out. If omitted, write everything.
-        title : str, optional
-            The contents of the `title' global attribute (omitted if empty or missing).
-        type : str, optional
-            The contents of the `type' global attribute (omitted if empty or missing).
-        affiliation : str, optional
-            The affiliation (name, institution etc.) of the creator saved in the `author' global attribute (omitted
-            if empty or missing).
+        global_attributes : dict, optional
+            A dictionary of global attributes and their values. If omitted, only `history' and `source' are written.
+            The latter is mainly for ParaView compatibility (I think).
         ncformat : str, optional
             The netCDF file type to create. If omitted, defaults to `NETCDF4'.
         ncopts : dict, optional
             Dictionary of additional arguments to pass when adding new variables (see
             `netCDF4.Dataset.createVariable'). If omitted, defaults to compression on.
+        ugrid_support : bool, optional
+            Set to True to enable adding the UGRID standard variable. Defaults to False (not added).
 
         """
 
@@ -2615,10 +2611,10 @@ class WriteFVCOM(object):
         self._ncopts = ncopts
         self._ncformat = ncformat
 
-        # Some extra pieces of information
-        self._title = title
-        self._type = type
-        self._affiliation = affiliation
+        if global_attributes is not None:
+            self._global_attributes = global_attributes
+        else:
+            self._global_attributes = {}
 
         # Some variables to skip
         range_variables = [f'{i}_range' for i in ('lon', 'lat', 'lonc', 'latc', 'x', 'xc', 'y', 'yc')]
@@ -2632,7 +2628,8 @@ class WriteFVCOM(object):
         self._add_attributes()
         self._create_variables()
         self._add_variables()
-        self._add_ugrid_support()
+        if ugrid_support:
+            self._add_ugrid_support()
         if self._fvcom.dims.time != 0:
             self._write_fvcom_time(self._fvcom.time.datetime)
 
@@ -2657,18 +2654,15 @@ class WriteFVCOM(object):
             self._nc.createDimension('DateStrLen', 26)
 
     def _add_attributes(self):
-        # Add any attributes we've got. We don't have as many global attributes as we don't really keep those in a
-        # FileReader object.
-        if self._type is not None:
-            self._nc.setncattr('type', self._type)
-        if self._title is not None:
-            self._nc.setncattr('title', self._title)
-        if self._affiliation is not None:
-            self._nc.setncattr('author', self._affiliation)
+        # Add any attributes we've got. A typical FileReader object doesn't have global attributes, so we'll only add
+        # history and source by default. If we've been given a set of others via global_attributes, then we can add
+        # those too (potentially overwriting history and source).
         module_name = f'PyFVCOM.{Path(inspect.stack()[0][1]).stem}.{self.__class__.__name__}'
         now = datetime.now().strftime('%Y-%m-%d at %H:%M:%S')
         self._nc.setncattr('history', f'File created using {module_name} on {now}.')
         self._nc.setncattr('source', 'FVCOM_3.0')  # for ParaView compatibility
+        for attribute, value in self._global_attributes.items():
+            self._nc.setncattr(attribute, value)
 
     def _create_variables(self):
         # Create the variables from the self._fvcom.grid and self._fvcom.data objects.

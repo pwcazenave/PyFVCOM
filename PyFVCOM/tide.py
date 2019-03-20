@@ -1293,7 +1293,7 @@ def lanczos(x, dt=1, cutoff=None, samples=100, passtype='low'):
     x : np.ndarray
         1-D times series values.
     dt : float, optional
-        Sampling interval. Defaults to 1. (dT in the MATLAB version).
+        Sampling interval in minutes. Defaults to 1. (dT in the MATLAB version).
     cutoff : float, optional
         Cutoff frequency in minutes at which to pass data. Defaults to the half the Nyquist frequency. (Cf in the
         MATLAB version).

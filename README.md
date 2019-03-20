@@ -43,12 +43,6 @@ Provides
     - `get_buoy_metadata`
     - `get_buoy_data`
 
-* `coast` - work with coastlines
-    - `read_ESRI_shapefile`
-    - `read_arc_MIKE`
-    - `read_CST`
-    - `write_CST`
-
 * `coordinate` - convert from spherical and cartesian (UTM) coordinates. Also work with British National Grid coordinates and spherical.
     - `utm_from_lonlat`
     - `lonlat_from_utm`
@@ -84,9 +78,14 @@ Provides
     - `read_fvcom_mesh`
     - `read_mike_mesh`
     - `read_gmsh_mesh`
+    - `read_smesh_mesh`
+    - `read_sms_cst`
     - `write_sms_mesh`
     - `write_sms_bathy`
     - `write_mike_mesh`
+    - `write_sms_cst`
+    - `shp2cst`
+    - `MIKEarc2cst`
     - `find_nearest_point`
     - `element_side_lengths`
     - `clip_triangulation`
@@ -228,7 +227,6 @@ Provides
     - `general.fix_range`
     - `general.ind2sub`
     - `general.flatten_list`
-    - `grid.StubFile`
     - `time.julian_day`
     - `time.gregorian_date`
     - `time.overlap`

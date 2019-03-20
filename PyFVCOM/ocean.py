@@ -63,6 +63,8 @@ Provides functions:
     - dissipation : calculate the tidal dissipation from a current speed.
     - rhum : calculate relative humidity from dew point temperature
       and ambient temperature.
+    - cfl : calculate the CFL number for some model output.
+    - turbulent_kinetic_energy : calculate the Turbulent Kinetic Energy from a velocity field.
 
 Pierre Cazenave (Plymouth Marine Laboratory)
 
@@ -1257,6 +1259,142 @@ def rhum(dew, temperature):
     rhum = 100 * 10**(m * ((dew / (dew + Tn)) - (temperature / (temperature + Tn))))
 
     return rhum
+
+
+def cfl(fvcom, timestep, depth_averaged=False, verbose=False, **kwargs):
+    """
+    Calculate the time-varying CFL for a given grid from the velocity and surface elevation time series.
+
+    This is a python reimplementation of show_max_CFL written by Simon Waldman from the MATLAB fvcom-toolbox:
+        https://gitlab.ecosystem-modelling.pml.ac.uk/fvcom/fvcom-toolbox/blob/dev/fvcom_postproc/show_max_CFL.m
+
+    This differs from that function in that it return the time-varying CFL array rather than just the maximum in time.
+
+    Parameters
+    ----------
+    fvcom : PyFVCOM.read.FileReader
+        A file reader object loaded from a netCDF file. This may optionally include 'u', 'v' and 'zeta' data. If no
+        data are loaded, they will be at run time.
+    timestep : float
+        The external time step used in the model.
+    depth_averaged : bool, optional
+        Set to True to use depth-averaged data. Defaults to False (depth-resolved).
+    verbose : bool, optional
+        Print the location (sigma layer, element) of the maximum CFL value for the given time step. Defaults to not
+        printing anything.
+
+    Additional kwargs are passed to `PyFVCOM.read.FileReader.load_data()'.
+
+    Returns
+    -------
+    cfl : np.ndarray
+        An array of the time-varying CFL number.
+
+    """
+
+    from PyFVCOM.grid import element_side_lengths, nodes2elems, unstructured_grid_depths
+
+    g = 9.81  # acceleration due to gravity
+
+    # Load the relevant data if we don't already have it.
+    uname, vname = 'u', 'v'
+    if depth_averaged:
+        uname, vname = 'ua', 'va'
+    if not hasattr(fvcom.data, uname):
+        fvcom.load_data(uname, **kwargs)
+    if not hasattr(fvcom.data, vname):
+        fvcom.load_data(vname, **kwargs)
+    if not hasattr(fvcom.data, 'zeta'):
+        fvcom.load_data('zeta', **kwargs)
+
+    u = getattr(fvcom.data, uname)
+    v = getattr(fvcom.data, vname)
+    z = getattr(fvcom.data, 'zeta')
+
+    element_sizes = element_side_lengths(fvcom.grid.triangles, fvcom.grid.x, fvcom.grid.y)
+    minimum_element_size = np.min(element_sizes, axis=1)
+
+    if depth_averaged:
+        element_water_depth = fvcom.grid.h_center + nodes2elems(z, fvcom.grid.triangles)
+    else:
+        node_water_depths = unstructured_grid_depths(fvcom.grid.h, z, fvcom.grid.siglay)
+        # Make water depths positive down so we don't get NaNs in the square root.
+        element_water_depth = nodes2elems(-node_water_depths, fvcom.grid.triangles)
+
+    # This is based on equation 6.1 on pg 33 of the MIKE hydrodynamic module manual (modified for using a single
+    # characteristic length rather than deltaX/deltaY)
+    cfl = (2 * np.sqrt(g * element_water_depth) + u + v) * (timestep / minimum_element_size)
+
+    if verbose:
+        val = np.nanmax(cfl)
+        ind = np.unravel_index(np.nanargmax(cfl), cfl.shape)
+
+        if depth_averaged:
+            time_ind, element_ind = ind
+            message = 'Maximum CFL first reached with an external timestep of {:f} seconds is approximately {:.3f} ' \
+                      'in element {:d} (lon/lat: {}, {}) at {}.'
+            print(message.format(timestep, val, element_ind,
+                                 fvcom.grid.lonc[element_ind], fvcom.grid.latc[element_ind],
+                                 fvcom.time.datetime[time_ind].strftime('%Y-%m-%d %H:%M:%S')))
+        else:
+            time_ind, layer_ind, element_ind = ind
+            message = 'Maximum CFL first reached with an external timestep of {:f} seconds is approximately {:.3f} ' \
+                      'in element {:d} (lon/lat: {}, {}) layer {:d} at {}.'
+            print(message.format(timestep, val, element_ind,
+                                 fvcom.grid.lonc[element_ind], fvcom.grid.latc[element_ind],
+                                 layer_ind, fvcom.time.datetime[time_ind].strftime('%Y-%m-%d %H:%M:%S')))
+
+    return cfl
+
+
+def turbulent_kinetic_energy(u, v, w, debug=False):
+    """
+
+    NOTE: THIS FUNCTION IS PROBABLY WRONG.
+
+    Calculate Turbulent Kinetic Energy from a velocity field.
+
+    Parameters
+    ----------
+    u, v, w : ndarray
+        Velocity fields in the x, y and z directions. First dimension must be
+        time. Any number of dimensions is supported.
+
+    Returns
+    -------
+    tke : ndarray
+        Turbulent Kinetic Energy.
+
+    Notes
+    -----
+    Translated and cleaned up a bit from the MATLAB function at
+    http://vegetationeffects.weebly.com/matlab-codes.html.
+
+    """
+
+    # TKE values from velocity measurements
+    # 3/1/2012 retrieved from Nathan Wells, UW Madison Graduate Student
+
+    # Get time averaged means.
+    u_bar = np.mean(u, axis=0)
+    v_bar = np.mean(v, axis=0)
+    w_bar = np.mean(w, axis=0)
+
+    # Fluctuation of velocity in x, y and z.
+    u_prime = u - u_bar
+    v_prime = v - v_bar
+    w_prime = w - w_bar
+
+    u_prime_squared_ave = np.mean(u_prime**2, axis=0)
+    v_prime_squared_ave = np.mean(v_prime**2, axis=0)
+    w_prime_squared_ave = np.mean(w_prime**2, axis=0)
+
+    tke = 0.5 * (u_prime_squared_ave + v_prime_squared_ave + w_prime_squared_ave)
+
+    if debug:
+        return tke, u_prime_squared_ave, v_prime_squared_ave, w_prime_squared_ave
+    else:
+        return tke
 
 
 if __name__ == '__main__':

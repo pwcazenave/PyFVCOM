@@ -9,6 +9,8 @@ from __future__ import print_function
 from datetime import datetime
 from pathlib import Path
 from warnings import warn
+from netCDF4 import date2num
+from PyFVCOM.utilities.general import PassiveStore
 
 import numpy as np
 
@@ -276,7 +278,7 @@ class Buoy(object):
                     values[values == self._missing] = np.nan
                     setattr(self.data, name, values)
 
-    class _Read(object):
+    class _Read(PassiveStore):
         def __init__(self, lines, noisy=False):
             """
             Initialise parsing the buoy time series data so we can subclass this for the header and data reading.
@@ -312,14 +314,13 @@ class Buoy(object):
 
             Provides
             --------
-            Attributes in self which are named for each variable found in `self._lines'. Each attribute contains a single
-            time series as a numpy array.
+            Attributes in self which are named for each variable found in `self._lines'. Each attribute contains a
+            single time series as a numpy array.
 
             """
 
             # We want everything bar the time column names.
             num_lines = len(self._lines) - self._header_length
-            num_columns = len(self._header)
             if num_lines > 1:
                 for name in self._header:
                     if name not in self._time_header:
@@ -333,7 +334,12 @@ class Buoy(object):
                         try:
                             setattr(self, name.strip().replace(' ', '_').replace('(', '').replace(')', ''), np.asarray(data, dtype=float))
                         except ValueError:
-                            # Probably strings so just leave as is.
+                            # Probably strings so just leave as is. Check for clearly nonsense values, and if we get
+                            # them, replace with NaN.
+                            if any(['*' in i for i in data]):
+                                data = np.asarray(data)
+                                data[data == '*******'] = np.nan
+                                data = data.tolist()
                             setattr(self, name.strip().replace(' ', '_').replace('(', '').replace(')', ''), np.asarray(data))
 
     class _ReadTime(_Read):
@@ -392,6 +398,17 @@ class Buoy(object):
                 # CCO format.
                 for date in getattr(self, 'Date/Time_GMT'):
                     self.datetime.append(datetime.strptime(date, '%d-%b-%Y %H:%M:%S'))
+
+        def _fvcom_time_representations(self):
+            """
+            Convert the datetime object into FVCOM time representations (`time', `Itime' and `Itime2').
+
+            """
+            if np.any(self.datetime):
+                self.time = date2num(self.datetime, units='days since 1858-11-17 00:00:00')
+                self.Itime = np.floor(self.time)
+                self.Itime2 = (self.time - self.Itime) * 60 * 60 * 1000
+
 
     class _ReadPosition:
         """ Add the position for the buoy. """

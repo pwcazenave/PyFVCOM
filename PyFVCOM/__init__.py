@@ -16,7 +16,6 @@ from warnings import warn
 
 # Import everything! Eventually, we're going to hit a circular dependency here...
 from PyFVCOM import buoy
-from PyFVCOM import coast
 from PyFVCOM import ctd
 from PyFVCOM import current
 from PyFVCOM import grid
@@ -28,7 +27,9 @@ from PyFVCOM import tide
 from PyFVCOM import plot
 from PyFVCOM import preproc
 from PyFVCOM import read
+from PyFVCOM import utilities
 from PyFVCOM import validation
+from PyFVCOM import interpolate
 
 if sys.version_info.major < 3 and sys.version_info.minor < 6:
     raise Exception('Must be using Python 3.6 or greater')
