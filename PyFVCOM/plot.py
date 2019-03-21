@@ -915,7 +915,7 @@ class Plotter(object):
         if self.cb_label:
             self.cbar.set_label(self.cb_label)
 
-    def plot_quiver(self, u, v, field=False, dx=None, dy=None, add_key=True, scale=1.0, label=None, *args, **kwargs):
+    def plot_quiver(self, u, v, field=False, dx=None, dy=None, add_key=True, scale=1.0, label=None, mask_land=True, *args, **kwargs):
         """
         Quiver plot using velocity components.
 
