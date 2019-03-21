@@ -844,7 +844,7 @@ class Domain(object):
 
         """
 
-        self.grid.art1, self.grid.art2 = control_volumes(self.x, self.y, self.triangles)
+        self.grid.art1, self.grid.art2 = control_volumes(self.grid.x, self.grid.y, self.triangles)
 
     def calculate_element_lengths(self):
         """
