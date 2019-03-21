@@ -1114,7 +1114,7 @@ class Plotter(object):
         v = np.squeeze(v)
 
         if self.cartesian:
-            plot_x, plot_y = self._regular_x, self._regular_y
+            plot_x, plot_y = self._regular_x[0, :], self._regular_y[:, 0]
             fvcom_x, fvcom_y = self.xc[self._mask_for_unstructured], self.yc[self._mask_for_unstructured]
         else:
             if self.mapper == 'cartopy':
