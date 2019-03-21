@@ -2044,10 +2044,12 @@ def plot_domain(domain, mesh=False, depth=False, **kwargs):
 
     domain.domain_plot = Plotter(domain, **kwargs)
 
-    x, y = domain.domain_plot.m(domain.grid.lon, domain.grid.lat)
-
     if mesh:
-        domain.mesh_plot = domain.domain_plot.axes.triplot(x, y, domain.grid.triangles, 'k-', linewidth=1)
+        mesh_plot = domain.domain_plot.axes.triplot(domain.domain_plot.mx, domain.domain_plot.my,
+                                                    domain.grid.triangles, 'k-',
+                                                    linewidth=1, zorder=2000,
+                                                    transform=domain.domain_plot._plot_projection)
+        domain.domain_plot.mesh_plot = mesh_plot
 
     if depth:
         # Make depths negative down.
