@@ -148,6 +148,8 @@ class MPIRegularInterpolateWorker():
         
         self.root = root
         self._noisy = verbose
+        if verbose and comm is None:
+            print('For verbose output you need to pass a comm object so it knows the process rank. Gonna crash if not.')
 
         self.fvcom_grid = PassiveStore()
         self.regular_grid = PassiveStore()
@@ -223,12 +225,10 @@ class MPIRegularInterpolateWorker():
 
             self.regular_grid.mask = np.ones([len(self.time_indices), len(self.regular_grid.lons), len(self.regular_grid.lats), len(self.regular_grid.dep_lays)], dtype=bool)
             for this_t in np.arange(0, len(self.time_indices)):
-                if self._noisy:
-                    print('Rank {}: Time step {}'.format(self.rank, this_t))
                 # retriangulate for each depth layer, can be multiple if there are split regions and interpolate
                 for this_depth_lay_ind, this_depth_lay in enumerate(self.regular_grid.dep_lays):
                     if self._noisy:
-                        print('Rank {}: Depth {}'.format(self.rank, this_depth_lay_ind))
+                        print('Rank {}: Time step {}, Depth {}'.format(self.rank, this_t, this_depth_lay_ind))
                     this_depth_layer_nodes = np.where(self.fvcom_grid.total_depth[this_t,:] >=this_depth_lay)[0]
                     if this_depth_layer_nodes.size:
                         this_depth_tri = reduce_triangulation(self.fvcom_grid.triangles, this_depth_layer_nodes)
