@@ -172,6 +172,8 @@ class MPIRegularInterpolateWorker():
 
 
         """
+        if self._noisy:
+            print('Rank {}: Loading grid'.format(self.rank))
         # Check ther regular grid limits fit with the grid resolution specified
         if not round((upper_right_ll[0] - lower_left_ll[0]) % grid_res, 10) % grid_res == 0:
             print('Longitudes not divisible by grid resolution, extending grid')
@@ -212,6 +214,8 @@ class MPIRegularInterpolateWorker():
         self.fvcom_grid.sigma_center = fvcom_grid_fr.grid.siglay_center[:, self.fvcom_grid.elements]
 
         if time_varying_depth:
+            if self._noisy:
+                print('Rank {}: Calculating time varying mask'.format(self.rank))
             fvcom_dep_lays = -unstructured_grid_depths(self.fvcom_grid.h, self.fvcom_grid.zeta, self.fvcom_grid.sigma) 
             ## change to depth from free surface since I *think* this is what cmems does?
             self.fvcom_grid.dep_lays = fvcom_dep_lays - np.tile(np.min(fvcom_dep_lays, axis=1)[:,np.newaxis,:], [1,fvcom_dep_lays.shape[1], 1])
@@ -220,11 +224,11 @@ class MPIRegularInterpolateWorker():
             self.regular_grid.mask = np.ones([len(self.time_indices), len(self.regular_grid.lons), len(self.regular_grid.lats), len(self.regular_grid.dep_lays)], dtype=bool)
             for this_t in np.arange(0, len(self.time_indices)):
                 if self._noisy:
-                    print('Step {}'.format(this_t))
+                    print('Rank {}: Time step {}'.format(self.rank, this_t))
                 # retriangulate for each depth layer, can be multiple if there are split regions and interpolate
                 for this_depth_lay_ind, this_depth_lay in enumerate(self.regular_grid.dep_lays):
                     if self._noisy:
-                        print(this_depth_lay_ind)
+                        print('Rank {}: Depth {}'.format(self.rank, this_depth_lay_ind))
                     this_depth_layer_nodes = np.where(self.fvcom_grid.total_depth[this_t,:] >=this_depth_lay)[0]
                     if this_depth_layer_nodes.size:
                         this_depth_tri = reduce_triangulation(self.fvcom_grid.triangles, this_depth_layer_nodes)
@@ -266,6 +270,8 @@ class MPIRegularInterpolateWorker():
         fvcom_data = getattr(FileReader(self.fvcom_file, [variable], dims={'time':self.time_indices}).data, variable)[...,self.fvcom_grid.select_points]
         
         for this_t in np.arange(0, len(self.time_indices)):
+            if self._noisy:
+                print('Rank {}: Interpolating time step {} for {}'.format(self.rank, this_t, variable))
             if mode == 'surface':
                 depth_lay_data = fvcom_data[this_t, :]     
                 interp_data = self._Interpolater(depth_lay_data).T
