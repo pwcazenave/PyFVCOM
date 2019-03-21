@@ -139,13 +139,13 @@ class MPIRegularInterpolateWorker():
         except ImportError:
             warn('No mpi4py found in this python installation. Some functions will be disabled.')
             self.have_mpi = False
-        """
+        
         self.comm = comm
         if self.have_mpi:
             self.rank = self.comm.Get_rank()
         else:
             self.rank = 0
-        """
+        
         self.root = root
         self._noisy = verbose
 
