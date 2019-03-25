@@ -1639,6 +1639,15 @@ class OpenBoundary(object):
                 coarse_depths = np.tile(coarse.grid.depth, [coarse.dims.lat, coarse.dims.lon, 1]).transpose(2, 0, 1)
                 coarse_depths = np.ma.masked_array(coarse_depths, mask=getattr(coarse.data, coarse_name)[0, ...].mask)
                 coarse_depths = np.max(coarse_depths, axis=0)
+            
+                # Find any places where only the zero depth layer exists and copy down 
+                zero_depth_water = np.where(np.logical_and(coarse_depths == 0, ~coarse_depths.mask))
+                if zero_depth_water[0].size:
+                    data_mod = getattr(coarse.data, coarse_name)
+                    data_mod[:,1,zero_depth_water[0], zero_depth_water[1]] = data_mod[:,0,zero_depth_water[0], zero_depth_water[1]]
+                    data_mod.mask[:,1,zero_depth_water[0], zero_depth_water[1]] = False
+                    setattr(coarse.data, coarse_name, data_mod) # Probably isn't needed cos pointers but for clarity
+
                 coarse_depths = np.ma.filled(coarse_depths, 0)
 
                 # Go through each open boundary position and if its depth is deeper than the closest coarse data,
