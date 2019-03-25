@@ -1090,6 +1090,11 @@ class FileReader(Domain):
         self._dims = self.grid._dims
         delattr(self.grid, '_dims')
 
+        # Make sure we set the grid dimensions correctly if we've been asked to subset in space.
+        for dim in ('node', 'nele', 'siglay', 'siglev', 'time'):
+            if dim in self._dims:
+                setattr(self.dims, dim, len(self._dims[dim]))
+
     def _load_time(self):
         self.time = _TimeReader(self._fvcom, dims=self._dims)
 
