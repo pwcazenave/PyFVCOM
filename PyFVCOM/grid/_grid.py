@@ -359,6 +359,9 @@ class GridReaderNetCDF(object):
 
         ds.close()
 
+        # Make sure we've updated the dimensions to match the data sizes.
+        self._update_dimensions()
+
         if self._debug:
             print('Finished loading grid from netCDF')
 
