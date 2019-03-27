@@ -844,7 +844,7 @@ class Domain(object):
 
         """
 
-        self.grid.art1, self.grid.art2 = control_volumes(self.x, self.y, self.triangles)
+        self.grid.art1, self.grid.art2 = control_volumes(self.grid.x, self.grid.y, self.triangles)
 
     def calculate_element_lengths(self):
         """
@@ -1709,7 +1709,7 @@ class OpenBoundary(object):
             pool.close()
 
             # Reshape and transpose to be the correct size for writing to netCDF (time, depth, node).
-            interpolated_coarse_data = np.asarray(results).reshape(nz, nx, -1).transpose(2, 0, 1)
+            interpolated_coarse_data = np.asarray(results).reshape(nx, nz, -1).transpose(2, 1, 0)
         else:
             if verbose:
                 print('Interpolating z-level data...', end=' ')

@@ -1,7 +1,5 @@
 """ Plotting class for FVCOM results. """
 
-# TODO: Replace Basemap with cartopy. The former is being deprecated and the latter is its suggested replacement.
-
 from __future__ import print_function
 
 import copy
@@ -9,15 +7,19 @@ from datetime import datetime
 from pathlib import Path
 from warnings import warn
 
+import cartopy.crs as ccrs
+import cartopy.feature as cfeature
 import matplotlib.widgets
 import mpl_toolkits.axes_grid1
 import numpy as np
+from cartopy.mpl.gridliner import LONGITUDE_FORMATTER, LATITUDE_FORMATTER
+from descartes import PolygonPatch
 from matplotlib import pyplot as plt
 from matplotlib import rcParams
 from matplotlib.animation import FuncAnimation
 from matplotlib.dates import DateFormatter, date2num
 from mpl_toolkits.axes_grid1 import make_axes_locatable
-from shapely.geometry import Polygon, Point
+from shapely.geometry import Polygon, Point, LineString
 
 from PyFVCOM.coordinate import lonlat_from_utm, utm_from_lonlat
 from PyFVCOM.current import vector2scalar
@@ -448,17 +450,21 @@ class Plotter(object):
     plot_scatter
     plot_streamlines
     add_scale
+    set_title
+    replot
+    close
 
     Author(s)
     ---------
     James Clark (Plymouth Marine Laboratory)
     Pierre Cazenave (Plymouth Marine Laboratory)
+    Mike Bedington (Plymouth Marine Laboratory)
 
     """
 
     def __init__(self, dataset, figure=None, axes=None, stations=None, extents=None, vmin=None, vmax=None, mask=None,
                  res='c', fs=10, title=None, cmap='viridis', figsize=(10., 10.), axis_position=None, tick_inc=None,
-                 cb_label=None, extend='neither', norm=None, m=None, cartesian=False, **bmargs):
+                 cb_label=None, extend='neither', norm=None, m=None, cartesian=False, mapper='basemap', **bmargs):
         """
         Parameters
         ----------
@@ -509,14 +515,16 @@ class Plotter(object):
         cartesian : bool, optional
             Set to True to skip using Basemap and instead return a simple cartesian axis plot. Defaults to False
             (geographical coordinates).
-        bmargs : dict
+        mapper : string, optional
+            Set to 'basemap' to use Basemap for plotting or 'cartopy' for cartopy.
+        bmargs : dict, optional
             Additional arguments to pass to Basemap.
 
         Author(s)
         ---------
-        James Clark (PML)
-        Pierre Cazenave (PML)
-        Mike Bedington (PML)
+        James Clark (Plymouth Marine Laboratory)
+        Pierre Cazenave (Plymouth Marine Laboratory)
+        Mike Bedington (Plymouth Marine Laboratory)
 
         """
 
@@ -543,7 +551,7 @@ class Plotter(object):
         self.m = m
         self.cartesian = cartesian
         self.bmargs = bmargs
-        self.colorbar_axis = None
+        self.mapper = mapper
 
         # Plot instances to hold the plot objects.
         self.quiver_plot = None
@@ -556,6 +564,13 @@ class Plotter(object):
         self.masked_tris = None
         self.colorbar_axis = None
         self.cbar = None
+
+        self.projection = None
+        self._plot_projection = {}
+        # For cartopy, we need to have a Plate Carree transform defined for doing the actual plotting of data since
+        # we're using Lambert for the "display" projection.
+        if self.mapper == 'cartopy':
+            self._plot_projection = {'transform': ccrs.PlateCarree()}
 
         # Are we working with a FileReader object or a bog-standard netCDF4 Dataset?
         self._FileReader = False
@@ -607,12 +622,6 @@ class Plotter(object):
             self.figure = plt.figure(figsize=figsize)
             self.figure.set_facecolor('white')
 
-        # Create plot axes
-        if not self.axes:
-            self.axes = self.figure.add_subplot(1, 1, 1)
-            if self.axis_position:
-                self.axes.set_position(self.axis_position)
-
         # If plot extents were not given, use min/max lat/lon values
         if self.extents is None:
             if self.cartesian:
@@ -622,35 +631,67 @@ class Plotter(object):
                 self.extents = np.array([self.lon.min(), self.lon.max(),
                                          self.lat.min(), self.lat.max()])
 
-        # Create basemap object
-        if not self.m and not self.cartesian:
-            if have_basemap:
-                self.m = Basemap(llcrnrlon=np.min(self.extents[:2]),
-                                 llcrnrlat=np.min(self.extents[-2:]),
-                                 urcrnrlon=np.max(self.extents[:2]),
-                                 urcrnrlat=np.max(self.extents[-2:]),
-                                 rsphere=(6378137.00, 6356752.3142),
-                                 resolution=self.res,
-                                 projection='merc',
-                                 lat_0=np.mean(self.extents[-2:]),
-                                 lon_0=np.mean(self.extents[:2]),
-                                 lat_ts=np.mean(self.extents[-2:]),
-                                 ax=self.axes,
-                                 **self.bmargs)
-            else:
-                raise RuntimeError('mpl_toolkits is not available in this Python.')
+        # Create mapping object if appropriate.
+        if not self.cartesian:
+            if self.mapper == 'basemap':
+                if have_basemap:
+                    if self.m is None:
+                        self.m = Basemap(llcrnrlon=np.min(self.extents[:2]),
+                                         llcrnrlat=np.min(self.extents[-2:]),
+                                         urcrnrlon=np.max(self.extents[:2]),
+                                         urcrnrlat=np.max(self.extents[-2:]),
+                                         rsphere=(6378137.00, 6356752.3142),
+                                         resolution=self.res,
+                                         projection='merc',
+                                         lat_0=np.mean(self.extents[-2:]),
+                                         lon_0=np.mean(self.extents[:2]),
+                                         lat_ts=np.mean(self.extents[-2:]),
+                                         ax=self.axes,
+                                         **self.bmargs)
+                    # Make a set of coordinates.
+                    self.mx, self.my = self.m(self.lon, self.lat)
+                    self.mxc, self.myc = self.m(self.lonc, self.latc)
+                else:
+                    raise RuntimeError('mpl_toolkits is not available in this Python.')
+            elif self.mapper == 'cartopy':
+                self.projection = ccrs.LambertConformal(central_longitude=np.mean(self.extents[:2]),
+                                                        central_latitude=np.mean(self.extents[2:]),
+                                                        false_easting=400000, false_northing=400000)
 
-        if self.cartesian:
+                # Make a coastline depending on whether we've got a GSHHS resolution or a Natural Earth one.
+                if self.res in ('c', 'l', 'i', 'h', 'f'):
+                    # Use the GSHHS data as in Basemap (a lot slower than the cartopy data).
+                    land = cfeature.GSHHSFeature(scale=self.res, edgecolor='k', facecolor=0.6)
+                else:
+                    # Make a land object which is fairly similar to the Basemap on we use.
+                    land = cfeature.NaturalEarthFeature('physical', 'land', self.res, edgecolor='k', facecolor='0.6')
+
+                # Make a set of coordinates.
+                self.mx, self.my = self.lon, self.lat
+                self.mxc, self.myc = self.lonc, self.latc
+            else:
+                raise ValueError(f"Unrecognised mapper value '{self.mapper}'. Choose 'basemap' (default) or 'cartopy'")
+        else:
+            # Easy peasy, just the cartesian coordinates.
             self.mx, self.my = self.x, self.y
             self.mxc, self.myc = self.xc, self.yc
-        else:
-            self.mx, self.my = self.m(self.lon, self.lat)
-            self.mxc, self.myc = self.m(self.lonc, self.latc)
 
+        # Create plot axes
+        if not self.axes:
+            self.axes = self.figure.add_subplot(1, 1, 1, projection=self.projection)
+            if self.axis_position:
+                self.axes.set_position(self.axis_position)
+
+        if self.mapper == 'cartopy':
+            self.axes.set_extent(self.extents, crs=ccrs.PlateCarree())
+            self.axes.add_feature(land, zorder=1000)
+            # *Must* call show and draw in order to get the axis boundary used to add ticks:
+            self.figure.show()
+            self.figure.canvas.draw()
+        elif self.mapper == 'basemap' and not self.cartesian:
             self.m.drawmapboundary()
-            if self.res is not None:
-                self.m.drawcoastlines(zorder=1000)
-                self.m.fillcontinents(color='0.6', zorder=1000)
+            self.m.drawcoastlines(zorder=1000)
+            self.m.fillcontinents(color='0.6', zorder=1000)
 
         if self.title:
             self.axes.set_title(self.title)
@@ -662,16 +703,87 @@ class Plotter(object):
             if self.tick_inc[1] > self.extents[3] - self.extents[2]:
                 warn('The y-axis tick interval is larger than the plot y-axis extent.')
 
-        # Add coordinate labels to the x and y axes (except if we're doing a cartesian plot).
+        # Add coordinate labels to the x and y axes.
         if self.tick_inc is not None:
-            if not self.cartesian:
-                meridians = np.arange(np.floor(np.min(self.extents[:2])), np.ceil(np.max(self.extents[:2])), self.tick_inc[0])
-                parallels = np.arange(np.floor(np.min(self.extents[2:])), np.ceil(np.max(self.extents[2:])), self.tick_inc[1])
-                self.m.drawparallels(parallels, labels=[1, 0, 0, 0], fontsize=self.fs, linewidth=0, ax=self.axes)
-                self.m.drawmeridians(meridians, labels=[0, 0, 0, 1], fontsize=self.fs, linewidth=0, ax=self.axes)
-            else:
+            meridians = np.arange(np.floor(np.min(self.extents[:2])), np.ceil(np.max(self.extents[:2])), self.tick_inc[0])
+            parallels = np.arange(np.floor(np.min(self.extents[2:])), np.ceil(np.max(self.extents[2:])), self.tick_inc[1])
+            if self.cartesian:
+                # Cartesian
                 self.axes.set_xticks(np.arange(self.extents[0], self.extents[1] + self.tick_inc[0], self.tick_inc[0]))
                 self.axes.set_yticks(np.arange(self.extents[2], self.extents[3] + self.tick_inc[1], self.tick_inc[1]))
+            elif self.mapper == 'basemap':
+                self.m.drawparallels(parallels, labels=[1, 0, 0, 0], fontsize=self.fs, linewidth=0, ax=self.axes)
+                self.m.drawmeridians(meridians, labels=[0, 0, 0, 1], fontsize=self.fs, linewidth=0, ax=self.axes)
+            elif self.mapper == 'cartopy':
+                self.axes.gridlines(xlocs=meridians, ylocs=parallels, linewidth=0)
+                # Label the end-points of the gridlines using the custom tick makers.
+                self.axes.xaxis.set_major_formatter(LONGITUDE_FORMATTER)
+                self.axes.yaxis.set_major_formatter(LATITUDE_FORMATTER)
+                self._lambert_xticks(meridians)
+                self._lambert_yticks(parallels)
+
+    # Whole bunch of hackery to get cartopy to label Lambert plots. Shamelessly copied from:
+    #   https://nbviewer.jupyter.org/gist/ajdawson/dd536f786741e987ae4e
+    @staticmethod
+    def _find_side(ls, side):
+        """
+        Given a shapely LineString which is assumed to be rectangular, return the
+        line corresponding to a given side of the rectangle.
+
+        """
+        minx, miny, maxx, maxy = ls.bounds
+        points = {'left': [(minx, miny), (minx, maxy)],
+                  'right': [(maxx, miny), (maxx, maxy)],
+                  'bottom': [(minx, miny), (maxx, miny)],
+                  'top': [(minx, maxy), (maxx, maxy)], }
+        return LineString(points[side])
+
+    def _lambert_xticks(self, ticks):
+        """Draw ticks on the bottom x-axis of a Lambert Conformal projection."""
+        te = lambda xy: xy[0]
+        lc = lambda t, n, b: np.vstack((np.zeros(n) + t, np.linspace(b[2], b[3], n))).T
+        xticks, xticklabels = self._lambert_ticks(ticks, 'bottom', lc, te)
+        self.axes.xaxis.tick_bottom()
+        self.axes.set_xticks(xticks)
+        self.axes.set_xticklabels([self.axes.xaxis.get_major_formatter()(xtick) for xtick in xticklabels])
+
+    def _lambert_yticks(self, ticks):
+        """Draw ricks on the left y-axis of a Lambert Conformal projection."""
+        te = lambda xy: xy[1]
+        lc = lambda t, n, b: np.vstack((np.linspace(b[0], b[1], n), np.zeros(n) + t)).T
+        yticks, yticklabels = self._lambert_ticks(ticks, 'left', lc, te)
+        self.axes.yaxis.tick_left()
+        self.axes.set_yticks(yticks)
+        self.axes.set_yticklabels([self.axes.yaxis.get_major_formatter()(ytick) for ytick in yticklabels])
+
+    def _lambert_ticks(self, ticks, tick_location, line_constructor, tick_extractor):
+        """Get the tick locations and labels for an axis of a Lambert Conformal projection."""
+        outline_patch = LineString(self.axes.outline_patch.get_path().vertices.tolist())
+        axis = self._find_side(outline_patch, tick_location)
+        n_steps = 30
+        extent = self.axes.get_extent(ccrs.PlateCarree())
+        _ticks = []
+        for t in ticks:
+            xy = line_constructor(t, n_steps, extent)
+            proj_xyz = self.axes.projection.transform_points(ccrs.Geodetic(), xy[:, 0], xy[:, 1])
+            xyt = proj_xyz[..., :2]
+            ls = LineString(xyt.tolist())
+            locs = axis.intersection(ls)
+            if not locs:
+                tick = [None]
+            else:
+                tick = tick_extractor(locs.xy)
+            _ticks.append(tick[0])
+        # Remove ticks that aren't visible:
+        ticklabels = copy.copy(ticks).tolist()
+        while True:
+            try:
+                index = _ticks.index(None)
+            except ValueError:
+                break
+            _ticks.pop(index)
+            ticklabels.pop(index)
+        return _ticks, ticklabels
 
     def get_colourbar_extension(self, field, clims):
         """
@@ -779,7 +891,7 @@ class Plotter(object):
 
         self.tripcolor_plot = self.axes.tripcolor(self.mx, self.my, self.triangles, np.squeeze(field), *args,
                                                   vmin=self.vmin, vmax=self.vmax, cmap=self.cmap, norm=self.norm,
-                                                  **kwargs)
+                                                  **self._plot_projection, **kwargs)
 
         if self.cartesian:
             self.axes.set_aspect('equal')
@@ -795,13 +907,15 @@ class Plotter(object):
                 divider = make_axes_locatable(self.axes)
                 cax = divider.append_axes("right", size="3%", pad=0.1)
                 self.cbar = self.figure.colorbar(self.tripcolor_plot, cax=cax, extend=extend)
+            elif self.mapper == 'cartopy':
+                self.cbar = self.figure.colorbar(self.tripcolor_plot, extend=extend)
             else:
                 self.cbar = self.m.colorbar(self.tripcolor_plot, extend=extend)
             self.cbar.ax.tick_params(labelsize=self.fs)
         if self.cb_label:
             self.cbar.set_label(self.cb_label)
 
-    def plot_quiver(self, u, v, field=False, dx=None, dy=None, add_key=True, scale=1.0, label=None, *args, **kwargs):
+    def plot_quiver(self, u, v, field=False, dx=None, dy=None, add_key=True, scale=1.0, label=None, mask_land=True, *args, **kwargs):
         """
         Quiver plot using velocity components.
 
@@ -867,13 +981,16 @@ class Plotter(object):
                                                 units='inches',
                                                 scale_units='inches',
                                                 scale=scale,
-                                                *args, **kwargs)
+                                                *args,
+                                                **self._plot_projection,
+                                                **kwargs)
             self.cbar = self.m(self.quiver_plot)
             self.cbar.ax.tick_params(labelsize=self.fs)
             if self.cb_label:
                 self.cbar.set_label(self.cb_label)
         else:
-            self.quiver_plot = self.axes.quiver(mxc, myc, u, v, units='inches', scale_units='inches', scale=scale)
+            self.quiver_plot = self.axes.quiver(mxc, myc, u, v, units='inches', scale_units='inches', scale=scale,
+                                                **self._plot_projection)
 
         if add_key:
             self.quiver_key = plt.quiverkey(self.quiver_plot, 0.9, 0.9, scale, label, coordinates='axes')
@@ -909,7 +1026,7 @@ class Plotter(object):
         else:
             mx, my = self.m(lon, lat)
 
-        self.line_plot = self.axes.plot(mx, my, *args, **kwargs)
+        self.line_plot = self.axes.plot(mx, my, *args, **self._plot_projection, **kwargs)
 
     def plot_scatter(self, x, y,  zone_number='30N', *args, **kwargs):
         """
@@ -934,7 +1051,7 @@ class Plotter(object):
         else:
             mx, my = self.m(lon, lat)
 
-        self.scatter_plot = self.axes.scatter(mx, my, *args, **kwargs)
+        self.scatter_plot = self.axes.scatter(mx, my, *args, **self._plot_projection, **kwargs)
 
     def plot_streamlines(self, u, v, dx=1000, dy=None, mask_land=True, **kwargs):
         """
@@ -968,6 +1085,9 @@ class Plotter(object):
 
         """
 
+        if self.mapper != 'cartopy':
+            raise ValueError("The streamplot function is subtly broken with Basemap plotting. Use cartopy instead.")
+
         if dx is not None and dy is None:
             dy = dx
 
@@ -994,10 +1114,14 @@ class Plotter(object):
         v = np.squeeze(v)
 
         if self.cartesian:
-            plot_x, plot_y = self._regular_x, self._regular_y
+            plot_x, plot_y = self._regular_x[0, :], self._regular_y[:, 0]
             fvcom_x, fvcom_y = self.xc[self._mask_for_unstructured], self.yc[self._mask_for_unstructured]
         else:
-            plot_x, plot_y = self.m(self._regular_x, self._regular_y)
+            if self.mapper == 'cartopy':
+                plot_x, plot_y = self._regular_x, self._regular_y
+            else:
+                # The Basemap version needs 1D arrays only.
+                plot_x, plot_y = self._regular_x[0, :], self._regular_y[:, 0]
             fvcom_x, fvcom_y = self.lonc[self._mask_for_unstructured], self.latc[self._mask_for_unstructured]
 
         # Interpolate whatever positions we have (spherical/cartesian).
@@ -1027,12 +1151,45 @@ class Plotter(object):
         # Mask off arrays as appropriate.
         ua_r = np.ma.array(ua_r, mask=self._mask_for_regular)
         va_r = np.ma.array(va_r, mask=self._mask_for_regular)
+        # Force the underlying data to NaN for the masked region. This is a problem which manifests itself when
+        # plotting with cartopy.
+        ua_r.data[self._mask_for_regular] = np.nan
+        va_r.data[self._mask_for_regular] = np.nan
         if self.cmap is not None:
             speed_r = np.ma.array(speed_r, mask=self._mask_for_regular)
+            speed_r.data[self._mask_for_regular] = np.nan
 
         # Now we have some data, do the streamline plot.
-        self.streamline_plot = self.axes.streamplot(plot_x, plot_y, ua_r, va_r, color=speed_r,
-                                                    cmap=self.cmap, norm=self.norm, **kwargs)
+        # self.streamline_plot = self.m.streamplot(plot_x, plot_y + ((plot_y - plot_y.min()) * 0.125), ua_r, va_r, color=speed_r,
+        # self.streamline_plot = self.axes.streamplot(plot_x, plot_y, ua_r, va_r, color=speed_r,
+        #                                             cmap=self.cmap, norm=self.norm, latlon=~self.cartesian, **kwargs)
+        # For cartopy, just pass a transform.
+        self.streamline_plot = self.axes.streamplot(plot_x, plot_y, ua_r, va_r, color=speed_r, cmap=self.cmap,
+                                                    norm=self.norm, **self._plot_projection, **kwargs)
+
+        if self.mapper == 'cartopy' and not hasattr(self, '_mask_patch'):
+            # I simply cannot get cartopy to not plot arrows outside the domain. So, the only thing I can think of
+            # doing is making a polygon out of the region which is outside the model domain and plotting that on top
+            # as white. It'll sit just above the arrow zorder. It's not currently possible to simply remove the
+            # arrows either.
+            warn("Cartopy doesn't mask the arrows on the streamlines correctly, so we're overlaying a white polygon to "
+                 "hide them. Things underneath it will disappear.")
+            model_boundaries = get_boundary_polygons(self.triangles)
+            model_polygons = [Polygon(np.asarray((self.lon[i], self.lat[i])).T) for i in model_boundaries]
+            polygon_areas = [i.area for i in model_polygons]
+            main_polygon_index = polygon_areas.index(max(polygon_areas))
+            model_domain = model_polygons[main_polygon_index]
+            # Make a polygon of the regular grid extents and then subtract the model domain from that to yield a
+            # masking polyon. Plot that afterwards.
+            regular_domain = Polygon(((self._regular_x.min() - 1, self._regular_y.min() - 1),  # lower left
+                                      (self._regular_x.min() - 1, self._regular_y.max() + 1),  # upper left
+                                      (self._regular_x.max() + 1, self._regular_y.max() + 1),  # upper right
+                                      (self._regular_x.max() + 1, self._regular_y.min() - 1)))  # lower right
+            mask_domain = regular_domain.difference(model_domain)
+            self._mask_patch = PolygonPatch(mask_domain, facecolor='w', edgecolor='none',
+                                            **self._plot_projection)
+            patch = self.axes.add_patch(self._mask_patch)
+            patch.set_zorder(self.streamline_plot.arrows.get_zorder() + 1)
 
         if self.cmap is not None:
             extend = copy.copy(self.extend)
@@ -1044,6 +1201,8 @@ class Plotter(object):
                     divider = make_axes_locatable(self.axes)
                     cax = divider.append_axes("right", size="3%", pad=0.1)
                     self.cbar = self.figure.colorbar(self.streamline_plot.lines, cax=cax, extend=extend)
+                elif self.mapper == 'cartopy':
+                    self.cbar = self.figure.colorbar(self.streamline_plot.lines, extend=extend)
                 else:
                     self.cbar = self.m.colorbar(self.streamline_plot.lines, extend=extend)
                 self.cbar.ax.tick_params(labelsize=self.fs)
@@ -1100,7 +1259,11 @@ class Plotter(object):
         else:
             x = self.lonc
             y = self.latc
-            west, east, south, north = self.m.llcrnrlon, self.m.urcrnrlon, self.m.llcrnrlat, self.m.urcrnrlat
+            # Should we use self.extents here?
+            if self.mapper == 'basemap':
+                west, east, south, north = self.m.llcrnrlon, self.m.urcrnrlon, self.m.llcrnrlat, self.m.urcrnrlat
+            else:
+                west, east, south, north = self.lon.min(), self.lon.max(), self.lat.min(), self.lat.max()
 
         self._mask_for_unstructured = (x >= west) & (x <= east) & (y >= south) * (y <= north)
 
@@ -1346,7 +1509,6 @@ class CrossPlotter(Plotter):
             siglev = self.ds.grid.siglev_center[:, self.sel_points]
             h = self.ds.grid.h_center[self.sel_points]
             zeta = np.mean(self.ds.data.zeta[:, self.ds.grid.nv - 1], axis=1)[:, self.sel_points]
-
         else:
             siglay = self.ds.grid.siglay[:, self.sel_points]
             siglev = self.ds.grid.siglev[:, self.sel_points]
@@ -1430,7 +1592,8 @@ class CrossPlotter(Plotter):
                                       plot_z[choose_horiz, :],
                                       cmap=self.cmap,
                                       vmin=self.vmin,
-                                      vmax=self.vmax)
+                                      vmax=self.vmax,
+                                      **self._plot_projection)
 
         self.axes.plot(self.chan_x, self.chan_y, linewidth=2, color='black')
         self.figure.colorbar(pc)
@@ -1462,7 +1625,7 @@ class CrossPlotter(Plotter):
         plot_y = np.ma.masked_invalid(self.cross_plot_y[timestep, :, :]).T
 
         self.plot_pcolor_field(cross_io.T, timestep)
-        self.axes.quiver(plot_x, plot_y, cross_u.T, cross_v.T*w_factor)
+        self.axes.quiver(plot_x, plot_y, cross_u.T, cross_v.T*w_factor, **self._plot_projection)
 
     def _var_prep(self, var, timestep):
         """
@@ -2041,10 +2204,12 @@ def plot_domain(domain, mesh=False, depth=False, **kwargs):
 
     domain.domain_plot = Plotter(domain, **kwargs)
 
-    x, y = domain.domain_plot.m(domain.grid.lon, domain.grid.lat)
-
     if mesh:
-        domain.mesh_plot = domain.domain_plot.axes.triplot(x, y, domain.grid.triangles, 'k-', linewidth=1)
+        mesh_plot = domain.domain_plot.axes.triplot(domain.domain_plot.mx, domain.domain_plot.my,
+                                                    domain.grid.triangles, 'k-',
+                                                    linewidth=1, zorder=2000,
+                                                    transform=domain.domain_plot._plot_projection)
+        domain.domain_plot.mesh_plot = mesh_plot
 
     if depth:
         # Make depths negative down.
