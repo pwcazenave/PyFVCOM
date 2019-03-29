@@ -4669,8 +4669,10 @@ class RegularReader(FileReader):
                 x, y = self.grid.lon.ravel(), self.grid.lat.ravel()
 
         index = self._closest_point(x, y, x, y, where, threshold=threshold, vincenty=vincenty, haversine=haversine)
-        if len(index) == 1:
+        try:
             index = index[0]
+        except IndexError:
+            pass
         if np.ndim(self.grid.lon) <= 1:
             return np.unravel_index(index, (len(self.grid.lon), len(self.grid.lat)))
         else:
