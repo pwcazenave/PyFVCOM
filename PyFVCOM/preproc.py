@@ -4988,7 +4988,7 @@ class NEMOReader(RegularReader):
             if depthname in self._dims:
                 depth_compare = len(self.ds.variables[depthvar][self._dims[depthname]]) == depthdim
             if timename in self._dims:
-                time_compare = len(self.ds.variables['time'][self._dims[timename]]) == timedim
+                time_compare = len(self.ds.variables[timename][self._dims[timename]]) == timedim
 
             if not lon_compare:
                 raise ValueError('Longitude data are incompatible. You may be trying to load data after having already '
@@ -5003,9 +5003,9 @@ class NEMOReader(RegularReader):
                 raise ValueError('Time period is incompatible. You may be trying to load data after having already '
                                  'concatenated a RegularReader object, which is unsupported.')
 
-            if 'time' not in var_dim and 'time_counter' not in var_dim:
+            if timename not in var_dim:
                 # Should we error here or carry on having warned?
-                warn("{} does not contain a `time' or `time_counter' dimension.".format(v))
+                warn(f"{v} does not contain a `{timename}' dimension.".format(v))
 
             attributes = PassiveStore()
             for attribute in self.ds.variables[v].ncattrs():
