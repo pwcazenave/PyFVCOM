@@ -1160,10 +1160,6 @@ class Plotter(object):
             speed_r.data[self._mask_for_regular] = np.nan
 
         # Now we have some data, do the streamline plot.
-        # self.streamline_plot = self.m.streamplot(plot_x, plot_y + ((plot_y - plot_y.min()) * 0.125), ua_r, va_r, color=speed_r,
-        # self.streamline_plot = self.axes.streamplot(plot_x, plot_y, ua_r, va_r, color=speed_r,
-        #                                             cmap=self.cmap, norm=self.norm, latlon=~self.cartesian, **kwargs)
-        # For cartopy, just pass a transform.
         self.streamline_plot = self.axes.streamplot(plot_x, plot_y, ua_r, va_r, color=speed_r, cmap=self.cmap,
                                                     norm=self.norm, **self._plot_projection, **kwargs)
 
