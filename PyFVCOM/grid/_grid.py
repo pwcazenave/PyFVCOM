@@ -968,6 +968,14 @@ class Domain(object):
 
         return isintriangle(tri_x, tri_y, x, y)
 
+    def exterior(self):
+        """
+        Return a shapely Polygon of the model's exterior boundary (ignoring islands).
+
+        """
+
+        return model_exterior(self.grid.lon, self.grid.lat, self.grid.triangles)
+
     def info(self):
         """
         Print out some salient information on the currently loaded grid.
@@ -5079,6 +5087,34 @@ def subset_domain(x, y, triangles, polygon=None):
     sub_triangles = reduce_triangulation(triangles, nodes)
 
     return nodes, elements, sub_triangles
+
+
+def model_exterior(lon, lat, triangles):
+    """
+    For a given unstructured grid, return a shapely.geometry.Polygon of the exterior boundary.
+
+    Parameters
+    ----------
+    lon, lat : np.ndarray
+        The x and y coordinates for the domain. Can be spherical or cartesian.
+    triangles : np.ndarray
+        The grid triangulation table (n, 3).
+
+    Returns
+    -------
+    boundary : shapely.geometry.Polygon
+        The grid exterior boundary (interior holes are ignores).
+
+    """
+
+    # `connectivity' doesn't return the boundary nodes in the right order, so we can't use it to get the exterior
+    # boundary.
+    boundary_nodes = get_boundary_polygons(triangles)
+    polygons = [shapely.geometry.Polygon(np.asarray((lon[i], lat[i])).T) for i in boundary_nodes]
+    areas = [i.area for i in polygons]
+    boundary = polygons[areas.index(max(areas))]
+
+    return boundary
 
 
 def fvcom2ugrid(fvcom):
