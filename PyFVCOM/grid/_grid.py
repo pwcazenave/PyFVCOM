@@ -573,7 +573,7 @@ class Domain(object):
 
     def __init__(self, grid, native_coordinates, zone=None, noisy=False, debug=False, verbose=False):
         """
-        Read in a grid and parse its structure into a format similar to a PyFVCOM.read.FileReader object.
+        Read in a grid and parse its structure into a standard format which we replicate throughout PyFVCOM.
 
         Parameters
         ----------
