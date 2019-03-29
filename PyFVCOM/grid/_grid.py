@@ -4855,6 +4855,10 @@ def reduce_triangulation(tri, nodes, return_elements=False):
 
     """
 
+    # The node IDs must be sorted otherwise you can end up changing a given ID multiple times, which makes for quite
+    # the mess, I can assure you.
+    nodes = np.sort(nodes)
+
     reduced_tri = tri[np.all(np.isin(tri, nodes), axis=1), :]
 
     # Remap nodes to a new index. Use a copy of the reduced triangulation for the lookup so we avoid potentially
