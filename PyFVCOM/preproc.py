@@ -4391,6 +4391,13 @@ class RegularReader(FileReader):
 
         Convert from UTM to spherical if we haven't got those data in the existing output file.
 
+        Parameters
+        ----------
+        netcdf_filestr : str
+            The path to the netCDF file to load.
+        grid_variables : list, optional
+            If given, these are the grid variable names. If omitted, defaults to CMEMS standard names.
+
         """
         if grid_variables is None:
             grid_variables = {'lon': 'lon', 'lat': 'lat',
@@ -4782,6 +4789,13 @@ class NEMOReader(RegularReader):
         Load the grid data.
 
         Convert from UTM to spherical if we haven't got those data in the existing output file.
+
+        Parameters
+        ----------
+        netcdf_filestr : str
+            The path to the netCDF file to load.
+        grid_variables : list, optional
+            If given, these are the grid variable names. If omitted, defaults to NEMO standard names.
 
         """
         if grid_variables is None:
