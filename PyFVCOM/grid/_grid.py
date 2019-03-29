@@ -964,7 +964,7 @@ class Domain(object):
 
         """
         tri_x = self.grid.lon[element]
-        try_y = self.grid.lat[element]
+        tri_y = self.grid.lat[element]
 
         return isintriangle(tri_x, tri_y, x, y)
 
