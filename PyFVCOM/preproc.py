@@ -4430,18 +4430,19 @@ class RegularReader(FileReader):
         # Update dimensions to match those we've been given, if any. Omit time here as we shouldn't be touching that
         # dimension for any variable in use in here.
         for dim in self._dims:
-            if dim != 'time':
-                # TODO Add support for slices here.
+            if dim not in ('time', 'wesn'):
+                # TODO Add support for slices here and shapely polygons for subsetting.
                 setattr(self.dims, dim, len(self._dims[dim]))
 
         # Convert the given W/E/S/N coordinates into node and element IDs to subset.
         if self._bounding_box:
             # We need to use the original Dataset lon and lat values here as they have the right shape for the
             # subsetting.
-            self._dims['lon'] = np.argwhere((self.grid.lon > self._dims['wesn'][0]) &
-                                            (self.grid.lon < self._dims['wesn'][1]))
-            self._dims['lat'] = np.argwhere((self.grid.lat > self._dims['wesn'][2]) &
-                                            (self.grid.lat < self._dims['wesn'][3]))
+            if not isinstance(self._dims['wesn'], Polygon):
+                self._dims['lon'] = np.argwhere((self.grid.lon > self._dims['wesn'][0]) &
+                                                (self.grid.lon < self._dims['wesn'][1]))
+                self._dims['lat'] = np.argwhere((self.grid.lat > self._dims['wesn'][2]) &
+                                                (self.grid.lat < self._dims['wesn'][3]))
 
         related_variables = {'lon': ('x', 'lon'), 'lat': ('y', 'lat')}
         for spatial_dimension in 'lon', 'lat':
@@ -4835,7 +4836,7 @@ class NEMOReader(RegularReader):
         # Update dimensions to match those we've been given, if any. Omit time here as we shouldn't be touching that
         # dimension for any variable in use in here.
         for dim in self._dims:
-            if dim != 'time':
+            if dim not in ('time', 'wesn'):
                 # TODO Add support for slices here.
                 setattr(self.dims, dim, len(self._dims[dim]))
 
