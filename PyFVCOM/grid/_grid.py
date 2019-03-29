@@ -547,6 +547,28 @@ class Domain(object):
     Class to hold information for unstructured grid from a range of file types. The aim is to abstract away the file
     format into a consistent object.
 
+    Methods
+    -------
+    closest_node - find the closest node ID to the given position
+    closest_element - find the closest element ID to the given position
+    horizontal_transect_nodes - make a transect through nodes
+    horizontal_transect_elements - make a transect through elements
+    subset_domain - subset the model grid to the given region
+    calculate_areas - calculate areas of elements
+    calculate_control_area_and_volume - calculate control areas and volumes for the grid
+    calculate_element_lengths - calculate element edge lengths
+    gradient - compute the gradient of a field
+    to_nodes - move values from elements to nodes
+    to_elements - move values from nodes to elements
+    in_element - check if a position in an element
+    exterior - return the boundary of the grid
+    info - print some information about the grid
+
+    Attributes
+    ----------
+    dims - the grid dimensions (nodes, elements, number of open boundaries (if discernible) etc.
+    grid - the grid data (lon, lat, x, y, triangles, open_boundaries, etc.).
+
     """
 
     def __init__(self, grid, native_coordinates, zone=None, noisy=False, debug=False, verbose=False):
