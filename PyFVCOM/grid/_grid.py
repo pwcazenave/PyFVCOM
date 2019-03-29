@@ -846,7 +846,7 @@ class Domain(object):
                                    np.asarray((x[triangles[:, 1]], y[triangles[:, 1]])).T,
                                    np.asarray((x[triangles[:, 2]], y[triangles[:, 2]])).T)
 
-    def calculate_control_area_and_volume(self):
+    def calculate_control_area_and_volume(self, **kwargs):
         """
         This calculates the surface area of individual control volumes consisted of triangles with a common node point.
 
@@ -857,6 +857,8 @@ class Domain(object):
         self.grid.art2 : np.ndarray
             Sum area of all cells around each node.
 
+        Additional kwargs are passed to `PyFVCOM.grid.control_volumes`.
+
         Notes
         -----
 
@@ -866,7 +868,10 @@ class Domain(object):
 
         """
 
-        self.grid.art1, self.grid.art2 = control_volumes(self.grid.x, self.grid.y, self.triangles)
+        if 'return_points' in kwargs:
+            self.grid.art1, self.grid.art2, self.grid.art1_points = control_volumes(self.grid.x, self.grid.y, self.grid.triangles, **kwargs)
+        else:
+            self.grid.art1, self.grid.art2 = control_volumes(self.grid.x, self.grid.y, self.grid.triangles, **kwargs)
 
     def calculate_element_lengths(self):
         """
@@ -4202,7 +4207,7 @@ def grid_metrics(tri, noisy=False):
     return ntve, nbve, nbe, isbce, isonb
 
 
-def control_volumes(x, y, tri, node_control=True, element_control=True, noisy=False, poolsize=None):
+def control_volumes(x, y, tri, node_control=True, element_control=True, noisy=False, poolsize=None, **kwargs):
     """
     This calculates the surface area of individual control volumes consisted of triangles with a common node point.
 
@@ -4219,12 +4224,17 @@ def control_volumes(x, y, tri, node_control=True, element_control=True, noisy=Fa
     noisy : bool
         Set to True to enable verbose output.
 
+    Additional kwargs are passed to `PyFVCOM.grid.node_control_area`.
+
     Returns
     -------
-    art1 : np.ndarray
-        Area of interior control volume (for node value integration)
-    art2 : np.ndarray
-        Sum area of all cells around each node.
+    art1 : np.ndarray, optional
+        Area of interior control volume (for node value integration). Omitted if node_control is False.
+    art2 : np.ndarray, optional
+        Sum area of all cells around each node. Omitted if element_control is False.
+    art1_points : np.ndarray, optional
+        If return_points is set to True (an argument to `PyFVCOM.grid.node_control_area`), then those are returned as
+        the second or third argument (with element_control = False, with element_control = True respectively).
 
     Notes
     -----
@@ -4263,10 +4273,16 @@ def control_volumes(x, y, tri, node_control=True, element_control=True, noisy=Fa
         if not pool:
             art1 = []
             for this_node in range(m):
-                art1.append(node_control_area(this_node, x, y, xc, yc, tri))
+                art1.append(node_control_area(this_node, x, y, xc, yc, tri, **kwargs))
             art1 = np.asarray(art1)
         else:
-            art1 = pool.map(partial(node_control_area, x=x, y=y, xc=xc, yc=yc, tri=tri), range(m))
+            results = pool.map(partial(node_control_area, x=x, y=y, xc=xc, yc=yc, tri=tri, **kwargs), range(m))
+            # Unpack the results in case we've been asked for the points too.
+            if 'return_points' in kwargs:
+                art1 = np.asarray([i[0] for i in results])
+                art1_points = np.asarray([i[1] for i in results])
+            else:
+                art1 = np.asarray(results)
 
     # Compute area of control volume art2(i) = sum(all tris surrounding node i)
     if element_control:
@@ -4285,9 +4301,15 @@ def control_volumes(x, y, tri, node_control=True, element_control=True, noisy=Fa
         pool.close()
 
     if node_control and element_control:
-        return art1, art2
+        if 'return_points' in kwargs:
+            return art1, art2, art1_points
+        else:
+            return art1, art2
     elif node_control and not element_control:
-        return art1
+        if 'return_points' in kwargs:
+            return art1, art1_points
+        else:
+            return art1
     elif not node_control and element_control:
         return art2
 
