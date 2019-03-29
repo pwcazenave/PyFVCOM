@@ -4303,7 +4303,7 @@ def control_volumes(x, y, tri, node_control=True, element_control=True, noisy=Fa
                 art2.append(element_control_area(this_node, triangles=tri, art=art))
             art2 = np.asarray(art2)
         else:
-            art2 = pool.map(partial(element_control_area, triangles=tri, art=art), range(m))
+            art2 = np.asarray(pool.map(partial(element_control_area, triangles=tri, art=art), range(m)))
 
     if pool:
         pool.close()
