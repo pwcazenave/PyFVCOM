@@ -4393,7 +4393,10 @@ class RegularReader(FileReader):
 
         """
         if grid_variables is None:
-            grid_variables = {'lon':'lon', 'lat':'lat', 'x':'x', 'y':'y', 'depth':'depth', 'Longitude':'Longitude', 'Latitude':'Latitude'}
+            grid_variables = {'lon': 'lon', 'lat': 'lat',
+                              'x': 'x', 'y': 'y',
+                              'depth': 'depth',
+                              'Longitude': 'Longitude', 'Latitude': 'Latitude'}
 
         self.grid = PassiveStore()
         # Get the grid data.
