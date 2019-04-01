@@ -2619,11 +2619,12 @@ class Model(Domain):
                     atts['grid'] = 'obc_grid'
                     # Collapse the data from all the open boundaries as we've done for temperature and salinity.
                     dump = np.full((time_number, self.dims.layers, nodes_number), np.nan)
-                    for boundary in self.open_boundaries:
-                        if name == 'time':
-                            pass
-                        temp_nodes_index = np.isin(nodes, boundary.nodes)
-                        dump[..., temp_nodes_index] = getattr(boundary.data, name)
+                    for nest in self.nest:
+                        for boundary in nest.boundaries:
+                            if name == 'time':
+                                pass
+                            temp_nodes_index = np.isin(nodes, boundary.nodes)
+                            dump[..., temp_nodes_index] = getattr(boundary.data, name)
                     nest_ncfile.add_variable(name, dump, ['time', 'siglay', 'node'], attributes=atts, ncopts=ncopts)
 
     def add_obc_types(self, types):
