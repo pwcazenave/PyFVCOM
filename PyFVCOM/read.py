@@ -2698,8 +2698,9 @@ class WriteFVCOM(object):
         # self._fvcom.data. may be missing entirely (it's always present as I write this, but I think it may go away
         # in the future - assume I've done that since it's relatively cheap to do so).
 
-        # We may also have completely custom variables here with no known dimensions in self._fvcom.variable_dimension_names,
-        # in which case we'll have to guess what dimensions they have based on their .shape. This could be tricky.
+        # We may also have completely custom variables here with no known dimensions in
+        # self._fvcom.variable_dimension_names, in which case we'll have to guess what dimensions they have based on
+        # their .shape. This could be tricky.
         dim_names = set(flatten_list([self._fvcom.variable_dimension_names[i] for i in self._fvcom.variable_dimension_names]))
         dim_size = {i: getattr(self._fvcom.dims, i) for i in dim_names}
         unlikely_dims = ['three', 'four', 'maxelem', 'maxnode']
