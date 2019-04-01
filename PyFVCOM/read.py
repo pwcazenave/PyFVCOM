@@ -1090,7 +1090,8 @@ class FileReader(Domain):
         self._dims = self.grid._dims
         delattr(self.grid, '_dims')
 
-        # Make sure we set the grid dimensions correctly if we've been asked to subset in space.
+        # Make sure we set the grid dimensions correctly if we've been asked to subset in space. We do this here and
+        # in load_data because it's possible to supply no dimensions at invocation but supply them with load_data.
         for dim in ('node', 'nele', 'siglay', 'siglev', 'time'):
             if dim in self._dims:
                 setattr(self.dims, dim, len(self._dims[dim]))
