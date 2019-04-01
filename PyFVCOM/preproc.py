@@ -2633,7 +2633,7 @@ class Model(Domain):
 
         Parameters
         ----------
-        type : int, list, optional
+        types : int, list, optional
             The open boundary type. See the types listed in mod_obcs.F, lines 29 to 49, reproduced in the notes below
             for convenience. Defaults to 1 (prescribed surface elevation). If given as a list, there must be one
             value per open boundary.
