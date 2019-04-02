@@ -4738,7 +4738,7 @@ class NEMOReader(RegularReader):
     #  - A lot of the methods on FileReader will need to be reimplemented for these data (e.g. avg_volume_var). That
     #  is, anything which assumes we've got an unstructured grid.
 
-    def __init__(self, *args, unstructured=False, **kwargs):
+    def __init__(self, *args, unstructured=False, tmask=None, **kwargs):
         """
         Read a NEMO output file into a FileReader-like object.
 
@@ -4752,14 +4752,47 @@ class NEMOReader(RegularReader):
             stuff to work with FVCOM outputs and you want to do the same thing for NEMO data without having to
             rewrite the analysis. In essence, it creates a triangulation and updates add sigma data compatible with
             existing PyFVCOM functions.
+        tmask : str, pathlib.Path, optional
+            Give a path to a NEMO tmask file. This is used to mask off invalid parts of the NEMO model domain. If
+            omitted, the bottom layer in the vertical grid is set to NaN as this layer is actually in the seabed. This
+            applies to all variables except Light_ADY and e3t.
 
         """
 
         # Define the fvcomisation variable before we call super so _load_grid works.
         self._fvcomise = unstructured
 
+        # Make sure we set the tmask value for self.load_data to know it exists before we call super().
+        self.tmask = tmask
 
         super().__init__(*args, **kwargs)
+
+        # If we've been given a tmask value, use it to mask off crappy values. Really, this is pretty much essential
+        # to use NEMO outputs sensibly.
+        if self.tmask is not None:
+            with Dataset(self.tmask) as ds:
+                # tmask: 1 = ocean, 0 = land and outside ocean (i.e. below bottom z-level).
+                self.tmask = ds.variables['tmask'][:].astype(bool)
+                # Make sure we clip in space if we've been asked to.
+                if 'x' in self._dims:
+                    self.tmask = self.tmask[..., self._dims['x']]
+                if 'y' in self._dims:
+                    self.tmask = self.tmask[..., self._dims['y'], :]
+                if 'deptht' in self._dims:
+                    self.tmask = self.tmask[..., self._dims['deptht'], :, :]
+                # Make it so it fits with time-varying data.
+                self.tmask = np.tile(np.squeeze(self.tmask), [self.dims.time_counter, 1, 1, 1])
+            for var in self.data:
+                # We could use masking here, but this feels more bulletproof (I think some bits of numpy/scipy ignore
+                # masks when interpolating).
+                current_data = getattr(self.data, var)
+                current_data[~self.tmask] = np.nan
+                setattr(self.data, var, current_data)
+        else:
+            # If we don't have a tmask file, we'll try our best to minimise potential issues with crappy NEMO data.
+            # We do that by simply setting all bottom layers (bar those in e3t and lightADY) to NaN. Crude at best.
+            for var in self.data:
+                self._mask_bottom_layer(var)
 
     def __rshift__(self, other, debug=False):
         """
@@ -5211,6 +5244,9 @@ class NEMOReader(RegularReader):
             data = self.ds.variables[v][variable_indices]  # data are automatically masked
             setattr(self.data, v, data)
 
+            # Make sure the bottom layer is masked (only if we haven't been given a tmask argument during __init__).
+            self._mask_bottom_layer(v)
+
             if self._fvcomise:
                 # Ravel the last two dimensions so we have data that are unstructured. Then extract only those that
                 # cover the region we've triangulated.
@@ -5223,6 +5259,21 @@ class NEMOReader(RegularReader):
                 if hasattr(self, '_regular_to_unstructured_mask'):
                     reshaped = reshaped[..., self._regular_to_unstructured_mask]
                 setattr(self.data, v, reshaped)
+
+    def _mask_bottom_layer(self, var):
+        """
+        The ERSEM data in the NEMO files have a bottom layer which is generally all zeros. With the exception of
+        Light_ADY, which appears to have sensible values. What we'll do here is set the bottom layer to be NaN for
+        any data we've loaded.
+
+        """
+        # Skip lightADY and e3t. Also don't do this if self.tmask has been populated with a mask.
+        if var not in ('lightADY', 'e3t') and self.tmask is not None:
+            current_data = getattr(self.data, var)
+            # Only replace the bottom layer if we've got a 4D array (time, depth, lat, lon).
+            if np.ndim(current_data) == 4:
+                current_data[:, -1, :, :] = np.nan
+            setattr(self.data, var, current_data)
 
 
 class _TimeReaderReg(_TimeReader):
