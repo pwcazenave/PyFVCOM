@@ -1731,7 +1731,7 @@ class OpenBoundary(object):
                 print('Interpolating sigma data...', end=' ')
 
             nt = coarse.dims.time  # rename!
-            interp_args = [(boundary_points, x, y, self.sigma.layers, coarse, coarse_name, self._debug, t) for t in np.arange(nt)]
+            interp_args = [(boundary_points, x, y, self.sigma.layers_z, coarse, coarse_name, self._debug, t) for t in np.arange(nt)]
             if hasattr(coarse, 'ds'):
                 coarse.ds.close()
                 delattr(coarse, 'ds')
