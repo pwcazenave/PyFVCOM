@@ -25,13 +25,15 @@ from PyFVCOM.coordinate import utm_from_lonlat, lonlat_from_utm
 from PyFVCOM.grid import Domain, grid_metrics, read_fvcom_obc, nodes2elems
 from PyFVCOM.grid import OpenBoundary, find_connected_elements
 from PyFVCOM.grid import find_bad_node, element_side_lengths, reduce_triangulation
-from PyFVCOM.grid import write_fvcom_mesh, connectivity, haversine_distance
-from PyFVCOM.read import FileReader, _TimeReader
+from PyFVCOM.grid import write_fvcom_mesh, connectivity, haversine_distance, subset_domain
+from PyFVCOM.read import FileReader, _TimeReader, control_volumes
 from PyFVCOM.utilities.general import flatten_list, PassiveStore
 from PyFVCOM.utilities.time import date_range
 from dateutil.relativedelta import relativedelta
 from netCDF4 import Dataset, date2num, num2date, stringtochar
 from scipy.interpolate import RegularGridInterpolator
+from scipy.spatial import Delaunay
+from shapely.geometry import Polygon
 
 
 class Model(Domain):
@@ -4698,7 +4700,8 @@ class RegularReader(FileReader):
         if cartesian:
             raise ValueError('No cartesian coordinates defined')
         else:
-            if np.ndim(self.grid.lon) <= 1:
+            # Check we haven't already got ravelled data too.
+            if np.ndim(self.grid.lon) <= 1 and len(self.grid.lon) != len(self.grid.lat):
                 lat_rav, lon_rav = np.meshgrid(self.grid.lat, self.grid.lon)
                 x, y = lon_rav.ravel(), lat_rav.ravel()
             else:
@@ -4734,6 +4737,29 @@ class NEMOReader(RegularReader):
     # TODO:
     #  - A lot of the methods on FileReader will need to be reimplemented for these data (e.g. avg_volume_var). That
     #  is, anything which assumes we've got an unstructured grid.
+
+    def __init__(self, *args, unstructured=False, **kwargs):
+        """
+        Read a NEMO output file into a FileReader-like object.
+
+        All arguments and keyword arguments are passed to PyFVCOM.preproc.RegularReader except `unstructured',
+        which is use to toggle conversion from a regular grid to an unstructured grid.
+
+        Parameters
+        ----------
+        unstructured : bool, optional
+            If given, converts the NEMO grid into an unstructured grid. This is handy if you've written a load of
+            stuff to work with FVCOM outputs and you want to do the same thing for NEMO data without having to
+            rewrite the analysis. In essence, it creates a triangulation and updates add sigma data compatible with
+            existing PyFVCOM functions.
+
+        """
+
+        # Define the fvcomisation variable before we call super so _load_grid works.
+        self._fvcomise = unstructured
+
+
+        super().__init__(*args, **kwargs)
 
     def __rshift__(self, other, debug=False):
         """
@@ -4948,6 +4974,140 @@ class NEMOReader(RegularReader):
         self.grid.bounding_box = (np.min(self.grid.lon), np.max(self.grid.lon),
                                   np.min(self.grid.lat), np.max(self.grid.lat))
 
+        if self._fvcomise:
+            self._to_unstructured()
+
+    def _to_unstructured(self):
+        # Convert the regularly gridded data into an unstructured grid which is good enough to pass muster with most
+        # of the FVCOM tools we've written in here.
+
+        # We need to mask off the land. This makes the grid unstructured which makes the next bit a lot easier. Keep
+        # a copy of the original grid so we can mask the data we load (self._regular_to_unstructured_mask).
+        original_x, original_y = np.meshgrid(self.grid.lon, self.grid.lat)
+
+        # Make the triangulation for the entire domain and we'll drop bits as we mask land and check for a shapely
+        # polygon.
+        self.grid.triangles = Delaunay(np.asarray((original_x.ravel(), original_y.ravel())).T).vertices
+
+        # Use the data array for masking. Just use the first time step to speed things up. Find the first 4D variable
+        # to get the mask. This is suboptimal because who knows what variable we'll end up using.
+        analysis_variable = [i for i in self.ds.variables if len(self.ds.variables[i].dimensions) == 4][0]
+        self._land_mask = ~np.squeeze(self.ds.variables[analysis_variable][0].mask)
+        xx = original_x.copy()[self._land_mask]
+        yy = original_y.copy()[self._land_mask]
+        self.grid.lon = xx
+        self.grid.lat = yy
+
+        self.grid.triangles = reduce_triangulation(self.grid.triangles, np.argwhere(self._land_mask.ravel()))
+
+        # Check if we've been asked to subset with a polygon.
+        if 'wesn' in self._dims and isinstance(self._dims['wesn'], Polygon):
+            sub_nodes, sub_elems, sub_tri = subset_domain(self.grid.lon, self.grid.lat, self.grid.triangles,
+                                                          polygon=self._dims['wesn'])
+            self.grid.lon = self.grid.lon[sub_nodes]
+            self.grid.lat = self.grid.lat[sub_nodes]
+            self.grid.triangles = sub_tri
+
+        # Remove nodes which aren't in the triangulation.
+        node_ids = np.arange(len(self.grid.lon))
+        isolated_nodes = np.setdiff1d(node_ids, np.unique(self.grid.triangles))
+        connected_nodes = np.setdiff1d(node_ids, isolated_nodes)
+        for attr in ('lon', 'lat'):
+            setattr(self.grid, attr, np.delete(getattr(self.grid, attr), isolated_nodes))
+        self.grid.triangles = reduce_triangulation(self.grid.triangles, connected_nodes)
+
+        # Clean up the triangulation to remove nodes we'd flag as invalid in FVCOM for a model run (elements with two
+        # land boundaries). We do this so subsequent calls to pf.grid.get_boundary_polygons work properly (i.e. we
+        # don't get multiple polygons for the main model domain). We have to do this lots of times until we end up
+        # with no dodgy nodes.
+        still_bad = 0
+        while still_bad >= 0:
+            # Limit the search to coastline nodes to massively speed things up!
+            _, _, _, bnd = connectivity(np.asarray((self.grid.lon, self.grid.lat)).T, self.grid.triangles)
+            all_nodes = np.arange(len(self.grid.lon))
+            coast_nodes = all_nodes[bnd]
+            interior_nodes = all_nodes[~bnd]
+            args = [(self.grid.triangles, i) for i in coast_nodes]
+            pool = multiprocessing.Pool()
+            bad_nodes = np.asarray(pool.map(self._bad_node_worker, args))
+            pool.close()
+            if not np.any(bad_nodes):
+                still_bad = -1
+            else:
+                still_bad += 1
+
+            for attr in ('lon', 'lat'):
+                setattr(self.grid, attr, np.delete(getattr(self.grid, attr), coast_nodes[bad_nodes]))
+            # Remove those nodes from the triangulation too. This step is quite slow.
+            new_all_nodes = np.hstack((interior_nodes, coast_nodes[~bad_nodes]))
+            self.grid.triangles = reduce_triangulation(self.grid.triangles, np.sort(new_all_nodes))
+
+            # Check for nodes which join two elements at a single point:
+            # |\
+            # | \
+            # |__o
+            #    /\
+            #   /  \
+            #  /____\
+            bad_nodes = []
+            all_nodes = np.unique(self.grid.triangles)
+            for node in all_nodes:
+                node_in_elements = np.argwhere(np.any(np.isin(self.grid.triangles, node), axis=1))
+                if len(node_in_elements) == 2:
+                    if len(np.unique(self.grid.triangles[node_in_elements])) == 5:
+                        bad_nodes.append(node)
+            if any(bad_nodes):
+                good_nodes = np.setdiff1d(all_nodes, bad_nodes)
+                for attr in ('lon', 'lat'):
+                    setattr(self.grid, attr, np.delete(getattr(self.grid, attr), bad_nodes))
+                self.grid.triangles = reduce_triangulation(self.grid.triangles, good_nodes)
+
+            if self._noisy:
+                if still_bad > 0:
+                    print(f'Make grid FVCOM compatible (iteration {still_bad})', flush=True)
+                else:
+                    print('Grid now FVCOM compatible.', flush=True)
+
+        # Find the indices of the remaining positions in the original coordinate arrays so we can extract the same
+        # positions when loading data.
+        original_xy = np.asarray((original_x.ravel(), original_y.ravel())).T.tolist()
+        new_xy = np.asarray((self.grid.lon, self.grid.lat)).T.tolist()
+        # It feels like I should be using np.isin here, but I can't get it to work. Slow loops it is.
+        original_indices = [original_xy.index(i) for i in new_xy]
+        self._regular_to_unstructured_mask = np.full(original_x.ravel().shape, False)
+        for i in original_indices:
+            self._regular_to_unstructured_mask[i] = True
+
+        self.grid.nv = self.grid.triangles.T + 1  # for pf.plot.Plotter compatibility.
+        self.grid.x, self.grid.y, _ = utm_from_lonlat(self.grid.lon, self.grid.lat, zone=self._zone)
+        self.grid.lonc = nodes2elems(self.grid.lon, self.grid.triangles)
+        self.grid.latc = nodes2elems(self.grid.lat, self.grid.triangles)
+        self.grid.xc = nodes2elems(self.grid.x, self.grid.triangles)
+        self.grid.yc = nodes2elems(self.grid.y, self.grid.triangles)
+
+        # Now we've got an unstructured grid, compute the FVCOM-specific variables.
+        self.grid.art1, self.grid.art1_points = control_volumes(self.grid.x, self.grid.y, self.grid.triangles,
+                                                                element_control=False, return_points=True)
+
+        # Fix dimensions.
+        self.dims.node = len(self.grid.lon)
+        self.dims.nele = len(self.grid.latc)
+
+        # Make some fake sigma data.
+        inc = 1 / self.dims.deptht
+        self.grid.siglev = np.tile(np.arange(0, 1 + inc, inc), (self.dims.time, self.dims.node, 1)).transpose(0, 2, 1)
+        self.grid.siglay = np.diff(self.grid.siglev, axis=1)
+
+        # If we've loaded data up front, we need to remove the values outside the triangulation.
+        for var in self.data:
+            _tmp = getattr(self.data, var)
+            if _tmp.shape[-1] != self.dims.node:
+                setattr(self.data, var, _tmp[..., self._regular_to_unstructured_mask])
+
+    @staticmethod
+    def _bad_node_worker(args):
+        return find_bad_node(*args)
+
     def load_data(self, var):
         """
         Load the given variable/variables.
@@ -5050,6 +5210,19 @@ class NEMOReader(RegularReader):
 
             data = self.ds.variables[v][variable_indices]  # data are automatically masked
             setattr(self.data, v, data)
+
+            if self._fvcomise:
+                # Ravel the last two dimensions so we have data that are unstructured. Then extract only those that
+                # cover the region we've triangulated.
+                current_shape = getattr(self.data, v).shape
+                new_shape = list(current_shape)[:-2]  # everything up to the horizontal space dimensions
+                new_shape.append(int(np.prod(current_shape[-2:])))
+                reshaped = getattr(self.data, v).reshape(new_shape)
+                # Extract only those positions which we ended up with in our final unstructured grid if we're being
+                # called separately (otherwise this happens in __init__).
+                if hasattr(self, '_regular_to_unstructured_mask'):
+                    reshaped = reshaped[..., self._regular_to_unstructured_mask]
+                setattr(self.data, v, reshaped)
 
 
 class _TimeReaderReg(_TimeReader):
