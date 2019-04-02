@@ -2233,7 +2233,7 @@ class Model(Domain):
 
                     # Now add the netCDF point to that boundary.
                     self.nest[nest_index].boundaries[boundary_index].nodes += [nc_nodes[point]]
-                    for var in ('x', 'y'):
+                    for var in ('x', 'y', 'h'):
                         current_value = getattr(self.nest[nest_index].boundaries[boundary_index].grid, var)
                         current_value = np.hstack((current_value, ds.variables[var][point]))
                         setattr(self.nest[nest_index].boundaries[boundary_index].grid, var, current_value)
@@ -2253,6 +2253,20 @@ class Model(Domain):
                     self.nest[nest_index].boundaries[boundary_index].triangles = triangles
                     # Also redo the elements for the current nest.
                     self.nest[nest_index].boundaries[boundary_index].elements = np.unique(triangles.ravel())
+
+            for nest in self.nest:
+                for boundary in nest.boundaries:
+                    # Remake the depth-resolve sigma information based on the filtered data we've got.
+                    boundary.sigma.layers_z = boundary.grid.h[:, np.newaxis] * boundary.sigma.layers
+                    boundary.sigma.levels_z = boundary.grid.h[:, np.newaxis] * boundary.sigma.levels
+                    try:
+                        boundary.sigma.layers_center_z = boundary.grid.h_center[:, np.newaxis] * boundary.sigma.layers_center
+                    except AttributeError:
+                        pass
+                    try:
+                        boundary.sigma.levels_center_z = boundary.grid.h_center[:, np.newaxis] * boundary.sigma.levels_center
+                    except AttributeError:
+                        pass
 
             # Fix the order of the positions in the data from the netCDF file to match those in the boundaries.
             nest_nodes = flatten_list([boundary.nodes for nest in self.nest for boundary in nest.boundaries])
