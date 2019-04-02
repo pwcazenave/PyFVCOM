@@ -14,6 +14,6 @@ setup(
     keywords=['fvcom', 'unstructured grid', 'mesh'],
     license='MIT',
     platforms='any',
-    install_requires=['jdcal', 'lxml', 'matplotlib', 'netCDF4', 'networkx', 'numpy>=1.13.0', 'pandas', 'pyproj', 'pytz', 'scipy', 'pyshp', 'UTide', 'shapely'],
+    install_requires=['jdcal', 'lxml', 'matplotlib', 'netCDF4', 'networkx', 'numpy>=1.13.0', 'pandas', 'pyproj', 'pytz', 'scipy', 'pyshp', 'UTide', 'shapely', 'descartes'],
     classifiers=[]
 )
