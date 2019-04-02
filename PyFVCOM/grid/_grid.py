@@ -1774,9 +1774,11 @@ class OpenBoundary(object):
         """
         Interpolate a given time of coarse data into the current open boundary node positions and times.
 
-        The name stems from the fact we simply iterate through all the points in the current boundary rather than
-        using LinearNDInterpolator. This is because the creation of a LinearNDInterpolator for a 4D set of points is
-        hugely expensive (even compared with this brute force approach).
+        The name stems from the fact we simply iterate through all the points (horizontal and vertical) in the
+        current boundary rather than using LinearNDInterpolator. This is because the creation of a
+        LinearNDInterpolator object for a 4D set of points is hugely expensive (even compared with this brute force
+        approach). Plus, this is easy to parallelise. It may be more sensible for use RegularGridInterpolators for
+        each position in a loop since the vertical and time are regularly spaced.
 
         Parameters
         ----------
@@ -1785,10 +1787,10 @@ class OpenBoundary(object):
             boundary_points : np.ndarray
                 The open boundary point indices (self.nodes or self.elements).
             x : np.ndarray
-                The source data x positions.
+                The source data x positions (spherical coordinates).
             y : np.ndarray
-                The source data y positions.
-            sigma_layers_z : np.ndarray
+                The source data y positions (spherical coordinates).
+            fvcom_layer_depth : np.ndarray
                 The vertical grid layer depths in metres (nx, nz) or (nx, nz, time).
             coarse : PyFVCOM.preproc.RegularReader
                 The coarse data from which we're interpolating.
@@ -1797,11 +1799,11 @@ class OpenBoundary(object):
             verbose : bool
                 True for verbose output, False for none. Only really useful in serial.
             t : int
-                The time index of the current interpolation.
+                The time index for the coarse data.
 
         Returns
         -------
-        The interpolated boundary data at `x', `y', `sigma_layers_z' for coarse.data.coarse_name at time index `t'.
+        The interpolated boundary data at `x', `y', `fvcom_layer_depth' for coarse.data.coarse_name at time index `t'.
 
         """
 
