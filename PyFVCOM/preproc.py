@@ -4401,10 +4401,14 @@ class RegularReader(FileReader):
 
         """
         if grid_variables is None:
-            grid_variables = {'lon': 'lon', 'lat': 'lat',
-                              'x': 'x', 'y': 'y',
-                              'depth': 'depth',
-                              'Longitude': 'Longitude', 'Latitude': 'Latitude'}
+            if 'longitude' in self.ds.variables:
+                grid_variables = {'lon': 'longitude', 'lat': 'latitude', 'x': 'x', 'y': 'y',
+                                  'depth': 'depth', 'Longitude': 'Longitude', 'Latitude': 'Latitude'}
+                self.dims.lon = self.dims.longitude
+                self.dims.lat = self.dims.latitude
+            else:
+                grid_variables = {'lon': 'lon', 'lat': 'lat', 'x': 'x', 'y': 'y',
+                                  'depth': 'depth', 'Longitude': 'Longitude', 'Latitude': 'Latitude'}
 
         self.grid = PassiveStore()
         # Get the grid data.
@@ -4549,7 +4553,11 @@ class RegularReader(FileReader):
                     variable_indices[variable_index] = self._dims[dimension]
 
             # Check the data we're loading is the same shape as our existing dimensions.
-            if hasattr(self.dims, 'lon'):
+            if hasattr(self.dims, 'longitude'):
+                xname = 'longitude'
+                xvar = 'lon'
+                xdim = self.dims.lon
+            elif hasattr(self.dims, 'lon'):
                 xname = 'lon'
                 xvar = 'lon'
                 xdim = self.dims.lon
@@ -4560,7 +4568,11 @@ class RegularReader(FileReader):
             else:
                 raise AttributeError('Unrecognised longitude dimension name')
 
-            if hasattr(self.dims, 'lat'):
+            if hasattr(self.dims, 'latitude'):
+                yname = 'latitude'
+                yvar = 'lat'
+                ydim = self.dims.lat
+            elif hasattr(self.dims, 'lat'):
                 yname = 'lat'
                 yvar = 'lat'
                 ydim = self.dims.lat
