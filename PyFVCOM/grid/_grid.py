@@ -15,6 +15,7 @@ import os
 import sys
 from collections import defaultdict, deque
 from functools import partial
+from pathlib import Path
 from warnings import warn
 
 import matplotlib.path as mpath
