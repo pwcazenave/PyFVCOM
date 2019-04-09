@@ -1261,6 +1261,11 @@ class FileReader(Domain):
                                            depth_integrated=True)
         self.grid.depth_volume, self.grid.depth_integrated_volume = volumes
 
+        if 'siglay' in self._dims and 'siglev' not in self._dims:
+            # Return only the relevant sigma layers here (only do so if siglev hasn't been subset otherwise we'll end
+            # up in a right pickle with the shape of things).
+            self.grid.depth_volume = self.grid.depth_volume[:, self._dims['siglay'], :]
+
     def _get_cv_volumes(self, poolsize=None):
         """
         Calculate the control area volumes in the model domain.
