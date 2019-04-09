@@ -652,7 +652,7 @@ class WCODB(ValidationDB):
         # Insert information into the error flags table
         self._add_sql_strings()
         for this_table, this_str in self.wco_tables.items():
-            self.create_table(this_key, this_val)
+            self.create_table(this_table, this_str)
         sites_data = [(0, 'L4', -4.217, 50.250, ' '), (1, 'E1', -4.368, 50.035, ' ')]
         self.insert_into_table('sites', sites_data)
         measurement_type_data = [(0, 'CTD measurements'), (1, 'Surface buoy measurements')]
