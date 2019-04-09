@@ -8,6 +8,7 @@ from __future__ import division
 
 import numpy as np
 from scipy import stats, polyfit, polyval
+from PyFVCOM.utilities.general import fix_range
 
 
 def calculate_regression(x, y, type='lin'):
@@ -79,9 +80,9 @@ def calculate_polyfit(x, y):
     minX = min(x)
     minY = min(y)
     if minX < 2e-7:
-        x, xFactor, xFactorFix = fixRange(x)
+        x, xFactor, xFactorFix = fix_range(x)
     if minY < 2e-7:
-        y, yFactor, yFactorFix = fixRange(y)
+        y, yFactor, yFactorFix = fix_range(y)
 
     (ar, br) = polyfit(x, y, 1)
     yf = polyval([ar, br], x)
