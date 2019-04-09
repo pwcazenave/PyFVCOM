@@ -587,6 +587,7 @@ class Domain(object):
                 - FVCOM .dat
                 - GMSH .gmsh
                 - DHI MIKE21 .m21fm
+                - FVCOM output file .nc
         native_coordinates : str
             Defined the coordinate system used in the grid ('spherical' or 'cartesian'). Defaults to `spherical'.
         zone : str, optional
@@ -603,7 +604,12 @@ class Domain(object):
         self._noisy = noisy or verbose
 
         # Add some extra bits for the grid information.
-        self.grid = _GridReader(grid, native_coordinates, zone)
+        if Path(grid).suffix == '.nc':
+            self.grid = GridReaderNetCDF(grid, zone=zone, verbose=verbose)
+            # Add the open boundary list since we can't discern that from a netCDF file alone.
+            self.grid.open_boundary_nodes = []
+        else:
+            self.grid = _GridReader(grid, native_coordinates, zone, verbose=verbose)
         self.dims = _MakeDimensions(self.grid)
 
         # Set two dimensions: number of open boundaries (obc) and number of open boundary nodes (open_boundary_nodes).
