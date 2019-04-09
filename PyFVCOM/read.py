@@ -1520,6 +1520,143 @@ class FileReader(Domain):
 
         river_nc.close()
 
+    def to_excel(self, name, variables=None):
+        """
+        Export data to an Excel file called `name'. Optionally specify which variables to save with
+        `variables=['var1', 'var2']`.
+
+        If we have loaded multiple data sets, each is saved in a separate sheet. Each sheet is called the variable
+        name.
+
+        If we have multiple layers, each sheet is appended with the corresponding layer number.
+
+        If we have multiple times, each column is appended "time=#" and a new sheet with the model times is
+        created.
+
+        Parameters
+        ----------
+        name : str
+            The Excel file name to which we save our data.
+        variables : list, optional
+            If given, only export the variables in the given list. If omitted, all variables are exported.
+
+        """
+
+        if variables is None:
+            variables = list(self.data)
+
+        with pd.ExcelWriter(name, datetime_format='YYYY/MM/DD hh:mm:ss.000', engine='xlsxwriter') as writer:
+            # If we have more than one time, make a sheet of just the time data.
+            if self.dims.time > 1:
+                df = pd.DataFrame(self.time.datetime, columns=['time (UTC)'])
+                df.to_excel(writer, 'time', index=False)
+                self._fix_column_widths(writer, df, 'time')
+
+            # Make sure we output the node control areas so we can account for the unstructured grid (e.g. for
+            # summing some variable over the grid).
+            df = pd.DataFrame(np.column_stack((self.grid.lon, self.grid.lat, self.grid.art1)),
+                              columns=['lon', 'lat', 'grid_area (m^2)'])
+            df.to_excel(writer, 'area', index=False)
+            self._fix_column_widths(writer, df, 'area')
+
+            # Also output the water column volume for the currently loaded sigma data (this excludes the time varying
+            # component).
+            if not hasattr(self.grid, 'depth_volume'):
+                self.grid_volume()
+            # Check if all the volume values in time are the same and if so, just use the first one. This is because
+            # self.grid_volume() always returns an array with an appropriate number of time steps.
+            if np.all(np.ptp(self.grid.depth_volume, axis=0) == 0):
+                self.grid.depth_volume = np.squeeze(self.grid.depth_volume[0])
+            self.grid.depth_volume = np.squeeze(self.grid.depth_volume)
+
+            if 'siglay' in self._dims:
+                layer_names = []
+                # Sort the layer indices since the data in the arrays will be surface to seabed and we need to make
+                # sure our layer labels are in that order too. This works for both negative and positive layer
+                # indices. Layer indices are 1-based (for ease of understanding).
+                for layer in sorted(self._dims['siglay']):
+                    if layer < 0:
+                        layer_names.append(f"layer {self.ds.dimensions['siglay'].size + layer + 1}")
+                    else:
+                        layer_names.append(f"layer {layer + 1}")
+            else:
+                # We have all layers, so just iterate over them all (use 1-based indexing).
+                layer_names = [f'layer {layer + 1}' for layer in range(self.dims.siglay)]
+
+            if self.dims.time > 1:
+                volume_names = ['lon', 'lat'] + [f'{i} volume (m^3)' for i in layer_names]
+            else:
+                volume_names = ['lon', 'lat', 'layer volume (m^3)']
+            df = pd.DataFrame(np.column_stack((self.grid.lon, self.grid.lat, self.grid.depth_volume.T)),
+                              columns=volume_names)
+            df.to_excel(writer, 'volume', index=False)
+            self._fix_column_widths(writer, df, 'volume')
+
+            for var in variables:
+                units = ''
+                if hasattr(self.atts, var):
+                    units = getattr(self.atts, var).units
+                data = getattr(self.data, var)
+
+                # Check if we have to stack in time, and if so, make appropriate column headers. Use the shape of the
+                # array rather than self.dims.time in case we've done some preprocessing before writing to disk (e.g.
+                # finding the maximum in time).
+                var_header = f'{var} ({units})'
+                if np.ndim(getattr(self.data, var)) > 2 and np.shape(getattr(self.data, var))[0] > 1:
+                    time_names = [f'{var_header} time={i + 1}' for i in range(getattr(self.data, var).shape[0])]
+                    columns = ['lon', 'lat'] + time_names
+                else:
+                    columns = ['lon', 'lat', var_header]
+
+                if 'nele' in self.variable_dimension_names[var]:
+                    lon, lat = self.grid.lonc, self.grid.latc
+                else:
+                    lon, lat = self.grid.lon, self.grid.lat
+
+                # Do we have multiple vertical levels? If so, pull out each layer separately and then write each one
+                # to a new sheet.
+                if self.dims.siglay in data.shape:
+                    num_layers = self.dims.siglay
+                    for layer, name in zip(range(num_layers), layer_names):
+                        sheet_name = f'{var} {name}'
+                        df = pd.DataFrame(np.column_stack((lon, lat, np.squeeze(data[..., layer, :]).T)),
+                                          columns=columns)
+                        df.to_excel(writer, sheet_name, index=False)
+                        self._fix_column_widths(writer, df, sheet_name)
+                else:
+                    df = pd.DataFrame(np.column_stack((lon, lat, np.squeeze(getattr(self.data, var)).T)),
+                                      columns=columns)
+                    df.to_excel(writer, var, index=False)
+                    self._fix_column_widths(writer, df, sheet_name)
+
+            writer.save()
+
+    @staticmethod
+    def _fix_column_widths(writer, df, sheet_name):
+        """
+        Find an appropriate width for each column for a given sheet.
+
+        Parameters
+        ----------
+        writer : pandas.ExcelWriter
+            The object which holds the handle to the Excel spreadsheet file.
+        df : pandas.DataFrame
+            The data frame of the data we're writing to disk.
+        sheet_name : str
+            The name of the current sheet.
+
+        Notes
+        -----
+        Lifted more or less verbatim from https://stackoverflow.com/a/40535454.
+
+        """
+
+        for idx, col in enumerate(df.columns):
+            series = df[col]
+            # Maximum of the length of the longest item or column name/header plus some padding.
+            max_len = max((series.astype(str).map(len).max(), len(str(series.name)))) + 2
+            writer.sheets[sheet_name].set_column(idx, idx, max_len)
+
 
 def read_nesting_nodes(fvcom, nestpath):
     """
