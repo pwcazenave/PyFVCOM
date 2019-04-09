@@ -5703,6 +5703,15 @@ class Restart(FileReader):
                         print('existing data')
                     ds[name][:] = self.ds[name][:]
 
+            if hasattr(self, 'add_vars'):
+                for name, meta_dict in self.add_vars.items():
+                    x = ds.createVariable(name, meta_dict['datatype'], meta_dict['dimensions'])
+                    # Copy variable attributes all at once via dictionary
+                    ds[name].setncatts(meta_dict['attributes'])
+                    if self._noisy:
+                        print('Writing {}'.format(name), end=' ')
+                    ds[name][:] = getattr(self.data, name)
+
     def read_regular(self, *args, **kwargs):
         """
         Read regularly gridded model data and provides a RegularReader object which mimics a FileReader object.
