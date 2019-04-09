@@ -103,6 +103,7 @@
 	- Add a NEMO restart class to make restart files for FVCOM from NEMO data.
 
 - PyFVCOM.read
+	- Add new method to export data from a FileReader object to an Excel spreadsheet.
 	- Fix removal of dodgy times from the file being read in (FileReader).
 	- Force times read in from an FVCOM averaged file to be at the midpoint of the time interval instead of the end.
 	- Add methods to add, subtract, multiply, divide and raise to a power FileReader objects (or rather, the data that
