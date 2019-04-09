@@ -547,11 +547,33 @@ class Domain(object):
     Class to hold information for unstructured grid from a range of file types. The aim is to abstract away the file
     format into a consistent object.
 
+    Methods
+    -------
+    closest_node - find the closest node ID to the given position
+    closest_element - find the closest element ID to the given position
+    horizontal_transect_nodes - make a transect through nodes
+    horizontal_transect_elements - make a transect through elements
+    subset_domain - subset the model grid to the given region
+    calculate_areas - calculate areas of elements
+    calculate_control_area_and_volume - calculate control areas and volumes for the grid
+    calculate_element_lengths - calculate element edge lengths
+    gradient - compute the gradient of a field
+    to_nodes - move values from elements to nodes
+    to_elements - move values from nodes to elements
+    in_element - check if a position in an element
+    exterior - return the boundary of the grid
+    info - print some information about the grid
+
+    Attributes
+    ----------
+    dims - the grid dimensions (nodes, elements, number of open boundaries (if discernible) etc.
+    grid - the grid data (lon, lat, x, y, triangles, open_boundaries, etc.).
+
     """
 
     def __init__(self, grid, native_coordinates, zone=None, noisy=False, debug=False, verbose=False):
         """
-        Read in a grid and parse its structure into a format similar to a PyFVCOM.read.FileReader object.
+        Read in a grid and parse its structure into a standard format which we replicate throughout PyFVCOM.
 
         Parameters
         ----------
@@ -824,7 +846,7 @@ class Domain(object):
                                    np.asarray((x[triangles[:, 1]], y[triangles[:, 1]])).T,
                                    np.asarray((x[triangles[:, 2]], y[triangles[:, 2]])).T)
 
-    def calculate_control_area_and_volume(self):
+    def calculate_control_area_and_volume(self, **kwargs):
         """
         This calculates the surface area of individual control volumes consisted of triangles with a common node point.
 
@@ -835,6 +857,8 @@ class Domain(object):
         self.grid.art2 : np.ndarray
             Sum area of all cells around each node.
 
+        Additional kwargs are passed to `PyFVCOM.grid.control_volumes`.
+
         Notes
         -----
 
@@ -844,7 +868,10 @@ class Domain(object):
 
         """
 
-        self.grid.art1, self.grid.art2 = control_volumes(self.grid.x, self.grid.y, self.triangles)
+        if 'return_points' in kwargs:
+            self.grid.art1, self.grid.art2, self.grid.art1_points = control_volumes(self.grid.x, self.grid.y, self.grid.triangles, **kwargs)
+        else:
+            self.grid.art1, self.grid.art2 = control_volumes(self.grid.x, self.grid.y, self.grid.triangles, **kwargs)
 
     def calculate_element_lengths(self):
         """
@@ -937,9 +964,17 @@ class Domain(object):
 
         """
         tri_x = self.grid.lon[element]
-        try_y = self.grid.lat[element]
+        tri_y = self.grid.lat[element]
 
         return isintriangle(tri_x, tri_y, x, y)
+
+    def exterior(self):
+        """
+        Return a shapely Polygon of the model's exterior boundary (ignoring islands).
+
+        """
+
+        return model_exterior(self.grid.lon, self.grid.lat, self.grid.triangles)
 
     def info(self):
         """
@@ -1696,7 +1731,7 @@ class OpenBoundary(object):
                 print('Interpolating sigma data...', end=' ')
 
             nt = coarse.dims.time  # rename!
-            interp_args = [(boundary_points, x, y, self.sigma.layers, coarse, coarse_name, self._debug, t) for t in np.arange(nt)]
+            interp_args = [(boundary_points, x, y, self.sigma.layers_z, coarse, coarse_name, self._debug, t) for t in np.arange(nt)]
             if hasattr(coarse, 'ds'):
                 coarse.ds.close()
                 delattr(coarse, 'ds')
@@ -1709,7 +1744,7 @@ class OpenBoundary(object):
             pool.close()
 
             # Reshape and transpose to be the correct size for writing to netCDF (time, depth, node).
-            interpolated_coarse_data = np.asarray(results).reshape(nx, nz, -1).transpose(2, 1, 0)
+            interpolated_coarse_data = np.asarray(results).reshape(nz, nx, -1).transpose(2, 0, 1)
         else:
             if verbose:
                 print('Interpolating z-level data...', end=' ')
@@ -1739,9 +1774,11 @@ class OpenBoundary(object):
         """
         Interpolate a given time of coarse data into the current open boundary node positions and times.
 
-        The name stems from the fact we simply iterate through all the points in the current boundary rather than
-        using LinearNDInterpolator. This is because the creation of a LinearNDInterpolator for a 4D set of points is
-        hugely expensive (even compared with this brute force approach).
+        The name stems from the fact we simply iterate through all the points (horizontal and vertical) in the
+        current boundary rather than using LinearNDInterpolator. This is because the creation of a
+        LinearNDInterpolator object for a 4D set of points is hugely expensive (even compared with this brute force
+        approach). Plus, this is easy to parallelise. It may be more sensible for use RegularGridInterpolators for
+        each position in a loop since the vertical and time are regularly spaced.
 
         Parameters
         ----------
@@ -1750,10 +1787,10 @@ class OpenBoundary(object):
             boundary_points : np.ndarray
                 The open boundary point indices (self.nodes or self.elements).
             x : np.ndarray
-                The source data x positions.
+                The source data x positions (spherical coordinates).
             y : np.ndarray
-                The source data y positions.
-            sigma_layers_z : np.ndarray
+                The source data y positions (spherical coordinates).
+            fvcom_layer_depth : np.ndarray
                 The vertical grid layer depths in metres (nx, nz) or (nx, nz, time).
             coarse : PyFVCOM.preproc.RegularReader
                 The coarse data from which we're interpolating.
@@ -1762,94 +1799,104 @@ class OpenBoundary(object):
             verbose : bool
                 True for verbose output, False for none. Only really useful in serial.
             t : int
-                The time index of the current interpolation.
+                The time index for the coarse data.
 
         Returns
         -------
-        The interpolated boundary data at `x', `y', `sigma_layers_z' for coarse.data.coarse_name at time index `t'.
+        The interpolated boundary data at `x', `y', `fvcom_layer_depth' for coarse.data.coarse_name at time index `t'.
 
         """
 
-        # MATLAB interp_coarse_to_obc.m reimplementation in Python with some tweaks. Hence the horrible variable
-        # names.
+        # MATLAB interp_coarse_to_obc.m reimplementation in Python with some tweaks. The only difference is I renamed
+        # the variables as the MATLAB ones were horrible.
         #
-        # This is twice as slow as the MATLAB version and I'm not quite sure why since we end up running it in parallel
-        # (in time instead of space). Annoyingly, it gets slower the more variables you interpolate (i.e. each
-        # successive variable being interpolated increases the time it takes to interpolate). This is probably a memory
-        # overhead from using multiprocessing.Pool.map().
-        boundary_points, x, y, sigma_layers_z, coarse, coarse_name, verbose, t = args
+        # This gets slower the more variables you interpolate (i.e. each successive variable being interpolated
+        # increases the time it takes to interpolate). This is probably a memory overhead from using
+        # multiprocessing.Pool.map().
+        boundary_points, x, y, fvcom_layer_depth, coarse, coarse_name, verbose, t = args
 
-        fz = sigma_layers_z.shape[-1]
+        num_fvcom_z = fvcom_layer_depth.shape[-1]
+        num_fvcom_points = len(boundary_points)
 
-        nf = len(boundary_points)
-        nz = coarse.grid.siglay_z.shape[0]  # rename!
+        num_coarse_z = coarse.grid.siglay_z.shape[0]  # rename!
 
         if verbose:
             print(f'Interpolating time {t} of {coarse.dims.time}')
-        # This can just be replaced by a reshape as we only load what we need up front. Check these are
-        # equivalent, though.
-        pctemp3 = np.squeeze(getattr(coarse.data, coarse_name)[t, ...]).reshape(nz, -1).T
+        # Get this time's data from the coarse model.
+        coarse_data_volume = np.squeeze(getattr(coarse.data, coarse_name)[t, ...]).reshape(num_coarse_z, -1).T
 
-        itempz = np.full((nf, nz), np.nan)
-        idepthz = np.full((nf, nz), np.nan)
+        interp_fvcom_data = np.full((num_fvcom_points, num_coarse_z), np.nan)
+        interp_fvcom_depth = np.full((num_fvcom_points, num_coarse_z), np.nan)
         if np.ndim(coarse.grid.siglay_z) == 4:
-            nemo_depth = np.squeeze(coarse.grid.siglay_z[..., t].reshape((nz, -1))).T
+            coarse_layer_depth = np.squeeze(coarse.grid.siglay_z[..., t].reshape((num_coarse_z, -1))).T
         else:
-            nemo_depth = np.squeeze(coarse.grid.siglay_z.reshape((nz, -1))).T
+            coarse_layer_depth = np.squeeze(coarse.grid.siglay_z.reshape((num_coarse_z, -1))).T
 
-        # Go through each vertical level, interpolate the coarse model depth and data to each position in the current
-        # open boundary. Make sure we remove all NaNs.
-        for j in np.arange(nz):
+        # Go through each coarse model vertical level, interpolate the coarse model depth and data to each position
+        # in the current open boundary. Make sure we remove all NaNs.
+        for z_index in np.arange(num_coarse_z):
             if verbose:
-                print(f'Interpolating layer {j} of {nz}')
-            tpctemp2 = pctemp3[:, j]
-            tpcdepth2 = nemo_depth[:, j]
+                print(f'Interpolating layer {z_index} of {num_coarse_z}')
+            coarse_data_layer = coarse_data_volume[:, z_index]
+            coarse_depth_layer = coarse_layer_depth[:, z_index]
 
-            tlon, tlat = np.meshgrid(coarse.grid.lon, coarse.grid.lat)
-            tlon, tlat = tlon.ravel(), tlat.ravel()
+            coarse_lon, coarse_lat = np.meshgrid(coarse.grid.lon, coarse.grid.lat)
+            coarse_lon, coarse_lat = coarse_lon.ravel(), coarse_lat.ravel()
 
-            interpolator = LinearNDInterpolator((tlon, tlat), tpctemp2)
-            itempobc = interpolator((x, y))
+            interpolator = LinearNDInterpolator((coarse_lon, coarse_lat), coarse_data_layer)
+            interp_fvcom_data_layer = interpolator((x, y))
             # Update values in the triangulation so we don't have to remake it (which can be expensive).
-            interpolator.values = tpcdepth2[:, np.newaxis].astype(np.float64)
-            idepthobc = interpolator((x, y))
+            interpolator.values = coarse_depth_layer[:, np.newaxis].astype(np.float64)
+            interp_fvcom_depth_layer = interpolator((x, y))
 
-            if np.any(np.isnan(itempobc)) or np.any(np.isnan(idepthobc)):
-                ibad = np.argwhere(np.isnan(itempobc))
-                for bb in ibad:
-                    warn(f'FVCOM boundary node at {x[bb]}, {y[bb]} returns NaN after interpolation. Using inverse distance interpolation.')
-                    w = 1 / np.hypot(tlon - x[bb], tlat - y[bb])
-                    w = w / w.max()
-                    itempobc[bb] = (tpctemp2 * w).sum() / w.sum()
-                    idepthobc[bb] = (tpcdepth2 * w).sum() / w.sum()
+            if np.any(np.isnan(interp_fvcom_data_layer)) or np.any(np.isnan(interp_fvcom_depth_layer)):
+                bad_indices = np.argwhere(np.isnan(interp_fvcom_data_layer))
+                for bad_index in bad_indices:
+                    warn(f'FVCOM boundary node at x, y, z: {x[bad_index]}, {y[bad_index]}, '
+                         f'{interp_fvcom_depth_layer[bad_index]} returns NaN after interpolation. Using inverse '
+                         f'distance interpolation.')
+                    weight = 1 / np.hypot(coarse_lon - x[bad_index], coarse_lat - y[bad_index])
+                    weight = weight / weight.max()
+                    interp_fvcom_data_layer[bad_index] = (coarse_data_layer * weight).sum() / weight.sum()
+                    interp_fvcom_depth_layer[bad_index] = (coarse_depth_layer * weight).sum() / weight.sum()
 
-            itempz[:, j] = itempobc
-            idepthz[:, j] = idepthobc
+            interp_fvcom_data[:, z_index] = interp_fvcom_data_layer
+            interp_fvcom_depth[:, z_index] = interp_fvcom_depth_layer
 
         # Now for each point in the current open boundary points (x, y), interpolate the interpolated (in the
-        # horizontal) model data onto the FVCOM vertical grid.
-        fvtempz = np.full((nf, fz), np.nan)
-        for pp in np.arange(nf):
+        # horizontal) coarse model data onto the FVCOM vertical grid.
+        interp_fvcom_boundary = np.full((num_fvcom_points, num_fvcom_z), np.nan)
+        for p_index in np.arange(num_fvcom_points):
             if verbose:
-                print(f'Interpolating point {pp} of {nf}')
-            tfz = sigma_layers_z[pp, :]
-            tpz = idepthz[pp, :]
+                print(f'Interpolating point {p_index} of {num_fvcom_points}')
+            fvcom_point_depths = fvcom_layer_depth[p_index, :]
+            coarse_point_depths = interp_fvcom_depth[p_index, :]
 
-            norm_tpz = fix_range(tpz, tfz.min(), tfz.max())
+            # Drop the NaN values from the coarse depths and data (where we're at the bottom of the water column).
+            nan_depth = np.isnan(coarse_point_depths)
+            coarse_point_depths = coarse_point_depths[~nan_depth]
+            interp_vertical_profile = interp_fvcom_data[p_index, ~nan_depth]
 
-            if not np.any(np.isnan(tpz)):
-                fvtempz[pp, :] = np.interp(tfz, norm_tpz, itempz[pp, :])
+            # Squeeze the coarse model water column into the FVCOM one.
+            norm_coarse_point_depths = fix_range(coarse_point_depths,
+                                                 fvcom_point_depths.min(),
+                                                 fvcom_point_depths.max())
+
+            if not np.any(np.isnan(coarse_point_depths)):
+                interp_fvcom_boundary[p_index, :] = np.interp(fvcom_point_depths,
+                                                              norm_coarse_point_depths,
+                                                              interp_vertical_profile)
 
         # Make sure we remove any NaNs from the vertical profiles by replacing with the interpolated data from the
         # non-NaN data in the vicinity.
-        for pp in np.arange(fz):
-            test = fvtempz[:, pp]
-            if np.any(np.isnan(test)):
-                igood = ~np.isnan(test)
-                ft = LinearNDInterpolator((x[igood], y[igood]), test[igood])
-                fvtempz[:, pp] = ft((x, y))
+        for p_index in np.arange(num_fvcom_z):
+            horizontal_slice = interp_fvcom_boundary[:, p_index]
+            if np.any(np.isnan(horizontal_slice)):
+                good_indices = ~np.isnan(horizontal_slice)
+                interpolator = LinearNDInterpolator((x[good_indices], y[good_indices]), horizontal_slice[good_indices])
+                interp_fvcom_boundary[:, p_index] = interpolator((x, y))
 
-        return fvtempz
+        return interp_fvcom_boundary
 
     @staticmethod
     def _interpolate_in_time(args):
@@ -4180,7 +4227,7 @@ def grid_metrics(tri, noisy=False):
     return ntve, nbve, nbe, isbce, isonb
 
 
-def control_volumes(x, y, tri, node_control=True, element_control=True, noisy=False, poolsize=None):
+def control_volumes(x, y, tri, node_control=True, element_control=True, noisy=False, poolsize=None, **kwargs):
     """
     This calculates the surface area of individual control volumes consisted of triangles with a common node point.
 
@@ -4197,12 +4244,17 @@ def control_volumes(x, y, tri, node_control=True, element_control=True, noisy=Fa
     noisy : bool
         Set to True to enable verbose output.
 
+    Additional kwargs are passed to `PyFVCOM.grid.node_control_area`.
+
     Returns
     -------
-    art1 : np.ndarray
-        Area of interior control volume (for node value integration)
-    art2 : np.ndarray
-        Sum area of all cells around each node.
+    art1 : np.ndarray, optional
+        Area of interior control volume (for node value integration). Omitted if node_control is False.
+    art2 : np.ndarray, optional
+        Sum area of all cells around each node. Omitted if element_control is False.
+    art1_points : np.ndarray, optional
+        If return_points is set to True (an argument to `PyFVCOM.grid.node_control_area`), then those are returned as
+        the second or third argument (with element_control = False, with element_control = True respectively).
 
     Notes
     -----
@@ -4241,10 +4293,16 @@ def control_volumes(x, y, tri, node_control=True, element_control=True, noisy=Fa
         if not pool:
             art1 = []
             for this_node in range(m):
-                art1.append(node_control_area(this_node, x, y, xc, yc, tri))
+                art1.append(node_control_area(this_node, x, y, xc, yc, tri, **kwargs))
             art1 = np.asarray(art1)
         else:
-            art1 = pool.map(partial(node_control_area, x=x, y=y, xc=xc, yc=yc, tri=tri), range(m))
+            results = pool.map(partial(node_control_area, x=x, y=y, xc=xc, yc=yc, tri=tri, **kwargs), range(m))
+            # Unpack the results in case we've been asked for the points too.
+            if 'return_points' in kwargs:
+                art1 = np.asarray([i[0] for i in results])
+                art1_points = np.asarray([i[1] for i in results])
+            else:
+                art1 = np.asarray(results)
 
     # Compute area of control volume art2(i) = sum(all tris surrounding node i)
     if element_control:
@@ -4257,15 +4315,21 @@ def control_volumes(x, y, tri, node_control=True, element_control=True, noisy=Fa
                 art2.append(element_control_area(this_node, triangles=tri, art=art))
             art2 = np.asarray(art2)
         else:
-            art2 = pool.map(partial(element_control_area, triangles=tri, art=art), range(m))
+            art2 = np.asarray(pool.map(partial(element_control_area, triangles=tri, art=art), range(m)))
 
     if pool:
         pool.close()
 
     if node_control and element_control:
-        return art1, art2
+        if 'return_points' in kwargs:
+            return art1, art2, art1_points
+        else:
+            return art1, art2
     elif node_control and not element_control:
-        return art1
+        if 'return_points' in kwargs:
+            return art1, art1_points
+        else:
+            return art1
     elif not node_control and element_control:
         return art2
 
@@ -4803,6 +4867,10 @@ def reduce_triangulation(tri, nodes, return_elements=False):
 
     """
 
+    # The node IDs must be sorted otherwise you can end up changing a given ID multiple times, which makes for quite
+    # the mess, I can assure you.
+    nodes = np.sort(nodes)
+
     reduced_tri = tri[np.all(np.isin(tri, nodes), axis=1), :]
 
     # Remap nodes to a new index. Use a copy of the reduced triangulation for the lookup so we avoid potentially
@@ -5035,6 +5103,34 @@ def subset_domain(x, y, triangles, polygon=None):
     sub_triangles = reduce_triangulation(triangles, nodes)
 
     return nodes, elements, sub_triangles
+
+
+def model_exterior(lon, lat, triangles):
+    """
+    For a given unstructured grid, return a shapely.geometry.Polygon of the exterior boundary.
+
+    Parameters
+    ----------
+    lon, lat : np.ndarray
+        The x and y coordinates for the domain. Can be spherical or cartesian.
+    triangles : np.ndarray
+        The grid triangulation table (n, 3).
+
+    Returns
+    -------
+    boundary : shapely.geometry.Polygon
+        The grid exterior boundary (interior holes are ignores).
+
+    """
+
+    # `connectivity' doesn't return the boundary nodes in the right order, so we can't use it to get the exterior
+    # boundary.
+    boundary_nodes = get_boundary_polygons(triangles)
+    polygons = [shapely.geometry.Polygon(np.asarray((lon[i], lat[i])).T) for i in boundary_nodes]
+    areas = [i.area for i in polygons]
+    boundary = polygons[areas.index(max(areas))]
+
+    return boundary
 
 
 def fvcom2ugrid(fvcom):

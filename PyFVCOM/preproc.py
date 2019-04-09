@@ -25,13 +25,15 @@ from PyFVCOM.coordinate import utm_from_lonlat, lonlat_from_utm
 from PyFVCOM.grid import Domain, grid_metrics, read_fvcom_obc, nodes2elems
 from PyFVCOM.grid import OpenBoundary, find_connected_elements
 from PyFVCOM.grid import find_bad_node, element_side_lengths, reduce_triangulation
-from PyFVCOM.grid import write_fvcom_mesh, connectivity, haversine_distance
-from PyFVCOM.read import FileReader, _TimeReader
+from PyFVCOM.grid import write_fvcom_mesh, connectivity, haversine_distance, subset_domain
+from PyFVCOM.read import FileReader, _TimeReader, control_volumes
 from PyFVCOM.utilities.general import flatten_list, PassiveStore
 from PyFVCOM.utilities.time import date_range
 from dateutil.relativedelta import relativedelta
 from netCDF4 import Dataset, date2num, num2date, stringtochar
 from scipy.interpolate import RegularGridInterpolator
+from scipy.spatial import Delaunay
+from shapely.geometry import Polygon
 
 
 class Model(Domain):
@@ -2085,6 +2087,15 @@ class Model(Domain):
             if nesting_type >= 2:
                 self.nest[-1].add_weights()
 
+            # Remove the element information from the last nested boundary object as it makes no sense there.
+            self.nest[-1].elements = None
+            # Find the set of attributes to remove by comparing with the first nested boundary which also has no
+            # element data.
+            grid_names = set(self.nest[-1].boundaries[-1].grid) - set(self.nest[-1].boundaries[0].grid)
+            sigma_names = set(self.nest[-1].boundaries[-1].sigma) - set(self.nest[-1].boundaries[0].sigma)
+            [delattr(self.nest[-1].boundaries[-1].grid, e_name) for e_name in grid_names]
+            [delattr(self.nest[-1].boundaries[-1].sigma, e_name) for e_name in sigma_names]
+
     def add_nests_harmonics(self, harmonics_file, harmonics_vars=['u', 'v', 'zeta'], constituents=['M2', 'S2'],
                             pool_size=None):
         """
@@ -2233,7 +2244,7 @@ class Model(Domain):
 
                     # Now add the netCDF point to that boundary.
                     self.nest[nest_index].boundaries[boundary_index].nodes += [nc_nodes[point]]
-                    for var in ('x', 'y'):
+                    for var in ('x', 'y', 'h'):
                         current_value = getattr(self.nest[nest_index].boundaries[boundary_index].grid, var)
                         current_value = np.hstack((current_value, ds.variables[var][point]))
                         setattr(self.nest[nest_index].boundaries[boundary_index].grid, var, current_value)
@@ -2253,6 +2264,20 @@ class Model(Domain):
                     self.nest[nest_index].boundaries[boundary_index].triangles = triangles
                     # Also redo the elements for the current nest.
                     self.nest[nest_index].boundaries[boundary_index].elements = np.unique(triangles.ravel())
+
+            for nest in self.nest:
+                for boundary in nest.boundaries:
+                    # Remake the depth-resolve sigma information based on the filtered data we've got.
+                    boundary.sigma.layers_z = boundary.grid.h[:, np.newaxis] * boundary.sigma.layers
+                    boundary.sigma.levels_z = boundary.grid.h[:, np.newaxis] * boundary.sigma.levels
+                    try:
+                        boundary.sigma.layers_center_z = boundary.grid.h_center[:, np.newaxis] * boundary.sigma.layers_center
+                    except AttributeError:
+                        pass
+                    try:
+                        boundary.sigma.levels_center_z = boundary.grid.h_center[:, np.newaxis] * boundary.sigma.levels_center
+                    except AttributeError:
+                        pass
 
             # Fix the order of the positions in the data from the netCDF file to match those in the boundaries.
             nest_nodes = flatten_list([boundary.nodes for nest in self.nest for boundary in nest.boundaries])
@@ -2619,11 +2644,12 @@ class Model(Domain):
                     atts['grid'] = 'obc_grid'
                     # Collapse the data from all the open boundaries as we've done for temperature and salinity.
                     dump = np.full((time_number, self.dims.layers, nodes_number), np.nan)
-                    for boundary in self.open_boundaries:
-                        if name == 'time':
-                            pass
-                        temp_nodes_index = np.isin(nodes, boundary.nodes)
-                        dump[..., temp_nodes_index] = getattr(boundary.data, name)
+                    for nest in self.nest:
+                        for boundary in nest.boundaries:
+                            if name == 'time':
+                                pass
+                            temp_nodes_index = np.isin(nodes, boundary.nodes)
+                            dump[..., temp_nodes_index] = getattr(boundary.data, name)
                     nest_ncfile.add_variable(name, dump, ['time', 'siglay', 'node'], attributes=atts, ncopts=ncopts)
 
     def add_obc_types(self, types):
@@ -2632,7 +2658,7 @@ class Model(Domain):
 
         Parameters
         ----------
-        type : int, list, optional
+        types : int, list, optional
             The open boundary type. See the types listed in mod_obcs.F, lines 29 to 49, reproduced in the notes below
             for convenience. Defaults to 1 (prescribed surface elevation). If given as a list, there must be one
             value per open boundary.
@@ -4391,14 +4417,23 @@ class RegularReader(FileReader):
 
         Convert from UTM to spherical if we haven't got those data in the existing output file.
 
+        Parameters
+        ----------
+        netcdf_filestr : str
+            The path to the netCDF file to load.
+        grid_variables : list, optional
+            If given, these are the grid variable names. If omitted, defaults to CMEMS standard names.
+
         """
         if grid_variables is None:
             if 'longitude' in self.ds.variables:
-                grid_variables = {'lon':'longitude', 'lat':'latitude', 'x':'x', 'y':'y', 'depth':'depth', 'Longitude':'Longitude', 'Latitude':'Latitude'}
+                grid_variables = {'lon': 'longitude', 'lat': 'latitude', 'x': 'x', 'y': 'y',
+                                  'depth': 'depth', 'Longitude': 'Longitude', 'Latitude': 'Latitude'}
                 self.dims.lon = self.dims.longitude
                 self.dims.lat = self.dims.latitude
             else:
-                grid_variables = {'lon':'lon', 'lat':'lat', 'x':'x', 'y':'y', 'depth':'depth', 'Longitude':'Longitude', 'Latitude':'Latitude'}
+                grid_variables = {'lon': 'lon', 'lat': 'lat', 'x': 'x', 'y': 'y',
+                                  'depth': 'depth', 'Longitude': 'Longitude', 'Latitude': 'Latitude'}
 
         self.grid = PassiveStore()
         # Get the grid data.
@@ -4425,18 +4460,19 @@ class RegularReader(FileReader):
         # Update dimensions to match those we've been given, if any. Omit time here as we shouldn't be touching that
         # dimension for any variable in use in here.
         for dim in self._dims:
-            if dim != 'time':
-                # TODO Add support for slices here.
+            if dim not in ('time', 'wesn'):
+                # TODO Add support for slices here and shapely polygons for subsetting.
                 setattr(self.dims, dim, len(self._dims[dim]))
 
         # Convert the given W/E/S/N coordinates into node and element IDs to subset.
         if self._bounding_box:
             # We need to use the original Dataset lon and lat values here as they have the right shape for the
             # subsetting.
-            self._dims['lon'] = np.argwhere((self.grid.lon > self._dims['wesn'][0]) &
-                                            (self.grid.lon < self._dims['wesn'][1]))
-            self._dims['lat'] = np.argwhere((self.grid.lat > self._dims['wesn'][2]) &
-                                            (self.grid.lat < self._dims['wesn'][3]))
+            if not isinstance(self._dims['wesn'], Polygon):
+                self._dims['lon'] = np.argwhere((self.grid.lon > self._dims['wesn'][0]) &
+                                                (self.grid.lon < self._dims['wesn'][1]))
+                self._dims['lat'] = np.argwhere((self.grid.lat > self._dims['wesn'][2]) &
+                                                (self.grid.lat < self._dims['wesn'][3]))
 
         related_variables = {'lon': ('x', 'lon'), 'lat': ('y', 'lat')}
         for spatial_dimension in 'lon', 'lat':
@@ -4664,15 +4700,18 @@ class RegularReader(FileReader):
         if cartesian:
             raise ValueError('No cartesian coordinates defined')
         else:
-            if np.ndim(self.grid.lon) <= 1:
+            # Check we haven't already got ravelled data too.
+            if np.ndim(self.grid.lon) <= 1 and len(self.grid.lon) != len(self.grid.lat):
                 lat_rav, lon_rav = np.meshgrid(self.grid.lat, self.grid.lon)
                 x, y = lon_rav.ravel(), lat_rav.ravel()
             else:
                 x, y = self.grid.lon.ravel(), self.grid.lat.ravel()
 
         index = self._closest_point(x, y, x, y, where, threshold=threshold, vincenty=vincenty, haversine=haversine)
-        if len(index) == 1:
+        try:
             index = index[0]
+        except IndexError:
+            pass
         if np.ndim(self.grid.lon) <= 1:
             return np.unravel_index(index, (len(self.grid.lon), len(self.grid.lat)))
         else:
@@ -4698,6 +4737,62 @@ class NEMOReader(RegularReader):
     # TODO:
     #  - A lot of the methods on FileReader will need to be reimplemented for these data (e.g. avg_volume_var). That
     #  is, anything which assumes we've got an unstructured grid.
+
+    def __init__(self, *args, unstructured=False, tmask=None, **kwargs):
+        """
+        Read a NEMO output file into a FileReader-like object.
+
+        All arguments and keyword arguments are passed to PyFVCOM.preproc.RegularReader except `unstructured',
+        which is use to toggle conversion from a regular grid to an unstructured grid.
+
+        Parameters
+        ----------
+        unstructured : bool, optional
+            If given, converts the NEMO grid into an unstructured grid. This is handy if you've written a load of
+            stuff to work with FVCOM outputs and you want to do the same thing for NEMO data without having to
+            rewrite the analysis. In essence, it creates a triangulation and updates add sigma data compatible with
+            existing PyFVCOM functions.
+        tmask : str, pathlib.Path, optional
+            Give a path to a NEMO tmask file. This is used to mask off invalid parts of the NEMO model domain. If
+            omitted, the bottom layer in the vertical grid is set to NaN as this layer is actually in the seabed. This
+            applies to all variables except Light_ADY and e3t.
+
+        """
+
+        # Define the fvcomisation variable before we call super so _load_grid works.
+        self._fvcomise = unstructured
+
+        # Make sure we set the tmask value for self.load_data to know it exists before we call super().
+        self.tmask = tmask
+
+        super().__init__(*args, **kwargs)
+
+        # If we've been given a tmask value, use it to mask off crappy values. Really, this is pretty much essential
+        # to use NEMO outputs sensibly.
+        if self.tmask is not None:
+            with Dataset(self.tmask) as ds:
+                # tmask: 1 = ocean, 0 = land and outside ocean (i.e. below bottom z-level).
+                self.tmask = ds.variables['tmask'][:].astype(bool)
+                # Make sure we clip in space if we've been asked to.
+                if 'x' in self._dims:
+                    self.tmask = self.tmask[..., self._dims['x']]
+                if 'y' in self._dims:
+                    self.tmask = self.tmask[..., self._dims['y'], :]
+                if 'deptht' in self._dims:
+                    self.tmask = self.tmask[..., self._dims['deptht'], :, :]
+                # Make it so it fits with time-varying data.
+                self.tmask = np.tile(np.squeeze(self.tmask), [self.dims.time_counter, 1, 1, 1])
+            for var in self.data:
+                # We could use masking here, but this feels more bulletproof (I think some bits of numpy/scipy ignore
+                # masks when interpolating).
+                current_data = getattr(self.data, var)
+                current_data[~self.tmask] = np.nan
+                setattr(self.data, var, current_data)
+        else:
+            # If we don't have a tmask file, we'll try our best to minimise potential issues with crappy NEMO data.
+            # We do that by simply setting all bottom layers (bar those in e3t and lightADY) to NaN. Crude at best.
+            for var in self.data:
+                self._mask_bottom_layer(var)
 
     def __rshift__(self, other, debug=False):
         """
@@ -4793,6 +4888,13 @@ class NEMOReader(RegularReader):
 
         Convert from UTM to spherical if we haven't got those data in the existing output file.
 
+        Parameters
+        ----------
+        netcdf_filestr : str
+            The path to the netCDF file to load.
+        grid_variables : list, optional
+            If given, these are the grid variable names. If omitted, defaults to NEMO standard names.
+
         """
         if grid_variables is None:
             grid_variables = {'lon': 'nav_lon', 'nav_lat': 'lat', 'x': 'x', 'y': 'y', 'depth': 'depth',
@@ -4831,7 +4933,7 @@ class NEMOReader(RegularReader):
         # Update dimensions to match those we've been given, if any. Omit time here as we shouldn't be touching that
         # dimension for any variable in use in here.
         for dim in self._dims:
-            if dim != 'time':
+            if dim not in ('time', 'wesn'):
                 # TODO Add support for slices here.
                 setattr(self.dims, dim, len(self._dims[dim]))
 
@@ -4904,6 +5006,140 @@ class NEMOReader(RegularReader):
         # Make a bounding box variable too (spherical coordinates): W/E/S/N
         self.grid.bounding_box = (np.min(self.grid.lon), np.max(self.grid.lon),
                                   np.min(self.grid.lat), np.max(self.grid.lat))
+
+        if self._fvcomise:
+            self._to_unstructured()
+
+    def _to_unstructured(self):
+        # Convert the regularly gridded data into an unstructured grid which is good enough to pass muster with most
+        # of the FVCOM tools we've written in here.
+
+        # We need to mask off the land. This makes the grid unstructured which makes the next bit a lot easier. Keep
+        # a copy of the original grid so we can mask the data we load (self._regular_to_unstructured_mask).
+        original_x, original_y = np.meshgrid(self.grid.lon, self.grid.lat)
+
+        # Make the triangulation for the entire domain and we'll drop bits as we mask land and check for a shapely
+        # polygon.
+        self.grid.triangles = Delaunay(np.asarray((original_x.ravel(), original_y.ravel())).T).vertices
+
+        # Use the data array for masking. Just use the first time step to speed things up. Find the first 4D variable
+        # to get the mask. This is suboptimal because who knows what variable we'll end up using.
+        analysis_variable = [i for i in self.ds.variables if len(self.ds.variables[i].dimensions) == 4][0]
+        self._land_mask = ~np.squeeze(self.ds.variables[analysis_variable][0].mask)
+        xx = original_x.copy()[self._land_mask]
+        yy = original_y.copy()[self._land_mask]
+        self.grid.lon = xx
+        self.grid.lat = yy
+
+        self.grid.triangles = reduce_triangulation(self.grid.triangles, np.argwhere(self._land_mask.ravel()))
+
+        # Check if we've been asked to subset with a polygon.
+        if 'wesn' in self._dims and isinstance(self._dims['wesn'], Polygon):
+            sub_nodes, sub_elems, sub_tri = subset_domain(self.grid.lon, self.grid.lat, self.grid.triangles,
+                                                          polygon=self._dims['wesn'])
+            self.grid.lon = self.grid.lon[sub_nodes]
+            self.grid.lat = self.grid.lat[sub_nodes]
+            self.grid.triangles = sub_tri
+
+        # Remove nodes which aren't in the triangulation.
+        node_ids = np.arange(len(self.grid.lon))
+        isolated_nodes = np.setdiff1d(node_ids, np.unique(self.grid.triangles))
+        connected_nodes = np.setdiff1d(node_ids, isolated_nodes)
+        for attr in ('lon', 'lat'):
+            setattr(self.grid, attr, np.delete(getattr(self.grid, attr), isolated_nodes))
+        self.grid.triangles = reduce_triangulation(self.grid.triangles, connected_nodes)
+
+        # Clean up the triangulation to remove nodes we'd flag as invalid in FVCOM for a model run (elements with two
+        # land boundaries). We do this so subsequent calls to pf.grid.get_boundary_polygons work properly (i.e. we
+        # don't get multiple polygons for the main model domain). We have to do this lots of times until we end up
+        # with no dodgy nodes.
+        still_bad = 0
+        while still_bad >= 0:
+            # Limit the search to coastline nodes to massively speed things up!
+            _, _, _, bnd = connectivity(np.asarray((self.grid.lon, self.grid.lat)).T, self.grid.triangles)
+            all_nodes = np.arange(len(self.grid.lon))
+            coast_nodes = all_nodes[bnd]
+            interior_nodes = all_nodes[~bnd]
+            args = [(self.grid.triangles, i) for i in coast_nodes]
+            pool = multiprocessing.Pool()
+            bad_nodes = np.asarray(pool.map(self._bad_node_worker, args))
+            pool.close()
+            if not np.any(bad_nodes):
+                still_bad = -1
+            else:
+                still_bad += 1
+
+            for attr in ('lon', 'lat'):
+                setattr(self.grid, attr, np.delete(getattr(self.grid, attr), coast_nodes[bad_nodes]))
+            # Remove those nodes from the triangulation too. This step is quite slow.
+            new_all_nodes = np.hstack((interior_nodes, coast_nodes[~bad_nodes]))
+            self.grid.triangles = reduce_triangulation(self.grid.triangles, np.sort(new_all_nodes))
+
+            # Check for nodes which join two elements at a single point:
+            # |\
+            # | \
+            # |__o
+            #    /\
+            #   /  \
+            #  /____\
+            bad_nodes = []
+            all_nodes = np.unique(self.grid.triangles)
+            for node in all_nodes:
+                node_in_elements = np.argwhere(np.any(np.isin(self.grid.triangles, node), axis=1))
+                if len(node_in_elements) == 2:
+                    if len(np.unique(self.grid.triangles[node_in_elements])) == 5:
+                        bad_nodes.append(node)
+            if any(bad_nodes):
+                good_nodes = np.setdiff1d(all_nodes, bad_nodes)
+                for attr in ('lon', 'lat'):
+                    setattr(self.grid, attr, np.delete(getattr(self.grid, attr), bad_nodes))
+                self.grid.triangles = reduce_triangulation(self.grid.triangles, good_nodes)
+
+            if self._noisy:
+                if still_bad > 0:
+                    print(f'Make grid FVCOM compatible (iteration {still_bad})', flush=True)
+                else:
+                    print('Grid now FVCOM compatible.', flush=True)
+
+        # Find the indices of the remaining positions in the original coordinate arrays so we can extract the same
+        # positions when loading data.
+        original_xy = np.asarray((original_x.ravel(), original_y.ravel())).T.tolist()
+        new_xy = np.asarray((self.grid.lon, self.grid.lat)).T.tolist()
+        # It feels like I should be using np.isin here, but I can't get it to work. Slow loops it is.
+        original_indices = [original_xy.index(i) for i in new_xy]
+        self._regular_to_unstructured_mask = np.full(original_x.ravel().shape, False)
+        for i in original_indices:
+            self._regular_to_unstructured_mask[i] = True
+
+        self.grid.nv = self.grid.triangles.T + 1  # for pf.plot.Plotter compatibility.
+        self.grid.x, self.grid.y, _ = utm_from_lonlat(self.grid.lon, self.grid.lat, zone=self._zone)
+        self.grid.lonc = nodes2elems(self.grid.lon, self.grid.triangles)
+        self.grid.latc = nodes2elems(self.grid.lat, self.grid.triangles)
+        self.grid.xc = nodes2elems(self.grid.x, self.grid.triangles)
+        self.grid.yc = nodes2elems(self.grid.y, self.grid.triangles)
+
+        # Now we've got an unstructured grid, compute the FVCOM-specific variables.
+        self.grid.art1, self.grid.art1_points = control_volumes(self.grid.x, self.grid.y, self.grid.triangles,
+                                                                element_control=False, return_points=True)
+
+        # Fix dimensions.
+        self.dims.node = len(self.grid.lon)
+        self.dims.nele = len(self.grid.latc)
+
+        # Make some fake sigma data.
+        inc = 1 / self.dims.deptht
+        self.grid.siglev = np.tile(np.arange(0, 1 + inc, inc), (self.dims.time, self.dims.node, 1)).transpose(0, 2, 1)
+        self.grid.siglay = np.diff(self.grid.siglev, axis=1)
+
+        # If we've loaded data up front, we need to remove the values outside the triangulation.
+        for var in self.data:
+            _tmp = getattr(self.data, var)
+            if _tmp.shape[-1] != self.dims.node:
+                setattr(self.data, var, _tmp[..., self._regular_to_unstructured_mask])
+
+    @staticmethod
+    def _bad_node_worker(args):
+        return find_bad_node(*args)
 
     def load_data(self, var):
         """
@@ -4981,7 +5217,7 @@ class NEMOReader(RegularReader):
             if depthname in self._dims:
                 depth_compare = len(self.ds.variables[depthvar][self._dims[depthname]]) == depthdim
             if timename in self._dims:
-                time_compare = len(self.ds.variables['time'][self._dims[timename]]) == timedim
+                time_compare = len(self.ds.variables[timename][self._dims[timename]]) == timedim
 
             if not lon_compare:
                 raise ValueError('Longitude data are incompatible. You may be trying to load data after having already '
@@ -4996,9 +5232,9 @@ class NEMOReader(RegularReader):
                 raise ValueError('Time period is incompatible. You may be trying to load data after having already '
                                  'concatenated a RegularReader object, which is unsupported.')
 
-            if 'time' not in var_dim and 'time_counter' not in var_dim:
+            if timename not in var_dim:
                 # Should we error here or carry on having warned?
-                warn("{} does not contain a `time' or `time_counter' dimension.".format(v))
+                warn(f"{v} does not contain a `{timename}' dimension.".format(v))
 
             attributes = PassiveStore()
             for attribute in self.ds.variables[v].ncattrs():
@@ -5007,6 +5243,37 @@ class NEMOReader(RegularReader):
 
             data = self.ds.variables[v][variable_indices]  # data are automatically masked
             setattr(self.data, v, data)
+
+            # Make sure the bottom layer is masked (only if we haven't been given a tmask argument during __init__).
+            self._mask_bottom_layer(v)
+
+            if self._fvcomise:
+                # Ravel the last two dimensions so we have data that are unstructured. Then extract only those that
+                # cover the region we've triangulated.
+                current_shape = getattr(self.data, v).shape
+                new_shape = list(current_shape)[:-2]  # everything up to the horizontal space dimensions
+                new_shape.append(int(np.prod(current_shape[-2:])))
+                reshaped = getattr(self.data, v).reshape(new_shape)
+                # Extract only those positions which we ended up with in our final unstructured grid if we're being
+                # called separately (otherwise this happens in __init__).
+                if hasattr(self, '_regular_to_unstructured_mask'):
+                    reshaped = reshaped[..., self._regular_to_unstructured_mask]
+                setattr(self.data, v, reshaped)
+
+    def _mask_bottom_layer(self, var):
+        """
+        The ERSEM data in the NEMO files have a bottom layer which is generally all zeros. With the exception of
+        Light_ADY, which appears to have sensible values. What we'll do here is set the bottom layer to be NaN for
+        any data we've loaded.
+
+        """
+        # Skip lightADY and e3t. Also don't do this if self.tmask has been populated with a mask.
+        if var not in ('lightADY', 'e3t') and self.tmask is not None:
+            current_data = getattr(self.data, var)
+            # Only replace the bottom layer if we've got a 4D array (time, depth, lat, lon).
+            if np.ndim(current_data) == 4:
+                current_data[:, -1, :, :] = np.nan
+            setattr(self.data, var, current_data)
 
 
 class _TimeReaderReg(_TimeReader):
