@@ -2274,7 +2274,6 @@ class Model(Domain):
             nest_nodes = flatten_list([boundary.nodes for nest in self.nest for boundary in nest.boundaries])
             nest_elements = flatten_list([boundary.elements for nest in self.nest for boundary in nest.boundaries if np.any(boundary.elements)])
             nc_node_order = [nc_nodes.tolist().index(i) for i in nest_nodes]
-            nc_nodes[nc_node_order]
             nc_element_order = [nc_elements.tolist().index(i) for i in nest_elements if i in nc_elements]
 
             for nest in self.nest:
@@ -2369,6 +2368,7 @@ class Model(Domain):
 
         for nest in nests:
             for boundary in nest.boundaries:
+                # Make boolean arrays for the matchup with the
                 temp_indices = {'nodes': np.isin(nodes, boundary.nodes),
                                 'elements': np.isin(elements, boundary.elements)}
 
@@ -2394,7 +2394,7 @@ class Model(Domain):
 
                         out_dict[var][0][..., this_index] = boundary_data
                     else:
-                        raise ValueError('Unknown nest boundary variable {}'.format(var))
+                        raise ValueError(f'Unknown nest boundary variable {var}')
 
         ncopts = {}
         if 'ncopts' in kwargs:
