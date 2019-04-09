@@ -72,6 +72,8 @@ def mask_to_fvcom(fvcom_ll, fvcom_tri, lons, lats, split_domain_check=False):
 
 def mask_to_fvcom_meshgrid(fvcom_ll, fvcom_tri, grid_mesh_lons, grid_mesh_lats, split_domain_check=False):
     """
+    Mask a regularly gridded set of coordinates to an FVCOM grid.
+
     Parameters
     ----------
     fvcom_ll : array
