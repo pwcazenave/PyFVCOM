@@ -2204,7 +2204,7 @@ class Model(Domain):
                                 if hasattr(boundary.sigma, var):
                                     setattr(boundary.sigma, var, getattr(boundary.sigma, var)[node_mask])
                         if boundary.elements is not None:
-                            element_mask = np.isin(boundary.elements, list(match_elements))
+                            element_mask = np.isin(boundary.elements, list(match_elements), invert=True)
                             if np.any(element_mask):
                                 boundary.elements = np.asarray(boundary.elements)[element_mask].tolist()
                                 for var in ('lonc', 'latc', 'xc', 'yc', 'h_center'):
