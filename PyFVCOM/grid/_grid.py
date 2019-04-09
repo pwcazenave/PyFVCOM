@@ -1849,12 +1849,20 @@ class OpenBoundary(object):
             interpolator.values = coarse_depth_layer[:, np.newaxis].astype(np.float64)
             interp_fvcom_depth_layer = interpolator((x, y))
 
+            # If we're interpolating NEMO data (and we are when we're using this method), the bottom layer will
+            # always return NaNs, so this message will always be triggered, which is a bit annoying. It'd be nice to
+            # use the tmask option when loading the NEMOReader to omit these values properly (rather than just
+            # setting them to NaN) so we could stop spitting out these messages for each interpolation. Maybe another
+            # day, eh?
             if np.any(np.isnan(interp_fvcom_data_layer)) or np.any(np.isnan(interp_fvcom_depth_layer)):
                 bad_indices = np.argwhere(np.isnan(interp_fvcom_data_layer))
+                if len(bad_indices) == 1:
+                    singular_plural = ''
+                else:
+                    singular_plural = 's'
+                warn(f'{len(bad_indices)} FVCOM boundary node{singular_plural} returned NaN after interpolation. Using '
+                     f'inverse distance interpolation instead.')
                 for bad_index in bad_indices:
-                    warn(f'FVCOM boundary node at x, y, z: {x[bad_index]}, {y[bad_index]}, '
-                         f'{interp_fvcom_depth_layer[bad_index]} returns NaN after interpolation. Using inverse '
-                         f'distance interpolation.')
                     weight = 1 / np.hypot(coarse_lon - x[bad_index], coarse_lat - y[bad_index])
                     weight = weight / weight.max()
                     interp_fvcom_data_layer[bad_index] = (coarse_data_layer * weight).sum() / weight.sum()
