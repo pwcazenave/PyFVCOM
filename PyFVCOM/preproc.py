@@ -2088,15 +2088,6 @@ class Model(Domain):
             if nesting_type >= 2:
                 self.nest[-1].add_weights()
 
-            # Remove the element information from the last nested boundary object as it makes no sense there.
-            self.nest[-1].elements = None
-            # Find the set of attributes to remove by comparing with the first nested boundary which also has no
-            # element data.
-            grid_names = set(self.nest[-1].boundaries[-1].grid) - set(self.nest[-1].boundaries[0].grid)
-            sigma_names = set(self.nest[-1].boundaries[-1].sigma) - set(self.nest[-1].boundaries[0].sigma)
-            [delattr(self.nest[-1].boundaries[-1].grid, e_name) for e_name in grid_names]
-            [delattr(self.nest[-1].boundaries[-1].sigma, e_name) for e_name in sigma_names]
-
     def add_nests_harmonics(self, harmonics_file, harmonics_vars=['u', 'v', 'zeta'], constituents=['M2', 'S2'],
                             pool_size=None):
         """
@@ -2181,7 +2172,6 @@ class Model(Domain):
             if filter_times:
                 # Some nesting files have duplicated times (!?). Remove them here.
                 bad_times = np.argwhere(np.asarray([i.total_seconds() for i in np.diff(ds_time)]) == 0).ravel()
-
                 ds_time = np.delete(ds_time, bad_times)
 
             if np.any(self.time.datetime != ds_time):
