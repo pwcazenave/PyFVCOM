@@ -2273,7 +2273,7 @@ class Model(Domain):
             # Fix the order of the positions in the data from the netCDF file to match those in the boundaries.
             nest_nodes = flatten_list([boundary.nodes for nest in self.nest for boundary in nest.boundaries])
             nest_elements = flatten_list([boundary.elements for nest in self.nest for boundary in nest.boundaries if np.any(boundary.elements)])
-            nc_node_order = [nc_nodes.tolist().index(i) for i in nest_nodes]
+            nc_node_order = [nc_nodes.tolist().index(i) for i in nest_nodes if i in nc_nodes]
             nc_element_order = [nc_elements.tolist().index(i) for i in nest_elements if i in nc_elements]
 
             for nest in self.nest:
