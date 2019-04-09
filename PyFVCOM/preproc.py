@@ -1047,8 +1047,9 @@ class Model(Domain):
         sigma_file : str, pathlib.Path
             Path to which to save sigma data.
 
-        TODO:
-         - Add support for writing all the sigma file formats.
+        Notes
+        -----
+        TODO: Add support for writing all the sigma file formats.
 
         """
 
