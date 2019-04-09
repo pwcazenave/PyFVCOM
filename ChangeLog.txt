@@ -1,6 +1,14 @@
 2.2
 ---
 
+This release brings a lot of changes in the way we interact with unstructured grids, with expansion of the Domain and
+FileReader classes. We have also added support for interacting with other model types via subclasses of RegularReader
+and/or FileReader for HYCOM, CMEMS and NEMO outputs.
+
+Since we spend a lot of our time interpolating data from one model grid to another, we have implemented a new
+"interpolate" module which will host most of these routines. This will minimise the duplication of interpolation
+routines for working with unstructured and structured grids.
+
 - PyFVCOM.buoy
 	- Fix a few small issues with the Buoy class.
 - PyFVCOM.coast - remove this and put its functions in PyFVCOM.grid, mostly.
