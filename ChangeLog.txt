@@ -1,3 +1,137 @@
+2.2
+---
+
+- PyFVCOM.buoy
+	- Fix a few small issues with the Buoy class.
+- PyFVCOM.coast - remove this and put its functions in PyFVCOM.grid, mostly.
+
+- PyFVCOM.coordinate
+	- Update the british_national_grid_to_lonlat function to use PyProj instead of a convoluted conversion.
+	- Add new function lonlat_decimal_from_degminsec_wco to handle Western Channel Observatory formatted time data.
+	- Update the lonlat_decimal_from_degminsec function to fix bugs with negative longitudes between -1 and 0.
+
+- PyFVCOM.current
+	- Minor fixes to remove the use of removed methods on self.
+
+- PyFVCOM.grid
+	- Fix handling subsampling in space for combinations of nodes and elements. We now check for incompatible pairings
+	and act accordingly (GridReaderNetCDF).
+	- Fix loading data for sets of nodes/elements to be a lot faster. The old way was a) inexplicably complicated and
+	b (GridReaderNetCDF).
+	slow. The new way is a) simple and b) faster (GridReaderNetCDF). Win win.
+	- Fix loading only vertical layers (no other dimensions) (GridReaderNetCDF).
+	- Fix depths when loading vertical layers (the _z arrays now have the correct signs) (GridReaderNetCDF).
+	- Add method on Domain (subset_domain) which will subset with a given shapely Polygon or interactively.
+	- Add new function (subset_domain) which subsets interactively or with a given shapely Polgyon.
+	- Add a few new methods on Domain to do some useful things:
+		- calculate_control_area_and_volume - calculates control areas and volumes.
+		- calculate_element_lengths - calculate the length of the element faces.
+		- gradient - compute the gradient of a field.
+		- to_nodes - move a field from elements to nodes.
+		- to_elements - move a field from nodes to elements.
+		- in_element - is a given position in a given element?
+		- exterior - return the exterior boundary of the current grid.
+		- info - print some basic information about the loaded grid.
+	- Fix loading open boundaries from SMS grid which have duplicated start and end nodes in the node string.
+	- OpenBoundary.add_tpxo_tides can now be given an interpolation method ('linear', 'nearest' etc.).
+	- Fix issue in OpenBoundary._interpolate_tpxo_harmonics where the interpolated phase was across the 360 to 0 degrees
+	transition. We now do the interpolation on the components of amplitude and phase (u and v) instead and recombine to
+	get amplitude and phase from those.
+	- Interpolating data in OpenBoundary.add_nested_forcing now handles internal land masses correctly.
+	- OpenBoundary.add_nested_forcing can also now interpolate from sigma coarse model data (e.g. NEMO output).
+	- New function to read an SMS map file (read_sms_map).
+	- New function to read in smeshing mesh files (read_smesh_mesh).
+	- Add the read_sms_cst function from the (now removed) PyFVCOM.coast module.
+	- Add the write_sms_cst function from the (now removed) PyFVCOM.coast module.
+	- Add the MIKEarc2cst function from the (now removed) PyFVCOM.coast module.
+	- Add the shp2cst function from the (now removed) PyFVCOM.coast module.
+	- Simplify the code in write_sms_mesh a little.
+	- The function get_boundary_polygons can now be given a set of nodes to identify whether they are interior or
+	exterior to the grid (i.e. islands or not).
+	- The control_volumes function can optionally return the coordinates of the node control areas. This is useful for
+	plotting things.
+	- In reduce_triangulation, make sure the nodes to which we are reducing the grid are sorted otherwise the reduced
+	triangulation is all sorts of broken.
+	- Add new function to return the exterior boundary of a model grid (model_exterior).
+	- Add new function to apply the UGRID conventions to an FVCOM netCDF file (fvcom2ugrid).
+	- Add new function to identify whether a given point lies within a given pixel (point_in_pixel).
+	- Add new function to move a node-based field to an element-based field using a cubic interpolation rather than
+	linear (as is done in elems2nodes).
+
+- PyFVCOM.interpolate
+	- Add new module to handle interpolations.
+	- Function mask_to_fvcom constructs a mask for a list of points which is True for points outside the FVCOM domain
+	and False inside.
+	- Function mask_to_fvcom_meshgrid to mask a regularly gridded set of coordinates to an FVCOM grid.
+	- MPIRegularInterpolateWorker is a class to handle interpolation using MPI instead of multiprocessing (which is what
+	we tend to use elsewhere).
+
+- PyFVCOM.ocean
+	- Add function to compute the CFL number.
+	- Add function to compute the turbulent kinetic energy from a velocity field (largely untested).
+
+- PyFVCOM.plot
+	- Add support for plotting with cartopy instead of Basemap. The default is still the latter. Use the 'mapper'
+	keyword in Plotter.
+	- Fix the orientation of slice plots in Time.plot_slice and Time.plot_surface.
+	- Add new methods on Plotter to plot streamlines (plot_streamlines), add scales (add_scale), set a title (set_title),
+	reinitialise a plot (replot) and close the current figure (close).
+	- Remove some options which were largely historic leftovers from the PyLag version of this class.
+	- Handle masking when plotting surfaces with Plotter.plot_field.
+	- Add option to interpolate quivers onto a regular grid.
+	- Tweaks the set up when plotting in parallel with MPIWorker.
+	- Add the ability to plot streamlines with MPIWorker.
+	- Add new class to interactively animate FVCOM output (Player).
+	- Add new function to find the colour bar extension for a given field and current plot range.
+
+- PyFVCOM.preproc
+	- Force times in the SST data to be at midday (a requirement for FVCOM).
+	- Add support for generalised sigma coordinates in Model.
+	- Fix indices for writing out tidal elevation files.
+	- Add method (read_ea_river_temperature_climatology) on Model to read in the English Environment Agency River
+	Temperature archive data.
+	- New method (load_nested_forcing) to add an existing FVCOM nesting file's data to the current set of nests in
+	a Model.
+	- Add support for writing out ERSEM variables to a nested forcing netCDF file.
+	- Add option to write groundwater at the surface for my customised FVCOM "surfacewater" code.
+	- Add method to load an existing elevation time series from netCDF (load_elevtide).
+	- Add method to write a standard FVCOM temperature and salinity open boundary forcing file (write_tsobc).
+	- Concatenation in time for FileReader-like object (RegularReader, HYCOMReader etc.) now done with >> rather than
+	+=.
+	- Add a FileReader-like object for interacting with NEMO data (NEMOReader). This has the option to convert the NEMO
+	grid into an unstructured grid for use with many of our existing tools.
+	- Add a NEMO restart class to make restart files for FVCOM from NEMO data.
+
+- PyFVCOM.read
+	- Fix removal of dodgy times from the file being read in (FileReader).
+	- Force times read in from an FVCOM averaged file to be at the midpoint of the time interval instead of the end.
+	- Add methods to add, subtract, multiply, divide and raise to a power FileReader objects (or rather, the data that
+	has been loaded in them).
+	- The concatenation in time of FileReader objects is now achieved with >> rather than +=.
+	- New function to read in nesting nodes from an FVCOM netCDF nesting file (read_nesting_nodes).
+	- New function to apply a mask to specified variables (apply_mask).
+	- Set the zero indexing option on get_river_config to default to True.
+	- Add new class to write a FileReader object to netCDF (WriteFVCOM).
+
+- PyFVCOM.stats
+	- Set the minimum number of samples required for computation of a correlation coefficient as an argument rather than
+	hard-coding it.
+
+- PyFVCOM.tide
+	- Miscellaneous minor fixes.
+
+- PyFVCOM.utilities
+	- New functions to convert from polar to cartesian coordinates and back (general.cart2pol and general.pol2cart).
+	- Renamed the _passive_data_store class to PassiveStore.
+	- Fix bug with general.fix_range where all values are identical, in which case we return the values unchanged.
+	- Move the `grid` utility StubFile into the tests (the only place it was being used).
+
+- PyFVCOM.validation
+	- PEP8 compliance fixes.
+
+- Existing tests have been updated to reflect bug fixes and new functionality (to a limited extent).
+
+
 2.1.3
 -----
 
