@@ -10,9 +10,7 @@ __license__ = 'MIT'
 __maintainer__ = 'Pierre Cazenave'
 __email__ = 'pica@pml.ac.uk'
 
-import inspect
 import sys
-from warnings import warn
 
 # Import everything! Eventually, we're going to hit a circular dependency here...
 from PyFVCOM import buoy
