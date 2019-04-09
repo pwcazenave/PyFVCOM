@@ -509,7 +509,7 @@ class Plotter(object):
             Set the colour bar extension ('neither', 'both', 'min', 'max').
             Defaults to 'neither').
         norm : matplotlib.colors.Normalize, optional
-            Normalise the luminance to 0,1. For example, use from matplotlib.colors.LogNorm to do log plots of fields.
+            Normalise the luminance to 0, 1. For example, use from matplotlib.colors.LogNorm to do log plots of fields.
         m : mpl_toolkits.basemap.Basemap, optional
             Pass a Basemap object rather than creating one on each invocation.
         cartesian : bool, optional
@@ -1389,7 +1389,7 @@ class CrossPlotter(Plotter):
     >>> cross_points = [np.asarray([[413889.37304891, 5589079.54545454], [415101.00156087, 5589616.47727273]])]
     >>> c_plot = pf.plot.CrossPlotter(filereader, cmap='bwr', vmin=5, vmax=10)
     >>> c_plot.cross_section_init(cross_points, dist_res=5)
-    >>> c_plot.plot_pcolor_field('temp',150)
+    >>> c_plot.plot_pcolor_field('temp', 150)
     >>> plt.show()
 
     Notes
@@ -2146,7 +2146,7 @@ class Player(FuncAnimation):
 
     def setup(self, pos):
         """ Set up the animation. """
-        playerax = self.fig.add_axes([pos[0],pos[1], 0.64, 0.04])
+        playerax = self.fig.add_axes([pos[0], pos[1], 0.64, 0.04])
         divider = mpl_toolkits.axes_grid1.make_axes_locatable(playerax)
         bax = divider.append_axes("right", size="80%", pad=0.05)
         sax = divider.append_axes("right", size="80%", pad=0.05)

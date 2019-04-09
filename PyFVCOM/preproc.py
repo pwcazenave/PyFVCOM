@@ -2478,7 +2478,7 @@ class Model(Domain):
                     'positive': 'up',
                     'valid_min': -1.,
                     'valid_max': 0.,
-                    'formula_terms': 'sigma:siglev eta: zeta depth: h'}
+                    'formula_terms': 'sigma: siglev eta: zeta depth: h'}
             nest_ncfile.add_variable('siglev', self.sigma.levels[nodes, :].T, ['siglev', 'node'], attributes=atts, ncopts=ncopts)
 
             if self._debug:
@@ -2551,7 +2551,7 @@ class Model(Domain):
                     'coordinates': 'time lat lon',
                     'type': 'data',
                     'location': 'node'}
-            nest_ncfile.add_variable('zeta', out_dict['zeta'][0], ['time','node'], attributes=atts, ncopts=ncopts)
+            nest_ncfile.add_variable('zeta', out_dict['zeta'][0], ['time', 'node'], attributes=atts, ncopts=ncopts)
 
             if self._debug:
                 print('Adding ua to netCDF')
@@ -3025,7 +3025,7 @@ class Model(Domain):
                     'positive': 'up',
                     'valid_min': -1.,
                     'valid_max': 0.,
-                    'formula_terms': 'sigma:siglev eta: zeta depth: h'}
+                    'formula_terms': 'sigma: siglev eta: zeta depth: h'}
             ncfile.add_variable('siglev', self.sigma.levels[nodes, :].T, ['siglev', 'nobc'], attributes=atts, ncopts=ncopts)
 
             if self._debug:
@@ -5316,7 +5316,7 @@ class NemoRestartRegularReader(RegularReader):
     nemo_data_reader.data_mask = tmask
     nemo_data_reader.load_data([this_nemo])
 
-    Also since these restart files are timeless a single dummy time (2001,1,1) is put in on initialising. The replace
+    Also since these restart files are timeless a single dummy time (2001, 1, 1) is put in on initialising. The replace
     interpolation *should* ignore the time if there is only one timestep but you can always overwrite it e.g.
 
     nemo_data_reader.time = restart_file_object.time

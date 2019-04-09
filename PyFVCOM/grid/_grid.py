@@ -1665,15 +1665,15 @@ class OpenBoundary(object):
             sea_points[land_mask] = np.nan
 
             ft_sea = RegularGridInterpolator((coarse.grid.lat, coarse.grid.lon), sea_points, method='linear', fill_value=np.nan)
-            internal_points = np.isnan(ft_sea(np.asarray([y,x]).T))
+            internal_points = np.isnan(ft_sea(np.asarray([y, x]).T))
 
             if np.any(internal_points):
                 xv, yv = np.meshgrid(coarse.grid.lon, coarse.grid.lat)
                 valid_ll = np.asarray([x[~internal_points], y[~internal_points]]).T
                 for this_ind in np.where(internal_points)[0]:
-                    nearest_valid_ind = np.argmin((valid_ll[:,0] - x[this_ind])**2 + (valid_ll[:,1] - y[this_ind])**2)
-                    x[this_ind] = valid_ll[nearest_valid_ind,0]
-                    y[this_ind] = valid_ll[nearest_valid_ind,1]
+                    nearest_valid_ind = np.argmin((valid_ll[:, 0] - x[this_ind])**2 + (valid_ll[:, 1] - y[this_ind])**2)
+                    x[this_ind] = valid_ll[nearest_valid_ind, 0]
+                    y[this_ind] = valid_ll[nearest_valid_ind, 1]
 
             # The depth data work differently as we need to squeeze each FVCOM water column into the available coarse
             # data. The only way to do this is to adjust each FVCOM water column in turn by comparing with the
@@ -1687,8 +1687,8 @@ class OpenBoundary(object):
                 zero_depth_water = np.where(np.logical_and(coarse_depths == 0, ~coarse_depths.mask))
                 if zero_depth_water[0].size:
                     data_mod = getattr(coarse.data, coarse_name)
-                    data_mod[:,1,zero_depth_water[0], zero_depth_water[1]] = data_mod[:,0,zero_depth_water[0], zero_depth_water[1]]
-                    data_mod.mask[:,1,zero_depth_water[0], zero_depth_water[1]] = False
+                    data_mod[:, 1, zero_depth_water[0], zero_depth_water[1]] = data_mod[:, 0, zero_depth_water[0], zero_depth_water[1]]
+                    data_mod.mask[:, 1, zero_depth_water[0], zero_depth_water[1]] = False
                     setattr(coarse.data, coarse_name, data_mod) # Probably isn't needed cos pointers but for clarity
 
                 coarse_depths = np.ma.filled(coarse_depths, 0)
@@ -3690,7 +3690,7 @@ def connectivity(p, t):
         """
         Similar to MATLAB's unique(A, 'rows'), this returns B, I, J
         where B is the unique rows of A and I and J satisfy
-        A = B[J,:] and B = A[I,:]
+        A = B[J, :] and B = A[I, :]
 
         Returns I if return_index is True
         Returns J if return_inverse is True
@@ -4115,7 +4115,7 @@ def get_boundary_polygons(triangle, noisy=False, nodes=None):
 
     else:
         all_poly_nodes = np.asarray([y for x in boundary_polygon_list for y in x])
-        reduce_nodes =  nodes[~all_poly_nodes,:]
+        reduce_nodes =  nodes[~all_poly_nodes, :]
         reduce_nodes_pts = [shapely.geometry.Point(this_ll) for this_ll in reduce_nodes]
 
         islands_list = []
@@ -4172,7 +4172,7 @@ def grid_metrics(tri, noisy=False):
     ntve : np.ndarray
         The number of neighboring elements of each grid node
     nbve : np.ndarray
-        nbve(i,1->ntve(i)) = ntve elements containing node i
+        nbve(i, 1->ntve(i)) = ntve elements containing node i
     nbe : np.ndarray
         Indices of tri for the elements connected to each element in the domain. To visualise:
             plt.plot(x[tri[1000, :], y[tri[1000, :], 'ro')
@@ -4918,7 +4918,7 @@ def getcrossectiontriangles(cross_section_pnts, trinodes, X, Y, dist_res):
         The two ends of the cross section line.
     trinodes : list-like
         Unstructured grid triangulation table
-    X,Y : list-like
+    X, Y : list-like
         Node positions
     dist_res : float
         Approximate distance at which to sample the line

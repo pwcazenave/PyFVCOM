@@ -1745,7 +1745,7 @@ def apply_mask(fvcom, vars=[], mask_nodes=[], mask_elements=[], noisy=False):
     for key in vars:
         # Check if we need to apply the node mask or element mask and tile the mask to the right shape.
         if 'node' in fvcom.variable_dimension_names[key]:
-            mask = np.tile(mask_nodes, (*getattr(fvcom.data, key).shape[:-1],1))
+            mask = np.tile(mask_nodes, (*getattr(fvcom.data, key).shape[:-1], 1))
         elif 'nele' in fvcom.variable_dimension_names[key]:
             mask = np.tile(mask_elements, (*getattr(fvcom.data, key).shape[:-1], 1))
 
@@ -2179,34 +2179,34 @@ class ncwrite(object):
     >>> data = {}
     >>> data['dimensions'] = {
     ...     'lat': np.size(lat),
-    ...     'lon':np.size(lon),
-    ...     'time':np.shape(timeStr)[1],
-    ...     'DateStrLen':26
+    ...     'lon': np.size(lon),
+    ...     'time': np.shape(timeStr)[1],
+    ...     'DateStrLen': 26
     ... }
     >>> data['variables'] = {
-    ... 'latitude':{'data':lat,
-    ...     'dimensions':['lat'],
-    ...     'attributes':{'units':'degrees north'}
+    ... 'latitude': {'data': lat,
+    ...     'dimensions': ['lat'],
+    ...     'attributes': {'units': 'degrees north'}
     ... },
-    ... 'longitude':{
-    ...     'data':lon,
-    ...     'dimensions':['lon'],
-    ...     'attributes':{'units':'degrees east'}
+    ... 'longitude': {
+    ...     'data': lon,
+    ...     'dimensions': ['lon'],
+    ...     'attributes': {'units': 'degrees east'}
     ... },
-    ... 'Times':{
-    ...     'data':timeStr,
-    ...     'dimensions':['time','DateStrLen'],
-    ...     'attributes':{'units':'degrees east'},
-    ...     'fill_value':-999.0,
-    ...     'data_type':'c'
+    ... 'Times': {
+    ...     'data': timeStr,
+    ...     'dimensions': ['time', 'DateStrLen'],
+    ...     'attributes': {'units': 'degrees east'},
+    ...     'fill_value': -999.0,
+    ...     'data_type': 'c'
     ... },
-    ... 'p90':{'data':data,
-    ...     'dimensions':['lat','lon'],
-    ...     'attributes':{'units':'mgC m-3'}}}
+    ... 'p90': {'data': data,
+    ...     'dimensions': ['lat', 'lon'],
+    ...     'attributes': {'units': 'mgC m-3'}}}
     ... data['global attributes'] = {
     ...     'description': 'P90 chlorophyll',
-    ...     'source':'netCDF3 python',
-    ...     'history':'Created {}'.format(time.ctime(time.time()))
+    ...     'source': 'netCDF3 python',
+    ...     'history': 'Created {}'.format(time.ctime(time.time()))
     ... }
     >>> ncwrite(data, 'test.nc')
 

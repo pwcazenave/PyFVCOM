@@ -447,7 +447,7 @@ class TideDB(ValidationDB):
             dates, data = None, None
         else:
             return_data = np.asarray(return_data)
-            date_list = [epochsec_to_dt(this_time) for this_time in return_data[:,0]]
+            date_list = [epochsec_to_dt(this_time) for this_time in return_data[:, 0]]
             dates, data = np.asarray(date_list), return_data[:, 1:]
 
         return dates, data
@@ -634,7 +634,7 @@ observations_meta_data = {'buoy_name':'L4', 'year':'2015', 'ctd_new_file_type': 
             'buoy_filepath': , '/data/euryale4/backup/mbe/Data/WCO_data/L4/Buoy_data/l4_cont_data_2015.txt', 'lon':-4.217, 'lat':50.250}
 
 model_filestr_lambda = lambda m: '/data/euryale4/backup/mbe/Models/FVCOM/tamar_v2/run/output/depth_tweak2/2006/{:02d}/tamar_v2_0001.nc'.format(m)
-available_months = np.arange(1,13)
+available_months = np.arange(1, 13)
 model_file_list = [model_filestr_lambda(this_month) for this_month in available_months]
 
 """
@@ -653,9 +653,9 @@ class WCODB(ValidationDB):
         self._add_sql_strings()
         for this_table, this_str in self.wco_tables.items():
             self.create_table(this_key, this_val)
-        sites_data = [(0, 'L4',-4.217,50.250, ' '), (1, 'E1',-4.368,50.035,' ')]
+        sites_data = [(0, 'L4', -4.217, 50.250, ' '), (1, 'E1', -4.368, 50.035, ' ')]
         self.insert_into_table('sites', sites_data)
-        measurement_type_data = [(0,'CTD measurements'), (1, 'Surface buoy measurements')]
+        measurement_type_data = [(0, 'CTD measurements'), (1, 'Surface buoy measurements')]
         self.insert_into_table('measurement_types', measurement_type_data)
         self.execute_sql('create index date_index on obs (time_int);')
 
@@ -753,8 +753,8 @@ class WCODB(ValidationDB):
             print('No data available')
         else:
             return_data = np.asarray(return_data)
-            date_list = [epochsec_to_dt(this_time) for this_time in return_data[:,0]]
-            dates, data = np.asarray(date_list), return_data[:,1:]
+            date_list = [epochsec_to_dt(this_time) for this_time in return_data[:, 0]]
+            dates, data = np.asarray(date_list), return_data[:, 1:]
 
         return dates, data
 
@@ -770,7 +770,7 @@ class WCOObsFile(object):
         if depth is not None:
             self.observation_dict['depth'] = np.tile(depth, len(self.observation_dict['dt_time']))
 
-    def _add_file(self,filename,remove_undated=True):
+    def _add_file(self, filename, remove_undated=True):
         """
         TODO: Add docstring
 
@@ -791,7 +791,7 @@ class WCOObsFile(object):
             if not remove_undated or 'dt_time' in this_obs:
                 obs_dict_list.append(this_obs)
         rm_file = [os.remove(this_file) for this_file in temp_file_list]
-        return {this_key:np.hstack([this_dict[this_key] for this_dict in obs_dict_list]) for this_key in obs_dict_list[0]}
+        return {this_key: np.hstack([this_dict[this_key] for this_dict in obs_dict_list]) for this_key in obs_dict_list[0]}
 
     def _add_file_part(self, filename):
         """
@@ -806,11 +806,11 @@ class WCOObsFile(object):
 
         # Load the files, some use semi-colon delimiters, some whitespace...
         if ';' in str(np.loadtxt('temp_header_file.txt', delimiter='no_delimination_needed', dtype=str)):
-            observations_raw = np.loadtxt('temp_file.txt', delimiter=';',dtype=str)
-            observations_header = np.loadtxt('temp_header_file.txt', delimiter=';',dtype=str)
+            observations_raw = np.loadtxt('temp_file.txt', delimiter=';', dtype=str)
+            observations_header = np.loadtxt('temp_header_file.txt', delimiter=';', dtype=str)
         elif ',' in str(np.loadtxt('temp_header_file.txt', delimiter='no_delimination_needed', dtype=str)):
-            observations_raw = np.loadtxt('temp_file.txt', delimiter=',',dtype=str)
-            observations_header = np.loadtxt('temp_header_file.txt', delimiter=',',dtype=str)
+            observations_raw = np.loadtxt('temp_file.txt', delimiter=',', dtype=str)
+            observations_header = np.loadtxt('temp_header_file.txt', delimiter=',', dtype=str)
         else:
             observations_raw = np.loadtxt('temp_file.txt', dtype=str)
             observations_header = np.loadtxt('temp_header_file.txt', dtype=str)
@@ -827,10 +827,10 @@ class WCOObsFile(object):
             if np.any(np.isin(this_possible, observations_header)):
                 this_col = np.where(np.isin(observations_header, this_possible))[0]
                 if this_var == 'time' or this_var =='date' or this_var=='Jd':
-                    observation_dict[this_var] = np.squeeze(np.asarray(observations_raw[:,this_col], dtype=str))
+                    observation_dict[this_var] = np.squeeze(np.asarray(observations_raw[:, this_col], dtype=str))
                     time_vars.append(this_possible[np.isin(this_possible, observations_header)])
                 else:
-                    observation_dict[this_var] = np.squeeze(np.asarray(observations_raw[:,this_col], dtype=float))
+                    observation_dict[this_var] = np.squeeze(np.asarray(observations_raw[:, this_col], dtype=float))
         if 'date' in observation_dict:
             observation_dict['dt_time'] = self._parse_dates_to_dt(observation_dict, time_vars)
         return observation_dict
@@ -840,9 +840,12 @@ class WCOObsFile(object):
         TODO: Add docstring
 
         """
-        self.possible_vars = {'temp':np.asarray(['Tv290C', 'SST', ' Mean SST (degC)']), 'salinity':np.asarray(['Sal00', 'Sal', ' Mean SST (degC)']),
-                        'depth':np.asarray(['DepSM']),    'date':np.asarray(['mm/dd/yyyy', 'Year', ' Date (YYMMDD)']),
-                        'julian_day':np.asarray(['Jd']), 'time':np.asarray(['hh:mm:ss', 'Time', ' Time (HHMMSS)'])}
+        self.possible_vars = {'temp': np.asarray(['Tv290C', 'SST', ' Mean SST (degC)']),
+                              'salinity': np.asarray(['Sal00', 'Sal', ' Mean SST (degC)']),
+                              'depth': np.asarray(['DepSM']),
+                              'date': np.asarray(['mm/dd/yyyy', 'Year', ' Date (YYMMDD)']),
+                              'julian_day': np.asarray(['Jd']),
+                              'time': np.asarray(['hh:mm:ss', 'Time', ' Time (HHMMSS)'])}
 
     @staticmethod
     def _parse_dates_to_dt(obs_dict, time_vars):
@@ -856,8 +859,8 @@ class WCOObsFile(object):
                 dt_list.append(dt.datetime.strptime(this_date + ' ' + this_time, '%m/%d/%Y %H:%M:%S'))
         elif np.any(np.isin('Year', time_vars)):
             for this_time, (this_jd, this_year) in zip(obs_dict['time'], zip(obs_dict['julian_day'], obs_dict['date'])):
-                dt_list.append(dt.datetime(int(this_year),1,1) + dt.timedelta(days=int(this_jd) -1) +
-                                dt.timedelta(hours=int(this_time.split('.')[0])) + dt.timedelta(minutes=int(this_time.split('.')[1])))
+                dt_list.append(dt.datetime(int(this_year), 1, 1) + dt.timedelta(days=int(this_jd) - 1) +
+                               dt.timedelta(hours=int(this_time.split('.')[0])) + dt.timedelta(minutes=int(this_time.split('.')[1])))
         elif np.any(np.isin(' Date (YYMMDD)', time_vars)):
             for this_time, this_date in zip(obs_dict['time'], obs_dict['date']):
                 dt_list.append(dt.datetime.strptime(this_date + ' ' + this_time, '%y%m%d %H%M%S'))
@@ -894,7 +897,7 @@ class WCOParseFile(WCOObsFile):
             except ValueError:
                 print('Error in file {}'.format(this_file))
         # Flatten the list of dictionaries to one dictionary
-        self.observation_dict = {this_key:np.hstack([this_dict[this_key] for this_dict in observation_dict_list]) for this_key in observation_dict_list[0]}
+        self.observation_dict = {this_key: np.hstack([this_dict[this_key] for this_dict in observation_dict_list]) for this_key in observation_dict_list[0]}
         self.observation_dict['dt_time'] = np.hstack(dt_list)
 
 
@@ -948,8 +951,8 @@ class CompareData(object):
             print('Retrieve model data first')
             return
         obs_dt, obs_raw = self.database_obj.get_obs_data(buoy_name, var, self.model_date_mm[0], self.model_date_mm[1], measurement_type)
-        obs_depth = obs_raw[:,0]
-        obs_var = obs_raw[:,1]
+        obs_depth = obs_raw[:, 0]
+        obs_var = obs_raw[:, 1]
         self.observations[buoy_name][var] = obs_dict
 
     def get_comp_data_interpolated(self, buoy_name, var_list):
@@ -971,7 +974,7 @@ class CompareData(object):
                 this_obs_deps = self.observations[buoy_name]['depth'][this_obs_choose]
                 for var in var_list:
                     this_obs = self.observations[buoy_name][var][this_obs_choose]
-                    this_model = np.squeeze(fvcom_data_reader.data.temp[this_time_close,...])
+                    this_model = np.squeeze(fvcom_data_reader.data.temp[this_time_close, ...])
                     this_model_interp = np.squeeze(np.interp(this_obs_deps, model_depths, this_model))
 
                     try:
@@ -1063,18 +1066,20 @@ class CompareDataProbe(CompareData):
                 s_filelist.append(this_dir + this_buoy + '_s1.dat')
             mod_times, mod_t_vals, mod_pos = pf.read.read_probes(t_filelist, locations=True, datetimes=True)
             mod_times, mod_s_vals, mod_pos = pf.read.read_probes(s_filelist, locations=True, datetimes=True)
-            model_dict = {'dt_time':mod_times, 'temp':mod_t_vals, 'salinity':mod_s_vals}
+            model_dict = {'dt_time': mod_times, 'temp': mod_t_vals, 'salinity': mod_s_vals}
             self.model_data[this_buoy] = model_dict
 
 
 class CompareICES(object):
     """
-    A class for comparing FVCOM(-ERSEM) models to ICES bottle data. It is a fvcom-ised and class-ised version of code written 
-    by Momme Butenschon for NEMO output.
+    A class for comparing FVCOM(-ERSEM) models to ICES bottle data. It is a fvcom-ised and class-ised version of code
+    written by Momme Butenschon for NEMO output.
 
-    The ICES data used is in a premade h5 file. This how it was inherited and should be updated to a form we can reproduce. 
-	Default ICES variables: 'TEMP','PSAL', 'DOXY(umol/l)', 'PHOS(umol/l)', 'SLCA(umol/l)', 'NTRA(umol/l)', 'AMON(umol/l)',
-                            'PHPH', 'ALKY(mmol/l)', 'CPHL(mg/m^3)'
+    The ICES data used is in a premade h5 file. This how it was inherited and should be updated to a form we can
+    reproduce.
+
+	Default ICES variables: 'TEMP', 'PSAL', 'DOXY(umol/l)', 'PHOS(umol/l)', 'SLCA(umol/l)', 'NTRA(umol/l)',
+	                        'AMON(umol/l)', 'PHPH', 'ALKY(mmol/l)', 'CPHL(mg/m^3)'
 
     Example
     -------
@@ -1084,8 +1089,8 @@ class CompareICES(object):
     datafile="/data/euryale4/backup/momm/Data/ICES-data/CTD-bottle/EX187716.averaged.sorted.reindexed.h5"
     modelroot="/data/euryale2/scratch/mbe/Models_2/FVCOM/rosa/output"
     years=[2005]
-    months = [2,3]
-    modelfile=lambda y,m: "{}/{}/{:02d}/aqua_v16_0001.nc".format(modelroot,y,m)
+    months = [2, 3]
+    modelfile=lambda y, m: "{}/{}/{:02d}/aqua_v16_0001.nc".format(modelroot, y, m)
     modelfilelist = [modelfile(years[0], this_month) for this_month in months]
 
     test_comp = ICES_comp(modelfilelist, datafile, noisy=True)
@@ -1098,10 +1103,9 @@ class CompareICES(object):
     To Do
     -----
     Make script to generate the ICES datafile
-    Parrellelelise
+    Parallelise
     Add plotting
     Change null value to non numeric
-
 
     """
 
@@ -1197,7 +1201,7 @@ class CompareICES(object):
             ices_lon = np.asarray(self.ices_data['lon'])[~remove_data]
             ices_lat = np.asarray(self.ices_data['lat'])[~remove_data]
 
-            ices_data = {var:ices_data, 'depths':ices_depths, 'dates':ices_dates, 'lon':ices_lon, 'lat':ices_lat}    
+            ices_data = {var: ices_data, 'depths': ices_depths, 'dates': ices_dates, 'lon': ices_lon, 'lat': ices_lat}
         
         return ices_data, model_data
 
@@ -1208,7 +1212,7 @@ class CompareICES(object):
         """
 
         # Read the ICES datafile
-        df=read_hdf(self.ices_file,"df")
+        df = read_hdf(self.ices_file, "df")
 
         start_step_len = 1000000
         end_step_len = 10
@@ -1220,12 +1224,12 @@ class CompareICES(object):
             start_step_len = start_step_len/10
         df = df[int(start_index):]
 
-        for n,sample in df.iterrows():
+        for n, sample in df.iterrows():
             if self.noisy:
                 print('ICES sample {}'.format(n))
 
             h = int(np.floor(sample['Hr']/100))
-            sample_dt = dt.datetime(int(sample['Year']),int(sample['Mnth']),int(sample['Dy']),h,int(sample['Hr'] - h*100))
+            sample_dt = dt.datetime(int(sample['Year']), int(sample['Mnth']), int(sample['Dy']), h, int(sample['Hr'] - h * 100))
             if sample_dt > np.max(self.zeta_filereader.time.datetime):
                 break
             
@@ -1236,7 +1240,7 @@ class CompareICES(object):
                     node_ind = self.zeta_filereader.closest_node([sample['Longdeg'], sample['Latdeg']], haversine=True)
 
                     if self.daily_avg: # For daily averages match by day, otherwise use nearest time
-                        sample_dt = dt.datetime(int(sample['Year']),int(sample['Mnth']),int(sample['Dy']))
+                        sample_dt = dt.datetime(int(sample['Year']), int(sample['Mnth']), int(sample['Dy']))
 
                     model_time_ind = self.zeta_filereader.closest_time(sample_dt)
                     model_dt = self.zeta_filereader.time.datetime[model_time_ind]
@@ -1307,16 +1311,16 @@ class CompareICES(object):
                 else:
                     return
             this_day_index = np.where(np.asarray(current_modelfile_dt) == this_day)[0]
-            this_day_fr = FileReader(self.model_files[current_modelfile_ind], self.model_varkeys, 
-                                                                    dims={'time':np.arange(np.min(this_day_index),np.max(this_day_index)+1)}) 
+            this_day_fr = FileReader(self.model_files[current_modelfile_ind], self.model_varkeys,
+                                     dims={'time': np.arange(np.min(this_day_index), np.max(this_day_index) + 1)})
             this_day_obs_inds = np.where(np.asarray([this_dt.date() for this_dt in self.ices_data['time_dt']]) == this_day)[0]
-    
+
             for this_record_ind in this_day_obs_inds:
                 for key in self.var_keys:
                     if self.ices_data[key][this_record_ind] >-9.99e9:
                         this_model_key = self.ices_model_conversion[key]
                         space_ind = self.model_data['node_ind'][this_record_ind]
-                        dep_ind = self.model_data['z_ind'][this_record_ind] 
+                        dep_ind = self.model_data['z_ind'][this_record_ind]
                         time_ind = this_day_fr.closest_time(self.ices_data['time_dt'][this_record_ind])
 
                         if "+" in this_model_key:
@@ -1353,8 +1357,8 @@ class CompareICES(object):
         TODO: Add docstring
 
         """
-        self.var_keys = ['TEMP','PSAL', 'DOXY(umol/l)', 'PHOS(umol/l)', 'SLCA(umol/l)', 'NTRA(umol/l)', 'AMON(umol/l)',
-                            'PHPH', 'ALKY(mmol/l)', 'CPHL(mg/m^3)']
+        self.var_keys = ['TEMP', 'PSAL', 'DOXY(umol/l)', 'PHOS(umol/l)', 'SLCA(umol/l)', 'NTRA(umol/l)', 'AMON(umol/l)',
+                         'PHPH', 'ALKY(mmol/l)', 'CPHL(mg/m^3)']
 
     def _checkSample(self, sample):
         """
@@ -1368,7 +1372,7 @@ class CompareICES(object):
         return hasData
 
     @staticmethod
-    def _checkDepth(z,dep_lays_choose):
+    def _checkDepth(z, dep_lays_choose):
         """
         TODO: Add docstring
 
