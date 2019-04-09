@@ -5535,7 +5535,8 @@ class Restart(FileReader):
             fudge! Defaults to False.
         mode : bool, optional
             Set to 'nodes' to interpolate onto the grid node positions or 'elements' for the elements. Defaults to
-            'nodes'.
+            'nodes'. If it is a 2d field needs 'surface' in it e.g. 'surface_elements' or 'surface_nodes'. 'surface' defaults
+            to interpolates onto nodes in line with the defaults.
 
         """
 
@@ -5545,7 +5546,7 @@ class Restart(FileReader):
         # We need the vertical grid data for the interpolation, so load it now.
         self.load_data(['siglay'])
         self.data.siglay_center = nodes2elems(self.data.siglay, self.grid.triangles)
-        if mode == 'elements':
+        if 'elements' in mode:
             x = copy.deepcopy(self.grid.lonc)
             y = copy.deepcopy(self.grid.latc)
             # Keep depths positive down.
@@ -5564,7 +5565,7 @@ class Restart(FileReader):
 
             # Internal landmasses also need to be dealt with, so test if a point lies within the mask of the grid and
             # move it to the nearest in grid point if so.
-            if not mode == 'surface':
+            if 'surface' not in mode:
                 land_mask = getattr(coarse.data, coarse_name)[0, ...].mask[0, :, :]
             else:
                 land_mask = getattr(coarse.data, coarse_name)[0, ...].mask
@@ -5586,7 +5587,7 @@ class Restart(FileReader):
             # The depth data work differently as we need to squeeze each FVCOM water column into the available coarse
             # data. The only way to do this is to adjust each FVCOM water column in turn by comparing with the
             # closest coarse depth.
-            if mode != 'surface':
+            if 'surface' not in mode:
                 coarse_depths = np.tile(coarse.grid.depth, [coarse.dims.lat, coarse.dims.lon, 1]).transpose(2, 0, 1)
                 coarse_depths = np.ma.masked_array(coarse_depths, mask=getattr(coarse.data, coarse_name)[0, ...].mask)
                 coarse_depths = np.max(coarse_depths, axis=0)
@@ -5624,7 +5625,7 @@ class Restart(FileReader):
         nx = len(x)
         nz = z.shape[0]
 
-        if mode == 'surface':
+        if 'surface' in mode:
             if nt > 1:
                 boundary_grid = np.array((np.tile(self.time.time, [nx, 1]).T.ravel(),
                                           np.tile(y, [nt, 1]).transpose(0, 1).ravel(),
