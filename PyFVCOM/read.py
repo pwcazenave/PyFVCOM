@@ -1208,7 +1208,20 @@ class FileReader(Domain):
         self._update_dimensions(var)
 
     def closest_time(self, when):
-        """ Find the index of the closest time to the supplied time (datetime object). """
+        """
+        Find the index of the closest time to the supplied time (datetime object).
+
+        Parameters
+        ----------
+        when : datetime.datetime
+            The time for which to return the closest model time index.
+
+        Returns
+        -------
+        index : int
+            The index of the time closest to `when'.
+
+        """
         try:
             return np.argmin(np.abs(self.time.datetime - when))
         except AttributeError:
