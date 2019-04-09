@@ -6,7 +6,8 @@ setup(
     name='PyFVCOM',
     packages=['PyFVCOM', 'PyFVCOM.ctd', 'PyFVCOM.grid', 'PyFVCOM.utilities'],
     version=version,
-    description=("PyFVCOM is a collection of various tools and utilities which can be used to extract, analyse and plot input and output files from FVCOM."),
+    description=("PyFVCOM is a collection of various tools which can be used to generate inputs files and interact "
+                 "with FVCOM outputs."),
     author='Pierre Cazenave',
     author_email='pica@pml.ac.uk',
     url='https://gitlab.ecosystem-modelling.pml.ac.uk/fvcom/PyFVCOM',
