@@ -74,6 +74,8 @@ class GridReaderNetCDF(object):
 
         ds = Dataset(filename, 'r')
         self._dims = copy.deepcopy(dims)
+        if self._dims is None:
+            self._dims = {}
 
         self._bounding_box = False
         if 'wesn' in self._dims:
