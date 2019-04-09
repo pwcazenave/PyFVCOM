@@ -884,7 +884,7 @@ class Domain(object):
 
         """
 
-        self.grid.lengths = element_side_lengths(self.triangles, self.x, self.y)
+        self.grid.lengths = element_side_lengths(self.grid.triangles, self.grid.x, self.grid.y)
 
     def gradient(self, field):
         """
@@ -901,7 +901,7 @@ class Domain(object):
             `dx' corresponds to the partial derivative dZ/dX, and `dy' corresponds to the partial derivative dZ/dY.
         """
 
-        dx, dy = trigradient(self.x, self.y, field, self.triangles)
+        dx, dy = trigradient(self.grid.x, self.grid.y, field, self.grid.triangles)
 
         return dx, dy
 
@@ -924,7 +924,7 @@ class Domain(object):
 
         """
 
-        return elems2nodes(field, self.triangles)
+        return elems2nodes(field, self.grid.triangles)
 
     def to_elements(self, field):
         """
@@ -944,7 +944,7 @@ class Domain(object):
 
         """
 
-        return nodes2elems(field, self.triangles)
+        return nodes2elems(field, self.grid.triangles)
 
     def in_element(self, x, y, element):
         """
