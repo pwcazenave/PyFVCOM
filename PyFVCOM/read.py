@@ -1090,6 +1090,13 @@ class FileReader(Domain):
         self._dims = self.grid._dims
         delattr(self.grid, '_dims')
 
+        # Convert any dimension given as a slice to be a range of indices instead.
+        for dim in self._dims:
+            if isinstance(self._dims[dim], slice):
+                if self._debug:
+                    print(f'Converting {dim} indices from a slice to an array of indices')
+                self._dims[dim] = np.arange(self.ds.dimensions[dim].size)[self._dims[dim]]
+
         # Make sure we set the grid dimensions correctly if we've been asked to subset in space. We do this here and
         # in load_data because it's possible to supply no dimensions at invocation but supply them with load_data.
         for dim in ('node', 'nele', 'siglay', 'siglev', 'time'):
