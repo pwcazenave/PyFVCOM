@@ -427,6 +427,8 @@ class _GridReader(object):
 
         """
 
+        # TODO: Add the read_smesh_mesh reader in here too. What's the typical smeshing file extension for its files?
+
         self.filename = gridfile
         self.native_coordinates = native_coordinates
         self.zone = zone
