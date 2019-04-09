@@ -2164,7 +2164,7 @@ class Model(Domain):
             Set to True to remove duplicate time data from the nesting file.
         filter_points : bool, optional
             Set to True to remove nodes not in the supplied existing nesting file from the current set of nested
-            boundaries.
+            boundaries. Defaults to False.
         verbose : bool, optional
             Set to True to enable verbose output. Defaults to False.
 
