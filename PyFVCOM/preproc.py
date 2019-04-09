@@ -1444,9 +1444,6 @@ class Model(Domain):
         """
         TODO: Finish docstring.
 
-        :param start_node:
-        :return:
-
         """
 
         if find_bad_node(self.grid.triangles, start_node) and ~np.any(np.isin(self.river.bad_nodes, start_node)):
@@ -2133,8 +2130,6 @@ class Model(Domain):
     def avg_nest_force_vel(self):
         """
         TODO: Add docstring.
-
-        :return:
 
         """
         for this_nest in self.nest:
