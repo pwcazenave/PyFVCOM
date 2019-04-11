@@ -1186,7 +1186,9 @@ class OpenBoundary(object):
 
         if not hasattr(self.time, 'start'):
             raise AttributeError('No time data have been added to this OpenBoundary object, so we cannot predict tides.')
-        self.tide.time = date_range(self.time.start - relativedelta(days=1), self.time.end + relativedelta(days=1), inc=interval)
+        self.tide.time = date_range(self.time.start - relativedelta(days=1),
+                                    self.time.end + relativedelta(days=1),
+                                    inc=interval)
 
         constituent_name = 'con'
         if predict == 'zeta':
@@ -1207,10 +1209,13 @@ class OpenBoundary(object):
                  'lon_name': lon_name,
                  'lat_name': lat_name,
                  'constituent_name': constituent_name}
-        harmonics_lon, harmonics_lat, amplitudes, phases, available_constituents = self._load_harmonics(tpxo_harmonics, constituents, names)
+        harmonics_lon, harmonics_lat, amplitudes, phases, available_constituents = self._load_harmonics(tpxo_harmonics,
+                                                                                                        constituents,
+                                                                                                        names)
         interpolated_amplitudes, interpolated_phases = self._interpolate_tpxo_harmonics(x, y,
                                                                                         amplitudes, phases,
-                                                                                        harmonics_lon, harmonics_lat, interp_method=interp_method)
+                                                                                        harmonics_lon, harmonics_lat,
+                                                                                        interp_method=interp_method)
 
         self.tide.constituents = available_constituents
 
@@ -1220,7 +1225,8 @@ class OpenBoundary(object):
         # Dump the results into the object.
         setattr(self.tide, predict, np.asarray(results).T)  # put the time dimension first, space last.
 
-    def add_fvcom_tides(self, fvcom_harmonics, predict='zeta', interval=1/24, constituents=['M2'], serial=False, pool_size=None, noisy=False):
+    def add_fvcom_tides(self, fvcom_harmonics, predict='zeta', interval=1/24, constituents=['M2'], serial=False,
+                        pool_size=None, noisy=False):
         """
         Add FVCOM-derived tides at the open boundary nodes.
 
