@@ -1157,7 +1157,8 @@ class OpenBoundary(object):
         # Feels a bit ridiculous having a whole method for this...
         setattr(self, 'type', obc_type)
 
-    def add_tpxo_tides(self, tpxo_harmonics, predict='zeta', interval=1 / 24, constituents=['M2'], serial=False, pool_size=None, noisy=False, interp_method='nearest'):
+    def add_tpxo_tides(self, tpxo_harmonics, predict='zeta', interval=1 / 24, constituents=['M2'], serial=False,
+                       interp_method='linear', pool_size=None, noisy=False):
         """
         Add TPXO tides at the open boundary nodes.
 
@@ -1173,6 +1174,9 @@ class OpenBoundary(object):
             List of constituent names to use in UTide.reconstruct. Defaults to ['M2'].
         serial : bool, optional
             Run in serial rather than parallel. Defaults to parallel.
+        interp_method : str
+            The interpolation method to use. Defaults to 'linear'. Passed to scipy.interp.RegularGridInterpolator,
+            so choose any valid one for that.
         pool_size : int, optional
             Specify number of processes for parallel run. By default it uses all available.
         noisy : bool, optional
