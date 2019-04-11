@@ -2092,7 +2092,7 @@ class Player(FuncAnimation):
         super().__init__(self.fig, self.func, frames=self.play(), init_func=init_func, fargs=fargs,
                          save_count=save_count, **kwargs)
 
-    def play(self):
+    def play(self, *dummy):
         """ What to do when we play the animation. """
         while self.runs:
             self.i = self.i + self.forwards - (not self.forwards)
@@ -2102,37 +2102,37 @@ class Player(FuncAnimation):
                 self.stop()
                 yield self.i
 
-    def start(self):
+    def start(self, *dummy):
         """ Start the animation. """
         self.runs = True
         self.event_source.start()
 
-    def stop(self):
+    def stop(self, *dummy):
         """ Stop the animation. """
         self.runs = False
         self.event_source.stop()
 
-    def forward(self):
+    def forward(self, *dummy):
         """ Play forwards. """
         self.forwards = True
         self.start()
 
-    def backward(self):
+    def backward(self, *dummy):
         """ Play backwards. """
         self.forwards = False
         self.start()
 
-    def oneforward(self):
+    def oneforward(self, *dummy):
         """ Skip one forwards. """
         self.forwards = True
         self.onestep()
 
-    def onebackward(self):
+    def onebackward(self, *dummy):
         """ Skip one backwards. """
         self.forwards = False
         self.onestep()
 
-    def onestep(self):
+    def onestep(self, *dummy):
         """ Skip through one frame at a time. """
         if self.min < self.i < self.max:
             self.i = self.i + self.forwards - (not self.forwards)
