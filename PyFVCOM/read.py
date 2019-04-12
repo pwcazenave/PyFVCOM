@@ -2982,12 +2982,15 @@ class WriteFVCOM(object):
                     # there are 4 time dimensions in the data, we'll likely pick up the dimension as `four' rather than
                     # `time').
                     dims = []
-                    for d in dim_size:
+                    for size in shape:
+                        candidate_dimensions = [i for i, j in dim_size.items() if j == size]
+                        if len(candidate_dimensions) > 1:
+                            raise AttributeError(f'Found duplicate possible dimensions for non-standard variable {var}')
                         # Skip unlikely dimensions.
-                        if d in unlikely_dims:
+                        if candidate_dimensions[0] in unlikely_dims:
                             continue
-                        if dim_size[d] in shape:
-                            dims.append(d)
+                        if candidate_dimensions:
+                            dims += candidate_dimensions
                     if len(dims) != len(shape):
                         raise AttributeError(f'Unable to identify dimensions for non-standard variable {var}')
 
