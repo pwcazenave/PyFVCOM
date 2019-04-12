@@ -2954,9 +2954,10 @@ class WriteFVCOM(object):
                 dims = self._fvcom.variable_dimension_names[var]
                 self._variables[var] = self._nc.createVariable(var, fmt, dims, **self._ncopts)
                 # Add any attributes we have.
-                var_atts = getattr(self._fvcom.atts, var)
-                for att in var_atts:
-                    self._variables[var].setncattr(att, getattr(var_atts, att))
+                if hasattr(self._fvcom.atts, var):
+                    var_atts = getattr(self._fvcom.atts, var)
+                    for att in var_atts:
+                        self._variables[var].setncattr(att, getattr(var_atts, att))
 
         # self._fvcom.data. may be missing entirely (it's always present as I write this, but I think it may go away
         # in the future - assume I've done that since it's relatively cheap to do so).
