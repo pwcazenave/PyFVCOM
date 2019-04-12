@@ -2994,9 +2994,10 @@ class WriteFVCOM(object):
                 self._variables[var] = self._nc.createVariable(var, fmt, dims, **self._ncopts)
 
                 # Add any attributes we have.
-                var_atts = getattr(self._fvcom.atts, var)
-                for att in var_atts:
-                    self._variables[var].setncattr(att, getattr(var_atts, att))
+                if hasattr(self._fvcom.atts, var):
+                    var_atts = getattr(self._fvcom.atts, var)
+                    for att in var_atts:
+                        self._variables[var].setncattr(att, getattr(var_atts, att))
 
     def _add_variables(self):
         # Add the data from the variables in self._fvcom.grid and self._fvcom.data.
