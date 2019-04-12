@@ -1665,6 +1665,106 @@ class FileReader(Domain):
             max_len = max((series.astype(str).map(len).max(), len(str(series.name)))) + 2
             writer.sheets[sheet_name].set_column(idx, idx, max_len)
 
+    def to_csv(self, name, variable=None, layer=0, **kwargs):
+        """
+        Export data to a CSV file called `name'.
+
+        If more than one variable has been loaded, specify which variable to save (e.g. `variable='O3_c'`).
+
+        If we have loaded multiple layers, specify the layer index (zero-indexed) which will be saved into the CSV file.
+
+        If we have multiple times, each column name is appended "time=%Y-%m-%dT%H:%M:%S.%f".
+
+        To export the grid area, use the variable `area'; for volume, use the variable `volume'.
+
+        Parameters
+        ----------
+        name : str
+            The Excel file name to which we save our data.
+        variable : str, optional
+            If given, export the names variable. If omitted, the first variable in self.data (alphabetically) is
+            exported.
+        layer : int, optional
+            If given, extract the relevant vertical layer. Defaults to 0.
+
+        Additional kwargs are passed to `pandas.DataFrame.to_csv`.
+
+        """
+
+        if variable is None:
+            variable = sorted(list(self.data))[0]
+            if len(list(self.data)) > 1:
+                warn(f'No specific variable supplied and more than one variable loaded. Exporting the first variable '
+                     f'name sorted alphabetically ({variable}).')
+
+        have_time = False  # assume we have no time dimension unless we have a 3D variable.
+
+        # Discriminate between self.grid and self.data.
+        base_attribute = self.data
+        if variable in list(self.grid):
+            base_attribute = self.grid
+
+        if variable is 'volume':
+            if not hasattr(self.grid, 'depth_volume'):
+                self.grid_volume()
+            # We'll always use depth_volume since it's vertically resolved but just grab the given layer now.
+            data = self.grid.depth_volume[layer, :]
+        elif variable is 'area':
+            if not hasattr(self.grid, 'art1'):
+                self.grid.art1 = np.asarray(control_volumes(self.grid.x, self.grid.y, self.grid.triangles,
+                                                            element_control=False, poolsize=None))
+            data = self.grid.art1
+        else:
+            try:
+                all_data = getattr(base_attribute, variable)
+                if np.ndim(all_data) > 2:
+                    have_time = True
+                data = np.squeeze(all_data[..., layer, :]).T
+            except IndexError:
+                # Probably got a 2D field (e.g. art1, h etc.). Just grab as is.
+                data = np.squeeze(getattr(base_attribute, variable))
+
+        if variable in self.variable_dimension_names and 'nele' in self.variable_dimension_names[variable]:
+            lon, lat = self.grid.lonc, self.grid.latc
+        else:
+            lon, lat = self.grid.lon, self.grid.lat
+
+        units = ''
+        if hasattr(self.atts, variable):
+            units = getattr(self.atts, variable).units
+        elif variable == 'h':
+            units = 'm'
+        elif variable == 'area':
+            units = 'm^2'
+        elif variable == 'volume':
+            units = 'm^3'
+
+        if units != '':
+            var_header = f'{variable} ({units})'
+        else:
+            var_header = f'{variable}'
+
+        # Check if we have to stack in time, and if so, make appropriate column headers. Use the shape of the array
+        # rather than self.dims.time in case we've done some preprocessing before writing to disk (e.g. finding the
+        # maximum in time).
+        if have_time and np.shape(data)[0] > 1:
+            columns = ['lon', 'lat'] + [f'{var_header} time={t}' for t in self.time.Times]
+        else:
+            columns = ['lon', 'lat', var_header]
+
+        # Update kwargs with our values if we haven't been passed them.
+        if 'index' not in kwargs:
+            kwargs.update({'index': False})
+        elif kwargs['index']:
+            # Add a new header to the columns.
+            columns = ['index'] + columns
+        if 'header' not in kwargs:
+            kwargs.update({'header': columns})
+
+        # Gather the coordinates with the data into a DataFrame and then write out.
+        df = pd.DataFrame(np.column_stack((lon, lat, data)))
+        df.to_csv(name, **kwargs)
+
 
 def read_nesting_nodes(fvcom, nestpath):
     """
