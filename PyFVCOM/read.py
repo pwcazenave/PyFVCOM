@@ -13,6 +13,7 @@ from warnings import warn
 
 import matplotlib.path as mpath
 import numpy as np
+import pandas as pd
 from netCDF4 import Dataset, MFDataset, num2date, date2num
 
 from PyFVCOM.grid import Domain, control_volumes, get_area_heron
@@ -1537,7 +1538,7 @@ class FileReader(Domain):
 
         If we have multiple layers, each sheet is appended with the corresponding layer number.
 
-        If we have multiple times, each column is appended "time=#" and a new sheet with the model times is
+        If we have multiple times, each column name is appended "time=#" and a new sheet with the model times is
         created.
 
         Parameters
