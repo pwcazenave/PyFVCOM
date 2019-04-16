@@ -2153,6 +2153,9 @@ class Model(Domain):
         Load the existing nested forcing file into the current set of nested boundaries in
         self.nest[*].boundaries[*].data.
 
+        This works best if the nests in self.nest are exactly the same as the data being loaded. That might take some
+        manual fiddling to get right.
+
         Parameters
         ----------
         existing_nest : str, pathlib.Path
