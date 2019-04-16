@@ -2242,60 +2242,6 @@ class Model(Domain):
                         boundary.grid.triangles = reduce_triangulation(boundary.grid.triangles, boundary.grid.nodes)
                         boundary.grid.nv = boundary.grid.triangles.T + 1
 
-                # Add any ones present in the given nesting file to the current set of nests. To pick which nested
-                # level to add it to, find the nested level which has the closest point and stick it in that.
-                nest_dist = []
-                nc_points = np.argwhere(nc_nodes == list(set(nc_nodes) - set(nest_nodes))).ravel()
-                for point in nc_points:
-                    px, py = x[point], y[point]
-                    for n_index, nest in enumerate(self.nest):
-                        nest_dist.append([])
-                        for b_index, boundary in enumerate(nest.boundaries):
-                            nest_dist[-1].append(np.min(np.abs(np.hypot(boundary.grid.x - px, boundary.grid.y - py))))
-
-                    target_min = np.min(flatten_list(nest_dist))
-                    for j, dist_nest in enumerate(nest_dist):
-                        for k, dist_boundary in enumerate(dist_nest):
-                            if dist_boundary == target_min:
-                                nest_index, boundary_index = j, k
-
-                    # Now add the netCDF point to that boundary.
-                    self.nest[nest_index].boundaries[boundary_index].nodes += [nc_nodes[point]]
-                    for var in ('x', 'y', 'h'):
-                        current_value = getattr(self.nest[nest_index].boundaries[boundary_index].grid, var)
-                        current_value = np.hstack((current_value, ds.variables[var][point]))
-                        setattr(self.nest[nest_index].boundaries[boundary_index].grid, var, current_value)
-                    lon, lat = lonlat_from_utm(self.nest[nest_index].boundaries[boundary_index].grid.x,
-                                               self.nest[nest_index].boundaries[boundary_index].grid.y,
-                                               self.nest[nest_index].boundaries[boundary_index].grid.zone)
-                    self.nest[nest_index].boundaries[boundary_index].grid.lon = lon
-                    self.nest[nest_index].boundaries[boundary_index].grid.lat = lat
-                    for var in ('layers', 'levels'):
-                        current_value = getattr(self.nest[nest_index].boundaries[boundary_index].sigma, var)
-                        current_value = np.vstack((current_value, ds.variables[f'sig{var[:3]}'][..., point]))
-                        setattr(self.nest[nest_index].boundaries[boundary_index].sigma, var, current_value)
-
-                    # Redo the triangulation now.
-                    triangles = reduce_triangulation(self.grid.triangles,
-                                                     self.nest[nest_index].boundaries[boundary_index].nodes)
-                    self.nest[nest_index].boundaries[boundary_index].triangles = triangles
-                    # Also redo the elements for the current nest.
-                    self.nest[nest_index].boundaries[boundary_index].elements = np.unique(triangles.ravel())
-
-            for nest in self.nest:
-                for boundary in nest.boundaries:
-                    # Remake the depth-resolve sigma information based on the filtered data we've got.
-                    boundary.sigma.layers_z = boundary.grid.h[:, np.newaxis] * boundary.sigma.layers
-                    boundary.sigma.levels_z = boundary.grid.h[:, np.newaxis] * boundary.sigma.levels
-                    try:
-                        boundary.sigma.layers_center_z = boundary.grid.h_center[:, np.newaxis] * boundary.sigma.layers_center
-                    except AttributeError:
-                        pass
-                    try:
-                        boundary.sigma.levels_center_z = boundary.grid.h_center[:, np.newaxis] * boundary.sigma.levels_center
-                    except AttributeError:
-                        pass
-
             # Fix the order of the positions in the data from the netCDF file to match those in the boundaries.
             nest_nodes = flatten_list([boundary.nodes for nest in self.nest for boundary in nest.boundaries])
             nest_elements = flatten_list([boundary.elements for nest in self.nest for boundary in nest.boundaries if np.any(boundary.elements)])
