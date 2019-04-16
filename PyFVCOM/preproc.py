@@ -2190,10 +2190,10 @@ class Model(Domain):
 
             # Grab the cartesian coordinates for the closest lookups. Realistically this could do spherical too by
             # leveraging the haversine argument to closest_{node,element}. Another day, perhaps.
-            x, y = ds.variables['x'][:], ds.variables['y'][:]
-            xc, yc = ds.variables['xc'][:], ds.variables['yc'][:]
-            nc_nodes = self.closest_node((x, y), cartesian=True)
-            nc_elements = self.closest_element((xc, yc), cartesian=True)
+            x, y = ds.variables['lon'][:], ds.variables['lat'][:]
+            xc, yc = ds.variables['lonc'][:], ds.variables['latc'][:]
+            nc_nodes = self.closest_node((x, y))
+            nc_elements = self.closest_element((xc, yc))
 
             nest_nodes = flatten_list([boundary.nodes for nest in self.nest for boundary in nest.boundaries])
             nest_elements = flatten_list([boundary.elements for nest in self.nest for boundary in nest.boundaries if np.any(boundary.elements)])
