@@ -4027,7 +4027,7 @@ class Nest(object):
         """
 
         if self._noisy:
-                print('Add weights to the nested boundary.')
+            print('Add weights to the nested boundary.')
 
         for index, boundary in enumerate(self.boundaries):
             if power == 0:
