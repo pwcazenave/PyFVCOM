@@ -1736,6 +1736,9 @@ class OpenBoundary(object):
         nx = len(boundary_points)
         nz = z.shape[-1]
 
+        if verbose:
+            print(f'Interpolating {nt} times, {nz} vertical layers and {nx} points')
+
         # Make arrays of lon, lat, depth and time for non-sigma interpolation. Need to make the coordinates match the
         # coarse data shape and then flatten the lot. We should be able to do the interpolation in one shot this way,
         # but we have to be careful our coarse data covers our model domain (space and time).
