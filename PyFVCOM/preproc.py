@@ -4019,7 +4019,7 @@ class Nest(object):
 
             boundary.weight_node = np.repeat(weight_node, len(boundary.nodes))
             # We will always have one fewer sets of elements as the nodes bound the elements.
-            if not np.any(boundary.elements) and index > 0:
+            if not np.any(boundary.elements) and boundary is not self.boundaries[-1]:
                 raise ValueError('No elements defined in this nest. Adding weights requires elements.')
             elif np.any(boundary.elements):
                 # We should get here on all boundaries bar the last since the last open boundary has no elements in a
