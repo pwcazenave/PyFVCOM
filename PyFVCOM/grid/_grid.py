@@ -1507,31 +1507,34 @@ class OpenBoundary(object):
 
         """
 
-        # Fix our input position longitudes to be in the 0-360 range to match the harmonics data range,
-        # if necessary.
+        # Fix our input position longitudes to be in the 0-360 range to match the harmonics data range, if necessary.
         if harmonics_lon.min() >= 0:
             x[x < 0] += 360
 
-        # Since everything should be in the 0-360 range, stuff which is between the Greenwich meridian and the
-        # first harmonics data point is now outside the interpolation domain, which yields an error since
-        # RegularGridInterpolator won't tolerate data outside the defined bounding box. As such, we need to
-        # squeeze the interpolation locations to the range of the open boundary positions.
+        # Since everything should be in the 0-360 range, stuff which is between the Greenwich meridian and the first
+        # harmonics data point is now outside the interpolation domain, which yields an error since
+        # RegularGridInterpolator won't tolerate data outside the defined bounding box. As such, we need to squeeze
+        # the interpolation locations to the range of the open boundary positions.
         if x.min() < harmonics_lon.min():
             harmonics_lon[harmonics_lon == harmonics_lon.min()] = x.min()
 
-        # I can't wrap my head around the n-dimensional unstructured interpolation tools (Rdf, griddata etc.), so just
-        # loop through each constituent and do a 2D interpolation.
+        # I can't wrap my head around the n-dimensional unstructured interpolation tools (Rdf, griddata etc.),
+        # so just loop through each constituent and do a 2D interpolation.
 
         if pool_size is None:
             pool = multiprocessing.Pool()
         else:
             pool = multiprocessing.Pool(pool_size)
 
-        inputs = [(harmonics_lon, harmonics_lat, amp_data[i], x, y) for i in range(amp_data.shape[0])]
-        amplitudes = np.asarray(pool.map(mp_interp_func, inputs))
-        inputs = [(harmonics_lon, harmonics_lat, phase_data[i], x, y) for i in range(phase_data.shape[0])]
-        phases = np.asarray(pool.map(mp_interp_func, inputs))
+        # Use pol2cart/cart2pol like we do for the TPXO components.
+        harmonics_u, harmonics_v = pol2cart(amp_data, phase_data, degrees=True)
+        inputs = [(harmonics_lon, harmonics_lat, harmonics_u[i], x, y) for i in range(harmonics_u.shape[0])]
+        harmonics_u = np.asarray(pool.map(mp_interp_func, inputs))
+        inputs = [(harmonics_lon, harmonics_lat, harmonics_v[i], x, y) for i in range(harmonics_v.shape[0])]
+        harmonics_v = np.asarray(pool.map(mp_interp_func, inputs))
         pool.close()
+        # Map back to amplitude and phase.
+        amplitudes, phases = cart2pol(harmonics_u, harmonics_v, degrees=True)
 
         # Transpose so space is first, constituents second (expected by self._predict_tide).
         return amplitudes.T, phases.T
