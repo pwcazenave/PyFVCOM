@@ -2085,6 +2085,19 @@ class Model(Domain):
             if nesting_type >= 2:
                 self.nest[-1].add_weights()
 
+        # Find missing elements on the last-but-one nested boundary. These are defined as those whose the three nodes
+        # are included but the element isn't. This replicates what FVCOM does when it computes the elements to
+        # include in a nested output file (since a nested input file for FVCOM is just defined as a list of node IDs).
+        boundary_nodes = self.nest[-1].boundaries[-1].nodes
+        boundary_elements = self.nest[-1].boundaries[-2].elements
+        missing_elements = np.argwhere(np.all(np.isin(self.grid.triangles, boundary_nodes), axis=1)).ravel()
+        if len(missing_elements) > 0:
+            if self._noisy:
+                print('Adding missing bounded elements for the last boundary in the nest.')
+            self.nest[-1].boundaries[-2].elements = np.unique(np.hstack([missing_elements, boundary_elements]))
+            # Update the associated boundary information.
+            self.nest[-1]._update_open_boundaries()
+
     def add_nests_harmonics(self, harmonics_file, harmonics_vars=['u', 'v', 'zeta'], constituents=['M2', 'S2'],
                             pool_size=None):
         """
