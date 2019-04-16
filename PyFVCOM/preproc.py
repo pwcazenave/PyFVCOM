@@ -3895,16 +3895,20 @@ class Nest(object):
             if self._debug:
                 print('Adding grid info to boundary {} of {}'.format(ii + 1, len(self.boundaries)))
             for attribute in self.grid:
-                if self._debug:
-                    print('\t{}'.format(attribute))
                 try:
                     if 'center' not in attribute and attribute not in ['lonc', 'latc', 'xc', 'yc']:
                         setattr(boundary.grid, attribute, getattr(self.grid, attribute)[boundary.nodes, ...])
+                        if self._debug:
+                            print(f'\tUpdating grid node attribute: {attribute}')
                     else:
                         if np.any(boundary.elements):
                             setattr(boundary.grid, attribute, getattr(self.grid, attribute)[boundary.elements, ...])
+                            if self._debug:
+                                print(f'\tUpdating grid element attribute: {attribute}')
                 except (IndexError, TypeError):
                     setattr(boundary.grid, attribute, getattr(self.grid, attribute))
+                    if self._debug:
+                        print(f'\tTransferring grid attribute: {attribute}')
                 except AttributeError as e:
                     if self._debug:
                         print(e)
@@ -3913,16 +3917,20 @@ class Nest(object):
             if self._debug:
                 print('Adding sigma info to boundary {} of {}'.format(ii + 1, len(self.boundaries)))
             for attribute in self.sigma:
-                if self._debug:
-                    print('\t{}'.format(attribute))
                 try:
                     if 'center' not in attribute:
                         setattr(boundary.sigma, attribute, getattr(self.sigma, attribute)[boundary.nodes, ...])
+                        if self._debug:
+                            print(f'\tUpdating sigma node attribute: {attribute}')
                     else:
                         if np.any(boundary.elements):
                             setattr(boundary.sigma, attribute, getattr(self.sigma, attribute)[boundary.elements, ...])
+                            if self._debug:
+                                print(f'\tUpdating sigma element attribute: {attribute}')
                 except (IndexError, TypeError):
                     setattr(boundary.sigma, attribute, getattr(self.sigma, attribute))
+                    if self._debug:
+                        print(f'\tTransferring sigma attribute: {attribute}')
                 except AttributeError as e:
                     if self._debug:
                         print(e)
