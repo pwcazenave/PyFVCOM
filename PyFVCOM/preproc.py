@@ -2197,11 +2197,17 @@ class Model(Domain):
             nest_nodes = flatten_list([boundary.nodes for nest in self.nest for boundary in nest.boundaries])
             nest_elements = flatten_list([boundary.elements for nest in self.nest for boundary in nest.boundaries if np.any(boundary.elements)])
 
-            # Identify nodes/elements only present in nest_nodes and nest_elements and then drop them from the
-            # corresponding boundary.
+            # Should this use the nest nodes and elements as canonical and grab whatever data we've got in the
+            # netCDF (even if it's not exactly in the right place) or should it error in that situation? The name
+            # of the option seems to imply that we'll filter one or the other. I think we'll go with filter as in
+            # "exclude ones from the netCDF which aren't in the nest nodes and elements".
+            #
+            # If there's a bug in here, I feel for whoever has to look at this to try to figure out how to fix it. 
+            # It's an impenetrable mess of masking. There must be a simpler way to do this and I encourage whoever it
+            # is to find it!
             if filter_points:
-                match_nodes = set(nest_nodes) - set(nc_nodes)
-                match_elements = set(nest_elements) - set(nc_elements)
+                match_nodes = set(nc_nodes) - set(nest_nodes)
+                match_elements = set(nc_elements) - set(nest_elements)
                 for nest in self.nest:
                     for boundary in nest.boundaries:
                         node_mask = np.isin(boundary.nodes, list(match_nodes), invert=True)
