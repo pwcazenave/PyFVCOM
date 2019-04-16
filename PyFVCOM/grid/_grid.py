@@ -1486,7 +1486,8 @@ class OpenBoundary(object):
 
         return amplitudes, phases
 
-    def _interpolate_fvcom_harmonics(self, x, y, amp_data, phase_data, harmonics_lon, harmonics_lat, pool_size=None):
+    @staticmethod
+    def _interpolate_fvcom_harmonics(x, y, amp_data, phase_data, harmonics_lon, harmonics_lat, pool_size=None):
         """
         Interpolate from the harmonics data onto the current open boundary positions.
 
