@@ -3910,12 +3910,12 @@ class Nest(object):
             raise ValueError("Unsupported boundary type {}. Supply PyFVCOM.grid.OpenBoundary or `list'.".format(type(boundary)))
         # Add the sigma and grid structure attributes. This is a bit inefficient as we end up doing it for every
         # boundary each time we add a new boundary.
-        self.__update_open_boundaries()
+        self._update_open_boundaries()
 
     def __iter__(self):
         return (a for a in dir(self) if not a.startswith('_'))
 
-    def __update_open_boundaries(self):
+    def _update_open_boundaries(self):
         """
         Call this when we've done something which affects the open boundary objects and we need to update their
         properties.
