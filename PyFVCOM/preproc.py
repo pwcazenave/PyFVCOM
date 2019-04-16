@@ -2179,7 +2179,6 @@ class Model(Domain):
             # Check the time values in the netCDF are equal to the times we've got.
             ds_time = num2date(ds.variables['Itime'][:] + ds.variables['Itime2'][:] / 1000 / 60 / 60 / 24,
                                units=ds.variables['Itime'].units)
-
             if filter_times:
                 # Some nesting files have duplicated times (!?). Remove them here.
                 bad_times = np.argwhere(np.asarray([i.total_seconds() for i in np.diff(ds_time)]) == 0).ravel()
@@ -2305,12 +2304,14 @@ class Model(Domain):
                         if has_time and has_space:
                             # Split the existing nodes/elements into the current open boundary nodes.
                             if 'node' in ds.variables[var].dimensions:
+                                nc_mask = np.isin(nc_nodes, boundary.nodes)
                                 # Holy nested indexing, Batman!
-                                data = ds.variables[var][:][..., nc_node_order][..., np.isin(nc_nodes[nc_node_order], boundary.nodes)]
+                                data = ds.variables[var][:][..., nc_node_order][..., nc_mask]
                             else:
                                 if boundary.elements is not None:
+                                    nc_mask = np.isin(nc_elements, boundary.elements)
                                     # Holy nested indexing, Batman!
-                                    data = ds.variables[var][:][..., nc_element_order][..., np.isin(nc_elements[nc_element_order], boundary.elements)]
+                                    data = ds.variables[var][:][..., nc_element_order][..., nc_mask]
                                 else:
                                     # This is the first boundary and thus has no element data.
                                     continue
