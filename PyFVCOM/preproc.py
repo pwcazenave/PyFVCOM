@@ -2206,6 +2206,11 @@ class Model(Domain):
                 for nest in self.nest:
                     for boundary in nest.boundaries:
                         node_mask = np.isin(boundary.nodes, list(match_nodes), invert=True)
+                        if self._debug:
+                            if np.sum(node_mask) != len(boundary.nodes):
+                                print(f'Hmmm, dodgy node filtering! {np.sum(node_mask)}, {len(boundary.nodes)}')
+                            else:
+                                print('OK node filtering')
                         if np.any(node_mask):
                             boundary.nodes = np.asarray(boundary.nodes)[node_mask].tolist()
                             for var in ('lon', 'lat', 'x', 'y', 'h', 'types'):
@@ -2216,6 +2221,11 @@ class Model(Domain):
                                     setattr(boundary.sigma, var, getattr(boundary.sigma, var)[node_mask])
                         if boundary.elements is not None:
                             element_mask = np.isin(boundary.elements, list(match_elements), invert=True)
+                            if self._debug:
+                                if np.sum(element_mask) != len(boundary.elements):
+                                    print(f'Hmmm, dodgy element filtering! {np.sum(element_mask)}, {len(boundary.elements)}')
+                                else:
+                                    print('OK element filtering')
                             if np.any(element_mask):
                                 boundary.elements = np.asarray(boundary.elements)[element_mask].tolist()
                                 for var in ('lonc', 'latc', 'xc', 'yc', 'h_center'):
