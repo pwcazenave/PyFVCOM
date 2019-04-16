@@ -3982,33 +3982,41 @@ class Nest(object):
             raise ValueError('No open boundary nodes in the current open boundary. Please add some and try again.')
 
         new_level_boundaries = []
-        for this_boundary in self.boundaries:
-            level_elements = find_connected_elements(this_boundary.nodes, self.grid.triangles)
-            # Find the nodes and elements in the existing nests.
-            nest_nodes = flatten_list([i.nodes for i in self.boundaries])
-            nest_elements = flatten_list([i.elements for i in self.boundaries if np.any(i.elements)])
+        # Work off the last boundary's nodes to get the connected elements and nodes. No need to iterate through
+        # everything as this gets recursive as we add more boundaries.
+        this_boundary = self.boundaries[-1]
+        level_elements = find_connected_elements(this_boundary.nodes, self.grid.triangles)
+        # Find the nodes and elements in the existing nests.
+        nest_nodes = flatten_list([i.nodes for i in self.boundaries])
+        nest_elements = flatten_list([i.elements for i in self.boundaries if np.any(i.elements)])
 
-            # Get the nodes connected to the elements we've extracted.
-            level_nodes = np.unique(self.grid.triangles[level_elements, :])
-            # Remove ones we already have in the nest.
-            unique_nodes = np.setdiff1d(level_nodes, nest_nodes)
-            if len(unique_nodes) > 0:
-                # Create a new open boundary from those nodes.
-                new_boundary = OpenBoundary(unique_nodes)
+        # Get unique elements and add them to the current boundary. This way we end up with the right number
+        # of layers of elements (i.e. they're bounded by a string of nodes on each side).
+        unique_elements = np.setdiff1d(level_elements, nest_elements)
+        if this_boundary.elements is None:
+            this_boundary.elements = unique_elements.tolist()
+        else:
+            if self._noisy:
+                warn(f'We already have elements on nest level {len(self.boundaries)}.')
+            # print(unique_elements, this_boundary.elements)
+            # this_boundary.elements = unique_elements.tolist()
 
-                # Add the elements unique to the current nest level too.
-                unique_elements = np.setdiff1d(level_elements, nest_elements)
-                new_boundary.elements = unique_elements.tolist()
+        # Get the nodes connected to the elements we've extracted.
+        level_nodes = np.unique(self.grid.triangles[level_elements, :])
+        # Remove ones we already have in the nest.
+        unique_nodes = np.setdiff1d(level_nodes, nest_nodes)
+        if len(unique_nodes) > 0:
+            # Create a new open boundary from those nodes.
+            new_boundary = OpenBoundary(unique_nodes)
 
-                # Grab the time from the previous one.
-                setattr(new_boundary, 'time', this_boundary.time)
-                new_level_boundaries.append(new_boundary)
+            # Grab the time from the previous one.
+            setattr(new_boundary, 'time', this_boundary.time)
+            new_level_boundaries.append(new_boundary)
 
-        for this_boundary in new_level_boundaries:
-            self.boundaries.append(this_boundary)
+            self.boundaries += new_level_boundaries
 
-        # Populate the grid and sigma objects too.
-        self.__update_open_boundaries()
+            # Populate the grid and sigma objects too.
+            self._update_open_boundaries()
 
     def add_weights(self, power=0):
         """
