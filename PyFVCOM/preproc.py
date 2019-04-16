@@ -2396,7 +2396,7 @@ class Model(Domain):
 
         for nest in nests:
             for boundary in nest.boundaries:
-                # Make boolean arrays for the matchup with the
+                # Make boolean arrays for the match up between the current nest boundary and flat indices.
                 temp_indices = {'nodes': np.isin(nodes, boundary.nodes),
                                 'elements': np.isin(elements, boundary.elements)}
 
@@ -2405,8 +2405,8 @@ class Model(Domain):
                         pass
                     elif var in out_dict.keys():
                         this_index = temp_indices[out_dict[var][1]]
-                        # Skip out if we don't have any indices for this index. This happens on the first boundary for
-                        # elements.
+                        # Skip out if we don't have any indices for this grid position (e.g. elements on the last
+                        # boundary in a nest).
                         if not np.any(this_index):
                             continue
 
@@ -4068,8 +4068,8 @@ class Nest(object):
             if not np.any(boundary.elements) and index > 0:
                 raise ValueError('No elements defined in this nest. Adding weights requires elements.')
             elif np.any(boundary.elements):
-                # We should only ever get here on the second iteration since the first open boundary has no elements
-                # in a nest (it's just the original open boundary).
+                # We should get here on all boundaries bar the last since the last open boundary has no elements in a
+                # nest.
                 if power == 0:
                     weight_element = 1 / index
                 else:
