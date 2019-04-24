@@ -3837,7 +3837,13 @@ class Nest(object):
     """
     Class to hold a set of open boundaries as OpenBoundary objects.
 
-    This feels like it ought to be a superclass of OpenBoundary, but I can't wrap my head around how.
+    TODO: This should be a subclass of Domain and OpenBoundary since a nest is just a weird unstructured grid. By
+     subclassing OpenBoundary, we'd get all the useful interpolation methods; subclassing Domain would simplify the
+     storage of the model grid and subsequent writing out to netCDF. Doing this would mean removing the
+     self.boundaries and instead only having a self.grid which has only the nested nodes and elements in it. The only
+     disadvantage I can see at the moment is that adding the weights is more difficult to do this way since we don't
+     have any way of easily identify what level of a nest we're in. However, that can instead be added as an option to
+     add_level to make it generate a list of weights for each set of nodes and elements that have been added.
 
     """
 
