@@ -2255,12 +2255,12 @@ class Model(Domain):
                         if has_time and has_space:
                             # Split the existing nodes/elements into the current open boundary nodes.
                             if 'node' in ds.variables[var].dimensions:
-                                nc_mask = np.isin(nc_nodes, boundary.nodes)
+                                nc_mask = np.isin(nc_nodes[nc_node_order], boundary.nodes)
                                 # Holy nested indexing, Batman!
                                 data = ds.variables[var][:][..., nc_node_order][..., nc_mask]
                             else:
                                 if boundary.elements is not None:
-                                    nc_mask = np.isin(nc_elements, boundary.elements)
+                                    nc_mask = np.isin(nc_elements[nc_element_order], boundary.elements)
                                     # Holy nested indexing, Batman!
                                     data = ds.variables[var][:][..., nc_element_order][..., nc_mask]
                                 else:
