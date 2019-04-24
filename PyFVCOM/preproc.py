@@ -2238,7 +2238,7 @@ class Model(Domain):
                                 for var in ('layers_center', 'levels_center'):
                                     if hasattr(boundary.sigma, var):
                                         setattr(boundary.sigma, var, getattr(boundary.sigma, var)[element_mask])
-                        boundary.grid.triangles = reduce_triangulation(boundary.grid.triangles, boundary.grid.nodes)
+                        boundary.grid.triangles = reduce_triangulation(self.grid.triangles, boundary.grid.nodes)
                         boundary.grid.nv = boundary.grid.triangles.T + 1
 
             # Fix the order of the positions in the data from the netCDF file to match those in the boundaries.
