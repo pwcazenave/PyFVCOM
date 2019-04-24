@@ -227,6 +227,7 @@ def pol2cart(rho, phi, degrees=False):
 
 def _warn(*args, **kwargs):
     """ Custom warning function which doesn't print the code to screen. """
+    # Mainly taken inspiration from https://stackoverflow.com/questions/2187269.
     msg = warnings.WarningMessage(*args, **kwargs)
     print(f'{msg.message} ({msg.filename}:{msg.lineno})')
 
