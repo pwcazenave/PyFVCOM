@@ -2247,8 +2247,11 @@ class Model(Domain):
             nc_node_order = [nc_nodes.tolist().index(i) for i in nest_nodes if i in nc_nodes]
             nc_element_order = [nc_elements.tolist().index(i) for i in nest_elements if i in nc_elements]
 
-            for nest in self.nest:
-                for boundary in nest.boundaries:
+            for ni, nest in enumerate(self.nest, 1):
+                # Boundary indexing for the verbose output doesn't start at 1 here because we have the original open
+                # boundary included and the output from add_level would conflict. It's a minor thing, but basically
+                # add_level says we've added 5 levels and then this would say there are 6 levels.
+                for bi, boundary in enumerate(nest.boundaries):
                     for var in variables:
                         has_time = 'time' in ds.variables[var].dimensions
                         has_space = 'node' in ds.variables[var].dimensions or 'nele' in ds.variables[var].dimensions
@@ -2277,7 +2280,7 @@ class Model(Domain):
                                 data = np.delete(data, bad_times, axis=0)
 
                             if verbose:
-                                print(f'Transferring {var} from the existing nesting file')
+                                print(f'Transferring {var} from the existing nesting file for nest {ni}, level {bi}')
 
                             setattr(boundary.data, var, data)
 
