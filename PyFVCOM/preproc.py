@@ -3144,11 +3144,9 @@ class ModelNameList(object):
         Mandatory fields are self.config['NML_CASE'] START_DATE and self.config['NML_CASE'] END_DATE. Everything
         else is pre-populated with default options.
 
-        Python True/False is supported (as well as T/F strings) for enabling/disabling things in the namelist.
-
-        - The no forcing at all (surface or open boundary).
+        - There is no forcing at all (surface or open boundary).
         - Temperature and salinity are deactivated.
-        - The intial condition is 15 Celsius / 35 PSU across the domain.
+        - The initial condition is 15 Celsius / 35 PSU across the domain.
         - The velocity field is zero everywhere.
         - The startup type is a cold start.
         - There are no rivers.
@@ -3157,6 +3155,8 @@ class ModelNameList(object):
         - A restart file is enabled with daily outputs.
         - Time-averaged output is off.
         - There are no probes or stations.
+
+        Python True/False is supported (as well as T/F strings) for enabling/disabling things in the namelist.
 
         Parameters
         ----------
@@ -3178,7 +3178,6 @@ class ModelNameList(object):
         index : find the index for a given entry in an NML_ section.
         value : return the value for a given entry in an NML_ section.
         update : update either the value or type of a given entry in an NML_ section.
-
 
         """
 
