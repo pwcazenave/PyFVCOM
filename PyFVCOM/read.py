@@ -9,7 +9,6 @@ import inspect
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
-from warnings import warn
 
 import matplotlib.path as mpath
 import numpy as np
@@ -18,7 +17,7 @@ from netCDF4 import Dataset, MFDataset, num2date, date2num
 
 from PyFVCOM.grid import Domain, control_volumes, get_area_heron
 from PyFVCOM.grid import unstructured_grid_volume, elems2nodes, GridReaderNetCDF
-from PyFVCOM.utilities.general import PassiveStore, flatten_list
+from PyFVCOM.utilities.general import PassiveStore, flatten_list, warn
 
 
 class _TimeReader(object):

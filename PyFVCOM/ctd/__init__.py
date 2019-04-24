@@ -7,13 +7,12 @@ from __future__ import print_function
 
 from datetime import datetime
 from pathlib import Path
-from warnings import warn
 from collections import OrderedDict
 
 import numpy as np
 from netCDF4 import Dataset
 
-from PyFVCOM.utilities.general import split_string, ObjectFromDict, cleanhtml, flatten_list
+from PyFVCOM.utilities.general import split_string, ObjectFromDict, cleanhtml, flatten_list, warn
 
 use_sqlite = True
 try:

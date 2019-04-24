@@ -17,7 +17,6 @@ import multiprocessing
 from datetime import datetime
 from functools import partial
 from pathlib import Path
-from warnings import warn
 
 import numpy as np
 import scipy.optimize
@@ -27,7 +26,7 @@ from PyFVCOM.grid import OpenBoundary, find_connected_elements
 from PyFVCOM.grid import find_bad_node, element_side_lengths, reduce_triangulation
 from PyFVCOM.grid import write_fvcom_mesh, connectivity, haversine_distance, subset_domain
 from PyFVCOM.read import FileReader, _TimeReader, control_volumes
-from PyFVCOM.utilities.general import flatten_list, PassiveStore
+from PyFVCOM.utilities.general import flatten_list, PassiveStore, warn
 from PyFVCOM.utilities.time import date_range
 from dateutil.relativedelta import relativedelta
 from netCDF4 import Dataset, date2num, num2date, stringtochar

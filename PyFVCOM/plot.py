@@ -5,7 +5,6 @@ from __future__ import print_function
 import copy
 from datetime import datetime
 from pathlib import Path
-from warnings import warn
 
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
@@ -27,7 +26,7 @@ from PyFVCOM.grid import get_boundary_polygons
 from PyFVCOM.grid import getcrossectiontriangles, unstructured_grid_depths, Domain, nodes2elems, mp_interp_func
 from PyFVCOM.ocean import depth2pressure, dens_jackett
 from PyFVCOM.read import FileReader
-from PyFVCOM.utilities.general import PassiveStore
+from PyFVCOM.utilities.general import PassiveStore, warn
 
 have_basemap = True
 try:

@@ -16,7 +16,6 @@ import sys
 from collections import defaultdict, deque
 from functools import partial
 from pathlib import Path
-from warnings import warn
 
 import matplotlib.path as mpath
 import matplotlib.pyplot as plt
@@ -37,7 +36,7 @@ from utide.utilities import Bunch
 
 from PyFVCOM.coordinate import utm_from_lonlat, lonlat_from_utm
 from PyFVCOM.ocean import zbar
-from PyFVCOM.utilities.general import PassiveStore, fix_range, cart2pol, pol2cart
+from PyFVCOM.utilities.general import PassiveStore, fix_range, cart2pol, pol2cart, warn
 from PyFVCOM.utilities.time import date_range
 
 

@@ -1,6 +1,6 @@
 from PyFVCOM.read import FileReader
 from PyFVCOM.grid import unstructured_grid_depths, node_to_centre, get_boundary_polygons, reduce_triangulation
-from PyFVCOM.utilities.general import PassiveStore
+from PyFVCOM.utilities.general import PassiveStore, warn
 import shapely.geometry as sg
 import scipy.interpolate as si
 import numpy as np
