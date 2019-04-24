@@ -3951,7 +3951,7 @@ class Nest(object):
         """
 
         if self._noisy:
-            print('Add level to the nest.')
+            print(f'Add level {len(self.boundaries)} to the nest.')
 
         # Find all the elements connected to the last set of open boundary nodes.
         if not np.any(self.boundaries[-1].nodes):
