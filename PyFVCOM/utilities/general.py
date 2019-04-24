@@ -201,6 +201,7 @@ def cleanhtml(text):
         print_exc(file=stderr)
         return text
 
+
 def cart2pol(x, y, degrees=False):
     """
     Apparantly this doesn't exist in numpy already. Originally from SO.
@@ -210,6 +211,7 @@ def cart2pol(x, y, degrees=False):
     if degrees:
         phi = np.mod(np.rad2deg(phi), 360)
     return(rho, phi)
+
 
 def pol2cart(rho, phi, degrees=False):
     """
