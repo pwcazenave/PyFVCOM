@@ -3632,12 +3632,12 @@ class ModelNameList(object):
         if section not in self.config:
             raise KeyError(f'{section} not defined in this namelist configuration.')
 
-        if not value is None:
+        if value is not None:
             if isinstance(value, bool):
                 value = str(value)[0]
             self.config[section][self.index(section, entry)].value = value
 
-        if not type is None:
+        if type is not None:
             self.config[section][self.index(section, entry)].type = type
 
     def update_nudging(self, recovery_time):
