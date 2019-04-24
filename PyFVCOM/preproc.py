@@ -2347,27 +2347,25 @@ class Model(Domain):
 
                 for var in out_dict:
                     if var == 'time':
-                        pass
-                    elif var in out_dict.keys():
-                        this_index = temp_indices[out_dict[var][1]]
-                        # Skip out if we don't have any indices for this grid position (e.g. elements on the last
-                        # boundary in a nest).
-                        if not np.any(this_index):
-                            continue
+                        continue
 
-                        try:
-                            boundary_data = getattr(boundary.data, var)
-                        except AttributeError:
-                            continue
+                    this_index = temp_indices[out_dict[var][1]]
+                    # Skip out if we don't have any indices for this grid position (e.g. elements on the last
+                    # boundary in a nest).
+                    if not np.any(this_index):
+                        continue
 
-                        if adjust_tides is not None and var in adjust_tides:
-                            # The harmonics are calculated -/+ one day
-                            tide_times_choose = np.isin(boundary.tide.time, boundary.data.time.datetime)
-                            boundary_data = boundary_data + getattr(boundary.tide, var)[tide_times_choose, :]
+                    try:
+                        boundary_data = getattr(boundary.data, var)
+                    except AttributeError:
+                        continue
 
-                        out_dict[var][0][..., this_index] = boundary_data
-                    else:
-                        raise ValueError(f'Unknown nest boundary variable {var}')
+                    if adjust_tides is not None and var in adjust_tides:
+                        # The harmonics are calculated -/+ one day
+                        tide_times_choose = np.isin(boundary.tide.time, boundary.data.time.datetime)
+                        boundary_data = boundary_data + getattr(boundary.tide, var)[tide_times_choose, :]
+
+                    out_dict[var][0][..., this_index] = boundary_data
 
         ncopts = {}
         if 'ncopts' in kwargs:
