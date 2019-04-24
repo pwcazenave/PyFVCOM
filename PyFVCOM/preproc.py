@@ -2264,7 +2264,7 @@ class Model(Domain):
                                     # Holy nested indexing, Batman!
                                     data = ds.variables[var][:][..., nc_element_order][..., nc_mask]
                                 else:
-                                    # This is the first boundary and thus has no element data.
+                                    # This is the last boundary and thus has no element data.
                                     continue
 
                             # Check if we got any valid points here. We won't get any on the last boundary. That
