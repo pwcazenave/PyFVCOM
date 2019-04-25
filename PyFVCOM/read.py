@@ -378,14 +378,45 @@ class _MakeDimensions(object):
 
 
 class FileReader(Domain):
-    """ Load FVCOM model output.
+    """
+    Load FVCOM model output.
 
     Class simplifies the preparation of FVCOM model output for analysis with PyFVCOM.
+
+    Methods
+    -------
+    In addition to the methods on PyFVCOM.grid.Domain, this object has:
+    add - add the data loaded in this FileReader with another one
+    subtract - subtract the data loaded in this FileReader with another one
+    multiply - multiply the data loaded in this FileReader with another one
+    divide - divide the data loaded in this FileReader with another one
+    power - raise  the data loaded in this FileReader with another one to a given power
+    load_data - load model data from the netCDF associated with this FileReader
+    closest_time - find the index of the closest time given as the argument
+    grid_volume - compute the model grid volume
+    total_volume_var - integrate a given variable in space returning a time series of the integrated values
+    avg_volume_var - calculate the cumulative depth-average of the given variable in space as a time series
+    time_to_index - find the time index for the given time string (%Y-%m-%d %H:%M:%S.%f) or datetime object.
+    time_average - average the requested variable in time at the specified frequency
+    add_river_flow - add river flow information to the current object
+    to_excel - export data to an Excel file (with limitations)
+    to_csv - export data to a CSV file (with limitations)
+
+    Attributes
+    ----------
+    In addition to the attributes from PyFVCOM.grid.Domain (dims and grid), this object has:
+    data - model data (generally time series) loaded from the netCDF file.
+    river - river data.
+    ds - the netCDF Dataset handle.
+    variable_dimension_names - the list of dimensions for all the variables in the netCDF
+    time - the time data
+    atts - the loaded variable attributes
 
     Author(s)
     ---------
     Pierre Cazenave (Plymouth Marine Laboratory)
     Mike Bedington (Plymouth Marine Laboratory)
+    Ricardo Torres (Plymouth Marine Laboratory)
 
     Credits
     -------
@@ -496,7 +527,7 @@ class FileReader(Domain):
         self._load_time()
         self._dims = copy.deepcopy(self.time._dims)  # grab the updated dimensions from the _TimeReader object.
 
-        # Update the time dimension no we've read in the time data (in case we did so with a specified dimension
+        # Update the time dimension number we've read in the time data (in case we did so with a specified dimension
         # range).
         try:
             self.dims.time = len(self.time.time)
