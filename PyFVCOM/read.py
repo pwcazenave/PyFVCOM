@@ -1657,8 +1657,14 @@ class FileReader(Domain):
                     num_layers = self.dims.siglay
                     for layer, name in zip(range(num_layers), layer_names):
                         sheet_name = f'{var} {name}'
-                        df = pd.DataFrame(np.column_stack((lon, lat, np.squeeze(data[..., layer, :]).T)),
-                                          columns=columns)
+                        try:
+                            df = pd.DataFrame(np.column_stack((lon, lat, np.squeeze(data[..., layer, :]).T)),
+                                              columns=columns)
+                        except ValueError:
+                            # If we've only got a single position, don't squeeze out the singleton dimension so it
+                            # stacks properly.
+                            df = pd.DataFrame(np.column_stack((lon, lat, data[..., layer, :].T)),
+                                              columns=columns)
                         df.to_excel(writer, sheet_name, index=False)
                         self._fix_column_widths(writer, df, sheet_name)
                 else:
@@ -1701,7 +1707,8 @@ class FileReader(Domain):
 
         If more than one variable has been loaded, specify which variable to save (e.g. `variable='O3_c'`).
 
-        If we have loaded multiple layers, specify the layer index (zero-indexed) which will be saved into the CSV file.
+        If we have loaded multiple layers, specify the layer index (zero-indexed) which will be saved into the CSV
+        file.
 
         If we have multiple times, each column name is appended "time=%Y-%m-%dT%H:%M:%S.%f".
 
@@ -1792,7 +1799,12 @@ class FileReader(Domain):
             kwargs.update({'header': columns})
 
         # Gather the coordinates with the data into a DataFrame and then write out.
-        df = pd.DataFrame(np.column_stack((lon, lat, data)))
+        try:
+            df = pd.DataFrame(np.column_stack((lon, lat, data)))
+        except ValueError:
+            # We might be extracting a single point only, so no need to stack columns, just concatenate the positions
+            # and data.
+            df = pd.DataFrame(np.concatenate((lon, lat, data.T))).T
         df.to_csv(name, **kwargs)
 
 
