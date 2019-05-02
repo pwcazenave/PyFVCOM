@@ -2424,6 +2424,11 @@ class Model(Domain):
 
                             setattr(boundary.data, var, data)
 
+        # Update dimensions if we've fiddled with things
+        if filter_points:
+            self.dims.node = len(self.grid.lon)
+            self.dims.nele = len(self.grid.lonc)
+
     def write_nested_forcing(self, ncfile, type=3, adjust_tides=None, ersem_metadata=None, **kwargs):
         """
         Write out the given nested forcing into the specified netCDF file.
