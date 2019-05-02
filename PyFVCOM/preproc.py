@@ -2197,7 +2197,7 @@ class Model(Domain):
         nest_levels : int
             Number of node levels in addition to the existing open boundary.
         nesting_type : int
-            FVCOM nesting type (1, 2 or 3). Defaults to 3. Currently, only 3 is supported.
+            FVCOM nesting type (1, 2 or 3). Defaults to 3.
         verbose : bool, optional
             Set to True to enable verbose output. Defaults to False.
 
