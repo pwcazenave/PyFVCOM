@@ -4268,11 +4268,11 @@ class Nest(object):
         if self._noisy:
             print('Add weights to the nested boundary.')
 
-        for index, boundary in enumerate(self.boundaries):
+        for index, boundary in enumerate(self.boundaries, 1):
             if power == 0:
-                weight_node = 1 / (index + 1)
+                weight_node = 1 / index
             else:
-                weight_node = 1 / ((index + 1)**power)
+                weight_node = 1 / (index**power)
 
             boundary.weight_node = np.repeat(weight_node, len(boundary.nodes))
             # We will always have one fewer sets of elements as the nodes bound the elements.
