@@ -527,12 +527,13 @@ class Model(Domain):
     def interp_ady(self, ady_dir, serial=False, pool_size=None, noisy=False):
 
         """
-        Interpolate geblstoff absorption from climatology on AMM grid to FVCOM grid
+        Interpolate Geblstoff absorption from a regular grid to an FVCOM grid.
 
         Parameters
         ----------
-        sst_dir : str, pathlib.Path
-            Path to directory containing the absorption data. Assumes there are directories per year within this directory.
+        ady_dir : str, pathlib.Path
+            Path to directory containing the absorption data. We will find any file ending in '.nc' and use them to
+            load the `gelbstoff_absorption_satellite' variable.
         serial : bool, optional
             Run in serial rather than parallel. Defaults to parallel.
         pool_size : int, optional
@@ -554,7 +555,7 @@ class Model(Domain):
         >>> ady_dir = '/home/mbe/Code/fvcom-projects/locate/python/ady_preproc/Data/yr_data/'
         >>> model = Model('/home/mbe/Models/FVCOM/tamar/tamar_v2_grd.dat',
         >>>     native_coordinates='cartesian', zone='30N')
-        >>> model.interp_ady(ady_dir, 2006, pool_size=20)
+        >>> model.interp_ady(ady_dir, pool_size=20)
         >>> # Save to netCDF
         >>> model.write_adygrd('casename_adygrd.nc')
 
