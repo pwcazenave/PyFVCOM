@@ -3091,7 +3091,7 @@ class Model(Domain):
         """
 
         # TODO: This needs more error checking (e.g. if no common nodes are found). We could also extend this to
-        # interpolate a given elevtide file onto the current boundaries.
+        #  interpolate a given elevtide file onto the current boundaries.
 
         ds = Dataset(elevtide)
 
@@ -3339,7 +3339,7 @@ class ModelNameList(object):
         - The startup type is a cold start.
         - There are no rivers.
         - Data assimilation is disabled.
-        - Output is instantaneous hourly for for all non-input variables.
+        - Output is instantaneous 15 minute interval for for all non-input variables.
         - A restart file is enabled with daily outputs.
         - Time-averaged output is off.
         - There are no probes or stations.
