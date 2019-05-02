@@ -601,7 +601,7 @@ class Model(Domain):
 
         ady = np.vstack(ady).T
         # FVCOM wants times at midday whilst the data are at midnight
-        dates = np.asarray([this_date + relativedelta(hours=12) for sublist in dates for this_date in sublist])
+        # dates = np.asarray([this_date + relativedelta(hours=12) for sublist in dates for this_date in sublist])
 
         # Sort by time.
         idx = np.argsort(dates)
