@@ -3371,6 +3371,11 @@ class ModelNameList(object):
         index : find the index for a given entry in an NML_ section.
         value : return the value for a given entry in an NML_ section.
         update : update either the value or type of a given entry in an NML_ section.
+        update_nudging : update the nudging time scale to match the time step.
+        update_nesting_interval : try to find a valid nesting interval for the nested output files.
+        valid_nesting_timescale : check if a nesting time scale is valid.
+        update_ramp : update the ramp to a given interval.
+        write_model_namelist : write the model namelist to file.
 
         """
 
