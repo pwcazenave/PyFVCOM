@@ -2427,7 +2427,7 @@ class Model(Domain):
         ncfile : str, pathlib.Path
             Path to the output netCDF file to be created.
         type : int, optional
-            Type of model nesting. Currently only type 3 (indirect) is supported. Defaults to 3.
+            Type of model nesting. Defaults to 3 (indirect weighted nesting).
         adjust_tides : list, optional
             Which variables (if any) to adjust by adding the predicted tidal signal from the harmonics. This
             expects that these variables exist in boundary.tide
