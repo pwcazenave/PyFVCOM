@@ -154,6 +154,9 @@ class Model(Domain):
         if 'noisy' in kwargs:
             self.noisy = kwargs['noisy']
 
+        # Useful to have a central place for this.
+        self._mjd_origin = 'days since 1858-11-17 00:00:00'
+
         # Initialise things so we can add attributes to them later.
         self.time = PassiveStore()
         self.sigma = PassiveStore()
@@ -201,7 +204,7 @@ class Model(Domain):
         """
 
         self.time.datetime = date_range(self.start, self.end, inc=self.sampling)
-        self.time.time = date2num(getattr(self.time, 'datetime'), units='days since 1858-11-17 00:00:00')
+        self.time.time = date2num(getattr(self.time, 'datetime'), units=self._mjd_origin)
         self.time.Itime = np.floor(getattr(self.time, 'time'))  # integer Modified Julian Days
         self.time.Itime2 = (getattr(self.time, 'time') - getattr(self.time, 'Itime')) * 24 * 60 * 60 * 1000  # milliseconds since midnight
         self.time.Times = [t.strftime('%Y-%m-%dT%H:%M:%S.%f') for t in getattr(self.time, 'datetime')]
