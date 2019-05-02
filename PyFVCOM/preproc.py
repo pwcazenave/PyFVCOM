@@ -4040,7 +4040,7 @@ class ModelNameList(object):
             if current_end is None:
                 self.update(*end, case_end)
 
-        if not self.valid_nesting_timescale() and self.value('NML_NESTING', 'NESTING_ON') == 'T':
+        if not self.valid_nesting_timescale() and self.value('NML_NCNEST', 'NCNEST_ON') == 'T':
             raise ValueError('The current NCNEST_OUT_INTERVAL is invalid for FVCOM. Use '
                              'PyFVCOM.preproc.Model.update_nesting_interval to find a suitable value.')
 
