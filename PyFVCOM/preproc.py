@@ -22,7 +22,7 @@ import numpy as np
 import scipy.optimize
 from PyFVCOM.coordinate import utm_from_lonlat, lonlat_from_utm
 from PyFVCOM.grid import Domain, grid_metrics, read_fvcom_obc, nodes2elems
-from PyFVCOM.grid import OpenBoundary, find_connected_elements
+from PyFVCOM.grid import OpenBoundary, find_connected_elements, mp_interp_func
 from PyFVCOM.grid import find_bad_node, element_side_lengths, reduce_triangulation
 from PyFVCOM.grid import write_fvcom_mesh, connectivity, haversine_distance, subset_domain
 from PyFVCOM.read import FileReader, _TimeReader, control_volumes
@@ -604,6 +604,136 @@ class Model(Domain):
         idx = np.argsort(dates)
         dates = dates[idx]
         ady = ady[idx, :]
+
+        # Store everything in an object.
+        self.ady.ady = ady
+        self.ady.time = dates
+
+    def interp_ady_climatology(self, ady_file, tmask, serial=False, pool_size=None, noisy=False):
+
+        """
+        Interpolate Geblstoff absorption climatology from a regular grid to an FVCOM grid.
+
+        Parameters
+        ----------
+        ady_file : str, pathlib.Path
+            Path to directory containing the absorption data. We will find any file ending in '.nc' and use them to
+            load the `gelbstoff_absorption_satellite' variable.
+        tmask : str, pathlib.Path
+            Path to the NEMO tmask file with the grid information in it.
+        serial : bool, optional
+            Run in serial rather than parallel. Defaults to parallel.
+        pool_size : int, optional
+            Specify number of processes for parallel run. By default it uses all available.
+        noisy : bool, optional
+            Set to True to enable some sort of progress output. Defaults to False.
+
+        Returns
+        -------
+        Adds a new `ady' object with:
+        ady : np.ndarray
+            Interpolated absorption time series for the supplied domain.
+        time : np.ndarray
+            List of python datetimes for the corresponding SST data.
+
+        Example
+        -------
+        >>> from PyFVCOM.preproc import Model
+        >>> ady_file = '/home/mbe/Code/fvcom-projects/locate/python/ady_preproc/Data/AMM7-ADY-broadband.nc'
+        >>> tmask = '/data/euryale4/to_archive/momm-AMM7-INPUTS/GRID/mesh_mask.nc'
+        >>> model = Model('/home/mbe/Models/FVCOM/tamar/tamar_v2_grd.dat',
+        >>>               native_coordinates='cartesian', zone='30N')
+        >>> model.interp_ady_climatology(ady_file, pool_size=20)
+        >>> # Save to netCDF
+        >>> model.write_adygrd('casename_adygrd.nc')
+
+        Notes
+        -----
+        TODO: Combine interpolation routines (sst, ady, ady_climatology, etc.) to make more efficient
+
+        """
+
+        # This is a reimplementation of the MATLAB script interp_ady_assimilation.m from PML's projects.
+
+        if isinstance(ady_file, str):
+            ady_file = Path(ady_file)
+        if isinstance(tmask, str):
+            tmask = Path(tmask)
+
+        # Read ADY data files and interpolate each to the FVCOM mesh
+        with Dataset(tmask) as ds:
+            land_mask = ds.variables['tmask'][:][0, 0].astype(bool)  # grab the surface only
+            # Make the
+            lon = ds.variables['nav_lon'][:][land_mask]
+            lat = ds.variables['nav_lat'][:][land_mask]
+
+        with Dataset(ady_file) as ds:
+            # NEMO-ERSEM ADY Gelbstoff absorption climatology file stores a number of hours since 1900-01-01 00:00:00
+            # Make time relative to our model start instead.
+            model_start = datetime.strptime(f'{self.start.year}-01-01 00:00:00', '%Y-%m-%d %H:%M:%S')
+            dates = [model_start + relativedelta(hours=t) for t in ds.variables['t'][:]]
+            # Make the land mask match the time dimension.
+            land_mask = np.tile(land_mask, (len(dates), 1, 1))
+
+            regular_ady = ds.variables['gelbstoff_absorption_satellite'][:]
+            # Flatten the space dimensions.
+            regular_ady = regular_ady[land_mask].reshape(-1, land_mask[0].sum())
+
+        # If the start or end of the model are outside the data, wrap the end of the climatology appropriately. Set
+        # the time accordingly.
+        original_dates = copy.copy(dates)
+        original_ady = regular_ady.copy()
+        if self.start < dates[0]:
+            interval = dates[-1] - dates[-2]
+            dates.insert(0, dates[0] - interval)
+            regular_ady = np.concatenate((original_ady[-1][np.newaxis], regular_ady), axis=0)
+        if self.end > dates[-1]:
+            relative_intervals = [i - original_dates[0] for i in original_dates]
+            new_dates = [original_dates[-1] + i for i in relative_intervals]
+            dates.append(new_dates[1])
+            regular_ady = np.concatenate((regular_ady, original_ady[0][np.newaxis]), axis=0)
+        del original_ady, original_dates
+
+        # Drop data outside the current model period. Offset by one either way so we can cover the current model
+        # period.
+        start_index = np.argwhere(np.asarray(dates) >= self.start).ravel()[0]
+        end_index = np.argwhere(np.asarray(dates) <= self.end).ravel()[-1]
+        if start_index != 0:
+            start_index -= 1
+        if end_index != len(dates):
+            # Add two here: one for indexing and one for covering the period of interest, making sure we aren't too big.
+            end_index = min(end_index + 2, len(dates))
+
+        dates = dates[start_index:end_index]
+        regular_ady = regular_ady[start_index:end_index]
+        print(dates[0], dates[-1])
+        print(self.start, self.end)
+
+        if noisy:
+            print(f'Interpolating ADY data for {len(dates)} times.', flush=True)
+
+        # Now for each time in the ADY data, interpolate it to the model grid.
+        if serial:
+            ady = []
+            for data in regular_ady:
+                ady.append(mp_interp_func((lon.ravel(), lat.ravel(), data.ravel(), self.grid.lon, self.grid.lat)))
+        else:
+            if pool_size is None:
+                pool = multiprocessing.Pool()
+            else:
+                pool = multiprocessing.Pool(pool_size)
+            args = [(lon.ravel(), lat.ravel(), data.ravel(), self.grid.lon, self.grid.lat) for data in regular_ady]
+            ady = pool.map(mp_interp_func, args)
+            pool.close()
+        ady = np.asarray(ady)
+
+        # Make sure we enclose our current model run by adding a point at the start and end too if necessary.
+        if dates[0] > self.start:
+            dates.insert(0, self.start)
+            ady = np.concatenate((ady[0][np.newaxis], ady), axis=0)
+        if dates[-1] < self.end:
+            dates.append(self.end)
+            ady = np.concatenate((ady, ady[-1][np.newaxis]), axis=0)
 
         # Store everything in an object.
         self.ady.ady = ady
