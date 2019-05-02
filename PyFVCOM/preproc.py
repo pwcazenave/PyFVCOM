@@ -3789,7 +3789,7 @@ class ModelNameList(object):
                                        NameListEntry('USE_FABM_BOTTOM_THICKNESS', 'F'),
                                        NameListEntry('USE_FABM_SALINITY', 'F'),
                                        NameListEntry('FABM_DEBUG', 'F'),
-                                       NameListEntry('FABM_DIAG_OUT', 'T')]
+                                       NameListEntry('FABM_DIAG_OUT', 'F')]
 
     def index(self, section, entry):
         """
