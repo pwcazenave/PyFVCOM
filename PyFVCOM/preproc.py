@@ -2494,9 +2494,6 @@ class Model(Domain):
                                 'elements': np.isin(elements, boundary.elements)}
 
                 for var in out_dict:
-                    if var == 'time':
-                        continue
-
                     this_index = temp_indices[out_dict[var][1]]
                     # Skip out if we don't have any indices for this grid position (e.g. elements on the last
                     # boundary in a nest).
