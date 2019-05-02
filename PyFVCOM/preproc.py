@@ -2524,8 +2524,8 @@ class Model(Domain):
 
         # Define the global attributes
         globals = {'type': 'FVCOM nestING TIME SERIES FILE',
-                   'title': 'FVCOM nestING TYPE {} TIME SERIES data for open boundary'.format(type),
-                   'history': 'File created using {} from PyFVCOM'.format(inspect.stack()[0][3]),
+                   'title': f'FVCOM nestING TYPE {type} TIME SERIES data for open boundary',
+                   'history': f'File created using {inspect.stack()[0][3]} from PyFVCOM',
                    'filename': str(ncfile),
                    'Conventions': 'CF-1.0'}
 
