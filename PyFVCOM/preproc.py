@@ -2217,8 +2217,6 @@ class Model(Domain):
             # Add all the nested levels and assign weights as necessary.
             for _ in range(nest_levels):
                 self.nest[-1].add_level()
-            if nesting_type >= 2:
-                self.nest[-1].add_weights()
 
         # Find missing elements on the last-but-one nested boundary. These are defined as those whose the three nodes
         # are included but the element isn't. This replicates what FVCOM does when it computes the elements to
@@ -2232,6 +2230,12 @@ class Model(Domain):
             self.nest[-1].boundaries[-2].elements = np.unique(np.hstack([missing_elements, boundary_elements]))
             # Update the associated boundary information.
             self.nest[-1]._update_open_boundaries()
+
+        # Add weights (if given) after we've done all the fiddling with the boundary elements so we don't have to
+        # deal with masking them or adding extra ones.
+        if nesting_type >= 2:
+            for boundary in self.open_boundaries:
+                self.nest[-1].add_weights()
 
     def add_nests_harmonics(self, harmonics_file, harmonics_vars=['u', 'v', 'zeta'], constituents=['M2', 'S2'],
                             pool_size=None):
