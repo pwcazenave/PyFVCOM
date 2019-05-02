@@ -2968,6 +2968,11 @@ class Model(Domain):
 
         """
 
+        # TODO This is almost exactly what load_nested_forcing does but probably better (or at least in a less
+        #  complicated manner). This function writes to a new netCDF whereas load_nested_forcing adds the data to
+        #  this model. There's definitely overlap between the two functions (identifying which points from the netCDF
+        #  to use) which should be harmonised between the two.
+
         # Aggregate the nested nodes and elements as well as the coordinates. Also check whether we're doing weighted
         # nesting.
         all_nests = [nest for i in self.nest for nest in i.boundaries]
