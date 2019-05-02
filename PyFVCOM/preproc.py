@@ -742,7 +742,7 @@ class Model(Domain):
 
     def write_adygrd(self, output_file, ncopts={'zlib': True, 'complevel': 7}, **kwargs):
         """
-        Generate a gelbstoff absorption file for the given FVCOM domain from the self.ady data.
+        Generate a Gelbstoff absorption file for the given FVCOM domain from the self.ady data.
 
         Parameters
         ----------
