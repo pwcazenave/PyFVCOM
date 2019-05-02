@@ -2363,6 +2363,9 @@ class Model(Domain):
                             for var in ('layers', 'levels'):
                                 if hasattr(boundary.sigma, var):
                                     setattr(boundary.sigma, var, getattr(boundary.sigma, var)[node_mask])
+                        if hasattr(boundary, 'weight_node'):
+                            boundary.weight_node = boundary.weight_node[node_mask]
+
                         if boundary.elements is not None:
                             element_mask = np.isin(boundary.elements, list(match_elements), invert=True)
                             if self._debug:
@@ -2378,6 +2381,8 @@ class Model(Domain):
                                 for var in ('layers_center', 'levels_center'):
                                     if hasattr(boundary.sigma, var):
                                         setattr(boundary.sigma, var, getattr(boundary.sigma, var)[element_mask])
+                                if hasattr(boundary, 'weight_element'):
+                                    boundary.weight_element = boundary.weight_element[element_mask]
                         boundary.grid.triangles = reduce_triangulation(self.grid.triangles, boundary.grid.nodes)
                         boundary.grid.nv = boundary.grid.triangles.T + 1
 
