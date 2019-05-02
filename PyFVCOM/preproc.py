@@ -579,13 +579,15 @@ class Model(Domain):
         if serial:
             results = []
             for ady_file in ady_files:
-                results.append(self._inter_sst_worker(lonlat, ady_file, noisy, var_name='gelbstoff_absorption_satellite', var_offset=0))
+                results.append(self._inter_sst_worker(lonlat, ady_file, noisy,
+                                                      var_name='gelbstoff_absorption_satellite', var_offset=0))
         else:
             if not pool_size:
                 pool = multiprocessing.Pool()
             else:
                 pool = multiprocessing.Pool(pool_size)
-            part_func = partial(self._inter_sst_worker, lonlat, noisy=noisy, var_name='gelbstoff_absorption_satellite', var_offset=0)
+            part_func = partial(self._inter_sst_worker, lonlat, noisy=noisy,
+                                var_name='gelbstoff_absorption_satellite', var_offset=0)
             results = pool.map(part_func, ady_files)
             pool.close()
 
