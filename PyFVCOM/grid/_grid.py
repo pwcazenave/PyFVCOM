@@ -1014,7 +1014,7 @@ def mp_interp_func(input):
     Returns
     -------
     interp : np.ndarray
-        The input data `input' interpolated onto the positions (x, y).
+        The input data `data' interpolated onto the positions (x, y).
 
     """
 
