@@ -2811,31 +2811,69 @@ class Model(Domain):
 
     def add_groundwater(self, locations, flux, temperature=15, salinity=35):
         """
-        Add groundwater flux at the given location.
+        Add groundwater flux at the given locations.
 
         Parameters
         ----------
         locations : list-like
-            Positions of the groundwater source as an array of lon/lats ((x1, x2, x3), (y1, y2, y3)).
-        flux : float
-            The discharge in m^3/s for each location in `locations'.
-        temperature : float, optional
-            If given, the temperature of the groundwater input at each location in `locations' (Celsius). If omitted,
+            Positions of the groundwater source as an array of lon/lats ((x1, x2, x3), (y1, y2, y3)) [n, 2].
+        flux : float, np.ndarray
+            The discharge time series in m^3/s. If given as a float it will be the same for all positions. If given
+            as a 1D array, it will be the same at all locations; if 2D, it must be a flux time series for each
+            position in `locations' [space, time]. Flux outside the positions will be set to zero.
+        temperature : float, np.ndarray, optional
+            If given, the temperature (Celsius) time series of the groundwater input. If given as a float it will be
+            the same for all positions. If given as a 1D array, it will be the same at all locations; if 2D,
+            it must be a temperature time series for each position in `locations' [space, time]. If omitted,
             15 Celsius.
-        salinity : float, optional
-            If given, the salinity of the groundwater input at each location in `locations' (PSU). If omitted, 35 PSU.
+        salinity : float, np.ndarray, optional
+            If given, the salinity (PSU) time series of the groundwater input. If given as a float it will be the
+            same for all positions. If given as a 1D array, it will be the same at all locations; if 2D, it must be a
+            salinity time series for each position in `locations' [space, time]. If omitted, 35 PSU.
 
         """
 
+        # Set the temperature and salinity to be uniform everywhere and let the flux control what actually gets put
+        # into the domain. By default, flux is zero everywhere and only non-zero at the given locations.
         self.groundwater.flux = np.zeros((len(self.time.datetime), self.dims.node))
         self.groundwater.temperature = np.full((len(self.time.datetime), self.dims.node), temperature)
         self.groundwater.salinity = np.full((len(self.time.datetime), self.dims.node), salinity)
 
-        for location in zip(locations[:, 0], locations[:, 1]):
-            node_index = self.closest_node(location)
-            self.groundwater.flux[:, node_index[0]] = flux
-            self.groundwater.temperature[:, node_index[0]] = temperature
-            self.groundwater.salinity[:, node_index[0]] = salinity
+        # If we have only a single value for flux, temperature or salinity, make a time series.
+        if np.ndim(flux) == 0:
+            flux = np.repeat(flux, len(self.time.datetime))
+        if np.ndim(temperature) == 0:
+            temperature = np.repeat(temperature, len(self.time.datetime))
+        if np.ndim(salinity) == 0:
+            salinity = np.repeat(salinity, len(self.time.datetime))
+
+        # If we have more than one position and only a single flux/temperature/salinity time series, make the inputs
+        # the same for all positions.
+        if np.ndim(locations) > 1:
+            if np.ndim(flux) == 1:
+                print('fixing flux')
+                flux = np.tile(flux, [locations.shape[0], 1])  # [space, time]
+            if np.ndim(temperature) == 1:
+                print('fixing temperature')
+                temperature = np.tile(temperature, [locations.shape[0], 1])  # [space, time]
+            if np.ndim(salinity) == 1:
+                print('fixing salinity')
+                salinity = np.tile(salinity, [locations.shape[0], 1])  # [space, time]
+
+        # Check input arrays and locations are compatible shapes.
+        if np.shape(flux)[0] != np.shape(locations)[0]:
+            raise ValueError('The supplied flux and locations do not match in size.')
+        if np.shape(temperature)[0] != np.shape(locations)[0]:
+            raise ValueError('The supplied temperature and locations do not match in size.')
+        if np.shape(salinity)[0] != np.shape(locations)[0]:
+            raise ValueError('The supplied salinity and locations do not match in size.')
+
+        # Holy horrific loop variable names, Batman!
+        for x, y, f, t, s in zip(locations[:, 0], locations[:, 1], flux, temperature, salinity):
+            node_index = self.closest_node((x, y))
+            self.groundwater.flux[:, node_index[0]] = f
+            self.groundwater.temperature[:, node_index[0]] = t
+            self.groundwater.salinity[:, node_index[0]] = s
 
     def write_groundwater(self, output_file, surface=False, ncopts={'zlib': True, 'complevel': 7}, **kwargs):
         """
