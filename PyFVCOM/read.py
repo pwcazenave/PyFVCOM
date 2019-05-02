@@ -386,11 +386,11 @@ class FileReader(Domain):
     Methods
     -------
     In addition to the methods on PyFVCOM.grid.Domain, this object has:
-    add - add the data loaded in this FileReader with another one
-    subtract - subtract the data loaded in this FileReader with another one
-    multiply - multiply the data loaded in this FileReader with another one
-    divide - divide the data loaded in this FileReader with another one
-    power - raise  the data loaded in this FileReader with another one to a given power
+    add - add the data loaded in this FileReader with another one or a single value
+    subtract - subtract the data loaded in this FileReader with another one or a single value
+    multiply - multiply the data loaded in this FileReader with another one or a single value
+    divide - divide the data loaded in this FileReader with another one or a single value
+    power - raise  the data loaded in this FileReader to a given power
     load_data - load model data from the netCDF associated with this FileReader
     closest_time - find the index of the closest time given as the argument
     grid_volume - compute the model grid volume
@@ -647,7 +647,7 @@ class FileReader(Domain):
 
     def __make_pickleable__(self):
         """
-        To deepcopy `self', we need to close the netCDF file handle as it's not picklable. This method does that and
+        To deepcopy `self', we need to close the netCDF file handle as it's not pickleable. This method does that and
         then reopens it in self and the copy.
 
         Returns
@@ -666,7 +666,6 @@ class FileReader(Domain):
         return idem
 
     def __check_common_variables__(self, variables, fvcom):
-
         # Do we have a FileReader?
         fvcom_variables = set(list(fvcom.data.__dict__.keys()))
         self_variables = set(list(self.data.__dict__.keys()))
@@ -890,6 +889,7 @@ class FileReader(Domain):
                 variables = list(self.data.__dict__.keys())
 
         try:
+            # Do we have a FileReader?
             self.__check_common_variables__(variables, value)
         except AttributeError:
             # Nope, we don't. We have probably (hopefully) got a number for `value', so just carry on as normal.
@@ -941,6 +941,7 @@ class FileReader(Domain):
                 variables = list(self.data.__dict__.keys())
 
         try:
+            # Do we have a FileReader?
             self.__check_common_variables__(variables, value)
         except AttributeError:
             # Nope, we don't. We have probably (hopefully) got a number for `value', so just carry on as normal.
@@ -992,6 +993,7 @@ class FileReader(Domain):
                 variables = list(self.data.__dict__.keys())
 
         try:
+            # Do we have a FileReader?
             self.__check_common_variables__(variables, value)
         except AttributeError:
             # Nope, we don't. We have probably (hopefully) got a number for `value', so just carry on as normal.
@@ -1043,6 +1045,7 @@ class FileReader(Domain):
                 variables = list(self.data.__dict__.keys())
 
         try:
+            # Do we have a FileReader?
             self.__check_common_variables__(variables, value)
         except AttributeError:
             # Nope, we don't. We have probably (hopefully) got a number for `value', so just carry on as normal.
@@ -1094,6 +1097,7 @@ class FileReader(Domain):
                 variables = list(self.data.__dict__.keys())
 
         try:
+            # Do we have a FileReader?
             self.__check_common_variables__(variables, value)
         except AttributeError:
             # Nope, we don't. We have probably (hopefully) got a number for `value', so just carry on as normal.
