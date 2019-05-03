@@ -902,10 +902,12 @@ class Plotter(object):
             extend = self.get_colourbar_extension(field, (self.vmin, self.vmax))
 
         if self.cbar is None:
-            if self.cartesian or self.mapper == 'cartopy':
+            if self.cartesian:
                 divider = make_axes_locatable(self.axes)
                 cax = divider.append_axes("right", size="3%", pad=0.1)
                 self.cbar = self.figure.colorbar(self.tripcolor_plot, cax=cax, extend=extend)
+            elif self.mapper == 'cartopy':
+                self.cbar = self.figure.colorbar(self.tripcolor_plot, extend=extend)
             else:
                 self.cbar = self.m.colorbar(self.tripcolor_plot, extend=extend)
             self.cbar.ax.tick_params(labelsize=self.fs)
@@ -1190,10 +1192,12 @@ class Plotter(object):
                 extend = self.get_colourbar_extension(speed_r, (self.vmin, self.vmax))
 
             if self.cbar is None:
-                if self.cartesian or self.mapper == 'cartopy':
+                if self.cartesian:
                     divider = make_axes_locatable(self.axes)
                     cax = divider.append_axes("right", size="3%", pad=0.1)
                     self.cbar = self.figure.colorbar(self.streamline_plot.lines, cax=cax, extend=extend)
+                elif self.mapper == 'cartopy':
+                    self.cbar = self.figure.colorbar(self.streamline_plot.lines, extend=extend)
                 else:
                     self.cbar = self.m.colorbar(self.streamline_plot.lines, extend=extend)
                 self.cbar.ax.tick_params(labelsize=self.fs)
