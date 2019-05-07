@@ -408,7 +408,6 @@ class Buoy(object):
                 self.Itime = np.floor(self.time)
                 self.Itime2 = (self.time - self.Itime) * 60 * 60 * 1000
 
-
     class _ReadPosition:
         """ Add the position for the buoy. """
 
