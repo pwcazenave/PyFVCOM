@@ -288,8 +288,8 @@ The examples directory includes some Jupyter notebooks of some brief examples of
 - Find nodes connected to node: `nodes = PyFVCOM.grid.find_connected_nodes(n, mesh.grid.triangles)`
 - Find model boundary from a grid: `coast = PyFVCOM.grid.get_boundary_polygons(mesh.grid.triangles)`
 - Calculate element areas: `mesh.calculate_areas()`
-- Calculate node control areas: `node_control_area = [PyFVCOM.grid.node_control_area(n) for n in range(len(mesh.dims.node))]`
-- Calculate element control areas: `element_control_area = [PyFVCOM.grid.element_control_area(e, mesh.grid.triangles, area) for e in range(len(fvcom.dims.nele))]`
+- Calculate node control areas: `node_control_area = [PyFVCOM.grid.node_control_area(n) for n in range(mesh.dims.node)]`
+- Calculate element control areas: `element_control_area = [PyFVCOM.grid.element_control_area(e, mesh.grid.triangles, area) for e in range(fvcom.dims.nele)]`
 - Move a field from elements to nodes: `on_nodes = elems2nodes(fvcom.data.field, mesh.grid.triangles)`
 - Move a field from nodes to elements: `on_elements = nodes2elems(fvcom.data.field, mesh.grid.triangles)`
 
