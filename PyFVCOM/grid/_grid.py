@@ -5241,6 +5241,23 @@ def point_in_pixel(x, y, point):
     return x_indices, y_indices
 
 
+def node_to_centre(field, filereader):
+    """
+    TODO: docstring
+
+    """
+    tt = Triangulation(filereader.grid.x, filereader.grid.y, filereader.grid.triangles)
+    interped_out = []
+    if len(field.shape) == 1:
+        field = field[np.newaxis, :]
+
+    for this_t in field:
+        ct = CubicTriInterpolator(tt, this_t)
+        interped_out.append(ct(filereader.grid.xc, filereader.grid.yc))
+
+    return np.asarray(interped_out)
+
+
 class Graph(object):
     """
     Base class for graph theoretic functions.
@@ -5486,14 +5503,3 @@ class GraphFVCOMdepth(Graph):
 
         return np.asarray(self.node_index[np.asarray(red_node_list)])
 
-def node_to_centre(field, filereader):
-    tt = Triangulation(filereader.grid.x, filereader.grid.y, filereader.grid.triangles)
-    interped_out = []
-    if len(field.shape) == 1:
-        field = field[np.newaxis, :]
-
-    for this_t in field:
-        ct = CubicTriInterpolator(tt, this_t)
-        interped_out.append(ct(filereader.grid.xc, filereader.grid.yc))
-
-    return np.asarray(interped_out)
