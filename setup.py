@@ -1,6 +1,6 @@
 from setuptools import setup
 
-version = '2.2'
+version = '2.2.0'
 
 setup(
     name='PyFVCOM',
