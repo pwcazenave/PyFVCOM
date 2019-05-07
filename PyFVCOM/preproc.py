@@ -5697,7 +5697,6 @@ class HYCOMReader(RegularReader):
 
         return idem
 
-
     def _load_time(self):
         """
         Populate a time object with additional useful time representations from the netCDF time data.
