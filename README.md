@@ -298,7 +298,7 @@ The examples directory includes some Jupyter notebooks of some brief examples of
 - Calculate density from temperature and salinity: `density = PyFVCOM.ocean.dens_jackett(fvcom.data.temp, fvcom.data.salinity)`
 
 #### Miscellaneous tools
-- Make an array of datetime objects: `times = PyFVCOM.utilities.date_range(start, end, inc=0.5)`
+- Make an array of datetime objects: `times = PyFVCOM.utilities.time.date_range(start, end, inc=0.5)`
 
 Coding conventions
 ------------------
