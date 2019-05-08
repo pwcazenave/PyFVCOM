@@ -9,12 +9,15 @@ Table of contents
 - [Examples](#examples)
 - [Provides](#provides)
 - [Coding conventions](#coding-conventions)
-- [Citation](#citation)
 
 Introduction
 ------------
 
 PyFVCOM is a collection of various tools and utilities which can be used to extract, analyse and plot input and output files from FVCOM as well as generate model inputs.
+
+If you wish to cite PyFVCOM, please use the following:
+
+Cazenave, P. W. et al. (2018). PyFVCOM (version x.x.x) [software]. Plymouth, Devon, United Kingdom: Plymouth Marine Laboratory. https://doi.org/10.5281/zenodo.1422462
 
 Installing
 ----------
@@ -444,9 +447,3 @@ Coding conventions
 - Use `with` when opening files or explicitly close files and sockets when done with them
 - Use TODO comments for code that is temporary, a short-term solution, or good-enough but not perfect
 - Verbose output should be off by default
-
-Citation
---------
-
-Cazenave, P. W. et al. (2018). PyFVCOM (version x.x.x) [software]. Plymouth, Devon, United Kingdom: Plymouth Marine Laboratory. https://doi.org/10.5281/zenodo.1422462
-
