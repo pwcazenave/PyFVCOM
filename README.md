@@ -6,15 +6,18 @@ Table of contents
 
 - [Introduction](#introduction)
 - [Installing](#installing)
-- [Provides](#provides)
 - [Examples](#examples)
+- [Provides](#provides)
 - [Coding conventions](#coding-conventions)
-- [Citation](#citation)
 
 Introduction
 ------------
 
 PyFVCOM is a collection of various tools and utilities which can be used to extract, analyse and plot input and output files from FVCOM as well as generate model inputs.
+
+If you wish to cite PyFVCOM, please use the following:
+
+Cazenave, P. W. et al. (2018). PyFVCOM (version x.x.x) [software]. Plymouth, Devon, United Kingdom: Plymouth Marine Laboratory. https://doi.org/10.5281/zenodo.1422462
 
 Installing
 ----------
@@ -34,6 +37,32 @@ pip install --user -e .
 We are targeting Python 3.6+. PyFVCOM no longer supports Python 2.
 
 We recommend Jupyter (formerly iPython) for interactive use of PyFVCOM (and python generally).
+
+Examples
+--------
+
+The examples directory includes some Jupyter notebooks of some brief examples of how to use PyFVCOM. There are also sample scripts of those notebooks.
+
+### Quick oneliners:
+
+#### Grid tools
+- Read an SMS unstructured grid: `mesh = PyFVCOM.grid.Domain('mesh.2dm')`
+- Read an FVCOM unstructured grid: `mesh = PyFVCOM.grid.Domain('mesh.dat')`
+- Find elements connected to node: `elements = PyFVCOM.grid.find_connected_elements(n, mesh.grid.triangles)`
+- Find nodes connected to node: `nodes = PyFVCOM.grid.find_connected_nodes(n, mesh.grid.triangles)`
+- Find model boundary from a grid: `coast = PyFVCOM.grid.get_boundary_polygons(mesh.grid.triangles)`
+- Calculate element areas: `mesh.calculate_areas()`
+- Calculate node control areas: `node_control_area = [PyFVCOM.grid.node_control_area(n) for n in range(mesh.dims.node)]`
+- Calculate element control areas: `element_control_area = [PyFVCOM.grid.element_control_area(e, mesh.grid.triangles, area) for e in range(fvcom.dims.nele)]`
+- Move a field from elements to nodes: `on_nodes = elems2nodes(fvcom.data.field, mesh.grid.triangles)`
+- Move a field from nodes to elements: `on_elements = nodes2elems(fvcom.data.field, mesh.grid.triangles)`
+
+#### Model data
+- Read model output: `fvcom = PyFVCOM.read.FileReader('casename_0001.nc', variables=['temp', 'salinity'])`
+- Calculate density from temperature and salinity: `density = PyFVCOM.ocean.dens_jackett(fvcom.data.temp, fvcom.data.salinity)`
+
+#### Miscellaneous tools
+- Make an array of datetime objects: `times = PyFVCOM.utilities.time.date_range(start, end, inc=0.5)`
 
 Provides
 --------
@@ -398,32 +427,6 @@ Provides
     - `CompareICES`
     - `CompareICES.get_var_comp`
 
-Examples
---------
-
-The examples directory includes some Jupyter notebooks of some brief examples of how to use PyFVCOM. There are also sample scripts of those notebooks.
-
-### Quick oneliners:
-
-#### Grid tools
-- Read an SMS unstructured grid: `mesh = PyFVCOM.grid.Domain('mesh.2dm')`
-- Read an FVCOM unstructured grid: `mesh = PyFVCOM.grid.Domain('mesh.dat')`
-- Find elements connected to node: `elements = PyFVCOM.grid.find_connected_elements(n, mesh.grid.triangles)`
-- Find nodes connected to node: `nodes = PyFVCOM.grid.find_connected_nodes(n, mesh.grid.triangles)`
-- Find model boundary from a grid: `coast = PyFVCOM.grid.get_boundary_polygons(mesh.grid.triangles)`
-- Calculate element areas: `mesh.calculate_areas()`
-- Calculate node control areas: `node_control_area = [PyFVCOM.grid.node_control_area(n) for n in range(mesh.dims.node)]`
-- Calculate element control areas: `element_control_area = [PyFVCOM.grid.element_control_area(e, mesh.grid.triangles, area) for e in range(fvcom.dims.nele)]`
-- Move a field from elements to nodes: `on_nodes = elems2nodes(fvcom.data.field, mesh.grid.triangles)`
-- Move a field from nodes to elements: `on_elements = nodes2elems(fvcom.data.field, mesh.grid.triangles)`
-
-#### Model data
-- Read model output: `fvcom = PyFVCOM.read.FileReader('casename_0001.nc', variables=['temp', 'salinity'])`
-- Calculate density from temperature and salinity: `density = PyFVCOM.ocean.dens_jackett(fvcom.data.temp, fvcom.data.salinity)`
-
-#### Miscellaneous tools
-- Make an array of datetime objects: `times = PyFVCOM.utilities.time.date_range(start, end, inc=0.5)`
-
 Coding conventions
 ------------------
 
@@ -444,9 +447,3 @@ Coding conventions
 - Use `with` when opening files or explicitly close files and sockets when done with them
 - Use TODO comments for code that is temporary, a short-term solution, or good-enough but not perfect
 - Verbose output should be off by default
-
-Citation
---------
-
-Cazenave, P. W. et al. (2018). PyFVCOM (version x.x.x) [software]. Plymouth, Devon, United Kingdom: Plymouth Marine Laboratory. https://doi.org/10.5281/zenodo.1422462
-
