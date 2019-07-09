@@ -3,6 +3,10 @@ Validation of model outputs against in situ data stored and extracted from a dat
 
 This also includes the code to build the databases of time series data sets.
 
+General theory:
+    Build a set of validation observations 
+
+
 """
 
 import datetime as dt
@@ -10,6 +14,7 @@ import glob as gb
 import os
 import sqlite3 as sq
 import subprocess as sp
+import shapely.geometry as sg
 
 import matplotlib.path as mplPath
 import matplotlib.pyplot as plt
@@ -22,7 +27,6 @@ from PyFVCOM.read import FileReader
 from PyFVCOM.stats import calculate_coefficient, rmse
 
 SQL_UNIX_EPOCH = dt.datetime(1970, 1, 1, 0, 0, 0)
-
 
 class ValidationDB(object):
     """ Work with an SQLite database. """
@@ -360,6 +364,122 @@ def _make_normal_tide_series(h_series):
     height_series = h_series - np.mean(h_series)
     return height_series
 
+class ValidationComparison():
+    
+    def __init__(self, filereader, validation_object, varlist):
+        """
+        
+        filereader : pyfvcom FileReader object
+            The model data to validate *without* the variable data loaded
+        validation_object : 
+            
+        varlist : list
+            List of the variables to compare, names are fvcom variable names
+        """
+        self.fvcom_data = filereader
+        self.varlist = varlist
+        self.obs_data = validation_object
+        
+        self.start_date = np.min(self.fvcom_data.time.time_dt)
+    
+    def _find_matching_obs(self):
+        pass
+    
+    def _get_matching_obs(self):
+        pass
+    
+    def _match_obs_depths(self):
+        pass
+
+    def _get_matching_mod(self):
+        pass
+    
+    
+class CtdDB(ValidationDB):
+    """      """
+
+    def get_fr_ctd_comp(self, filereader_str_list, var_list):
+
+        station_str, station_ll, station_dt = self.find_ctd_records(this_filereader)
+         
+        for station, pos, time_dt in zip(station_str, station_ll, station_dt):
+            obs_depths, obs_vals = self.retreive_vars(station, var_names_db)
+            node_ind = this_filereader.closest_node(pos)
+            time_ind = this_filereader.closest_time(time_dt)            
+
+
+
+    def find_ctd_records(self, filereader, start_date=None, end_date=None):
+        """
+        
+        Parameters
+        ----------
+        filereader : PyFVCOM filereader object (something with grid.lon, grid.lat, grid.triangles)       
+
+        start_date : datetime, optional
+            
+        end_date : datetime, optional
+        """
+        if start_date is None:
+            start_date = min(filereader.time.datetime)
+        if end_date is None:
+            end_date = max(filereader.time.datetime)
+
+
+        start_year = start_date.year
+        end_year = end_date.year
+
+        poss_stations = np.asarray(self.select_qry('Stations', 'yearStart >= {} and yearEnd <= {}'.format(start_year, end_year)))
+        
+        station_dt = np.asarray([dt.datetime.strptime(this_entry[3], '%Y-%m-%d %H:%M:%S') for this_entry in poss_stations])  
+        chosen_stations = np.logical_and(station_dt >=start_date, station_dt <= end_date)
+        poss_stations = poss_stations[chosen_stations]
+        station_dt = station_dt[chosen_stations]
+
+        station_ll = np.asarray([[float(this_entry[2]), float(this_entry[1])]for this_entry in poss_stations])
+
+        outer_bnd_poly = get_boundary_polygons(filereader.grid.triangles)[0] 
+        domain_poly = sg.Polygon(np.asarray([filereader.grid.lon[outer_bnd_poly], filereader.grid.lat[outer_bnd_poly]]).T)
+        station_pts = [sg.Point(this_pt) for this_pt in station_ll] 
+        station_isin = [domain_poly.contains(this_pt) for this_pt in station_pts] 
+
+        station_dt = station_dt[station_isin]
+        station_ll = station_ll[station_isin]
+        station_str = [this_entry[0] for this_entry in poss_stations[station_isin]]
+
+        for i, this_str in enumerate(station_str):
+            if this_str[0].isdigit():
+                station_str[i] = 'b{}'.format(this_str)
+        
+        return np.asarray(station_str), station_ll, station_dt
+
+    def retreive_vars(self, station_str, var_name_list, ctd_table_cols=None):
+
+        if ctd_table_cols is None:
+            ctd_table_cols = np.asarray(['SequenceNumber', 'Depth', 'OxygenConcentration', 'FluorometerVoltage', 'DownwellingIrradiance', 'OxygenSaturation', 
+                                'Transmittance', 'Attenuance', 'Pressure', 'Salinity','SigmaTheta', 'Temperature', 'ConversionFactor'])
+
+        ctd_raw_data = self.select_qry(station_str, '')
+
+        depth = ctd_raw_data[:, np.squeeze(np.argwhere(ctd_table_cols == 'Depth'))]
+
+        vals = []
+
+        for this_var in var_name_list:
+            var_ind = np.squeeze(np.argwhere(ctd_table_cols == this_var))
+            if var_ind == 0:
+                print('Variable not in ctd table')
+            else:
+                vals.append(ctd_raw_data[:, np.squeeze(np.argwhere(ctd_table_cols == this_var))])
+ 
+        vals = np.asarray(vals).T
+
+        return depth, vals
+
+    def obs_model_comp(self, ):
+        
+        
+        return 
 
 class TideDB(ValidationDB):
     """ Create a time series database and query it. """
@@ -859,8 +979,8 @@ class WCOObsFile(object):
                 dt_list.append(dt.datetime.strptime(this_date + ' ' + this_time, '%m/%d/%Y %H:%M:%S'))
         elif np.any(np.isin('Year', time_vars)):
             for this_time, (this_jd, this_year) in zip(obs_dict['time'], zip(obs_dict['julian_day'], obs_dict['date'])):
-                dt_list.append(dt.datetime(int(this_year), 1, 1) + dt.timedelta(days=int(this_jd) - 1) +
-                               dt.timedelta(hours=int(this_time.split('.')[0])) + dt.timedelta(minutes=int(this_time.split('.')[1])))
+                dt_list.append(dt.datetime(int(this_year),1,1) + dt.timedelta(days=int(this_jd) -1) +
+                                dt.timedelta(hours=int(this_time.split('.')[0])) + dt.timedelta(minutes=int(this_time.split('.')[1])))
         elif np.any(np.isin(' Date (YYMMDD)', time_vars)):
             for this_time, this_date in zip(obs_dict['time'], obs_dict['date']):
                 dt_list.append(dt.datetime.strptime(this_date + ' ' + this_time, '%y%m%d %H%M%S'))
@@ -1106,6 +1226,7 @@ class CompareICES(object):
     Parallelise
     Add plotting
     Change null value to non numeric
+
 
     """
 
