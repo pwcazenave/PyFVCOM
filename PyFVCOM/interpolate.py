@@ -309,3 +309,56 @@ class MPIRegularInterpolateWorker():
             interped_data = np.zeros(self.regular_grid.mesh_lons.shape)
             interped_data[:] = np.nan
         return interped_data
+
+class MPIUnstrucuturedInterpolateWorker():
+    """
+    For interpolating unstructured data to the FVCOM grid. Currently only for single layer (e.g. surface) applications.
+    """
+
+    def __init__(self, fvcom_file, data_coords_file, data_file, comm=None, verbose=False, cartesian=False):
+        self.fvcom_file = FileReader(fvcom_file)
+
+        self.have_mpi = True
+        try:
+            from mpi4py import MPI
+            self.MPI = MPI
+        except ImportError:
+            warn('No mpi4py found in this python installation. Some functions will be disabled.')
+            self.have_mpi = False
+
+        self.comm = comm
+        if self.have_mpi:
+            self.rank = self.comm.Get_rank()
+        else:
+            self.rank = 0
+
+        self.root = root
+        self._noisy = verbose
+        if verbose and comm is None:
+            print('For verbose output you need to pass a comm object so it knows the process rank. Gonna crash if not.')
+
+        self.data_coords = np.load(data_coords_file)       
+        self.data = np.load(data_file)
+
+        if cartesian:
+            self.model_coords = np.asarray([self.fvcom_file.grid.x, self.fvcom_file.grid.y]).T
+        else:
+            self.model_coords = np.asarray([self.fvcom_file.grid.lon, self.fvcom_file.grid.lat]).T
+
+    def InterpolateFVCOM(self, data_indices):
+        all_interped_data = [] 
+        for this_index in data_indices:
+            all_interped_data.append(self._Interpolater(self.data[this_index,:]))
+
+        return np.asarray(all_interped_data)
+
+    def _Interpolater(self, data):
+        non_nan = ~np.isnan(data)
+        if np.sum(non_nan) > 0:
+            interpolater = interp.Rbf(self.data_coords[non_nan,0], sself.data_coords[this_c_nan,1],
+                            data[non_nan], function='cubic', smooth=0)
+            interped_data = interpolater(self.model_coords[non_nan,0], self.model_coords[non_nan,1]) 
+        else:
+            interped_data = np.zeros(self.regular_grid.mesh_lons.shape)
+            interped_data[:] = np.nan
+        return interped_data
