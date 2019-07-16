@@ -980,6 +980,24 @@ class Domain(object):
 
         return isintriangle(tri_x, tri_y, x, y)
 
+    def which_element(self, x, y):
+        """
+        Identify which element a point (x, y) is in.
+
+        Parameters
+        ----------
+        x, y : float
+            The position in spherical coordinates.
+
+        Returns
+        -------
+        ele : int
+            The element ID the point is in.
+
+        """
+
+        return np.where([self.in_element(x, y, this_ele) for this_ele in np.arange(0, len(self.grid.lonc))])[0]
+
     def exterior(self):
         """
         Return a shapely Polygon of the model's exterior boundary (ignoring islands).
