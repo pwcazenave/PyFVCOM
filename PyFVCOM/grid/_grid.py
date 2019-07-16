@@ -973,8 +973,10 @@ class Domain(object):
             True if the given point is inside the specified element. False otherwise.
 
         """
-        tri_x = self.grid.lon[element]
-        tri_y = self.grid.lat[element]
+        element_nodes = self.grid.triangles[element,:]
+    
+        tri_x = self.grid.lon[element_nodes]
+        tri_y = self.grid.lat[element_nodes]
 
         return isintriangle(tri_x, tri_y, x, y)
 
