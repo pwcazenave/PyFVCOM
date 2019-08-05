@@ -25,6 +25,7 @@ from PyFVCOM.grid import get_boundary_polygons, vincenty_distance
 from PyFVCOM.plot import Time, Plotter
 from PyFVCOM.read import FileReader
 from PyFVCOM.stats import calculate_coefficient, rmse
+from PyFVCOM.utilities.general import PassiveStore, flatten_list, warn
 
 SQL_UNIX_EPOCH = dt.datetime(1970, 1, 1, 0, 0, 0)
 
@@ -364,10 +365,51 @@ def _make_normal_tide_series(h_series):
     height_series = h_series - np.mean(h_series)
     return height_series
 
-class ValidationComparison():
-    
-    def __init__(self, filereader, validation_object, varlist):
+
+class ValidationReader():
+    def __init__(self):
+        self.data = PassiveStore()
+        self.grid = PassiveStore()
+        self.time = PassiveStore()
+
+    def add_data(self, varname_list, data, lonlat, date_list, depth):
         """
+        varname_list : list
+            List of N (fvcom equivalent) variable names
+        data : NxM float array
+            Data for   , where data doesn't exist for a particular variable-position-date-depth it should be passed as NaN
+        lonlat : Mx2 float array
+            Positions of the observation data, [Longitude, Latitude]
+        date_list : M list-like object of datetime.datetime objects
+            Times of observation data
+        depth : M float array
+            Depths of observations
+        """
+        if np.logical_or(len(lonlat) != len(date_list), len(date_list) != len(depth)):
+            print('Lonlat, date, and depth must have same number of entries')
+            return
+
+        if len(varname_list) == 1 and len(data.shape) == 1:
+            data = data[np.newaxis, :] 
+        elif len(data.shape) != 2:
+            print('Data must be 2d array')
+            return
+        elif np.logical_or(len(varname_list) != data.shape[0], len(date_list) != data.shape[1]):
+            if np.logical_and(len(varname_list) == data.shape[1], len(date_list) == data.shape[0]):
+                data = data.T
+            else:
+                print('Data array shape does not match variable and entry numbers')
+        elif len(varname_list) == len(date_list):
+            print('WARNING: Same number of variables as data entries, its up to you to make sure the data array is the correct orientation')
+
+
+        setattr(self.time, 'datetime', np.asarray(date_list))
+        setattr(self.grid, 'lon', np.squeeze(lonlat[:,0]))
+        setattr(self.grid, 'lat', np.squeeze(lonlat[:,1])) 
+        setattr(self.grid, 'depth', np.asarray(depth))
+
+        for i, this_var in enumerate(varname_list):
+            setattr(self.data, this_var, np.squeeze(data[i,:]))
         
         filereader : pyfvcom FileReader object
             The model data to validate *without* the variable data loaded
