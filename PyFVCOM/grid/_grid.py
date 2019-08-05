@@ -1003,8 +1003,10 @@ class Domain(object):
         Return a shapely Polygon of the model's exterior boundary (ignoring islands).
 
         """
+        if not hasattr(self, 'model_exterior'):
+            self.model_exterior = model_exterior(self.grid.lon, self.grid.lat, self.grid.triangles)
 
-        return model_exterior(self.grid.lon, self.grid.lat, self.grid.triangles)
+        return self.model_exterior
 
     def info(self):
         """
