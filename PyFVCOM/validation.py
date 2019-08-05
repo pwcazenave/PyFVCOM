@@ -411,31 +411,180 @@ class ValidationReader():
         for i, this_var in enumerate(varname_list):
             setattr(self.data, this_var, np.squeeze(data[i,:]))
         
+
+
+class ValidationComparison(): 
+    def __init__(self, filereader, validationreader, varlist, mode='nodes', horizontal_match='nearest', vertical_match='interp', time_match='nearest', ignore_deep=True):
+        """ 
         filereader : pyfvcom FileReader object
             The model data to validate *without* the variable data loaded
-        validation_object : 
-            
+        validationreader : pyfvcom ValidationReader object 
+            Some object of validation data with the baseclass as ValidationReader
         varlist : list
-            List of the variables to compare, names are fvcom variable names
+            List of the variables to compare, names are fvcom variable names. At the moment they have to be either all node based or all element based.
+        mode : str, one of ['nodes', 'elements']
+            Whether the varlist are node or element based, eventually this should be done automatically (and handle a mixture of both)
+        horizontal_match : str, one of ['interp', 'nearest']
+            Matching horizontally between model and observation
+        vertical_match : str, one of ['interp', 'nearest']
+            Matching vertically between model and observation
+        ignore_deep : bool
+            Whether to ignore observations at depths below the model bathymetry. If false then observations deeper will all be adjusted to the max model depth.
         """
         self.fvcom_data = filereader
         self.varlist = varlist
-        self.obs_data = validation_object
-        
-        self.start_date = np.min(self.fvcom_data.time.time_dt)
-    
-    def _find_matching_obs(self):
-        pass
-    
-    def _get_matching_obs(self):
-        pass
-    
-    def _match_obs_depths(self):
-        pass
+        self.mode = mode
+        self.obs_data = validationreader
 
-    def _get_matching_mod(self):
-        pass
+        if horizontal_match not in ['interp', 'nearest'] or vertical_match not in ['interp', 'nearest'] or time_match not in ['interp', 'nearest']:
+            print('Unknown matching scheme')
+            return
+        else:
+            self.horizontal_match = horizontal_match
+            self.vertical_match = vertical_match
+            self.time_match = time_match
+
+        self.ignore_deep = ignore_deep
+
+    def find_matching_obs(self):
+        obs_in_mod_xy = np.asarray([self.fvcom_data.in_domain(this_lon, this_lat) for this_lon, this_lat in zip(self.obs_data.grid.lon, self.obs_data.grid.lat)])
+        obs_in_mod_t = np.logical_and(self.obs_data.time.datetime <= np.max(self.fvcom_data.time.datetime),
+                            self.obs_data.time.datetime >= np.min(self.fvcom_data.time.datetime))
+       
+        self.chosen_obs = np.logical_and(obs_in_mod_xy, obs_in_mod_t)
+        self.chosen_obs_ll = np.asarray([self.obs_data.grid.lon[self.chosen_obs], self.obs_data.grid.lat[self.chosen_obs]]).T
+        self.chosen_obs_dep = self.obs_data.grid.depth[self.chosen_obs]
+
+    def find_model_horizontal(self):
+        if self.mode == 'nodes':
+            if self.horizontal_match == 'nearest':
+                self.chosen_mod_nodes = np.squeeze(np.asarray([self.fvcom_data.closest_node(this_ll) for this_ll in self.chosen_obs_ll]))[:, np.newaxis]
+                self.chosen_mod_nodes_weights = np.ones(len(self.chosen_mod_nodes))[:, np.newaxis]
+            elif self.horizontal_match == 'interp':
+                chosen_mod_nodes = []
+                chosen_mod_nodes_weights = []
+
+                for this_obs_ll in self.chosen_obs_ll:
+                    this_ele = self.fvcom_data.which_element(this_obs_ll[0], this_obs_ll[1])
+                    this_nodes = np.squeeze(self.fvcom_data.grid.triangles[this_ele,:])
+                    this_nodes_lon = self.fvcom_data.grid.lon[this_nodes]
+                    this_nodes_lat = self.fvcom_data.grid.lat[this_nodes]
+                    this_nodes_dists = pf.grid.haversine_distance([this_nodes_lon, this_nodes_lat], this_obs_ll)
+                    this_tot_dist = np.sum(this_nodes_dists)
+                    this_wgts = this_nodes_dists/this_tot_dist
+            
+                    chosen_mod_nodes.append(this_nodes)
+                    chosen_mod_nodes_weights.append(this_wgts)
+
+                self.chosen_mod_nodes = np.asarray(chosen_mod_nodes)
+                self.chosen_mod_nodes_weights = np.asarray(chosen_mod_nodes_weights)
+
+        elif self.mode == 'elements':
+            if self.horizontal_match == 'nearest':
+                self.chosen_mod_nodes = self.fvcom_data.closest_element(self.chosen_obs_ll)
+                self.chosen_mod_nodes_weights = np.ones(len(self.chosen_mod_nodes))
+            elif self.horizontal_match == 'interp':
+                chosen_mod_nodes = []
+                chosen_mod_nodes_weights = [] 
+                # fill in using grid.nbe, trickier cos of boundary elements (-1s)
+
+    def find_model_time(self):
+        if self.time_match == 'nearest':
+            self.chosen_mod_times = np.asarray([self.fvcom_data.closest_time(this_t) for this_t in self.obs_data.time.datetime[self.chosen_obs]])[:, np.newaxis]
+            self.chosen_mod_times_weights = np.ones(len(self.chosen_mod_times))[:, np.newaxis]
+        elif self.time_match == 'interp':
+            temp_closest_times = np.asarray([self.fvcom_data.closest_time(this_t) for this_t in self.obs_data.time.datetime[self.chosen_obs]])
+            
+            chosen_mod_times = []
+            chosen_mod_times_weights = []
+            for this_time, this_ind in zip(self.obs_data.time.datetime[self.chosen_obs], temp_closest_times):
+                if this_time >= self.fvcom_data.time.datetime[this_ind]:
+                    time_inds = [this_ind, this_ind + 1]
+                else:
+                    time_inds = [this_ind -1, this_ind]
     
+                diff_1 = (this_time - self.fvcom_data.time.datetime[time_inds[0]]).seconds
+                diff_2 = (self.fvcom_data.time.datetime[time_inds[1]] - this_time).seconds
+
+                wgts = [1-(diff_1/(diff_1 + diff_2)), 1-(diff_2/(diff_1 + diff_2))]
+
+                chosen_mod_times.append(time_inds)
+                chosen_mod_times_weights.append(wgts)
+    
+            self.chosen_mod_times = np.asarray(chosen_mod_times)
+            self.chosen_mod_times_weights = np.asarray(chosen_mod_times_weights)
+
+    def find_model_vertical(self):
+        if not hasattr(self.fvcom_data.grid, 'depth'):
+            self.fvcom_data._get_cv_volumes()
+
+        if not hasattr(self, 'chosen_mod_nodes'):
+            print('Not found horizontal match yet')
+            return
+        if not hasattr(self, 'chosen_mod_times'):
+            print('Not found time match yet')
+            return
+
+        if self.mode == 'nodes':
+            self.mod_h = self.fvcom_data.grid.depth
+            self.mod_depths = -self.mod_h[:,np.newaxis, :]*self.fvcom_data.grid.siglay[np.newaxis, :,:]
+        
+        elif self.mode == 'elements':
+            setattr(self.fvcom_data.data, 'zeta_centre', pf.grid.node_to_centre(self.fvcom_data.zeta, self.fvcom_data))
+            self.mod_h = self.fvcom_data.data.zeta_centre + self.grid.h_center
+            self.mod_depths = self.mod_h[:,np.newaxis, :]*self.fvcom_data.grid.siglay_center[np.newaxis, :,:]
+
+        self.mod_obs_depths_all_t = np.sum(self.mod_depths[:,:,self.chosen_mod_nodes]*self.chosen_mod_nodes_weights[np.newaxis, np.newaxis,:], axis=-1)
+        self.mod_obs_depths = np.diagonal(np.squeeze(self.mod_obs_depths_all_t[self.chosen_mod_times,:]))
+        
+        if self.vertical_match == 'nearest':
+            self.chosen_mod_depths = np.asarray([np.argmin(np.abs(this_mod_obs_dep - this_dep)) for this_mod_obs_dep, this_dep in zip(self.mod_obs_depths, self.obs_data.grid.depth[self.chosen_obs])])[:,np.newaxis]
+            self.chosen_mod_depths_weights = np.ones(self.chosen_mod_depths.shape)
+
+        elif self.vertical_match == 'interp':
+            self.chosen_mod_depths = a
+            self.chosen_mod_weights = b 
+
+        if self.ignore_deep:
+            self.max_mod_dep = np.max(self.mod_depths, axis=1)[self.chosen_mod_times, self.chosen_mod_nodes].diagonal()
+            adjust_chosen =  self.obs_data.grid.depth[self.chosen_obs] <= self.max_mod_dep
+            
+            self.chosen_obs[self.chosen_obs == True][~adjust_chosen] = False
+            self.chosen_obs_dep = self.chosen_obs_dep[adjust_chosen]
+            self.chosen_obs_ll = self.chosen_obs_ll[adjust_chosen,:]
+            self.chosen_mod_depths = self.chosen_mod_depths[adjust_chosen,:]
+            self.chosen_mod_depths_weights = self.chosen_mod_depths_weights[adjust_chosen,:]
+            self.chosen_mod_nodes = self.chosen_mod_nodes[adjust_chosen,:]
+            self.chosen_mod_nodes_weights = self.chosen_mod_nodes_weights[adjust_chosen,:]
+            self.chosen_mod_times = self.chosen_mod_times[adjust_chosen,:]
+            self.chosen_mod_times_weights = self.chosen_mod_times_weights[adjust_chosen,:]
+ 
+    def get_matching_mod(self, varlist, return_time_ll_depth=False):
+        match_dict = {}
+        for this_var in varlist:
+            self.fvcom_data.load_data([this_var])
+            raw_data = getattr(self.fvcom_data.data, this_var)
+ 
+            # Do horizontal weighting first as largest dimension
+            chosen_horiz = np.sum(raw_data[:,:,self.chosen_mod_nodes] * self.chosen_mod_nodes_weights[np.newaxis, np.newaxis, :], axis=-1)
+
+            # Then by time
+            chosen_time = np.sum(chosen_horiz[self.chosen_mod_times,:] * self.chosen_mod_times_weights[:, np.newaxis, np.newaxis], axis=1)
+
+            # Then by depth
+            chosen_depth = np.sum(chosen_time[:, self.chosen_mod_depths, :] * self.chosen_mod_depths_weights[np.newaxis,:,np.newaxis], axis=2)
+            
+            chosen = chosen_depth.diagonal().diagonal()
+ 
+            obs_data = getattr(self.obs_data.data, this_var)[self.chosen_obs]
+            delattr(self.fvcom_data.data, this_var)
+            match_dict[this_var] = [chosen, obs_data]
+
+        if return_time_ll_depth:
+            tld = [self.obs_data.time.datetime[self.chosen_obs], self.chosen_obs_ll, self.chosen_obs_dep]
+            match_dict = (match_dict, tld)
+
+        return match_dict
     
 class CtdDB(ValidationDB):
     """      """
