@@ -2214,6 +2214,9 @@ class Model(Domain):
 
         self.nest = []
 
+        if len(self.open_boundaries) == 0:
+            raise AttributeError('No open boundaries on which to add nests')
+
         for boundary in self.open_boundaries:
             if not hasattr(self.sigma, 'levels'):
                 raise AttributeError('Missing sigma grid information. Add it before creating nests.')

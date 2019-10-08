@@ -471,6 +471,7 @@ class _GridReader(object):
                     print('Found and parsed open boundary file: {}'.format(obcfile))
             except OSError:
                 # File probably doesn't exist, so just carry on.
+                print("Can't find an open boundary file ({}) carrying on without".format(obcfile))
                 pass
         elif extension == '.gmsh':
             if self._noisy:
