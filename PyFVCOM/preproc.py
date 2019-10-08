@@ -2343,8 +2343,8 @@ class Model(Domain):
         salinity = np.empty((time_number, self.dims.layers, nodes_number)) * np.nan
         hyw = np.zeros((time_number, self.dims.levels, nodes_number))  # we never set this to anything other than zeros
         if type == 3:
-            weight_nodes = np.repeat(weight_nodes, time_number, 0).reshape(time_number, -1)
-            weight_elements = np.repeat(weight_elements, time_number, 0).reshape(time_number, -1)
+            weight_nodes = np.tile(weight_nodes, [time_number, 1])
+            weight_elements = np.tile(weight_elements, [time_number, 1])
 
         # Hold in dict to simplify the next for loop
         out_dict = {'ua': [ua, 'elements'], 'va': [va, 'elements'], 'u': [u, 'elements'], 'v': [v, 'elements'],
@@ -5624,8 +5624,10 @@ class Restart(FileReader):
         nx = len(x)
         nz = z.shape[0]
 
+        nt_coarse = len(coarse.time.time)
+
         if mode == 'surface':
-            if nt > 1:
+            if nt_coarse > 1:
                 boundary_grid = np.array((np.tile(self.time.time, [nx, 1]).T.ravel(),
                                           np.tile(y, [nt, 1]).transpose(0, 1).ravel(),
                                           np.tile(x, [nt, 1]).transpose(0, 1).ravel())).T
@@ -5641,7 +5643,7 @@ class Restart(FileReader):
                 interpolated_coarse_data = ft(boundary_grid).reshape([nt, -1])
 
         else:
-            if nt > 1:
+            if nt_coarse > 1:
                 boundary_grid = np.array((np.tile(self.time.time, [nx, nz, 1]).T.ravel(),
                                           np.tile(z, [nt, 1, 1]).ravel(),
                                           np.tile(y, [nz, nt, 1]).transpose(1, 0, 2).ravel(),
@@ -5661,7 +5663,7 @@ class Restart(FileReader):
                 # Reshape the results to match the un-ravelled boundary_grid array.
                 interpolated_coarse_data = ft(boundary_grid).reshape([nt, nz, -1])
 
-        self.replace_variable(variable, interpolated_coarse_data)
+        self.replace_variable(variable, np.squeeze(interpolated_coarse_data))
 
     def write_restart(self, restart_file, **ncopts):
         """
