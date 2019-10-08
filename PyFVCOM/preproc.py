@@ -6190,7 +6190,7 @@ class Restart(FileReader):
         nt_coarse = len(coarse.time.time)
 
         if 'surface' in mode:
-            if nt > 1:
+            if nt_coarse > 1:
                 boundary_grid = np.array((np.tile(self.time.time, [nx, 1]).T.ravel(),
                                           np.tile(y, [nt, 1]).transpose(0, 1).ravel(),
                                           np.tile(x, [nt, 1]).transpose(0, 1).ravel())).T
@@ -6206,7 +6206,7 @@ class Restart(FileReader):
                 interpolated_coarse_data = ft(boundary_grid).reshape([nt, -1])
 
         else:
-            if nt > 1:
+            if nt_coarse > 1:
                 boundary_grid = np.array((np.tile(self.time.time, [nx, nz, 1]).T.ravel(),
                                           np.tile(z, [nt, 1, 1]).ravel(),
                                           np.tile(y, [nz, nt, 1]).transpose(1, 0, 2).ravel(),
