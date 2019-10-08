@@ -8,9 +8,8 @@ from __future__ import print_function
 
 from datetime import datetime
 from pathlib import Path
-from warnings import warn
 from netCDF4 import date2num
-from PyFVCOM.utilities.general import PassiveStore
+from PyFVCOM.utilities.general import PassiveStore, warn
 
 import numpy as np
 
@@ -408,7 +407,6 @@ class Buoy(object):
                 self.time = date2num(self.datetime, units='days since 1858-11-17 00:00:00')
                 self.Itime = np.floor(self.time)
                 self.Itime2 = (self.time - self.Itime) * 60 * 60 * 1000
-
 
     class _ReadPosition:
         """ Add the position for the buoy. """

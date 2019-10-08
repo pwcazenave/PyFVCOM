@@ -23,15 +23,17 @@ import numpy as np
 import scipy.optimize
 from PyFVCOM.coordinate import utm_from_lonlat, lonlat_from_utm
 from PyFVCOM.grid import Domain, grid_metrics, read_fvcom_obc, nodes2elems
-from PyFVCOM.grid import OpenBoundary, find_connected_elements
+from PyFVCOM.grid import OpenBoundary, find_connected_elements, mp_interp_func
 from PyFVCOM.grid import find_bad_node, element_side_lengths, reduce_triangulation
-from PyFVCOM.grid import write_fvcom_mesh, connectivity, haversine_distance
-from PyFVCOM.read import FileReader, _TimeReader
-from PyFVCOM.utilities.general import flatten_list, PassiveStore
+from PyFVCOM.grid import write_fvcom_mesh, connectivity, haversine_distance, subset_domain
+from PyFVCOM.read import FileReader, _TimeReader, control_volumes
+from PyFVCOM.utilities.general import flatten_list, PassiveStore, warn
 from PyFVCOM.utilities.time import date_range
 from dateutil.relativedelta import relativedelta
 from netCDF4 import Dataset, date2num, num2date, stringtochar
 from scipy.interpolate import RegularGridInterpolator
+from scipy.spatial import Delaunay
+from shapely.geometry import Polygon
 
 
 class Model(Domain):
@@ -153,6 +155,9 @@ class Model(Domain):
         if 'noisy' in kwargs:
             self.noisy = kwargs['noisy']
 
+        # Useful to have a central place for this.
+        self._mjd_origin = 'days since 1858-11-17 00:00:00'
+
         # Initialise things so we can add attributes to them later.
         self.time = PassiveStore()
         self.sigma = PassiveStore()
@@ -200,7 +205,7 @@ class Model(Domain):
         """
 
         self.time.datetime = date_range(self.start, self.end, inc=self.sampling)
-        self.time.time = date2num(getattr(self.time, 'datetime'), units='days since 1858-11-17 00:00:00')
+        self.time.time = date2num(getattr(self.time, 'datetime'), units=self._mjd_origin)
         self.time.Itime = np.floor(getattr(self.time, 'time'))  # integer Modified Julian Days
         self.time.Itime2 = (getattr(self.time, 'time') - getattr(self.time, 'Itime')) * 24 * 60 * 60 * 1000  # milliseconds since midnight
         self.time.Times = [t.strftime('%Y-%m-%dT%H:%M:%S.%f') for t in getattr(self.time, 'datetime')]
@@ -523,12 +528,13 @@ class Model(Domain):
     def interp_ady(self, ady_dir, serial=False, pool_size=None, noisy=False):
 
         """
-        Interpolate geblstoff absorption from climatology on AMM grid to FVCOM grid
+        Interpolate Geblstoff absorption from a regular grid to an FVCOM grid.
 
         Parameters
         ----------
-        sst_dir : str, pathlib.Path
-            Path to directory containing the absorption data. Assumes there are directories per year within this directory.
+        ady_dir : str, pathlib.Path
+            Path to directory containing the absorption data. We will find any file ending in '.nc' and use them to
+            load the `gelbstoff_absorption_satellite' variable.
         serial : bool, optional
             Run in serial rather than parallel. Defaults to parallel.
         pool_size : int, optional
@@ -550,7 +556,7 @@ class Model(Domain):
         >>> ady_dir = '/home/mbe/Code/fvcom-projects/locate/python/ady_preproc/Data/yr_data/'
         >>> model = Model('/home/mbe/Models/FVCOM/tamar/tamar_v2_grd.dat',
         >>>     native_coordinates='cartesian', zone='30N')
-        >>> model.interp_ady(ady_dir, 2006, pool_size=20)
+        >>> model.interp_ady(ady_dir, pool_size=20)
         >>> # Save to netCDF
         >>> model.write_adygrd('casename_adygrd.nc')
 
@@ -574,13 +580,15 @@ class Model(Domain):
         if serial:
             results = []
             for ady_file in ady_files:
-                results.append(self._inter_sst_worker(lonlat, ady_file, noisy, var_name='gelbstoff_absorption_satellite', var_offset=0))
+                results.append(self._inter_sst_worker(lonlat, ady_file, noisy,
+                                                      var_name='gelbstoff_absorption_satellite', var_offset=0))
         else:
             if not pool_size:
                 pool = multiprocessing.Pool()
             else:
                 pool = multiprocessing.Pool(pool_size)
-            part_func = partial(self._inter_sst_worker, lonlat, noisy=noisy, var_name='gelbstoff_absorption_satellite', var_offset=0)
+            part_func = partial(self._inter_sst_worker, lonlat, noisy=noisy,
+                                var_name='gelbstoff_absorption_satellite', var_offset=0)
             results = pool.map(part_func, ady_files)
             pool.close()
 
@@ -594,7 +602,7 @@ class Model(Domain):
 
         ady = np.vstack(ady).T
         # FVCOM wants times at midday whilst the data are at midnight
-        dates = np.asarray([this_date + relativedelta(hours=12) for sublist in dates for this_date in sublist])
+        # dates = np.asarray([this_date + relativedelta(hours=12) for sublist in dates for this_date in sublist])
 
         # Sort by time.
         idx = np.argsort(dates)
@@ -605,9 +613,139 @@ class Model(Domain):
         self.ady.ady = ady
         self.ady.time = dates
 
+    def interp_ady_climatology(self, ady_file, tmask, serial=False, pool_size=None, noisy=False):
+
+        """
+        Interpolate Geblstoff absorption climatology from a regular grid to an FVCOM grid.
+
+        Parameters
+        ----------
+        ady_file : str, pathlib.Path
+            Path to directory containing the absorption data. We will find any file ending in '.nc' and use them to
+            load the `gelbstoff_absorption_satellite' variable.
+        tmask : str, pathlib.Path
+            Path to the NEMO tmask file with the grid information in it.
+        serial : bool, optional
+            Run in serial rather than parallel. Defaults to parallel.
+        pool_size : int, optional
+            Specify number of processes for parallel run. By default it uses all available.
+        noisy : bool, optional
+            Set to True to enable some sort of progress output. Defaults to False.
+
+        Returns
+        -------
+        Adds a new `ady' object with:
+        ady : np.ndarray
+            Interpolated absorption time series for the supplied domain.
+        time : np.ndarray
+            List of python datetimes for the corresponding SST data.
+
+        Example
+        -------
+        >>> from PyFVCOM.preproc import Model
+        >>> ady_file = '/home/mbe/Code/fvcom-projects/locate/python/ady_preproc/Data/AMM7-ADY-broadband.nc'
+        >>> tmask = '/data/euryale4/to_archive/momm-AMM7-INPUTS/GRID/mesh_mask.nc'
+        >>> model = Model('/home/mbe/Models/FVCOM/tamar/tamar_v2_grd.dat',
+        >>>               native_coordinates='cartesian', zone='30N')
+        >>> model.interp_ady_climatology(ady_file, pool_size=20)
+        >>> # Save to netCDF
+        >>> model.write_adygrd('casename_adygrd.nc')
+
+        Notes
+        -----
+        TODO: Combine interpolation routines (sst, ady, ady_climatology, etc.) to make more efficient
+
+        """
+
+        # This is a reimplementation of the MATLAB script interp_ady_assimilation.m from PML's projects.
+
+        if isinstance(ady_file, str):
+            ady_file = Path(ady_file)
+        if isinstance(tmask, str):
+            tmask = Path(tmask)
+
+        # Read ADY data files and interpolate each to the FVCOM mesh
+        with Dataset(tmask) as ds:
+            land_mask = ds.variables['tmask'][:][0, 0].astype(bool)  # grab the surface only
+            # Make the
+            lon = ds.variables['nav_lon'][:][land_mask]
+            lat = ds.variables['nav_lat'][:][land_mask]
+
+        with Dataset(ady_file) as ds:
+            # NEMO-ERSEM ADY Gelbstoff absorption climatology file stores a number of hours since 1900-01-01 00:00:00
+            # Make time relative to our model start instead.
+            model_start = datetime.strptime(f'{self.start.year}-01-01 00:00:00', '%Y-%m-%d %H:%M:%S')
+            dates = [model_start + relativedelta(hours=t) for t in ds.variables['t'][:]]
+            # Make the land mask match the time dimension.
+            land_mask = np.tile(land_mask, (len(dates), 1, 1))
+
+            regular_ady = ds.variables['gelbstoff_absorption_satellite'][:]
+            # Flatten the space dimensions.
+            regular_ady = regular_ady[land_mask].reshape(-1, land_mask[0].sum())
+
+        # If the start or end of the model are outside the data, wrap the end of the climatology appropriately. Set
+        # the time accordingly.
+        original_dates = copy.copy(dates)
+        original_ady = regular_ady.copy()
+        if self.start < dates[0]:
+            interval = dates[-1] - dates[-2]
+            dates.insert(0, dates[0] - interval)
+            regular_ady = np.concatenate((original_ady[-1][np.newaxis], regular_ady), axis=0)
+        if self.end > dates[-1]:
+            relative_intervals = [i - original_dates[0] for i in original_dates]
+            new_dates = [original_dates[-1] + i for i in relative_intervals]
+            dates.append(new_dates[1])
+            regular_ady = np.concatenate((regular_ady, original_ady[0][np.newaxis]), axis=0)
+        del original_ady, original_dates
+
+        # Drop data outside the current model period. Offset by one either way so we can cover the current model
+        # period.
+        start_index = np.argwhere(np.asarray(dates) >= self.start).ravel()[0]
+        end_index = np.argwhere(np.asarray(dates) <= self.end).ravel()[-1]
+        if start_index != 0:
+            start_index -= 1
+        if end_index != len(dates):
+            # Add two here: one for indexing and one for covering the period of interest, making sure we aren't too big.
+            end_index = min(end_index + 2, len(dates))
+
+        dates = dates[start_index:end_index]
+        regular_ady = regular_ady[start_index:end_index]
+        print(dates[0], dates[-1])
+        print(self.start, self.end)
+
+        if noisy:
+            print(f'Interpolating ADY data for {len(dates)} times.', flush=True)
+
+        # Now for each time in the ADY data, interpolate it to the model grid.
+        if serial:
+            ady = []
+            for data in regular_ady:
+                ady.append(mp_interp_func((lon.ravel(), lat.ravel(), data.ravel(), self.grid.lon, self.grid.lat)))
+        else:
+            if pool_size is None:
+                pool = multiprocessing.Pool()
+            else:
+                pool = multiprocessing.Pool(pool_size)
+            args = [(lon.ravel(), lat.ravel(), data.ravel(), self.grid.lon, self.grid.lat) for data in regular_ady]
+            ady = pool.map(mp_interp_func, args)
+            pool.close()
+        ady = np.asarray(ady)
+
+        # Make sure we enclose our current model run by adding a point at the start and end too if necessary.
+        if dates[0] > self.start:
+            dates.insert(0, self.start)
+            ady = np.concatenate((ady[0][np.newaxis], ady), axis=0)
+        if dates[-1] < self.end:
+            dates.append(self.end)
+            ady = np.concatenate((ady, ady[-1][np.newaxis]), axis=0)
+
+        # Store everything in an object.
+        self.ady.ady = ady
+        self.ady.time = dates
+
     def write_adygrd(self, output_file, ncopts={'zlib': True, 'complevel': 7}, **kwargs):
         """
-        Generate a gelbstoff absorption file for the given FVCOM domain from the self.ady data.
+        Generate a Gelbstoff absorption file for the given FVCOM domain from the self.ady data.
 
         Parameters
         ----------
@@ -1045,8 +1183,9 @@ class Model(Domain):
         sigma_file : str, pathlib.Path
             Path to which to save sigma data.
 
-        TODO:
-         - Add support for writing all the sigma file formats.
+        Notes
+        -----
+        TODO: Add support for writing all the sigma file formats.
 
         """
 
@@ -2062,7 +2201,7 @@ class Model(Domain):
         nest_levels : int
             Number of node levels in addition to the existing open boundary.
         nesting_type : int
-            FVCOM nesting type (1, 2 or 3). Defaults to 3. Currently, only 3 is supported.
+            FVCOM nesting type (1, 2 or 3). Defaults to 3.
         verbose : bool, optional
             Set to True to enable verbose output. Defaults to False.
 
@@ -2082,7 +2221,24 @@ class Model(Domain):
             # Add all the nested levels and assign weights as necessary.
             for _ in range(nest_levels):
                 self.nest[-1].add_level()
-            if nesting_type >= 2:
+
+        # Find missing elements on the last-but-one nested boundary. These are defined as those whose the three nodes
+        # are included but the element isn't. This replicates what FVCOM does when it computes the elements to
+        # include in a nested output file (since a nested input file for FVCOM is just defined as a list of node IDs).
+        boundary_nodes = self.nest[-1].boundaries[-1].nodes
+        boundary_elements = self.nest[-1].boundaries[-2].elements
+        missing_elements = np.argwhere(np.all(np.isin(self.grid.triangles, boundary_nodes), axis=1)).ravel()
+        if len(missing_elements) > 0:
+            if self._noisy:
+                print('Adding missing bounded elements for the last boundary in the nest.')
+            self.nest[-1].boundaries[-2].elements = np.unique(np.hstack([missing_elements, boundary_elements]))
+            # Update the associated boundary information.
+            self.nest[-1]._update_open_boundaries()
+
+        # Add weights (if given) after we've done all the fiddling with the boundary elements so we don't have to
+        # deal with masking them or adding extra ones.
+        if nesting_type >= 2:
+            for boundary in self.open_boundaries:
                 self.nest[-1].add_weights()
 
     def add_nests_harmonics(self, harmonics_file, harmonics_vars=['u', 'v', 'zeta'], constituents=['M2', 'S2'],
@@ -2142,6 +2298,9 @@ class Model(Domain):
         Load the existing nested forcing file into the current set of nested boundaries in
         self.nest[*].boundaries[*].data.
 
+        This works best if the nests in self.nest are exactly the same as the data being loaded. That might take some
+        manual fiddling to get right.
+
         Parameters
         ----------
         existing_nest : str, pathlib.Path
@@ -2152,7 +2311,7 @@ class Model(Domain):
             Set to True to remove duplicate time data from the nesting file.
         filter_points : bool, optional
             Set to True to remove nodes not in the supplied existing nesting file from the current set of nested
-            boundaries.
+            boundaries. Defaults to False.
         verbose : bool, optional
             Set to True to enable verbose output. Defaults to False.
 
@@ -2177,22 +2336,33 @@ class Model(Domain):
 
             # Grab the cartesian coordinates for the closest lookups. Realistically this could do spherical too by
             # leveraging the haversine argument to closest_{node,element}. Another day, perhaps.
-            x, y = ds.variables['x'][:], ds.variables['y'][:]
-            xc, yc = ds.variables['xc'][:], ds.variables['yc'][:]
-            nc_nodes = self.closest_node((x, y), cartesian=True)
-            nc_elements = self.closest_element((xc, yc), cartesian=True)
+            x, y = ds.variables['lon'][:], ds.variables['lat'][:]
+            xc, yc = ds.variables['lonc'][:], ds.variables['latc'][:]
+            nc_nodes = self.closest_node((x, y))
+            nc_elements = self.closest_element((xc, yc))
 
             nest_nodes = flatten_list([boundary.nodes for nest in self.nest for boundary in nest.boundaries])
             nest_elements = flatten_list([boundary.elements for nest in self.nest for boundary in nest.boundaries if np.any(boundary.elements)])
 
-            # Identify nodes/elements only present in nest_nodes and nest_elements and then drop them from the
-            # corresponding boundary.
+            # Should this use the nest nodes and elements as canonical and grab whatever data we've got in the
+            # netCDF (even if it's not exactly in the right place) or should it error in that situation? The name
+            # of the option seems to imply that we'll filter one or the other. I think we'll go with filter as in
+            # "exclude ones from the netCDF which aren't in the nest nodes and elements".
+            #
+            # If there's a bug in here, I feel for whoever has to look at this to try to figure out how to fix it. 
+            # It's an impenetrable mess of masking. There must be a simpler way to do this and I encourage whoever it
+            # is to find it!
             if filter_points:
-                match_nodes = set(nest_nodes) - set(nc_nodes)
-                match_elements = set(nest_elements) - set(nc_elements)
+                match_nodes = set(nc_nodes) - set(nest_nodes)
+                match_elements = set(nc_elements) - set(nest_elements)
                 for nest in self.nest:
                     for boundary in nest.boundaries:
                         node_mask = np.isin(boundary.nodes, list(match_nodes), invert=True)
+                        if self._debug:
+                            if np.sum(node_mask) != len(boundary.nodes):
+                                print(f'Hmmm, dodgy node filtering! {np.sum(node_mask)}, {len(boundary.nodes)}')
+                            else:
+                                print('OK node filtering')
                         if np.any(node_mask):
                             boundary.nodes = np.asarray(boundary.nodes)[node_mask].tolist()
                             for var in ('lon', 'lat', 'x', 'y', 'h', 'types'):
@@ -2201,8 +2371,16 @@ class Model(Domain):
                             for var in ('layers', 'levels'):
                                 if hasattr(boundary.sigma, var):
                                     setattr(boundary.sigma, var, getattr(boundary.sigma, var)[node_mask])
+                        if hasattr(boundary, 'weight_node'):
+                            boundary.weight_node = boundary.weight_node[node_mask]
+
                         if boundary.elements is not None:
-                            element_mask = np.isin(boundary.elements, list(match_elements))
+                            element_mask = np.isin(boundary.elements, list(match_elements), invert=True)
+                            if self._debug:
+                                if np.sum(element_mask) != len(boundary.elements):
+                                    print(f'Hmmm, dodgy element filtering! {np.sum(element_mask)}, {len(boundary.elements)}')
+                                else:
+                                    print('OK element filtering')
                             if np.any(element_mask):
                                 boundary.elements = np.asarray(boundary.elements)[element_mask].tolist()
                                 for var in ('lonc', 'latc', 'xc', 'yc', 'h_center'):
@@ -2211,7 +2389,9 @@ class Model(Domain):
                                 for var in ('layers_center', 'levels_center'):
                                     if hasattr(boundary.sigma, var):
                                         setattr(boundary.sigma, var, getattr(boundary.sigma, var)[element_mask])
-                        boundary.grid.triangles = reduce_triangulation(boundary.grid.triangles, boundary.grid.nodes)
+                                if hasattr(boundary, 'weight_element'):
+                                    boundary.weight_element = boundary.weight_element[element_mask]
+                        boundary.grid.triangles = reduce_triangulation(self.grid.triangles, boundary.grid.nodes)
                         boundary.grid.nv = boundary.grid.triangles.T + 1
 
                 # Add any ones present in the given nesting file to the current set of nests. To pick which nested
@@ -2256,27 +2436,31 @@ class Model(Domain):
 
             # Fix the order of the positions in the data from the netCDF file to match those in the boundaries.
             nest_nodes = flatten_list([boundary.nodes for nest in self.nest for boundary in nest.boundaries])
-            nest_elements = flatten_list([boundary.elements for nest in self.nest for boundary in nest.boundaries if np.any(boundary.elements)])
-            nc_node_order = [nc_nodes.tolist().index(i) for i in nest_nodes]
-            nc_nodes[nc_node_order]
+            nest_elements = flatten_list([boundary.elements for nest in self.nest for boundary in nest.boundaries if boundary.elements is not None])
+            nc_node_order = [nc_nodes.tolist().index(i) for i in nest_nodes if i in nc_nodes]
             nc_element_order = [nc_elements.tolist().index(i) for i in nest_elements if i in nc_elements]
 
-            for nest in self.nest:
-                for boundary in nest.boundaries:
+            for ni, nest in enumerate(self.nest, 1):
+                # Boundary indexing for the verbose output doesn't start at 1 here because we have the original open
+                # boundary included and the output from add_level would conflict. It's a minor thing, but basically
+                # add_level says we've added 5 levels and then this would say there are 6 levels.
+                for bi, boundary in enumerate(nest.boundaries):
                     for var in variables:
                         has_time = 'time' in ds.variables[var].dimensions
                         has_space = 'node' in ds.variables[var].dimensions or 'nele' in ds.variables[var].dimensions
                         if has_time and has_space:
                             # Split the existing nodes/elements into the current open boundary nodes.
                             if 'node' in ds.variables[var].dimensions:
+                                nc_mask = np.isin(nc_nodes[nc_node_order], boundary.nodes)
                                 # Holy nested indexing, Batman!
-                                data = ds.variables[var][:][..., nc_node_order][..., np.isin(nc_nodes[nc_node_order], boundary.nodes)]
+                                data = ds.variables[var][:][..., nc_node_order][..., nc_mask]
                             else:
                                 if boundary.elements is not None:
+                                    nc_mask = np.isin(nc_elements[nc_element_order], boundary.elements)
                                     # Holy nested indexing, Batman!
-                                    data = ds.variables[var][:][..., nc_element_order][..., np.isin(nc_elements[nc_element_order], boundary.elements)]
+                                    data = ds.variables[var][:][..., nc_element_order][..., nc_mask]
                                 else:
-                                    # This is the first boundary and thus has no element data.
+                                    # This is the last boundary and thus has no element data.
                                     continue
 
                             # Check if we got any valid points here. We won't get any on the last boundary. That
@@ -2289,9 +2473,14 @@ class Model(Domain):
                                 data = np.delete(data, bad_times, axis=0)
 
                             if verbose:
-                                print(f'Transferring {var} from the existing nesting file')
+                                print(f'Transferring {var} from the existing nesting file for nest {ni}, level {bi}')
 
                             setattr(boundary.data, var, data)
+
+        # Update dimensions if we've fiddled with things
+        if filter_points:
+            self.dims.node = len(self.grid.lon)
+            self.dims.nele = len(self.grid.lonc)
 
     def write_nested_forcing(self, ncfile, type=3, adjust_tides=None, ersem_metadata=None, **kwargs):
         """
@@ -2302,7 +2491,7 @@ class Model(Domain):
         ncfile : str, pathlib.Path
             Path to the output netCDF file to be created.
         type : int, optional
-            Type of model nesting. Currently only type 3 (indirect) is supported. Defaults to 3.
+            Type of model nesting. Defaults to 3 (indirect weighted nesting).
         adjust_tides : list, optional
             Which variables (if any) to adjust by adding the predicted tidal signal from the harmonics. This
             expects that these variables exist in boundary.tide
@@ -2353,6 +2542,7 @@ class Model(Domain):
 
         for nest in nests:
             for boundary in nest.boundaries:
+                # Make boolean arrays for the match up between the current nest boundary and flat indices.
                 temp_indices = {'nodes': np.isin(nodes, boundary.nodes),
                                 'elements': np.isin(elements, boundary.elements)}
 
@@ -2462,7 +2652,7 @@ class Model(Domain):
                     'positive': 'up',
                     'valid_min': -1.,
                     'valid_max': 0.,
-                    'formula_terms': 'sigma:siglev eta: zeta depth: h'}
+                    'formula_terms': 'sigma: siglev eta: zeta depth: h'}
             nest_ncfile.add_variable('siglev', self.sigma.levels[nodes, :].T, ['siglev', 'node'], attributes=atts, ncopts=ncopts)
 
             if self._debug:
@@ -2535,7 +2725,7 @@ class Model(Domain):
                     'coordinates': 'time lat lon',
                     'type': 'data',
                     'location': 'node'}
-            nest_ncfile.add_variable('zeta', out_dict['zeta'][0], ['time','node'], attributes=atts, ncopts=ncopts)
+            nest_ncfile.add_variable('zeta', out_dict['zeta'][0], ['time', 'node'], attributes=atts, ncopts=ncopts)
 
             if self._debug:
                 print('Adding ua to netCDF')
@@ -2619,11 +2809,12 @@ class Model(Domain):
                     atts['grid'] = 'obc_grid'
                     # Collapse the data from all the open boundaries as we've done for temperature and salinity.
                     dump = np.full((time_number, self.dims.layers, nodes_number), np.nan)
-                    for boundary in self.open_boundaries:
-                        if name == 'time':
-                            pass
-                        temp_nodes_index = np.isin(nodes, boundary.nodes)
-                        dump[..., temp_nodes_index] = getattr(boundary.data, name)
+                    for nest in self.nest:
+                        for boundary in nest.boundaries:
+                            if name == 'time':
+                                pass
+                            temp_nodes_index = np.isin(nodes, boundary.nodes)
+                            dump[..., temp_nodes_index] = getattr(boundary.data, name)
                     nest_ncfile.add_variable(name, dump, ['time', 'siglay', 'node'], attributes=atts, ncopts=ncopts)
 
     def add_obc_types(self, types):
@@ -2632,7 +2823,7 @@ class Model(Domain):
 
         Parameters
         ----------
-        type : int, list, optional
+        types : int, list, optional
             The open boundary type. See the types listed in mod_obcs.F, lines 29 to 49, reproduced in the notes below
             for convenience. Defaults to 1 (prescribed surface elevation). If given as a list, there must be one
             value per open boundary.
@@ -2678,31 +2869,69 @@ class Model(Domain):
 
     def add_groundwater(self, locations, flux, temperature=15, salinity=35):
         """
-        Add groundwater flux at the given location.
+        Add groundwater flux at the given locations.
 
         Parameters
         ----------
         locations : list-like
-            Positions of the groundwater source as an array of lon/lats ((x1, x2, x3), (y1, y2, y3)).
-        flux : float
-            The discharge in m^3/s for each location in `locations'.
-        temperature : float, optional
-            If given, the temperature of the groundwater input at each location in `locations' (Celsius). If omitted,
+            Positions of the groundwater source as an array of lon/lats ((x1, x2, x3), (y1, y2, y3)) [n, 2].
+        flux : float, np.ndarray
+            The discharge time series in m^3/s. If given as a float it will be the same for all positions. If given
+            as a 1D array, it will be the same at all locations; if 2D, it must be a flux time series for each
+            position in `locations' [space, time]. Flux outside the positions will be set to zero.
+        temperature : float, np.ndarray, optional
+            If given, the temperature (Celsius) time series of the groundwater input. If given as a float it will be
+            the same for all positions. If given as a 1D array, it will be the same at all locations; if 2D,
+            it must be a temperature time series for each position in `locations' [space, time]. If omitted,
             15 Celsius.
-        salinity : float, optional
-            If given, the salinity of the groundwater input at each location in `locations' (PSU). If omitted, 35 PSU.
+        salinity : float, np.ndarray, optional
+            If given, the salinity (PSU) time series of the groundwater input. If given as a float it will be the
+            same for all positions. If given as a 1D array, it will be the same at all locations; if 2D, it must be a
+            salinity time series for each position in `locations' [space, time]. If omitted, 35 PSU.
 
         """
 
+        # Set the temperature and salinity to be uniform everywhere and let the flux control what actually gets put
+        # into the domain. By default, flux is zero everywhere and only non-zero at the given locations.
         self.groundwater.flux = np.zeros((len(self.time.datetime), self.dims.node))
         self.groundwater.temperature = np.full((len(self.time.datetime), self.dims.node), temperature)
         self.groundwater.salinity = np.full((len(self.time.datetime), self.dims.node), salinity)
 
-        for location in zip(locations[:, 0], locations[:, 1]):
-            node_index = self.closest_node(location)
-            self.groundwater.flux[:, node_index[0]] = flux
-            self.groundwater.temperature[:, node_index[0]] = temperature
-            self.groundwater.salinity[:, node_index[0]] = salinity
+        # If we have only a single value for flux, temperature or salinity, make a time series.
+        if np.ndim(flux) == 0:
+            flux = np.repeat(flux, len(self.time.datetime))
+        if np.ndim(temperature) == 0:
+            temperature = np.repeat(temperature, len(self.time.datetime))
+        if np.ndim(salinity) == 0:
+            salinity = np.repeat(salinity, len(self.time.datetime))
+
+        # If we have more than one position and only a single flux/temperature/salinity time series, make the inputs
+        # the same for all positions.
+        if np.ndim(locations) > 1:
+            if np.ndim(flux) == 1:
+                print('fixing flux')
+                flux = np.tile(flux, [locations.shape[0], 1])  # [space, time]
+            if np.ndim(temperature) == 1:
+                print('fixing temperature')
+                temperature = np.tile(temperature, [locations.shape[0], 1])  # [space, time]
+            if np.ndim(salinity) == 1:
+                print('fixing salinity')
+                salinity = np.tile(salinity, [locations.shape[0], 1])  # [space, time]
+
+        # Check input arrays and locations are compatible shapes.
+        if np.shape(flux)[0] != np.shape(locations)[0]:
+            raise ValueError('The supplied flux and locations do not match in size.')
+        if np.shape(temperature)[0] != np.shape(locations)[0]:
+            raise ValueError('The supplied temperature and locations do not match in size.')
+        if np.shape(salinity)[0] != np.shape(locations)[0]:
+            raise ValueError('The supplied salinity and locations do not match in size.')
+
+        # Holy horrific loop variable names, Batman!
+        for x, y, f, t, s in zip(locations[:, 0], locations[:, 1], flux, temperature, salinity):
+            node_index = self.closest_node((x, y))
+            self.groundwater.flux[:, node_index[0]] = f
+            self.groundwater.temperature[:, node_index[0]] = t
+            self.groundwater.salinity[:, node_index[0]] = s
 
     def write_groundwater(self, output_file, surface=False, ncopts={'zlib': True, 'complevel': 7}, **kwargs):
         """
@@ -2791,6 +3020,11 @@ class Model(Domain):
             The new file to create.
 
         """
+
+        # TODO This is almost exactly what load_nested_forcing does but probably better (or at least in a less
+        #  complicated manner). This function writes to a new netCDF whereas load_nested_forcing adds the data to
+        #  this model. There's definitely overlap between the two functions (identifying which points from the netCDF
+        #  to use) which should be harmonised between the two.
 
         # Aggregate the nested nodes and elements as well as the coordinates. Also check whether we're doing weighted
         # nesting.
@@ -2915,7 +3149,7 @@ class Model(Domain):
         """
 
         # TODO: This needs more error checking (e.g. if no common nodes are found). We could also extend this to
-        # interpolate a given elevtide file onto the current boundaries.
+        #  interpolate a given elevtide file onto the current boundaries.
 
         ds = Dataset(elevtide)
 
@@ -3008,7 +3242,7 @@ class Model(Domain):
                     'positive': 'up',
                     'valid_min': -1.,
                     'valid_max': 0.,
-                    'formula_terms': 'sigma:siglev eta: zeta depth: h'}
+                    'formula_terms': 'sigma: siglev eta: zeta depth: h'}
             ncfile.add_variable('siglev', self.sigma.levels[nodes, :].T, ['siglev', 'nobc'], attributes=atts, ncopts=ncopts)
 
             if self._debug:
@@ -3156,19 +3390,19 @@ class ModelNameList(object):
         Mandatory fields are self.config['NML_CASE'] START_DATE and self.config['NML_CASE'] END_DATE. Everything
         else is pre-populated with default options.
 
-        Python True/False is supported (as well as T/F strings) for enabling/disabling things in the namelist.
-
-        - The no forcing at all (surface or open boundary).
+        - There is no forcing at all (surface or open boundary).
         - Temperature and salinity are deactivated.
-        - The intial condition is 15 Celsius / 35 PSU across the domain.
+        - The initial condition is 15 Celsius / 35 PSU across the domain.
         - The velocity field is zero everywhere.
         - The startup type is a cold start.
         - There are no rivers.
         - Data assimilation is disabled.
-        - Output is instantaneous hourly for for all non-input variables.
+        - Output is instantaneous 15 minute interval for for all non-input variables.
         - A restart file is enabled with daily outputs.
         - Time-averaged output is off.
         - There are no probes or stations.
+
+        Python True/False is supported (as well as T/F strings) for enabling/disabling things in the namelist.
 
         Parameters
         ----------
@@ -3190,7 +3424,11 @@ class ModelNameList(object):
         index : find the index for a given entry in an NML_ section.
         value : return the value for a given entry in an NML_ section.
         update : update either the value or type of a given entry in an NML_ section.
-
+        update_nudging : update the nudging time scale to match the time step.
+        update_nesting_interval : try to find a valid nesting interval for the nested output files.
+        valid_nesting_timescale : check if a nesting time scale is valid.
+        update_ramp : update the ramp to a given interval.
+        write_model_namelist : write the model namelist to file.
 
         """
 
@@ -3200,348 +3438,405 @@ class ModelNameList(object):
         self._fabm = fabm
 
         # Initialise all the namelist sections with default values.
-        self.config = {'NML_CASE':
-                           [NameListEntry('CASE_TITLE', 'PyFVCOM default CASE_TITLE'),
-                            NameListEntry('TIMEZONE', 'UTC'),
-                            NameListEntry('DATE_FORMAT', 'YMD'),
-                            NameListEntry('DATE_REFERENCE', 'default'),
-                            NameListEntry('START_DATE', None),
-                            NameListEntry('END_DATE', None)],
-                       'NML_STARTUP':
-                           [NameListEntry('STARTUP_TYPE', 'coldstart'),
-                            NameListEntry('STARTUP_FILE', f'{self._casename}_restart.nc'),
-                            NameListEntry('STARTUP_UV_TYPE', 'default'),
-                            NameListEntry('STARTUP_TURB_TYPE', 'default'),
-                            NameListEntry('STARTUP_TS_TYPE', 'constant'),
-                            NameListEntry('STARTUP_T_VALS', 15.0, 'f'),
-                            NameListEntry('STARTUP_S_VALS', 35.0, 'f'),
-                            NameListEntry('STARTUP_U_VALS', 0.0, 'f'),
-                            NameListEntry('STARTUP_V_VALS', 0.0, 'f'),
-                            NameListEntry('STARTUP_DMAX', -3.0, 'f')],
-                       'NML_IO':
-                           [NameListEntry('INPUT_DIR', './input'),
-                            NameListEntry('OUTPUT_DIR', './output'),
-                            NameListEntry('IREPORT', 300, 'd'),
-                            NameListEntry('VISIT_ALL_VARS', 'F'),
-                            NameListEntry('WAIT_FOR_VISIT', 'F'),
-                            NameListEntry('USE_MPI_IO_MODE', 'F')],
-                       'NML_INTEGRATION':
-                           [NameListEntry('EXTSTEP_SECONDS', 1.0, 'f'),
-                            NameListEntry('ISPLIT', 10, 'd'),
-                            NameListEntry('IRAMP', 1, 'd'),
-                            NameListEntry('MIN_DEPTH', 0.2, 'f'),
-                            NameListEntry('STATIC_SSH_ADJ', 0.0, 'f')],
-                       'NML_RESTART':
-                           [NameListEntry('RST_ON', 'T'),
-                            NameListEntry('RST_FIRST_OUT', None),
-                            NameListEntry('RST_OUT_INTERVAL', 'seconds=86400.'),
-                            NameListEntry('RST_OUTPUT_STACK', 0, 'd')],
-                       'NML_NETCDF':
-                           [NameListEntry('NC_ON', 'T'),
-                            NameListEntry('NC_FIRST_OUT', None),
-                            NameListEntry('NC_OUT_INTERVAL', 'seconds=900.'),
-                            NameListEntry('NC_OUTPUT_STACK', 0, 'd'),
-                            NameListEntry('NC_SUBDOMAIN_FILES', 'FVCOM'),
-                            NameListEntry('NC_GRID_METRICS', 'T'),
-                            NameListEntry('NC_FILE_DATE', 'T'),
-                            NameListEntry('NC_VELOCITY', 'T'),
-                            NameListEntry('NC_SALT_TEMP', 'T'),
-                            NameListEntry('NC_TURBULENCE', 'T'),
-                            NameListEntry('NC_AVERAGE_VEL', 'T'),
-                            NameListEntry('NC_VERTICAL_VEL', 'T'),
-                            NameListEntry('NC_WIND_VEL', 'F'),
-                            NameListEntry('NC_WIND_STRESS', 'F'),
-                            NameListEntry('NC_EVAP_PRECIP', 'F'),
-                            NameListEntry('NC_SURFACE_HEAT', 'F'),
-                            NameListEntry('NC_GROUNDWATER', 'F'),
-                            NameListEntry('NC_BIO', 'F'),
-                            NameListEntry('NC_WQM', 'F'),
-                            NameListEntry('NC_VORTICITY', 'F')],
-                       'NML_NETCDF_AV':
-                           [NameListEntry('NCAV_ON', 'F'),
-                            NameListEntry('NCAV_FIRST_OUT', None),
-                            NameListEntry('NCAV_OUT_INTERVAL', 'seconds=86400.'),
-                            NameListEntry('NCAV_OUTPUT_STACK', 0, 'd'),
-                            NameListEntry('NCAV_GRID_METRICS', 'T'),
-                            NameListEntry('NCAV_FILE_DATE', 'T'),
-                            NameListEntry('NCAV_VELOCITY', 'T'),
-                            NameListEntry('NCAV_SALT_TEMP', 'T'),
-                            NameListEntry('NCAV_TURBULENCE', 'T'),
-                            NameListEntry('NCAV_AVERAGE_VEL', 'T'),
-                            NameListEntry('NCAV_VERTICAL_VEL', 'T'),
-                            NameListEntry('NCAV_WIND_VEL', 'F'),
-                            NameListEntry('NCAV_WIND_STRESS', 'F'),
-                            NameListEntry('NCAV_EVAP_PRECIP', 'F'),
-                            NameListEntry('NCAV_SURFACE_HEAT', 'F'),
-                            NameListEntry('NCAV_GROUNDWATER', 'F'),
-                            NameListEntry('NCAV_BIO', 'F'),
-                            NameListEntry('NCAV_WQM', 'F'),
-                            NameListEntry('NCAV_VORTICITY', 'F')],
-                       'NML_SURFACE_FORCING':
-                           [NameListEntry('WIND_ON', 'F'),
-                            NameListEntry('WIND_TYPE', 'speed'),
-                            NameListEntry('WIND_FILE', f'{self._casename}_wnd.nc'),
-                            NameListEntry('WIND_KIND', 'variable'),
-                            NameListEntry('WIND_X', 5.0, 'f'),
-                            NameListEntry('WIND_Y', 5.0, 'f'),
-                            NameListEntry('HEATING_ON', 'F'),
-                            NameListEntry('HEATING_TYPE', 'flux'),
-                            NameListEntry('HEATING_KIND', 'variable'),
-                            NameListEntry('HEATING_FILE', f'{self._casename}_wnd.nc'),
-                            NameListEntry('HEATING_LONGWAVE_LENGTHSCALE', 0.7, 'f'),
-                            NameListEntry('HEATING_LONGWAVE_PERCTAGE', 10, 'f'),
-                            NameListEntry('HEATING_SHORTWAVE_LENGTHSCALE', 1.1, 'f'),
-                            NameListEntry('HEATING_RADIATION', 0.0, 'f'),
-                            NameListEntry('HEATING_NETFLUX', 0.0, 'f'),
-                            NameListEntry('PRECIPITATION_ON', 'F'),
-                            NameListEntry('PRECIPITATION_KIND', 'variable'),
-                            NameListEntry('PRECIPITATION_FILE', f'{self._casename}_wnd.nc'),
-                            NameListEntry('PRECIPITATION_PRC', 0.0, 'f'),
-                            NameListEntry('PRECIPITATION_EVP', 0.0, 'f'),
-                            NameListEntry('AIRPRESSURE_ON', 'F'),
-                            NameListEntry('AIRPRESSURE_KIND', 'variable'),
-                            NameListEntry('AIRPRESSURE_FILE', f'{self._casename}_wnd.nc'),
-                            NameListEntry('AIRPRESSURE_VALUE', 0.0, 'f'),
-                            NameListEntry('WAVE_ON', 'F'),
-                            NameListEntry('WAVE_FILE', f'{self._casename}_wav.nc'),
-                            NameListEntry('WAVE_KIND', 'constant'),
-                            NameListEntry('WAVE_HEIGHT', 0.0, 'f'),
-                            NameListEntry('WAVE_LENGTH', 0.0, 'f'),
-                            NameListEntry('WAVE_DIRECTION', 0.0, 'f'),
-                            NameListEntry('WAVE_PERIOD', 0.0, 'f'),
-                            NameListEntry('WAVE_PER_BOT', 0.0, 'f'),
-                            NameListEntry('WAVE_UB_BOT', 0.0, 'f')],
-                       'NML_HEATING_CALCULATED':
-                           [NameListEntry('HEATING_CALCULATE_ON', 'F'),
-                            NameListEntry('HEATING_CALCULATE_TYPE', 'flux'),
-                            NameListEntry('HEATING_CALCULATE_FILE', f'{self._casename}_wnd.nc'),
-                            NameListEntry('HEATING_CALCULATE_KIND', 'variable'),
-                            NameListEntry('ZUU', 10.0, 'f'),
-                            NameListEntry('ZTT', 2.0, 'f'),
-                            NameListEntry('ZQQ', 2.0, 'f'),
-                            NameListEntry('AIR_TEMPERATURE', 0.0, 'f'),
-                            NameListEntry('RELATIVE_HUMIDITY', 0.0, 'f'),
-                            NameListEntry('SURFACE_PRESSURE', 0.0, 'f'),
-                            NameListEntry('LONGWAVE_RADIATION', 0.0, 'f'),
-                            NameListEntry('SHORTWAVE_RADIATION', 0.0, 'f'),
-                            NameListEntry('HEATING_LONGWAVE_PERCTAGE_IN_HEATFLUX', 0.78, 'f'),
-                            NameListEntry('HEATING_LONGWAVE_LENGTHSCALE_IN_HEATFLUX', 1.4, 'f'),
-                            NameListEntry('HEATING_SHORTWAVE_LENGTHSCALE_IN_HEATFLUX', 6.3, 'f')],
-                       'NML_PHYSICS':
-                           [NameListEntry('HORIZONTAL_MIXING_TYPE', 'closure'),
-                            NameListEntry('HORIZONTAL_MIXING_KIND', 'constant'),
-                            NameListEntry('HORIZONTAL_MIXING_COEFFICIENT', 0.1, 'f'),
-                            NameListEntry('HORIZONTAL_PRANDTL_NUMBER', 1.0, 'f'),
-                            NameListEntry('VERTICAL_MIXING_TYPE', 'closure'),
-                            NameListEntry('VERTICAL_MIXING_COEFFICIENT', 0.2, 'f'),
-                            NameListEntry('VERTICAL_PRANDTL_NUMBER', 1.0, 'f'),
-                            NameListEntry('BOTTOM_ROUGHNESS_MINIMUM', 0.0001, 'f'),
-                            NameListEntry('BOTTOM_ROUGHNESS_LENGTHSCALE', -1, 'f'),
-                            NameListEntry('BOTTOM_ROUGHNESS_KIND', 'static'),
-                            NameListEntry('BOTTOM_ROUGHNESS_TYPE', 'orig'),
-                            NameListEntry('BOTTOM_ROUGHNESS_FILE', f'{self._casename}_roughness.nc'),
-                            NameListEntry('CONVECTIVE_OVERTURNING', 'F'),
-                            NameListEntry('SCALAR_POSITIVITY_CONTROL', 'T'),
-                            NameListEntry('BAROTROPIC', 'F'),
-                            NameListEntry('BAROCLINIC_PRESSURE_GRADIENT', 'sigma levels'),
-                            NameListEntry('SEA_WATER_DENSITY_FUNCTION', 'dens2'),
-                            NameListEntry('RECALCULATE_RHO_MEAN', 'F'),
-                            NameListEntry('INTERVAL_RHO_MEAN', 'days=1.0'),
-                            NameListEntry('TEMPERATURE_ACTIVE', 'F'),
-                            NameListEntry('SALINITY_ACTIVE', 'F'),
-                            NameListEntry('SURFACE_WAVE_MIXING', 'F'),
-                            NameListEntry('WETTING_DRYING_ON', 'T'),
-                            NameListEntry('NOFLUX_BOT_CONDITION', 'T'),
-                            NameListEntry('ADCOR_ON', 'T'),
-                            NameListEntry('EQUATOR_BETA_PLANE', 'F'),
-                            NameListEntry('BACKWARD_ADVECTION', 'F'),
-                            NameListEntry('BACKWARD_STEP', 1, 'd')],
-                       'NML_RIVER_TYPE':
-                           [NameListEntry('RIVER_NUMBER', 0, 'd'),
-                            NameListEntry('RIVER_KIND', 'variable'),
-                            NameListEntry('RIVER_TS_SETTING', 'calculated'),
-                            NameListEntry('RIVER_INFLOW_LOCATION', 'node'),
-                            NameListEntry('RIVER_INFO_FILE', f'{self._casename}_riv.nml')],
-                       'NML_OPEN_BOUNDARY_CONTROL':
-                           [NameListEntry('OBC_ON', 'F'),
-                            NameListEntry('OBC_NODE_LIST_FILE', f'{self._casename}_obc.dat'),
-                            NameListEntry('OBC_ELEVATION_FORCING_ON', 'F'),
-                            NameListEntry('OBC_ELEVATION_FILE', f'{self._casename}_elevtide.nc'),
-                            NameListEntry('OBC_TS_TYPE', 3, 'd'),
-                            NameListEntry('OBC_TEMP_NUDGING', 'F'),
-                            NameListEntry('OBC_TEMP_FILE', f'{self._casename}_tsobc.nc'),
-                            NameListEntry('OBC_TEMP_NUDGING_TIMESCALE', 0.0001736111, '.10f'),
-                            NameListEntry('OBC_SALT_NUDGING', 'F'),
-                            NameListEntry('OBC_SALT_FILE', f'{self._casename}_tsobc.nc'),
-                            NameListEntry('OBC_SALT_NUDGING_TIMESCALE', 0.0001736111, '.10f'),
-                            NameListEntry('OBC_MEANFLOW', 'F'),
-                            NameListEntry('OBC_MEANFLOW_FILE', f'{self._casename}_meanflow.nc'),
-                            NameListEntry('OBC_TIDEOUT_INITIAL', 1, 'd'),
-                            NameListEntry('OBC_TIDEOUT_INTERVAL', 900, 'd'),
-                            NameListEntry('OBC_LONGSHORE_FLOW_ON', 'F'),
-                            NameListEntry('OBC_LONGSHORE_FLOW_FILE', f'{self._casename}_lsf.dat')],
-                       'NML_GRID_COORDINATES':
-                           [NameListEntry('GRID_FILE', f'{self._casename}_grd.dat'),
-                            NameListEntry('GRID_FILE_UNITS', 'meters'),
-                            NameListEntry('PROJECTION_REFERENCE', 'proj=utm +ellps=WGS84 +zone=30'),
-                            NameListEntry('SIGMA_LEVELS_FILE', f'{self._casename}_sigma.dat'),
-                            NameListEntry('DEPTH_FILE', f'{self._casename}_dep.dat'),
-                            NameListEntry('CORIOLIS_FILE', f'{self._casename}_cor.dat'),
-                            NameListEntry('SPONGE_FILE', f'{self._casename}_spg.dat')],
-                       'NML_GROUNDWATER':
-                           [NameListEntry('GROUNDWATER_ON', 'F'),
-                            NameListEntry('GROUNDWATER_TEMP_ON', 'F'),
-                            NameListEntry('GROUNDWATER_SALT_ON', 'F'),
-                            NameListEntry('GROUNDWATER_KIND', 'none'),
-                            NameListEntry('GROUNDWATER_FILE', f'{self._casename}_groundwater.nc'),
-                            NameListEntry('GROUNDWATER_FLOW', 0.0, 'f'),
-                            NameListEntry('GROUNDWATER_TEMP', 0.0, 'f'),
-                            NameListEntry('GROUNDWATER_SALT', 0.0, 'f')],
-                       'NML_LAG':
-                           [NameListEntry('LAG_PARTICLES_ON', 'F'),
-                            NameListEntry('LAG_START_FILE', f'{self._casename}_lag_init.nc'),
-                            NameListEntry('LAG_OUT_FILE', f'{self._casename}_lag_out.nc'),
-                            NameListEntry('LAG_FIRST_OUT', 'cycle=0'),
-                            NameListEntry('LAG_RESTART_FILE', f'{self._casename}_lag_restart.nc'),
-                            NameListEntry('LAG_OUT_INTERVAL', 'cycle=30'),
-                            NameListEntry('LAG_SCAL_CHOICE', 'none')],
-                       'NML_ADDITIONAL_MODELS':
-                           [NameListEntry('DATA_ASSIMILATION', 'F'),
-                            NameListEntry('DATA_ASSIMILATION_FILE', f'{self._casename}_run.nml'),
-                            NameListEntry('BIOLOGICAL_MODEL', 'F'),
-                            NameListEntry('STARTUP_BIO_TYPE', 'observed'),
-                            NameListEntry('SEDIMENT_MODEL', 'F'),
-                            NameListEntry('SEDIMENT_MODEL_FILE', 'none'),
-                            NameListEntry('SEDIMENT_PARAMETER_TYPE', 'none'),
-                            NameListEntry('SEDIMENT_PARAMETER_FILE', 'none'),
-                            NameListEntry('BEDFLAG_TYPE', 'none'),
-                            NameListEntry('BEDFLAG_FILE', 'none'),
-                            NameListEntry('ICING_MODEL', 'F'),
-                            NameListEntry('ICING_FORCING_FILE', 'none'),
-                            NameListEntry('ICING_FORCING_KIND', 'none'),
-                            NameListEntry('ICING_AIR_TEMP', 0.0, 'f'),
-                            NameListEntry('ICING_WSPD', 0.0, 'f'),
-                            NameListEntry('ICE_MODEL', 'F'),
-                            NameListEntry('ICE_FORCING_FILE', 'none'),
-                            NameListEntry('ICE_FORCING_KIND', 'none'),
-                            NameListEntry('ICE_SEA_LEVEL_PRESSURE', 0.0, 'f'),
-                            NameListEntry('ICE_AIR_TEMP', 0.0, 'f'),
-                            NameListEntry('ICE_SPEC_HUMIDITY', 0.0, 'f'),
-                            NameListEntry('ICE_SHORTWAVE', 0.0, 'f'),
-                            NameListEntry('ICE_CLOUD_COVER', 0.0, 'f')],
-                       'NML_PROBES':
-                           [NameListEntry('PROBES_ON', 'F'),
-                            NameListEntry('PROBES_NUMBER', 0, 'd'),
-                            NameListEntry('PROBES_FILE', f'{self._casename}_probes.nml')],
-                       'NML_STATION_TIMESERIES':
-                           [NameListEntry('OUT_STATION_TIMESERIES_ON', 'F'),
-                            NameListEntry('STATION_FILE', f'{self._casename}_station.dat'),
-                            NameListEntry('LOCATION_TYPE', 'node'),
-                            NameListEntry('OUT_ELEVATION', 'F'),
-                            NameListEntry('OUT_VELOCITY_3D', 'F'),
-                            NameListEntry('OUT_VELOCITY_2D', 'F'),
-                            NameListEntry('OUT_WIND_VELOCITY', 'F'),
-                            NameListEntry('OUT_SALT_TEMP', 'F'),
-                            NameListEntry('OUT_INTERVAL', 'seconds= 360.0')],
-                       'NML_NESTING':
-                           [NameListEntry('NESTING_ON', 'F'),
-                            NameListEntry('NESTING_BLOCKSIZE', 10, 'd'),
-                            NameListEntry('NESTING_TYPE', 1, 'd'),
-                            NameListEntry('NESTING_FILE_NAME', f'{self._casename}_nest.nc')],
-                       'NML_NCNEST':
-                           [NameListEntry('NCNEST_ON', 'F'),
-                            NameListEntry('NCNEST_BLOCKSIZE', 10, 'd'),
-                            NameListEntry('NCNEST_NODE_FILES', ''),
-                            NameListEntry('NCNEST_OUT_INTERVAL', 'seconds=900.0')],
-                       'NML_NCNEST_WAVE':
-                           [NameListEntry('NCNEST_ON_WAVE', 'F'),
-                            NameListEntry('NCNEST_TYPE_WAVE', 'spectral density'),
-                            NameListEntry('NCNEST_BLOCKSIZE_WAVE', -1, 'd'),
-                            NameListEntry('NCNEST_NODE_FILES_WAVE', 'none')],
-                       'NML_BOUNDSCHK':
-                           [NameListEntry('BOUNDSCHK_ON', 'F'),
-                            NameListEntry('CHK_INTERVAL', 1, 'd'),
-                            NameListEntry('VELOC_MAG_MAX', 6.5, 'f'),
-                            NameListEntry('ZETA_MAG_MAX', 10.0, 'f'),
-                            NameListEntry('TEMP_MAX', 30.0, 'f'),
-                            NameListEntry('TEMP_MIN', -4.0, 'f'),
-                            NameListEntry('SALT_MAX', 40.0, 'f'),
-                            NameListEntry('SALT_MIN', -0.5, 'f')],
-                       'NML_DYE_RELEASE':
-                           [NameListEntry('DYE_ON', 'F'),
-                            NameListEntry('DYE_RELEASE_START', None),
-                            NameListEntry('DYE_RELEASE_STOP', None),
-                            NameListEntry('KSPE_DYE', 1, 'd'),
-                            NameListEntry('MSPE_DYE', 1, 'd'),
-                            NameListEntry('K_SPECIFY', 1, 'd'),
-                            NameListEntry('M_SPECIFY', 1, 'd'),
-                            NameListEntry('DYE_SOURCE_TERM', 1.0, 'f')],
-                       'NML_PWP':
-                           [NameListEntry('UPPER_DEPTH_LIMIT', 20.0, 'f'),
-                            NameListEntry('LOWER_DEPTH_LIMIT', 200.0, 'f'),
-                            NameListEntry('VERTICAL_RESOLUTION', 1.0, 'f'),
-                            NameListEntry('BULK_RICHARDSON', 0.65, 'f'),
-                            NameListEntry('GRADIENT_RICHARDSON', 0.25, 'f')],
-                       'NML_SST_ASSIMILATION':
-                           [NameListEntry('SST_ASSIM', 'F'),
-                            NameListEntry('SST_ASSIM_FILE', f'{self._casename}_sst.nc'),
-                            NameListEntry('SST_RADIUS', 0.0, 'f'),
-                            NameListEntry('SST_WEIGHT_MAX', 1.0, 'f'),
-                            NameListEntry('SST_TIMESCALE', 0.0, 'f'),
-                            NameListEntry('SST_TIME_WINDOW', 0.0, 'f'),
-                            NameListEntry('SST_N_PER_INTERVAL', 0.0, 'f')],
-                       'NML_SSTGRD_ASSIMILATION':
-                           [NameListEntry('SSTGRD_ASSIM', 'F'),
-                            NameListEntry('SSTGRD_ASSIM_FILE', f'{self._casename}_sstgrd.nc'),
-                            NameListEntry('SSTGRD_WEIGHT_MAX', 0.5, 'f'),
-                            NameListEntry('SSTGRD_TIMESCALE', 0.0001, 'f'),
-                            NameListEntry('SSTGRD_TIME_WINDOW', 1.0, 'f'),
-                            NameListEntry('SSTGRD_N_PER_INTERVAL', 24.0, 'f')],
-                       'NML_SSHGRD_ASSIMILATION':
-                           [NameListEntry('SSHGRD_ASSIM', 'F'),
-                            NameListEntry('SSHGRD_ASSIM_FILE', f'{self._casename}_sshgrd.nc'),
-                            NameListEntry('SSHGRD_WEIGHT_MAX', 0.0, 'f'),
-                            NameListEntry('SSHGRD_TIMESCALE', 0.0, 'f'),
-                            NameListEntry('SSHGRD_TIME_WINDOW', 0.0, 'f'),
-                            NameListEntry('SSHGRD_N_PER_INTERVAL', 0.0, 'f')],
-                       'NML_TSGRD_ASSIMILATION':
-                           [NameListEntry('TSGRD_ASSIM', 'F'),
-                            NameListEntry('TSGRD_ASSIM_FILE', f'{self._casename}_tsgrd.nc'),
-                            NameListEntry('TSGRD_WEIGHT_MAX', 0.0, 'f'),
-                            NameListEntry('TSGRD_TIMESCALE', 0.0, 'f'),
-                            NameListEntry('TSGRD_TIME_WINDOW', 0.0, 'f'),
-                            NameListEntry('TSGRD_N_PER_INTERVAL', 0.0, 'f')],
-                       'NML_CUR_NGASSIMILATION':
-                           [NameListEntry('CUR_NGASSIM', 'F'),
-                            NameListEntry('CUR_NGASSIM_FILE', f'{self._casename}_cur.nc'),
-                            NameListEntry('CUR_NG_RADIUS', 0.0, 'f'),
-                            NameListEntry('CUR_GAMA', 0.0, 'f'),
-                            NameListEntry('CUR_GALPHA', 0.0, 'f'),
-                            NameListEntry('CUR_NG_ASTIME_WINDOW', 0.0, 'f')],
-                       'NML_CUR_OIASSIMILATION':
-                           [NameListEntry('CUR_OIASSIM', 'F'),
-                            NameListEntry('CUR_OIASSIM_FILE', f'{self._casename}_curoi.nc'),
-                            NameListEntry('CUR_OI_RADIUS', 0.0, 'f'),
-                            NameListEntry('CUR_OIGALPHA', 0.0, 'f'),
-                            NameListEntry('CUR_OI_ASTIME_WINDOW', 0.0, 'f'),
-                            NameListEntry('CUR_N_INFLU', 0.0, 'f'),
-                            NameListEntry('CUR_NSTEP_OI', 0.0, 'f')],
-                       'NML_TS_NGASSIMILATION':
-                           [NameListEntry('TS_NGASSIM', 'F'),
-                            NameListEntry('TS_NGASSIM_FILE', f'{self._casename}_ts.nc'),
-                            NameListEntry('TS_NG_RADIUS', 0.0, 'f'),
-                            NameListEntry('TS_GAMA', 0.0, 'f'),
-                            NameListEntry('TS_GALPHA', 0.0, 'f'),
-                            NameListEntry('TS_NG_ASTIME_WINDOW', 0.0, 'f')],
-                       'NML_TS_OIASSIMILATION':
-                           [NameListEntry('TS_OIASSIM', 'F'),
-                            NameListEntry('TS_OIASSIM_FILE', f'{self._casename}_tsoi.nc'),
-                            NameListEntry('TS_OI_RADIUS', 0.0, 'f'),
-                            NameListEntry('TS_OIGALPHA', 0.0, 'f'),
-                            NameListEntry('TS_OI_ASTIME_WINDOW', 0.0, 'f'),
-                            NameListEntry('TS_MAX_LAYER', 0.0, 'f'),
-                            NameListEntry('TS_N_INFLU', 0.0, 'f'),
-                            NameListEntry('TS_NSTEP_OI', 0.0, 'f')]}
+        self.config = {
+            'NML_CASE': [
+                NameListEntry('CASE_TITLE', 'PyFVCOM default CASE_TITLE'),
+                NameListEntry('TIMEZONE', 'UTC'),
+                NameListEntry('DATE_FORMAT', 'YMD'),
+                NameListEntry('DATE_REFERENCE', 'default'),
+                NameListEntry('START_DATE', None),
+                NameListEntry('END_DATE', None)
+            ],
+            'NML_STARTUP': [
+                NameListEntry('STARTUP_TYPE', 'coldstart'),
+                NameListEntry('STARTUP_FILE', f'{self._casename}_restart.nc'),
+                NameListEntry('STARTUP_UV_TYPE', 'default'),
+                NameListEntry('STARTUP_TURB_TYPE', 'default'),
+                NameListEntry('STARTUP_TS_TYPE', 'constant'),
+                NameListEntry('STARTUP_T_VALS', 15.0, 'f'),
+                NameListEntry('STARTUP_S_VALS', 35.0, 'f'),
+                NameListEntry('STARTUP_U_VALS', 0.0, 'f'),
+                NameListEntry('STARTUP_V_VALS', 0.0, 'f'),
+                NameListEntry('STARTUP_DMAX', -3.0, 'f')
+            ],
+            'NML_IO': [
+                NameListEntry('INPUT_DIR', './input'),
+                NameListEntry('OUTPUT_DIR', './output'),
+                NameListEntry('IREPORT', 300, 'd'),
+                NameListEntry('VISIT_ALL_VARS', 'F'),
+                NameListEntry('WAIT_FOR_VISIT', 'F'),
+                NameListEntry('USE_MPI_IO_MODE', 'F')
+            ],
+            'NML_INTEGRATION': [
+                NameListEntry('EXTSTEP_SECONDS', 1.0, 'f'),
+                NameListEntry('ISPLIT', 10, 'd'),
+                NameListEntry('IRAMP', 1, 'd'),
+                NameListEntry('MIN_DEPTH', 0.2, 'f'),
+                NameListEntry('STATIC_SSH_ADJ', 0.0, 'f')
+            ],
+            'NML_RESTART': [
+                NameListEntry('RST_ON', 'T'),
+                NameListEntry('RST_FIRST_OUT', None),
+                NameListEntry('RST_OUT_INTERVAL', 'seconds=86400.'),
+                NameListEntry('RST_OUTPUT_STACK', 0, 'd')
+            ],
+            'NML_NETCDF': [
+                NameListEntry('NC_ON', 'T'),
+                NameListEntry('NC_FIRST_OUT', None),
+                NameListEntry('NC_OUT_INTERVAL', 'seconds=900.'),
+                NameListEntry('NC_OUTPUT_STACK', 0, 'd'),
+                NameListEntry('NC_SUBDOMAIN_FILES', 'FVCOM'),
+                NameListEntry('NC_GRID_METRICS', 'T'),
+                NameListEntry('NC_FILE_DATE', 'T'),
+                NameListEntry('NC_VELOCITY', 'T'),
+                NameListEntry('NC_SALT_TEMP', 'T'),
+                NameListEntry('NC_TURBULENCE', 'T'),
+                NameListEntry('NC_AVERAGE_VEL', 'T'),
+                NameListEntry('NC_VERTICAL_VEL', 'T'),
+                NameListEntry('NC_WIND_VEL', 'F'),
+                NameListEntry('NC_ATM_PRESS', 'F'),
+                NameListEntry('NC_WIND_STRESS', 'F'),
+                NameListEntry('NC_EVAP_PRECIP', 'F'),
+                NameListEntry('NC_SURFACE_HEAT', 'F'),
+                NameListEntry('NC_GROUNDWATER', 'F'),
+                NameListEntry('NC_BIO', 'F'),
+                NameListEntry('NC_WQM', 'F'),
+                NameListEntry('NC_VORTICITY', 'F')
+            ],
+            'NML_NETCDF_SURFACE': [
+                NameListEntry('NCSF_ON', 'F'),
+                NameListEntry('NCSF_FIRST_OUT', None),
+                NameListEntry('NCSF_OUT_INTERVAL', 'seconds=900.'),
+                NameListEntry('NCSF_OUTPUT_STACK', 0, 'd'),
+                NameListEntry('NCSF_SUBDOMAIN_FILES', 'FVCOM'),
+                NameListEntry('NCSF_GRID_METRICS', 'F'),
+                NameListEntry('NCSF_FILE_DATE', 'F'),
+                NameListEntry('NCSF_VELOCITY', 'F'),
+                NameListEntry('NCSF_SALT_TEMP', 'F'),
+                NameListEntry('NCSF_TURBULENCE', 'F'),
+                NameListEntry('NCSF_WIND_VEL', 'F'),
+                NameListEntry('NCSF_ATM_PRESS', 'F'),
+                NameListEntry('NCSF_WIND_STRESS', 'F'),
+                NameListEntry('NCSF_WAVE_PARA', 'F'),
+                NameListEntry('NCSF_ICE', 'F'),
+                NameListEntry('NCSF_EVAP_PRECIP', 'F'),
+                NameListEntry('NCSF_SURFACE_HEAT', 'F')
+            ],
+            'NML_NETCDF_AV': [
+                NameListEntry('NCAV_ON', 'F'),
+                NameListEntry('NCAV_FIRST_OUT', None),
+                NameListEntry('NCAV_OUT_INTERVAL', 'seconds=86400.'),
+                NameListEntry('NCAV_OUTPUT_STACK', 0, 'd'),
+                NameListEntry('NCAV_GRID_METRICS', 'T'),
+                NameListEntry('NCAV_FILE_DATE', 'T'),
+                NameListEntry('NCAV_VELOCITY', 'T'),
+                NameListEntry('NCAV_SALT_TEMP', 'T'),
+                NameListEntry('NCAV_TURBULENCE', 'T'),
+                NameListEntry('NCAV_AVERAGE_VEL', 'T'),
+                NameListEntry('NCAV_VERTICAL_VEL', 'T'),
+                NameListEntry('NCAV_WIND_VEL', 'F'),
+                NameListEntry('NCAV_ATM_PRESS', 'F'),
+                NameListEntry('NCAV_WIND_STRESS', 'F'),
+                NameListEntry('NCAV_EVAP_PRECIP', 'F'),
+                NameListEntry('NCAV_SURFACE_HEAT', 'F'),
+                NameListEntry('NCAV_GROUNDWATER', 'F'),
+                NameListEntry('NCAV_BIO', 'F'),
+                NameListEntry('NCAV_WQM', 'F'),
+                NameListEntry('NCAV_VORTICITY', 'F')
+            ],
+            'NML_SURFACE_FORCING': [
+                NameListEntry('WIND_ON', 'F'),
+                NameListEntry('WIND_TYPE', 'speed'),
+                NameListEntry('WIND_FILE', f'{self._casename}_wnd.nc'),
+                NameListEntry('WIND_KIND', 'variable'),
+                NameListEntry('WIND_X', 5.0, 'f'),
+                NameListEntry('WIND_Y', 5.0, 'f'),
+                NameListEntry('HEATING_ON', 'F'),
+                NameListEntry('HEATING_TYPE', 'flux'),
+                NameListEntry('HEATING_KIND', 'variable'),
+                NameListEntry('HEATING_FILE', f'{self._casename}_wnd.nc'),
+                NameListEntry('HEATING_LONGWAVE_LENGTHSCALE', 0.7, 'f'),
+                NameListEntry('HEATING_LONGWAVE_PERCTAGE', 10, 'f'),
+                NameListEntry('HEATING_SHORTWAVE_LENGTHSCALE', 1.1, 'f'),
+                NameListEntry('HEATING_RADIATION', 0.0, 'f'),
+                NameListEntry('HEATING_NETFLUX', 0.0, 'f'),
+                NameListEntry('PRECIPITATION_ON', 'F'),
+                NameListEntry('PRECIPITATION_KIND', 'variable'),
+                NameListEntry('PRECIPITATION_FILE', f'{self._casename}_wnd.nc'),
+                NameListEntry('PRECIPITATION_PRC', 0.0, 'f'),
+                NameListEntry('PRECIPITATION_EVP', 0.0, 'f'),
+                NameListEntry('AIRPRESSURE_ON', 'F'),
+                NameListEntry('AIRPRESSURE_KIND', 'variable'),
+                NameListEntry('AIRPRESSURE_FILE', f'{self._casename}_wnd.nc'),
+                NameListEntry('AIRPRESSURE_VALUE', 0.0, 'f'),
+                NameListEntry('WAVE_ON', 'F'),
+                NameListEntry('WAVE_FILE', f'{self._casename}_wav.nc'),
+                NameListEntry('WAVE_KIND', 'constant'),
+                NameListEntry('WAVE_HEIGHT', 0.0, 'f'),
+                NameListEntry('WAVE_LENGTH', 0.0, 'f'),
+                NameListEntry('WAVE_DIRECTION', 0.0, 'f'),
+                NameListEntry('WAVE_PERIOD', 0.0, 'f'),
+                NameListEntry('WAVE_PER_BOT', 0.0, 'f'),
+                NameListEntry('WAVE_UB_BOT', 0.0, 'f')
+            ],
+            'NML_HEATING_CALCULATED': [
+                NameListEntry('HEATING_CALCULATE_ON', 'F'),
+                NameListEntry('HEATING_CALCULATE_TYPE', 'flux'),
+                NameListEntry('HEATING_CALCULATE_FILE', f'{self._casename}_wnd.nc'),
+                NameListEntry('HEATING_CALCULATE_KIND', 'variable'),
+                NameListEntry('HEATING_FRESHWATER', 'F'),
+                NameListEntry('COARE_VERSION', 'COARE26Z'),  # 'COARE26Z' or 'COARE40VN'
+                NameListEntry('ZUU', 10.0, 'f'),
+                NameListEntry('ZTT', 2.0, 'f'),
+                NameListEntry('ZQQ', 2.0, 'f'),
+                NameListEntry('AIR_TEMPERATURE', 0.0, 'f'),
+                NameListEntry('RELATIVE_HUMIDITY', 0.0, 'f'),
+                NameListEntry('SURFACE_PRESSURE', 0.0, 'f'),
+                NameListEntry('LONGWAVE_RADIATION', 0.0, 'f'),
+                NameListEntry('SHORTWAVE_RADIATION', 0.0, 'f'),
+                NameListEntry('HEATING_LONGWAVE_PERCTAGE_IN_HEATFLUX', 0.78, 'f'),
+                NameListEntry('HEATING_LONGWAVE_LENGTHSCALE_IN_HEATFLUX', 1.4, 'f'),
+                NameListEntry('HEATING_SHORTWAVE_LENGTHSCALE_IN_HEATFLUX', 6.3, 'f')
+            ],
+            'NML_PHYSICS': [
+                NameListEntry('HORIZONTAL_MIXING_TYPE', 'closure'),
+                NameListEntry('HORIZONTAL_MIXING_KIND', 'constant'),
+                NameListEntry('HORIZONTAL_MIXING_COEFFICIENT', 0.1, 'f'),
+                NameListEntry('HORIZONTAL_PRANDTL_NUMBER', 1.0, 'f'),
+                NameListEntry('VERTICAL_MIXING_TYPE', 'closure'),
+                NameListEntry('VERTICAL_MIXING_COEFFICIENT', 0.2, 'f'),
+                NameListEntry('VERTICAL_PRANDTL_NUMBER', 1.0, 'f'),
+                NameListEntry('BOTTOM_ROUGHNESS_MINIMUM', 0.0001, 'f'),
+                NameListEntry('BOTTOM_ROUGHNESS_LENGTHSCALE', -1, 'f'),
+                NameListEntry('BOTTOM_ROUGHNESS_KIND', 'static'),
+                NameListEntry('BOTTOM_ROUGHNESS_TYPE', 'orig'),
+                NameListEntry('BOTTOM_ROUGHNESS_FILE', f'{self._casename}_roughness.nc'),
+                NameListEntry('CONVECTIVE_OVERTURNING', 'F'),
+                NameListEntry('SCALAR_POSITIVITY_CONTROL', 'T'),
+                NameListEntry('BAROTROPIC', 'F'),
+                NameListEntry('BAROCLINIC_PRESSURE_GRADIENT', 'sigma levels'),
+                NameListEntry('SEA_WATER_DENSITY_FUNCTION', 'dens2'),
+                NameListEntry('RECALCULATE_RHO_MEAN', 'F'),
+                NameListEntry('INTERVAL_RHO_MEAN', 'days=1.0'),
+                NameListEntry('TEMPERATURE_ACTIVE', 'F'),
+                NameListEntry('SALINITY_ACTIVE', 'F'),
+                NameListEntry('SURFACE_WAVE_MIXING', 'F'),
+                NameListEntry('WETTING_DRYING_ON', 'T'),
+                NameListEntry('NOFLUX_BOT_CONDITION', 'T'),
+                NameListEntry('ADCOR_ON', 'T'),
+                NameListEntry('EQUATOR_BETA_PLANE', 'F'),
+                NameListEntry('BACKWARD_ADVECTION', 'F'),
+                NameListEntry('BACKWARD_STEP', 1, 'd')
+            ],
+            'NML_RIVER_TYPE': [
+                NameListEntry('RIVER_NUMBER', 0, 'd'),
+                NameListEntry('RIVER_KIND', 'variable'),
+                NameListEntry('RIVER_TS_SETTING', 'calculated'),
+                NameListEntry('RIVER_INFLOW_LOCATION', 'node'),
+                NameListEntry('RIVER_INFO_FILE', f'{self._casename}_riv.nml')
+            ],
+            'NML_OPEN_BOUNDARY_CONTROL': [
+                NameListEntry('OBC_ON', 'F'),
+                NameListEntry('OBC_NODE_LIST_FILE', f'{self._casename}_obc.dat'),
+                NameListEntry('OBC_ELEVATION_FORCING_ON', 'F'),
+                NameListEntry('OBC_ELEVATION_FILE', f'{self._casename}_elevtide.nc'),
+                NameListEntry('OBC_TS_TYPE', 3, 'd'),
+                NameListEntry('OBC_TEMP_NUDGING', 'F'),
+                NameListEntry('OBC_TEMP_FILE', f'{self._casename}_tsobc.nc'),
+                NameListEntry('OBC_TEMP_NUDGING_TIMESCALE', 0.0001736111, '.10f'),
+                NameListEntry('OBC_SALT_NUDGING', 'F'),
+                NameListEntry('OBC_SALT_FILE', f'{self._casename}_tsobc.nc'),
+                NameListEntry('OBC_SALT_NUDGING_TIMESCALE', 0.0001736111, '.10f'),
+                NameListEntry('OBC_MEANFLOW', 'F'),
+                NameListEntry('OBC_MEANFLOW_FILE', f'{self._casename}_meanflow.nc'),
+                NameListEntry('OBC_TIDEOUT_INITIAL', 1, 'd'),
+                NameListEntry('OBC_TIDEOUT_INTERVAL', 900, 'd'),
+                NameListEntry('OBC_LONGSHORE_FLOW_ON', 'F'),
+                NameListEntry('OBC_LONGSHORE_FLOW_FILE', f'{self._casename}_lsf.dat')
+            ],
+            'NML_GRID_COORDINATES': [
+                NameListEntry('GRID_FILE', f'{self._casename}_grd.dat'),
+                NameListEntry('GRID_FILE_UNITS', 'meters'),
+                NameListEntry('PROJECTION_REFERENCE', 'proj=utm +ellps=WGS84 +zone=30'),
+                NameListEntry('SIGMA_LEVELS_FILE', f'{self._casename}_sigma.dat'),
+                NameListEntry('DEPTH_FILE', f'{self._casename}_dep.dat'),
+                NameListEntry('CORIOLIS_FILE', f'{self._casename}_cor.dat'),
+                NameListEntry('SPONGE_FILE', f'{self._casename}_spg.dat')
+            ],
+            'NML_GROUNDWATER': [
+                NameListEntry('GROUNDWATER_ON', 'F'),
+                NameListEntry('GROUNDWATER_TEMP_ON', 'F'),
+                NameListEntry('GROUNDWATER_SALT_ON', 'F'),
+                NameListEntry('GROUNDWATER_KIND', 'none'),
+                NameListEntry('GROUNDWATER_FILE', f'{self._casename}_groundwater.nc'),
+                NameListEntry('GROUNDWATER_FLOW', 0.0, 'f'),
+                NameListEntry('GROUNDWATER_TEMP', 0.0, 'f'),
+                NameListEntry('GROUNDWATER_SALT', 0.0, 'f')
+            ],
+            'NML_LAG': [
+                NameListEntry('LAG_PARTICLES_ON', 'F'),
+                NameListEntry('LAG_START_FILE', f'{self._casename}_lag_init.nc'),
+                NameListEntry('LAG_OUT_FILE', f'{self._casename}_lag_out.nc'),
+                NameListEntry('LAG_FIRST_OUT', 'cycle=0'),
+                NameListEntry('LAG_RESTART_FILE', f'{self._casename}_lag_restart.nc'),
+                NameListEntry('LAG_OUT_INTERVAL', 'cycle=30'),
+                NameListEntry('LAG_SCAL_CHOICE', 'none')
+            ],
+            'NML_ADDITIONAL_MODELS': [
+                NameListEntry('DATA_ASSIMILATION', 'F'),
+                NameListEntry('DATA_ASSIMILATION_FILE', f'{self._casename}_run.nml'),
+                NameListEntry('BIOLOGICAL_MODEL', 'F'),
+                NameListEntry('STARTUP_BIO_TYPE', 'observed'),
+                NameListEntry('SEDIMENT_MODEL', 'F'),
+                NameListEntry('SEDIMENT_MODEL_FILE', 'none'),
+                NameListEntry('SEDIMENT_PARAMETER_TYPE', 'none'),
+                NameListEntry('SEDIMENT_PARAMETER_FILE', 'none'),
+                NameListEntry('BEDFLAG_TYPE', 'none'),
+                NameListEntry('BEDFLAG_FILE', 'none'),
+                NameListEntry('ICING_MODEL', 'F'),
+                NameListEntry('ICING_FORCING_FILE', 'none'),
+                NameListEntry('ICING_FORCING_KIND', 'none'),
+                NameListEntry('ICING_AIR_TEMP', 0.0, 'f'),
+                NameListEntry('ICING_WSPD', 0.0, 'f'),
+                NameListEntry('ICE_MODEL', 'F'),
+                NameListEntry('ICE_FORCING_FILE', 'none'),
+                NameListEntry('ICE_FORCING_KIND', 'none'),
+                NameListEntry('ICE_SEA_LEVEL_PRESSURE', 0.0, 'f'),
+                NameListEntry('ICE_AIR_TEMP', 0.0, 'f'),
+                NameListEntry('ICE_SPEC_HUMIDITY', 0.0, 'f'),
+                NameListEntry('ICE_SHORTWAVE', 0.0, 'f'),
+                NameListEntry('ICE_CLOUD_COVER', 0.0, 'f')
+            ],
+            'NML_PROBES': [
+                NameListEntry('PROBES_ON', 'F'),
+                NameListEntry('PROBES_NUMBER', 0, 'd'),
+                NameListEntry('PROBES_FILE', f'{self._casename}_probes.nml')
+            ],
+            'NML_STATION_TIMESERIES': [
+                NameListEntry('OUT_STATION_TIMESERIES_ON', 'F'),
+                NameListEntry('STATION_FILE', f'{self._casename}_station.dat'),
+                NameListEntry('LOCATION_TYPE', 'node'),
+                NameListEntry('OUT_ELEVATION', 'F'),
+                NameListEntry('OUT_VELOCITY_3D', 'F'),
+                NameListEntry('OUT_VELOCITY_2D', 'F'),
+                NameListEntry('OUT_WIND_VELOCITY', 'F'),
+                NameListEntry('OUT_SALT_TEMP', 'F'),
+                NameListEntry('OUT_INTERVAL', 'seconds= 360.0')
+            ],
+            'NML_NESTING': [
+                NameListEntry('NESTING_ON', 'F'),
+                NameListEntry('NESTING_BLOCKSIZE', 10, 'd'),
+                NameListEntry('NESTING_TYPE', 1, 'd'),
+                NameListEntry('NESTING_FILE_NAME', f'{self._casename}_nest.nc')
+            ],
+            'NML_NCNEST': [
+                NameListEntry('NCNEST_ON', 'F'),
+                NameListEntry('NCNEST_BLOCKSIZE', 10, 'd'),
+                NameListEntry('NCNEST_NODE_FILES', ''),
+                NameListEntry('NCNEST_OUT_INTERVAL', 'seconds=900.0')
+            ],
+            'NML_NCNEST_WAVE': [
+                NameListEntry('NCNEST_ON_WAVE', 'F'),
+                NameListEntry('NCNEST_TYPE_WAVE', 'spectral density'),
+                NameListEntry('NCNEST_BLOCKSIZE_WAVE', -1, 'd'),
+                NameListEntry('NCNEST_NODE_FILES_WAVE', 'none')
+            ],
+            'NML_BOUNDSCHK': [
+                NameListEntry('BOUNDSCHK_ON', 'F'),
+                NameListEntry('CHK_INTERVAL', 1, 'd'),
+                NameListEntry('VELOC_MAG_MAX', 6.5, 'f'),
+                NameListEntry('ZETA_MAG_MAX', 10.0, 'f'),
+                NameListEntry('TEMP_MAX', 30.0, 'f'),
+                NameListEntry('TEMP_MIN', -4.0, 'f'),
+                NameListEntry('SALT_MAX', 40.0, 'f'),
+                NameListEntry('SALT_MIN', -0.5, 'f')
+            ],
+            'NML_DYE_RELEASE': [
+                NameListEntry('DYE_ON', 'F'),
+                NameListEntry('DYE_RELEASE_START', None),
+                NameListEntry('DYE_RELEASE_STOP', None),
+                NameListEntry('KSPE_DYE', 1, 'd'),
+                NameListEntry('MSPE_DYE', 1, 'd'),
+                NameListEntry('K_SPECIFY', 1, 'd'),
+                NameListEntry('M_SPECIFY', 1, 'd'),
+                NameListEntry('DYE_SOURCE_TERM', 1.0, 'f')
+            ],
+            'NML_PWP':  [
+                NameListEntry('UPPER_DEPTH_LIMIT', 20.0, 'f'),
+                NameListEntry('LOWER_DEPTH_LIMIT', 200.0, 'f'),
+                NameListEntry('VERTICAL_RESOLUTION', 1.0, 'f'),
+                NameListEntry('BULK_RICHARDSON', 0.65, 'f'),
+                NameListEntry('GRADIENT_RICHARDSON', 0.25, 'f')
+            ],
+            'NML_SST_ASSIMILATION': [
+                NameListEntry('SST_ASSIM', 'F'),
+                NameListEntry('SST_ASSIM_FILE', f'{self._casename}_sst.nc'),
+                NameListEntry('SST_RADIUS', 0.0, 'f'),
+                NameListEntry('SST_WEIGHT_MAX', 1.0, 'f'),
+                NameListEntry('SST_TIMESCALE', 0.0, 'f'),
+                NameListEntry('SST_TIME_WINDOW', 0.0, 'f'),
+                NameListEntry('SST_N_PER_INTERVAL', 0.0, 'f')
+            ],
+            'NML_SSTGRD_ASSIMILATION': [
+                NameListEntry('SSTGRD_ASSIM', 'F'),
+                NameListEntry('SSTGRD_ASSIM_FILE', f'{self._casename}_sstgrd.nc'),
+                NameListEntry('SSTGRD_WEIGHT_MAX', 0.5, 'f'),
+                NameListEntry('SSTGRD_TIMESCALE', 0.0001, 'f'),
+                NameListEntry('SSTGRD_TIME_WINDOW', 1.0, 'f'),
+                NameListEntry('SSTGRD_N_PER_INTERVAL', 24.0, 'f')
+            ],
+            'NML_SSHGRD_ASSIMILATION': [
+                NameListEntry('SSHGRD_ASSIM', 'F'),
+                NameListEntry('SSHGRD_ASSIM_FILE', f'{self._casename}_sshgrd.nc'),
+                NameListEntry('SSHGRD_WEIGHT_MAX', 0.0, 'f'),
+                NameListEntry('SSHGRD_TIMESCALE', 0.0, 'f'),
+                NameListEntry('SSHGRD_TIME_WINDOW', 0.0, 'f'),
+                NameListEntry('SSHGRD_N_PER_INTERVAL', 0.0, 'f')
+            ],
+            'NML_TSGRD_ASSIMILATION': [
+                NameListEntry('TSGRD_ASSIM', 'F'),
+                NameListEntry('TSGRD_ASSIM_FILE', f'{self._casename}_tsgrd.nc'),
+                NameListEntry('TSGRD_WEIGHT_MAX', 0.0, 'f'),
+                NameListEntry('TSGRD_TIMESCALE', 0.0, 'f'),
+                NameListEntry('TSGRD_TIME_WINDOW', 0.0, 'f'),
+                NameListEntry('TSGRD_N_PER_INTERVAL', 0.0, 'f')
+            ],
+            'NML_CUR_NGASSIMILATION': [
+                NameListEntry('CUR_NGASSIM', 'F'),
+                NameListEntry('CUR_NGASSIM_FILE', f'{self._casename}_cur.nc'),
+                NameListEntry('CUR_NG_RADIUS', 0.0, 'f'),
+                NameListEntry('CUR_GAMA', 0.0, 'f'),
+                NameListEntry('CUR_GALPHA', 0.0, 'f'),
+                NameListEntry('CUR_NG_ASTIME_WINDOW', 0.0, 'f')
+            ],
+            'NML_CUR_OIASSIMILATION': [
+                NameListEntry('CUR_OIASSIM', 'F'),
+                NameListEntry('CUR_OIASSIM_FILE', f'{self._casename}_curoi.nc'),
+                NameListEntry('CUR_OI_RADIUS', 0.0, 'f'),
+                NameListEntry('CUR_OIGALPHA', 0.0, 'f'),
+                NameListEntry('CUR_OI_ASTIME_WINDOW', 0.0, 'f'),
+                NameListEntry('CUR_N_INFLU', 0.0, 'f'),
+                NameListEntry('CUR_NSTEP_OI', 0.0, 'f')
+            ],
+            'NML_TS_NGASSIMILATION': [
+                NameListEntry('TS_NGASSIM', 'F'),
+                NameListEntry('TS_NGASSIM_FILE', f'{self._casename}_ts.nc'),
+                NameListEntry('TS_NG_RADIUS', 0.0, 'f'),
+                NameListEntry('TS_GAMA', 0.0, 'f'),
+                NameListEntry('TS_GALPHA', 0.0, 'f'),
+                NameListEntry('TS_NG_ASTIME_WINDOW', 0.0, 'f')
+            ],
+            'NML_TS_OIASSIMILATION': [
+                NameListEntry('TS_OIASSIM', 'F'),
+                NameListEntry('TS_OIASSIM_FILE', f'{self._casename}_tsoi.nc'),
+                NameListEntry('TS_OI_RADIUS', 0.0, 'f'),
+                NameListEntry('TS_OIGALPHA', 0.0, 'f'),
+                NameListEntry('TS_OI_ASTIME_WINDOW', 0.0, 'f'),
+                NameListEntry('TS_MAX_LAYER', 0.0, 'f'),
+                NameListEntry('TS_N_INFLU', 0.0, 'f'),
+                NameListEntry('TS_NSTEP_OI', 0.0, 'f')
+            ]
+        }
 
         if self._fabm:
             # Update existing configuration sections.
@@ -3557,7 +3852,7 @@ class ModelNameList(object):
                                        NameListEntry('USE_FABM_BOTTOM_THICKNESS', 'F'),
                                        NameListEntry('USE_FABM_SALINITY', 'F'),
                                        NameListEntry('FABM_DEBUG', 'F'),
-                                       NameListEntry('FABM_DIAG_OUT', 'T')]
+                                       NameListEntry('FABM_DIAG_OUT', 'F')]
 
     def index(self, section, entry):
         """
@@ -3645,12 +3940,12 @@ class ModelNameList(object):
         if section not in self.config:
             raise KeyError(f'{section} not defined in this namelist configuration.')
 
-        if not value is None:
+        if value is not None:
             if isinstance(value, bool):
                 value = str(value)[0]
             self.config[section][self.index(section, entry)].value = value
 
-        if not type is None:
+        if type is not None:
             self.config[section][self.index(section, entry)].type = type
 
     def update_nudging(self, recovery_time):
@@ -3808,7 +4103,7 @@ class ModelNameList(object):
             if current_end is None:
                 self.update(*end, case_end)
 
-        if not self.valid_nesting_timescale() and self.value('NML_NESTING', 'NESTING_ON') == 'T':
+        if not self.valid_nesting_timescale() and self.value('NML_NCNEST', 'NCNEST_ON') == 'T':
             raise ValueError('The current NCNEST_OUT_INTERVAL is invalid for FVCOM. Use '
                              'PyFVCOM.preproc.Model.update_nesting_interval to find a suitable value.')
 
@@ -3850,7 +4145,13 @@ class Nest(object):
     """
     Class to hold a set of open boundaries as OpenBoundary objects.
 
-    This feels like it ought to be a superclass of OpenBoundary, but I can't wrap my head around how.
+    TODO: This should be a subclass of Domain and OpenBoundary since a nest is just a weird unstructured grid. By
+     subclassing OpenBoundary, we'd get all the useful interpolation methods; subclassing Domain would simplify the
+     storage of the model grid and subsequent writing out to netCDF. Doing this would mean removing the
+     self.boundaries and instead only having a self.grid which has only the nested nodes and elements in it. The only
+     disadvantage I can see at the moment is that adding the weights is more difficult to do this way since we don't
+     have any way of easily identify what level of a nest we're in. However, that can instead be added as an option to
+     add_level to make it generate a list of weights for each set of nodes and elements that have been added.
 
     """
 
@@ -3885,12 +4186,12 @@ class Nest(object):
             raise ValueError("Unsupported boundary type {}. Supply PyFVCOM.grid.OpenBoundary or `list'.".format(type(boundary)))
         # Add the sigma and grid structure attributes. This is a bit inefficient as we end up doing it for every
         # boundary each time we add a new boundary.
-        self.__update_open_boundaries()
+        self._update_open_boundaries()
 
     def __iter__(self):
         return (a for a in dir(self) if not a.startswith('_'))
 
-    def __update_open_boundaries(self):
+    def _update_open_boundaries(self):
         """
         Call this when we've done something which affects the open boundary objects and we need to update their
         properties.
@@ -3909,11 +4210,17 @@ class Nest(object):
                 try:
                     if 'center' not in attribute and attribute not in ['lonc', 'latc', 'xc', 'yc']:
                         setattr(boundary.grid, attribute, getattr(self.grid, attribute)[boundary.nodes, ...])
+                        if self._debug:
+                            print(f'\tUpdating grid node attribute: {attribute}')
                     else:
                         if np.any(boundary.elements):
                             setattr(boundary.grid, attribute, getattr(self.grid, attribute)[boundary.elements, ...])
+                            if self._debug:
+                                print(f'\tUpdating grid element attribute: {attribute}')
                 except (IndexError, TypeError):
                     setattr(boundary.grid, attribute, getattr(self.grid, attribute))
+                    if self._debug:
+                        print(f'\tTransferring grid attribute: {attribute}')
                 except AttributeError as e:
                     if self._debug:
                         print(e)
@@ -3927,11 +4234,17 @@ class Nest(object):
                 try:
                     if 'center' not in attribute:
                         setattr(boundary.sigma, attribute, getattr(self.sigma, attribute)[boundary.nodes, ...])
+                        if self._debug:
+                            print(f'\tUpdating sigma node attribute: {attribute}')
                     else:
                         if np.any(boundary.elements):
                             setattr(boundary.sigma, attribute, getattr(self.sigma, attribute)[boundary.elements, ...])
+                            if self._debug:
+                                print(f'\tUpdating sigma element attribute: {attribute}')
                 except (IndexError, TypeError):
                     setattr(boundary.sigma, attribute, getattr(self.sigma, attribute))
+                    if self._debug:
+                        print(f'\tTransferring sigma attribute: {attribute}')
                 except AttributeError as e:
                     if self._debug:
                         print(e)
@@ -3950,40 +4263,48 @@ class Nest(object):
         """
 
         if self._noisy:
-            print('Add level to the nest.')
+            print(f'Add level {len(self.boundaries)} to the nest.')
 
         # Find all the elements connected to the last set of open boundary nodes.
         if not np.any(self.boundaries[-1].nodes):
             raise ValueError('No open boundary nodes in the current open boundary. Please add some and try again.')
 
         new_level_boundaries = []
-        for this_boundary in self.boundaries:
-            level_elements = find_connected_elements(this_boundary.nodes, self.grid.triangles)
-            # Find the nodes and elements in the existing nests.
-            nest_nodes = flatten_list([i.nodes for i in self.boundaries])
-            nest_elements = flatten_list([i.elements for i in self.boundaries if np.any(i.elements)])
+        # Work off the last boundary's nodes to get the connected elements and nodes. No need to iterate through
+        # everything as this gets recursive as we add more boundaries.
+        this_boundary = self.boundaries[-1]
+        level_elements = find_connected_elements(this_boundary.nodes, self.grid.triangles)
+        # Find the nodes and elements in the existing nests.
+        nest_nodes = flatten_list([i.nodes for i in self.boundaries])
+        nest_elements = flatten_list([i.elements for i in self.boundaries if np.any(i.elements)])
 
-            # Get the nodes connected to the elements we've extracted.
-            level_nodes = np.unique(self.grid.triangles[level_elements, :])
-            # Remove ones we already have in the nest.
-            unique_nodes = np.setdiff1d(level_nodes, nest_nodes)
-            if len(unique_nodes) > 0:
-                # Create a new open boundary from those nodes.
-                new_boundary = OpenBoundary(unique_nodes)
+        # Get unique elements and add them to the current boundary. This way we end up with the right number
+        # of layers of elements (i.e. they're bounded by a string of nodes on each side).
+        unique_elements = np.setdiff1d(level_elements, nest_elements)
+        if this_boundary.elements is None:
+            this_boundary.elements = unique_elements.tolist()
+        else:
+            if self._noisy:
+                warn(f'We already have elements on nest level {len(self.boundaries)}.')
+            # print(unique_elements, this_boundary.elements)
+            # this_boundary.elements = unique_elements.tolist()
 
-                # Add the elements unique to the current nest level too.
-                unique_elements = np.setdiff1d(level_elements, nest_elements)
-                new_boundary.elements = unique_elements.tolist()
+        # Get the nodes connected to the elements we've extracted.
+        level_nodes = np.unique(self.grid.triangles[level_elements, :])
+        # Remove ones we already have in the nest.
+        unique_nodes = np.setdiff1d(level_nodes, nest_nodes)
+        if len(unique_nodes) > 0:
+            # Create a new open boundary from those nodes.
+            new_boundary = OpenBoundary(unique_nodes)
 
-                # Grab the time from the previous one.
-                setattr(new_boundary, 'time', this_boundary.time)
-                new_level_boundaries.append(new_boundary)
+            # Grab the time from the previous one.
+            setattr(new_boundary, 'time', this_boundary.time)
+            new_level_boundaries.append(new_boundary)
 
-        for this_boundary in new_level_boundaries:
-            self.boundaries.append(this_boundary)
+            self.boundaries += new_level_boundaries
 
-        # Populate the grid and sigma objects too.
-        self.__update_open_boundaries()
+            # Populate the grid and sigma objects too.
+            self._update_open_boundaries()
 
     def add_weights(self, power=0):
         """
@@ -4002,21 +4323,21 @@ class Nest(object):
         """
 
         if self._noisy:
-                print('Add weights to the nested boundary.')
+            print('Add weights to the nested boundary.')
 
-        for index, boundary in enumerate(self.boundaries):
+        for index, boundary in enumerate(self.boundaries, 1):
             if power == 0:
-                weight_node = 1 / (index + 1)
+                weight_node = 1 / index
             else:
-                weight_node = 1 / ((index + 1)**power)
+                weight_node = 1 / (index**power)
 
             boundary.weight_node = np.repeat(weight_node, len(boundary.nodes))
             # We will always have one fewer sets of elements as the nodes bound the elements.
-            if not np.any(boundary.elements) and index > 0:
+            if not np.any(boundary.elements) and boundary is not self.boundaries[-1]:
                 raise ValueError('No elements defined in this nest. Adding weights requires elements.')
             elif np.any(boundary.elements):
-                # We should only ever get here on the second iteration since the first open boundary has no elements
-                # in a nest (it's just the original open boundary).
+                # We should get here on all boundaries bar the last since the last open boundary has no elements in a
+                # nest.
                 if power == 0:
                     weight_element = 1 / index
                 else:
@@ -4391,14 +4712,23 @@ class RegularReader(FileReader):
 
         Convert from UTM to spherical if we haven't got those data in the existing output file.
 
+        Parameters
+        ----------
+        netcdf_filestr : str
+            The path to the netCDF file to load.
+        grid_variables : list, optional
+            If given, these are the grid variable names. If omitted, defaults to CMEMS standard names.
+
         """
         if grid_variables is None:
             if 'longitude' in self.ds.variables:
-                grid_variables = {'lon':'longitude', 'lat':'latitude', 'x':'x', 'y':'y', 'depth':'depth', 'Longitude':'Longitude', 'Latitude':'Latitude'}
+                grid_variables = {'lon': 'longitude', 'lat': 'latitude', 'x': 'x', 'y': 'y',
+                                  'depth': 'depth', 'Longitude': 'Longitude', 'Latitude': 'Latitude'}
                 self.dims.lon = self.dims.longitude
                 self.dims.lat = self.dims.latitude
             else:
-                grid_variables = {'lon':'lon', 'lat':'lat', 'x':'x', 'y':'y', 'depth':'depth', 'Longitude':'Longitude', 'Latitude':'Latitude'}
+                grid_variables = {'lon': 'lon', 'lat': 'lat', 'x': 'x', 'y': 'y',
+                                  'depth': 'depth', 'Longitude': 'Longitude', 'Latitude': 'Latitude'}
 
         self.grid = PassiveStore()
         # Get the grid data.
@@ -4425,18 +4755,19 @@ class RegularReader(FileReader):
         # Update dimensions to match those we've been given, if any. Omit time here as we shouldn't be touching that
         # dimension for any variable in use in here.
         for dim in self._dims:
-            if dim != 'time':
-                # TODO Add support for slices here.
+            if dim not in ('time', 'wesn'):
+                # TODO Add support for slices here and shapely polygons for subsetting.
                 setattr(self.dims, dim, len(self._dims[dim]))
 
         # Convert the given W/E/S/N coordinates into node and element IDs to subset.
         if self._bounding_box:
             # We need to use the original Dataset lon and lat values here as they have the right shape for the
             # subsetting.
-            self._dims['lon'] = np.argwhere((self.grid.lon > self._dims['wesn'][0]) &
-                                            (self.grid.lon < self._dims['wesn'][1]))
-            self._dims['lat'] = np.argwhere((self.grid.lat > self._dims['wesn'][2]) &
-                                            (self.grid.lat < self._dims['wesn'][3]))
+            if not isinstance(self._dims['wesn'], Polygon):
+                self._dims['lon'] = np.argwhere((self.grid.lon > self._dims['wesn'][0]) &
+                                                (self.grid.lon < self._dims['wesn'][1]))
+                self._dims['lat'] = np.argwhere((self.grid.lat > self._dims['wesn'][2]) &
+                                                (self.grid.lat < self._dims['wesn'][3]))
 
         related_variables = {'lon': ('x', 'lon'), 'lat': ('y', 'lat')}
         for spatial_dimension in 'lon', 'lat':
@@ -4664,15 +4995,18 @@ class RegularReader(FileReader):
         if cartesian:
             raise ValueError('No cartesian coordinates defined')
         else:
-            if np.ndim(self.grid.lon) <= 1:
+            # Check we haven't already got ravelled data too.
+            if np.ndim(self.grid.lon) <= 1 and len(self.grid.lon) != len(self.grid.lat):
                 lat_rav, lon_rav = np.meshgrid(self.grid.lat, self.grid.lon)
                 x, y = lon_rav.ravel(), lat_rav.ravel()
             else:
                 x, y = self.grid.lon.ravel(), self.grid.lat.ravel()
 
         index = self._closest_point(x, y, x, y, where, threshold=threshold, vincenty=vincenty, haversine=haversine)
-        if len(index) == 1:
+        try:
             index = index[0]
+        except IndexError:
+            pass
         if np.ndim(self.grid.lon) <= 1:
             return np.unravel_index(index, (len(self.grid.lon), len(self.grid.lat)))
         else:
@@ -4698,6 +5032,62 @@ class NEMOReader(RegularReader):
     # TODO:
     #  - A lot of the methods on FileReader will need to be reimplemented for these data (e.g. avg_volume_var). That
     #  is, anything which assumes we've got an unstructured grid.
+
+    def __init__(self, *args, unstructured=False, tmask=None, **kwargs):
+        """
+        Read a NEMO output file into a FileReader-like object.
+
+        All arguments and keyword arguments are passed to PyFVCOM.preproc.RegularReader except `unstructured',
+        which is use to toggle conversion from a regular grid to an unstructured grid.
+
+        Parameters
+        ----------
+        unstructured : bool, optional
+            If given, converts the NEMO grid into an unstructured grid. This is handy if you've written a load of
+            stuff to work with FVCOM outputs and you want to do the same thing for NEMO data without having to
+            rewrite the analysis. In essence, it creates a triangulation and updates add sigma data compatible with
+            existing PyFVCOM functions.
+        tmask : str, pathlib.Path, optional
+            Give a path to a NEMO tmask file. This is used to mask off invalid parts of the NEMO model domain. If
+            omitted, the bottom layer in the vertical grid is set to NaN as this layer is actually in the seabed. This
+            applies to all variables except Light_ADY and e3t.
+
+        """
+
+        # Define the fvcomisation variable before we call super so _load_grid works.
+        self._fvcomise = unstructured
+
+        # Make sure we set the tmask value for self.load_data to know it exists before we call super().
+        self.tmask = tmask
+
+        super().__init__(*args, **kwargs)
+
+        # If we've been given a tmask value, use it to mask off crappy values. Really, this is pretty much essential
+        # to use NEMO outputs sensibly.
+        if self.tmask is not None:
+            with Dataset(self.tmask) as ds:
+                # tmask: 1 = ocean, 0 = land and outside ocean (i.e. below bottom z-level).
+                self.tmask = ds.variables['tmask'][:].astype(bool)
+                # Make sure we clip in space if we've been asked to.
+                if 'x' in self._dims:
+                    self.tmask = self.tmask[..., self._dims['x']]
+                if 'y' in self._dims:
+                    self.tmask = self.tmask[..., self._dims['y'], :]
+                if 'deptht' in self._dims:
+                    self.tmask = self.tmask[..., self._dims['deptht'], :, :]
+                # Make it so it fits with time-varying data.
+                self.tmask = np.tile(np.squeeze(self.tmask), [self.dims.time_counter, 1, 1, 1])
+            for var in self.data:
+                # We could use masking here, but this feels more bulletproof (I think some bits of numpy/scipy ignore
+                # masks when interpolating).
+                current_data = getattr(self.data, var)
+                current_data[~self.tmask] = np.nan
+                setattr(self.data, var, current_data)
+        else:
+            # If we don't have a tmask file, we'll try our best to minimise potential issues with crappy NEMO data.
+            # We do that by simply setting all bottom layers (bar those in e3t and lightADY) to NaN. Crude at best.
+            for var in self.data:
+                self._mask_bottom_layer(var)
 
     def __rshift__(self, other, debug=False):
         """
@@ -4793,6 +5183,13 @@ class NEMOReader(RegularReader):
 
         Convert from UTM to spherical if we haven't got those data in the existing output file.
 
+        Parameters
+        ----------
+        netcdf_filestr : str
+            The path to the netCDF file to load.
+        grid_variables : list, optional
+            If given, these are the grid variable names. If omitted, defaults to NEMO standard names.
+
         """
         if grid_variables is None:
             grid_variables = {'lon': 'nav_lon', 'nav_lat': 'lat', 'x': 'x', 'y': 'y', 'depth': 'depth',
@@ -4831,7 +5228,7 @@ class NEMOReader(RegularReader):
         # Update dimensions to match those we've been given, if any. Omit time here as we shouldn't be touching that
         # dimension for any variable in use in here.
         for dim in self._dims:
-            if dim != 'time':
+            if dim not in ('time', 'wesn'):
                 # TODO Add support for slices here.
                 setattr(self.dims, dim, len(self._dims[dim]))
 
@@ -4904,6 +5301,140 @@ class NEMOReader(RegularReader):
         # Make a bounding box variable too (spherical coordinates): W/E/S/N
         self.grid.bounding_box = (np.min(self.grid.lon), np.max(self.grid.lon),
                                   np.min(self.grid.lat), np.max(self.grid.lat))
+
+        if self._fvcomise:
+            self._to_unstructured()
+
+    def _to_unstructured(self):
+        # Convert the regularly gridded data into an unstructured grid which is good enough to pass muster with most
+        # of the FVCOM tools we've written in here.
+
+        # We need to mask off the land. This makes the grid unstructured which makes the next bit a lot easier. Keep
+        # a copy of the original grid so we can mask the data we load (self._regular_to_unstructured_mask).
+        original_x, original_y = np.meshgrid(self.grid.lon, self.grid.lat)
+
+        # Make the triangulation for the entire domain and we'll drop bits as we mask land and check for a shapely
+        # polygon.
+        self.grid.triangles = Delaunay(np.asarray((original_x.ravel(), original_y.ravel())).T).vertices
+
+        # Use the data array for masking. Just use the first time step to speed things up. Find the first 4D variable
+        # to get the mask. This is suboptimal because who knows what variable we'll end up using.
+        analysis_variable = [i for i in self.ds.variables if len(self.ds.variables[i].dimensions) == 4][0]
+        self._land_mask = ~np.squeeze(self.ds.variables[analysis_variable][0].mask)
+        xx = original_x.copy()[self._land_mask]
+        yy = original_y.copy()[self._land_mask]
+        self.grid.lon = xx
+        self.grid.lat = yy
+
+        self.grid.triangles = reduce_triangulation(self.grid.triangles, np.argwhere(self._land_mask.ravel()))
+
+        # Check if we've been asked to subset with a polygon.
+        if 'wesn' in self._dims and isinstance(self._dims['wesn'], Polygon):
+            sub_nodes, sub_elems, sub_tri = subset_domain(self.grid.lon, self.grid.lat, self.grid.triangles,
+                                                          polygon=self._dims['wesn'])
+            self.grid.lon = self.grid.lon[sub_nodes]
+            self.grid.lat = self.grid.lat[sub_nodes]
+            self.grid.triangles = sub_tri
+
+        # Remove nodes which aren't in the triangulation.
+        node_ids = np.arange(len(self.grid.lon))
+        isolated_nodes = np.setdiff1d(node_ids, np.unique(self.grid.triangles))
+        connected_nodes = np.setdiff1d(node_ids, isolated_nodes)
+        for attr in ('lon', 'lat'):
+            setattr(self.grid, attr, np.delete(getattr(self.grid, attr), isolated_nodes))
+        self.grid.triangles = reduce_triangulation(self.grid.triangles, connected_nodes)
+
+        # Clean up the triangulation to remove nodes we'd flag as invalid in FVCOM for a model run (elements with two
+        # land boundaries). We do this so subsequent calls to pf.grid.get_boundary_polygons work properly (i.e. we
+        # don't get multiple polygons for the main model domain). We have to do this lots of times until we end up
+        # with no dodgy nodes.
+        still_bad = 0
+        while still_bad >= 0:
+            # Limit the search to coastline nodes to massively speed things up!
+            _, _, _, bnd = connectivity(np.asarray((self.grid.lon, self.grid.lat)).T, self.grid.triangles)
+            all_nodes = np.arange(len(self.grid.lon))
+            coast_nodes = all_nodes[bnd]
+            interior_nodes = all_nodes[~bnd]
+            args = [(self.grid.triangles, i) for i in coast_nodes]
+            pool = multiprocessing.Pool()
+            bad_nodes = np.asarray(pool.map(self._bad_node_worker, args))
+            pool.close()
+            if not np.any(bad_nodes):
+                still_bad = -1
+            else:
+                still_bad += 1
+
+            for attr in ('lon', 'lat'):
+                setattr(self.grid, attr, np.delete(getattr(self.grid, attr), coast_nodes[bad_nodes]))
+            # Remove those nodes from the triangulation too. This step is quite slow.
+            new_all_nodes = np.hstack((interior_nodes, coast_nodes[~bad_nodes]))
+            self.grid.triangles = reduce_triangulation(self.grid.triangles, np.sort(new_all_nodes))
+
+            # Check for nodes which join two elements at a single point:
+            # |\
+            # | \
+            # |__o
+            #    /\
+            #   /  \
+            #  /____\
+            bad_nodes = []
+            all_nodes = np.unique(self.grid.triangles)
+            for node in all_nodes:
+                node_in_elements = np.argwhere(np.any(np.isin(self.grid.triangles, node), axis=1))
+                if len(node_in_elements) == 2:
+                    if len(np.unique(self.grid.triangles[node_in_elements])) == 5:
+                        bad_nodes.append(node)
+            if any(bad_nodes):
+                good_nodes = np.setdiff1d(all_nodes, bad_nodes)
+                for attr in ('lon', 'lat'):
+                    setattr(self.grid, attr, np.delete(getattr(self.grid, attr), bad_nodes))
+                self.grid.triangles = reduce_triangulation(self.grid.triangles, good_nodes)
+
+            if self._noisy:
+                if still_bad > 0:
+                    print(f'Make grid FVCOM compatible (iteration {still_bad})', flush=True)
+                else:
+                    print('Grid now FVCOM compatible.', flush=True)
+
+        # Find the indices of the remaining positions in the original coordinate arrays so we can extract the same
+        # positions when loading data.
+        original_xy = np.asarray((original_x.ravel(), original_y.ravel())).T.tolist()
+        new_xy = np.asarray((self.grid.lon, self.grid.lat)).T.tolist()
+        # It feels like I should be using np.isin here, but I can't get it to work. Slow loops it is.
+        original_indices = [original_xy.index(i) for i in new_xy]
+        self._regular_to_unstructured_mask = np.full(original_x.ravel().shape, False)
+        for i in original_indices:
+            self._regular_to_unstructured_mask[i] = True
+
+        self.grid.nv = self.grid.triangles.T + 1  # for pf.plot.Plotter compatibility.
+        self.grid.x, self.grid.y, _ = utm_from_lonlat(self.grid.lon, self.grid.lat, zone=self._zone)
+        self.grid.lonc = nodes2elems(self.grid.lon, self.grid.triangles)
+        self.grid.latc = nodes2elems(self.grid.lat, self.grid.triangles)
+        self.grid.xc = nodes2elems(self.grid.x, self.grid.triangles)
+        self.grid.yc = nodes2elems(self.grid.y, self.grid.triangles)
+
+        # Now we've got an unstructured grid, compute the FVCOM-specific variables.
+        self.grid.art1, self.grid.art1_points = control_volumes(self.grid.x, self.grid.y, self.grid.triangles,
+                                                                element_control=False, return_points=True)
+
+        # Fix dimensions.
+        self.dims.node = len(self.grid.lon)
+        self.dims.nele = len(self.grid.latc)
+
+        # Make some fake sigma data.
+        inc = 1 / self.dims.deptht
+        self.grid.siglev = np.tile(np.arange(0, 1 + inc, inc), (self.dims.time, self.dims.node, 1)).transpose(0, 2, 1)
+        self.grid.siglay = np.diff(self.grid.siglev, axis=1)
+
+        # If we've loaded data up front, we need to remove the values outside the triangulation.
+        for var in self.data:
+            _tmp = getattr(self.data, var)
+            if _tmp.shape[-1] != self.dims.node:
+                setattr(self.data, var, _tmp[..., self._regular_to_unstructured_mask])
+
+    @staticmethod
+    def _bad_node_worker(args):
+        return find_bad_node(*args)
 
     def load_data(self, var):
         """
@@ -4981,7 +5512,7 @@ class NEMOReader(RegularReader):
             if depthname in self._dims:
                 depth_compare = len(self.ds.variables[depthvar][self._dims[depthname]]) == depthdim
             if timename in self._dims:
-                time_compare = len(self.ds.variables['time'][self._dims[timename]]) == timedim
+                time_compare = len(self.ds.variables[timename][self._dims[timename]]) == timedim
 
             if not lon_compare:
                 raise ValueError('Longitude data are incompatible. You may be trying to load data after having already '
@@ -4996,9 +5527,9 @@ class NEMOReader(RegularReader):
                 raise ValueError('Time period is incompatible. You may be trying to load data after having already '
                                  'concatenated a RegularReader object, which is unsupported.')
 
-            if 'time' not in var_dim and 'time_counter' not in var_dim:
+            if timename not in var_dim:
                 # Should we error here or carry on having warned?
-                warn("{} does not contain a `time' or `time_counter' dimension.".format(v))
+                warn(f"{v} does not contain a `{timename}' dimension.".format(v))
 
             attributes = PassiveStore()
             for attribute in self.ds.variables[v].ncattrs():
@@ -5007,6 +5538,37 @@ class NEMOReader(RegularReader):
 
             data = self.ds.variables[v][variable_indices]  # data are automatically masked
             setattr(self.data, v, data)
+
+            # Make sure the bottom layer is masked (only if we haven't been given a tmask argument during __init__).
+            self._mask_bottom_layer(v)
+
+            if self._fvcomise:
+                # Ravel the last two dimensions so we have data that are unstructured. Then extract only those that
+                # cover the region we've triangulated.
+                current_shape = getattr(self.data, v).shape
+                new_shape = list(current_shape)[:-2]  # everything up to the horizontal space dimensions
+                new_shape.append(int(np.prod(current_shape[-2:])))
+                reshaped = getattr(self.data, v).reshape(new_shape)
+                # Extract only those positions which we ended up with in our final unstructured grid if we're being
+                # called separately (otherwise this happens in __init__).
+                if hasattr(self, '_regular_to_unstructured_mask'):
+                    reshaped = reshaped[..., self._regular_to_unstructured_mask]
+                setattr(self.data, v, reshaped)
+
+    def _mask_bottom_layer(self, var):
+        """
+        The ERSEM data in the NEMO files have a bottom layer which is generally all zeros. With the exception of
+        Light_ADY, which appears to have sensible values. What we'll do here is set the bottom layer to be NaN for
+        any data we've loaded.
+
+        """
+        # Skip lightADY and e3t. Also don't do this if self.tmask has been populated with a mask.
+        if var not in ('lightADY', 'e3t') and self.tmask is not None:
+            current_data = getattr(self.data, var)
+            # Only replace the bottom layer if we've got a 4D array (time, depth, lat, lon).
+            if np.ndim(current_data) == 4:
+                current_data[:, -1, :, :] = np.nan
+            setattr(self.data, var, current_data)
 
 
 class _TimeReaderReg(_TimeReader):
@@ -5058,7 +5620,7 @@ class NemoRestartRegularReader(RegularReader):
     nemo_data_reader.data_mask = tmask
     nemo_data_reader.load_data([this_nemo])
 
-    Also since these restart files are timeless a single dummy time (2001,1,1) is put in on initialising. The replace
+    Also since these restart files are timeless a single dummy time (2001, 1, 1) is put in on initialising. The replace
     interpolation *should* ignore the time if there is only one timestep but you can always overwrite it e.g.
 
     nemo_data_reader.time = restart_file_object.time
@@ -5535,7 +6097,8 @@ class Restart(FileReader):
             fudge! Defaults to False.
         mode : bool, optional
             Set to 'nodes' to interpolate onto the grid node positions or 'elements' for the elements. Defaults to
-            'nodes'.
+            'nodes'. If it is a 2d field needs 'surface' in it e.g. 'surface_elements' or 'surface_nodes'. 'surface' defaults
+            to interpolates onto nodes in line with the defaults.
 
         """
 
@@ -5545,7 +6108,7 @@ class Restart(FileReader):
         # We need the vertical grid data for the interpolation, so load it now.
         self.load_data(['siglay'])
         self.data.siglay_center = nodes2elems(self.data.siglay, self.grid.triangles)
-        if mode == 'elements':
+        if 'elements' in mode:
             x = copy.deepcopy(self.grid.lonc)
             y = copy.deepcopy(self.grid.latc)
             # Keep depths positive down.
@@ -5564,7 +6127,7 @@ class Restart(FileReader):
 
             # Internal landmasses also need to be dealt with, so test if a point lies within the mask of the grid and
             # move it to the nearest in grid point if so.
-            if not mode == 'surface':
+            if 'surface' not in mode:
                 land_mask = getattr(coarse.data, coarse_name)[0, ...].mask[0, :, :]
             else:
                 land_mask = getattr(coarse.data, coarse_name)[0, ...].mask
@@ -5586,7 +6149,7 @@ class Restart(FileReader):
             # The depth data work differently as we need to squeeze each FVCOM water column into the available coarse
             # data. The only way to do this is to adjust each FVCOM water column in turn by comparing with the
             # closest coarse depth.
-            if mode != 'surface':
+            if 'surface' not in mode:
                 coarse_depths = np.tile(coarse.grid.depth, [coarse.dims.lat, coarse.dims.lon, 1]).transpose(2, 0, 1)
                 coarse_depths = np.ma.masked_array(coarse_depths, mask=getattr(coarse.data, coarse_name)[0, ...].mask)
                 coarse_depths = np.max(coarse_depths, axis=0)
@@ -5626,8 +6189,8 @@ class Restart(FileReader):
 
         nt_coarse = len(coarse.time.time)
 
-        if mode == 'surface':
-            if nt_coarse > 1:
+        if 'surface' in mode:
+            if nt > 1:
                 boundary_grid = np.array((np.tile(self.time.time, [nx, 1]).T.ravel(),
                                           np.tile(y, [nt, 1]).transpose(0, 1).ravel(),
                                           np.tile(x, [nt, 1]).transpose(0, 1).ravel())).T
@@ -5643,7 +6206,7 @@ class Restart(FileReader):
                 interpolated_coarse_data = ft(boundary_grid).reshape([nt, -1])
 
         else:
-            if nt_coarse > 1:
+            if nt > 1:
                 boundary_grid = np.array((np.tile(self.time.time, [nx, nz, 1]).T.ravel(),
                                           np.tile(z, [nt, 1, 1]).ravel(),
                                           np.tile(y, [nz, nt, 1]).transpose(1, 0, 2).ravel(),
@@ -5663,7 +6226,7 @@ class Restart(FileReader):
                 # Reshape the results to match the un-ravelled boundary_grid array.
                 interpolated_coarse_data = ft(boundary_grid).reshape([nt, nz, -1])
 
-        self.replace_variable(variable, np.squeeze(interpolated_coarse_data))
+        self.replace_variable(variable, interpolated_coarse_data)
 
     def write_restart(self, restart_file, **ncopts):
         """
@@ -5703,6 +6266,15 @@ class Restart(FileReader):
                     if self._noisy:
                         print('existing data')
                     ds[name][:] = self.ds[name][:]
+
+            if hasattr(self, 'add_vars'):
+                for name, meta_dict in self.add_vars.items():
+                    x = ds.createVariable(name, meta_dict['datatype'], meta_dict['dimensions'])
+                    # Copy variable attributes all at once via dictionary
+                    ds[name].setncatts(meta_dict['attributes'])
+                    if self._noisy:
+                        print('Writing {}'.format(name), end=' ')
+                    ds[name][:] = getattr(self.data, name)
 
     def read_regular(self, *args, **kwargs):
         """

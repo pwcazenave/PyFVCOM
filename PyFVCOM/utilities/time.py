@@ -308,7 +308,7 @@ def ramped_signal(start, end, time_interval, signal_start, signal_end, min_rate,
     -------
     t : np.ndarray
         Time series for the signal (datetime objects).
-    sigmal : np.ndarray
+    signal : np.ndarray
         Leak values for the times in `t'.
 
     """

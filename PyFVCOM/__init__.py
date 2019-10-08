@@ -3,16 +3,14 @@ The FVCOM Python toolbox (PyFVCOM)
 
 """
 
-__version__ = '2.1.3'
+__version__ = '2.2.0'
 __author__ = 'Pierre Cazenave'
 __credits__ = ['Pierre Cazenave', 'Michael Bedington', 'Ricardo Torres']
 __license__ = 'MIT'
 __maintainer__ = 'Pierre Cazenave'
 __email__ = 'pica@pml.ac.uk'
 
-import inspect
 import sys
-from warnings import warn
 
 # Import everything! Eventually, we're going to hit a circular dependency here...
 from PyFVCOM import buoy

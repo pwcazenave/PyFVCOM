@@ -9,15 +9,15 @@ import inspect
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
-from warnings import warn
 
 import matplotlib.path as mpath
 import numpy as np
+import pandas as pd
 from netCDF4 import Dataset, MFDataset, num2date, date2num
 
 from PyFVCOM.grid import Domain, control_volumes, get_area_heron
 from PyFVCOM.grid import unstructured_grid_volume, elems2nodes, GridReaderNetCDF
-from PyFVCOM.utilities.general import PassiveStore, flatten_list
+from PyFVCOM.utilities.general import PassiveStore, flatten_list, warn
 
 
 class _TimeReader(object):
@@ -378,14 +378,45 @@ class _MakeDimensions(object):
 
 
 class FileReader(Domain):
-    """ Load FVCOM model output.
+    """
+    Load FVCOM model output.
 
     Class simplifies the preparation of FVCOM model output for analysis with PyFVCOM.
+
+    Methods
+    -------
+    In addition to the methods on PyFVCOM.grid.Domain, this object has:
+    add - add the data loaded in this FileReader with another one or a single value
+    subtract - subtract the data loaded in this FileReader with another one or a single value
+    multiply - multiply the data loaded in this FileReader with another one or a single value
+    divide - divide the data loaded in this FileReader with another one or a single value
+    power - raise  the data loaded in this FileReader to a given power
+    load_data - load model data from the netCDF associated with this FileReader
+    closest_time - find the index of the closest time given as the argument
+    grid_volume - compute the model grid volume
+    total_volume_var - integrate a given variable in space returning a time series of the integrated values
+    avg_volume_var - calculate the cumulative depth-average of the given variable in space as a time series
+    time_to_index - find the time index for the given time string (%Y-%m-%d %H:%M:%S.%f) or datetime object.
+    time_average - average the requested variable in time at the specified frequency
+    add_river_flow - add river flow information to the current object
+    to_excel - export data to an Excel file (with limitations)
+    to_csv - export data to a CSV file (with limitations)
+
+    Attributes
+    ----------
+    In addition to the attributes from PyFVCOM.grid.Domain (dims and grid), this object has:
+    data - model data (generally time series) loaded from the netCDF file.
+    river - river data.
+    ds - the netCDF Dataset handle.
+    variable_dimension_names - the list of dimensions for all the variables in the netCDF
+    time - the time data
+    atts - the loaded variable attributes
 
     Author(s)
     ---------
     Pierre Cazenave (Plymouth Marine Laboratory)
     Mike Bedington (Plymouth Marine Laboratory)
+    Ricardo Torres (Plymouth Marine Laboratory)
 
     Credits
     -------
@@ -496,7 +527,7 @@ class FileReader(Domain):
         self._load_time()
         self._dims = copy.deepcopy(self.time._dims)  # grab the updated dimensions from the _TimeReader object.
 
-        # Update the time dimension no we've read in the time data (in case we did so with a specified dimension
+        # Update the time dimension number we've read in the time data (in case we did so with a specified dimension
         # range).
         try:
             self.dims.time = len(self.time.time)
@@ -616,7 +647,7 @@ class FileReader(Domain):
 
     def __make_pickleable__(self):
         """
-        To deepcopy `self', we need to close the netCDF file handle as it's not picklable. This method does that and
+        To deepcopy `self', we need to close the netCDF file handle as it's not pickleable. This method does that and
         then reopens it in self and the copy.
 
         Returns
@@ -635,7 +666,6 @@ class FileReader(Domain):
         return idem
 
     def __check_common_variables__(self, variables, fvcom):
-
         # Do we have a FileReader?
         fvcom_variables = set(list(fvcom.data.__dict__.keys()))
         self_variables = set(list(self.data.__dict__.keys()))
@@ -859,6 +889,7 @@ class FileReader(Domain):
                 variables = list(self.data.__dict__.keys())
 
         try:
+            # Do we have a FileReader?
             self.__check_common_variables__(variables, value)
         except AttributeError:
             # Nope, we don't. We have probably (hopefully) got a number for `value', so just carry on as normal.
@@ -910,6 +941,7 @@ class FileReader(Domain):
                 variables = list(self.data.__dict__.keys())
 
         try:
+            # Do we have a FileReader?
             self.__check_common_variables__(variables, value)
         except AttributeError:
             # Nope, we don't. We have probably (hopefully) got a number for `value', so just carry on as normal.
@@ -961,6 +993,7 @@ class FileReader(Domain):
                 variables = list(self.data.__dict__.keys())
 
         try:
+            # Do we have a FileReader?
             self.__check_common_variables__(variables, value)
         except AttributeError:
             # Nope, we don't. We have probably (hopefully) got a number for `value', so just carry on as normal.
@@ -1012,6 +1045,7 @@ class FileReader(Domain):
                 variables = list(self.data.__dict__.keys())
 
         try:
+            # Do we have a FileReader?
             self.__check_common_variables__(variables, value)
         except AttributeError:
             # Nope, we don't. We have probably (hopefully) got a number for `value', so just carry on as normal.
@@ -1063,6 +1097,7 @@ class FileReader(Domain):
                 variables = list(self.data.__dict__.keys())
 
         try:
+            # Do we have a FileReader?
             self.__check_common_variables__(variables, value)
         except AttributeError:
             # Nope, we don't. We have probably (hopefully) got a number for `value', so just carry on as normal.
@@ -1090,7 +1125,15 @@ class FileReader(Domain):
         self._dims = self.grid._dims
         delattr(self.grid, '_dims')
 
-        # Make sure we set the grid dimensions correctly if we've been asked to subset in space.
+        # Convert any dimension given as a slice to be a range of indices instead.
+        for dim in self._dims:
+            if isinstance(self._dims[dim], slice):
+                if self._debug:
+                    print(f'Converting {dim} indices from a slice to an array of indices')
+                self._dims[dim] = np.arange(self.ds.dimensions[dim].size)[self._dims[dim]]
+
+        # Make sure we set the grid dimensions correctly if we've been asked to subset in space. We do this here and
+        # in load_data because it's possible to supply no dimensions at invocation but supply them with load_data.
         for dim in ('node', 'nele', 'siglay', 'siglev', 'time'):
             if dim in self._dims:
                 setattr(self.dims, dim, len(self._dims[dim]))
@@ -1207,7 +1250,20 @@ class FileReader(Domain):
         self._update_dimensions(var)
 
     def closest_time(self, when):
-        """ Find the index of the closest time to the supplied time (datetime object). """
+        """
+        Find the index of the closest time to the supplied time (datetime object).
+
+        Parameters
+        ----------
+        when : datetime.datetime
+            The time for which to return the closest model time index.
+
+        Returns
+        -------
+        index : int
+            The index of the time closest to `when'.
+
+        """
         try:
             return np.argmin(np.abs(self.time.datetime - when))
         except AttributeError:
@@ -1246,6 +1302,11 @@ class FileReader(Domain):
         volumes = unstructured_grid_volume(self.grid.art1, self.grid.h, surface_elevation, self.grid.siglev,
                                            depth_integrated=True)
         self.grid.depth_volume, self.grid.depth_integrated_volume = volumes
+
+        if 'siglay' in self._dims and 'siglev' not in self._dims:
+            # Return only the relevant sigma layers here (only do so if siglev hasn't been subset otherwise we'll end
+            # up in a right pickle with the shape of things).
+            self.grid.depth_volume = self.grid.depth_volume[:, self._dims['siglay'], :]
 
     def _get_cv_volumes(self, poolsize=None):
         """
@@ -1501,6 +1562,255 @@ class FileReader(Domain):
 
         river_nc.close()
 
+    def to_excel(self, name, variables=None):
+        """
+        Export data to an Excel file called `name'. Optionally specify which variables to save with
+        `variables=['var1', 'var2']`.
+
+        If we have loaded multiple data sets, each is saved in a separate sheet. Each sheet is called the variable
+        name.
+
+        If we have multiple layers, each sheet is appended with the corresponding layer number.
+
+        If we have multiple times, each column name is appended "time=#" and a new sheet with the model times is
+        created.
+
+        Parameters
+        ----------
+        name : str
+            The Excel file name to which we save our data.
+        variables : list, optional
+            If given, only export the variables in the given list. If omitted, all variables are exported.
+
+        """
+
+        if variables is None:
+            variables = list(self.data)
+
+        with pd.ExcelWriter(name, datetime_format='YYYY/MM/DD hh:mm:ss.000', engine='xlsxwriter') as writer:
+            # If we have more than one time, make a sheet of just the time data.
+            if self.dims.time > 1:
+                df = pd.DataFrame(self.time.datetime, columns=['time (UTC)'])
+                df.to_excel(writer, 'time', index=False)
+                self._fix_column_widths(writer, df, 'time')
+
+            # Make sure we output the node control areas so we can account for the unstructured grid (e.g. for
+            # summing some variable over the grid).
+            df = pd.DataFrame(np.column_stack((self.grid.lon, self.grid.lat, self.grid.art1)),
+                              columns=['lon', 'lat', 'grid_area (m^2)'])
+            df.to_excel(writer, 'area', index=False)
+            self._fix_column_widths(writer, df, 'area')
+
+            # Also output the water column volume for the currently loaded sigma data (this excludes the time varying
+            # component).
+            if not hasattr(self.grid, 'depth_volume'):
+                self.grid_volume()
+            # Check if all the volume values in time are the same and if so, just use the first one. This is because
+            # self.grid_volume() always returns an array with an appropriate number of time steps.
+            if np.all(np.ptp(self.grid.depth_volume, axis=0) == 0):
+                self.grid.depth_volume = np.squeeze(self.grid.depth_volume[0])
+            self.grid.depth_volume = np.squeeze(self.grid.depth_volume)
+
+            if 'siglay' in self._dims:
+                layer_names = []
+                # Sort the layer indices since the data in the arrays will be surface to seabed and we need to make
+                # sure our layer labels are in that order too. This works for both negative and positive layer
+                # indices. Layer indices are 1-based (for ease of understanding).
+                for layer in sorted(self._dims['siglay']):
+                    if layer < 0:
+                        layer_names.append(f"layer {self.ds.dimensions['siglay'].size + layer + 1}")
+                    else:
+                        layer_names.append(f"layer {layer + 1}")
+            else:
+                # We have all layers, so just iterate over them all (use 1-based indexing).
+                layer_names = [f'layer {layer + 1}' for layer in range(self.dims.siglay)]
+
+            if self.dims.time > 1:
+                volume_names = ['lon', 'lat'] + [f'{i} volume (m^3)' for i in layer_names]
+            else:
+                volume_names = ['lon', 'lat', 'layer volume (m^3)']
+            df = pd.DataFrame(np.column_stack((self.grid.lon, self.grid.lat, self.grid.depth_volume.T)),
+                              columns=volume_names)
+            df.to_excel(writer, 'volume', index=False)
+            self._fix_column_widths(writer, df, 'volume')
+
+            for var in variables:
+                units = ''
+                if hasattr(self.atts, var):
+                    units = getattr(self.atts, var).units
+                data = getattr(self.data, var)
+
+                # Check if we have to stack in time, and if so, make appropriate column headers. Use the shape of the
+                # array rather than self.dims.time in case we've done some preprocessing before writing to disk (e.g.
+                # finding the maximum in time).
+                var_header = f'{var} ({units})'
+                if np.ndim(getattr(self.data, var)) > 2 and np.shape(getattr(self.data, var))[0] > 1:
+                    time_names = [f'{var_header} time={i + 1}' for i in range(getattr(self.data, var).shape[0])]
+                    columns = ['lon', 'lat'] + time_names
+                else:
+                    columns = ['lon', 'lat', var_header]
+
+                if 'nele' in self.variable_dimension_names[var]:
+                    lon, lat = self.grid.lonc, self.grid.latc
+                else:
+                    lon, lat = self.grid.lon, self.grid.lat
+
+                # Do we have multiple vertical levels? If so, pull out each layer separately and then write each one
+                # to a new sheet.
+                if self.dims.siglay in data.shape:
+                    num_layers = self.dims.siglay
+                    for layer, name in zip(range(num_layers), layer_names):
+                        sheet_name = f'{var} {name}'
+                        try:
+                            df = pd.DataFrame(np.column_stack((lon, lat, np.squeeze(data[..., layer, :]).T)),
+                                              columns=columns)
+                        except ValueError:
+                            # If we've only got a single position, don't squeeze out the singleton dimension so it
+                            # stacks properly.
+                            df = pd.DataFrame(np.column_stack((lon, lat, data[..., layer, :].T)),
+                                              columns=columns)
+                        df.to_excel(writer, sheet_name, index=False)
+                        self._fix_column_widths(writer, df, sheet_name)
+                else:
+                    df = pd.DataFrame(np.column_stack((lon, lat, np.squeeze(getattr(self.data, var)).T)),
+                                      columns=columns)
+                    df.to_excel(writer, var, index=False)
+                    self._fix_column_widths(writer, df, sheet_name)
+
+            writer.save()
+
+    @staticmethod
+    def _fix_column_widths(writer, df, sheet_name):
+        """
+        Find an appropriate width for each column for a given sheet.
+
+        Parameters
+        ----------
+        writer : pandas.ExcelWriter
+            The object which holds the handle to the Excel spreadsheet file.
+        df : pandas.DataFrame
+            The data frame of the data we're writing to disk.
+        sheet_name : str
+            The name of the current sheet.
+
+        Notes
+        -----
+        Lifted more or less verbatim from https://stackoverflow.com/a/40535454.
+
+        """
+
+        for idx, col in enumerate(df.columns):
+            series = df[col]
+            # Maximum of the length of the longest item or column name/header plus some padding.
+            max_len = max((series.astype(str).map(len).max(), len(str(series.name)))) + 2
+            writer.sheets[sheet_name].set_column(idx, idx, max_len)
+
+    def to_csv(self, name, variable=None, layer=0, **kwargs):
+        """
+        Export data to a CSV file called `name'.
+
+        If more than one variable has been loaded, specify which variable to save (e.g. `variable='O3_c'`).
+
+        If we have loaded multiple layers, specify the layer index (zero-indexed) which will be saved into the CSV
+        file.
+
+        If we have multiple times, each column name is appended "time=%Y-%m-%dT%H:%M:%S.%f".
+
+        To export the grid area, use the variable `area'; for volume, use the variable `volume'.
+
+        Parameters
+        ----------
+        name : str
+            The Excel file name to which we save our data.
+        variable : str, optional
+            If given, export the names variable. If omitted, the first variable in self.data (alphabetically) is
+            exported.
+        layer : int, optional
+            If given, extract the relevant vertical layer. Defaults to 0.
+
+        Additional kwargs are passed to `pandas.DataFrame.to_csv`.
+
+        """
+
+        if variable is None:
+            variable = sorted(list(self.data))[0]
+            if len(list(self.data)) > 1:
+                warn(f'No specific variable supplied and more than one variable loaded. Exporting the first variable '
+                     f'name sorted alphabetically ({variable}).')
+
+        have_time = False  # assume we have no time dimension unless we have a 3D variable.
+
+        # Discriminate between self.grid and self.data.
+        base_attribute = self.data
+        if variable in list(self.grid):
+            base_attribute = self.grid
+
+        if variable is 'volume':
+            if not hasattr(self.grid, 'depth_volume'):
+                self.grid_volume()
+            # We'll always use depth_volume since it's vertically resolved but just grab the given layer now.
+            data = self.grid.depth_volume[layer, :]
+        elif variable is 'area':
+            if not hasattr(self.grid, 'art1'):
+                self.grid.art1 = np.asarray(control_volumes(self.grid.x, self.grid.y, self.grid.triangles,
+                                                            element_control=False, poolsize=None))
+            data = self.grid.art1
+        else:
+            try:
+                all_data = getattr(base_attribute, variable)
+                if np.ndim(all_data) > 2:
+                    have_time = True
+                data = np.squeeze(all_data[..., layer, :]).T
+            except IndexError:
+                # Probably got a 2D field (e.g. art1, h etc.). Just grab as is.
+                data = np.squeeze(getattr(base_attribute, variable))
+
+        if variable in self.variable_dimension_names and 'nele' in self.variable_dimension_names[variable]:
+            lon, lat = self.grid.lonc, self.grid.latc
+        else:
+            lon, lat = self.grid.lon, self.grid.lat
+
+        units = ''
+        if hasattr(self.atts, variable):
+            units = getattr(self.atts, variable).units
+        elif variable == 'h':
+            units = 'm'
+        elif variable == 'area':
+            units = 'm^2'
+        elif variable == 'volume':
+            units = 'm^3'
+
+        if units != '':
+            var_header = f'{variable} ({units})'
+        else:
+            var_header = f'{variable}'
+
+        # Check if we have to stack in time, and if so, make appropriate column headers. Use the shape of the array
+        # rather than self.dims.time in case we've done some preprocessing before writing to disk (e.g. finding the
+        # maximum in time).
+        if have_time and np.shape(data)[0] > 1:
+            columns = ['lon', 'lat'] + [f'{var_header} time={t}' for t in self.time.Times]
+        else:
+            columns = ['lon', 'lat', var_header]
+
+        # Update kwargs with our values if we haven't been passed them.
+        if 'index' not in kwargs:
+            kwargs.update({'index': False})
+        elif kwargs['index']:
+            # Add a new header to the columns.
+            columns = ['index'] + columns
+        if 'header' not in kwargs:
+            kwargs.update({'header': columns})
+
+        # Gather the coordinates with the data into a DataFrame and then write out.
+        try:
+            df = pd.DataFrame(np.column_stack((lon, lat, data)))
+        except ValueError:
+            # We might be extracting a single point only, so no need to stack columns, just concatenate the positions
+            # and data.
+            df = pd.DataFrame(np.concatenate((lon, lat, data.T))).T
+        df.to_csv(name, **kwargs)
+
 
 def read_nesting_nodes(fvcom, nestpath):
     """
@@ -1582,7 +1892,7 @@ def apply_mask(fvcom, vars=[], mask_nodes=[], mask_elements=[], noisy=False):
     for key in vars:
         # Check if we need to apply the node mask or element mask and tile the mask to the right shape.
         if 'node' in fvcom.variable_dimension_names[key]:
-            mask = np.tile(mask_nodes, (*getattr(fvcom.data, key).shape[:-1],1))
+            mask = np.tile(mask_nodes, (*getattr(fvcom.data, key).shape[:-1], 1))
         elif 'nele' in fvcom.variable_dimension_names[key]:
             mask = np.tile(mask_elements, (*getattr(fvcom.data, key).shape[:-1], 1))
 
@@ -2016,34 +2326,34 @@ class ncwrite(object):
     >>> data = {}
     >>> data['dimensions'] = {
     ...     'lat': np.size(lat),
-    ...     'lon':np.size(lon),
-    ...     'time':np.shape(timeStr)[1],
-    ...     'DateStrLen':26
+    ...     'lon': np.size(lon),
+    ...     'time': np.shape(timeStr)[1],
+    ...     'DateStrLen': 26
     ... }
     >>> data['variables'] = {
-    ... 'latitude':{'data':lat,
-    ...     'dimensions':['lat'],
-    ...     'attributes':{'units':'degrees north'}
+    ... 'latitude': {'data': lat,
+    ...     'dimensions': ['lat'],
+    ...     'attributes': {'units': 'degrees north'}
     ... },
-    ... 'longitude':{
-    ...     'data':lon,
-    ...     'dimensions':['lon'],
-    ...     'attributes':{'units':'degrees east'}
+    ... 'longitude': {
+    ...     'data': lon,
+    ...     'dimensions': ['lon'],
+    ...     'attributes': {'units': 'degrees east'}
     ... },
-    ... 'Times':{
-    ...     'data':timeStr,
-    ...     'dimensions':['time','DateStrLen'],
-    ...     'attributes':{'units':'degrees east'},
-    ...     'fill_value':-999.0,
-    ...     'data_type':'c'
+    ... 'Times': {
+    ...     'data': timeStr,
+    ...     'dimensions': ['time', 'DateStrLen'],
+    ...     'attributes': {'units': 'degrees east'},
+    ...     'fill_value': -999.0,
+    ...     'data_type': 'c'
     ... },
-    ... 'p90':{'data':data,
-    ...     'dimensions':['lat','lon'],
-    ...     'attributes':{'units':'mgC m-3'}}}
+    ... 'p90': {'data': data,
+    ...     'dimensions': ['lat', 'lon'],
+    ...     'attributes': {'units': 'mgC m-3'}}}
     ... data['global attributes'] = {
     ...     'description': 'P90 chlorophyll',
-    ...     'source':'netCDF3 python',
-    ...     'history':'Created {}'.format(time.ctime(time.time()))
+    ...     'source': 'netCDF3 python',
+    ...     'history': 'Created {}'.format(time.ctime(time.time()))
     ... }
     >>> ncwrite(data, 'test.nc')
 
@@ -2690,15 +3000,17 @@ class WriteFVCOM(object):
                 dims = self._fvcom.variable_dimension_names[var]
                 self._variables[var] = self._nc.createVariable(var, fmt, dims, **self._ncopts)
                 # Add any attributes we have.
-                var_atts = getattr(self._fvcom.atts, var)
-                for att in var_atts:
-                    self._variables[var].setncattr(att, getattr(var_atts, att))
+                if hasattr(self._fvcom.atts, var):
+                    var_atts = getattr(self._fvcom.atts, var)
+                    for att in var_atts:
+                        self._variables[var].setncattr(att, getattr(var_atts, att))
 
         # self._fvcom.data. may be missing entirely (it's always present as I write this, but I think it may go away
         # in the future - assume I've done that since it's relatively cheap to do so).
 
-        # We may also have completely custom variables here with no known dimensions in self._fvcom.variable_dimension_names,
-        # in which case we'll have to guess what dimensions they have based on their .shape. This could be tricky.
+        # We may also have completely custom variables here with no known dimensions in
+        # self._fvcom.variable_dimension_names, in which case we'll have to guess what dimensions they have based on
+        # their .shape. This could be tricky.
         dim_names = set(flatten_list([self._fvcom.variable_dimension_names[i] for i in self._fvcom.variable_dimension_names]))
         dim_size = {i: getattr(self._fvcom.dims, i) for i in dim_names}
         unlikely_dims = ['three', 'four', 'maxelem', 'maxnode']
@@ -2716,21 +3028,25 @@ class WriteFVCOM(object):
                     # there are 4 time dimensions in the data, we'll likely pick up the dimension as `four' rather than
                     # `time').
                     dims = []
-                    for d in dim_size:
+                    for size in shape:
+                        candidate_dimensions = [i for i, j in dim_size.items() if j == size]
+                        if len(candidate_dimensions) > 1:
+                            raise AttributeError(f'Found duplicate possible dimensions for non-standard variable {var}')
                         # Skip unlikely dimensions.
-                        if d in unlikely_dims:
+                        if candidate_dimensions[0] in unlikely_dims:
                             continue
-                        if dim_size[d] in shape:
-                            dims.append(d)
+                        if candidate_dimensions:
+                            dims += candidate_dimensions
                     if len(dims) != len(shape):
                         raise AttributeError(f'Unable to identify dimensions for non-standard variable {var}')
 
                 self._variables[var] = self._nc.createVariable(var, fmt, dims, **self._ncopts)
 
                 # Add any attributes we have.
-                var_atts = getattr(self._fvcom.atts, var)
-                for att in var_atts:
-                    self._variables[var].setncattr(att, getattr(var_atts, att))
+                if hasattr(self._fvcom.atts, var):
+                    var_atts = getattr(self._fvcom.atts, var)
+                    for att in var_atts:
+                        self._variables[var].setncattr(att, getattr(var_atts, att))
 
     def _add_variables(self):
         # Add the data from the variables in self._fvcom.grid and self._fvcom.data.

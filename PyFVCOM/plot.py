@@ -5,7 +5,6 @@ from __future__ import print_function
 import copy
 from datetime import datetime
 from pathlib import Path
-from warnings import warn
 
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
@@ -27,7 +26,7 @@ from PyFVCOM.grid import get_boundary_polygons
 from PyFVCOM.grid import getcrossectiontriangles, unstructured_grid_depths, Domain, nodes2elems, mp_interp_func
 from PyFVCOM.ocean import depth2pressure, dens_jackett
 from PyFVCOM.read import FileReader
-from PyFVCOM.utilities.general import PassiveStore
+from PyFVCOM.utilities.general import PassiveStore, warn
 
 have_basemap = True
 try:
@@ -509,7 +508,7 @@ class Plotter(object):
             Set the colour bar extension ('neither', 'both', 'min', 'max').
             Defaults to 'neither').
         norm : matplotlib.colors.Normalize, optional
-            Normalise the luminance to 0,1. For example, use from matplotlib.colors.LogNorm to do log plots of fields.
+            Normalise the luminance to 0, 1. For example, use from matplotlib.colors.LogNorm to do log plots of fields.
         m : mpl_toolkits.basemap.Basemap, optional
             Pass a Basemap object rather than creating one on each invocation.
         cartesian : bool, optional
@@ -1160,10 +1159,6 @@ class Plotter(object):
             speed_r.data[self._mask_for_regular] = np.nan
 
         # Now we have some data, do the streamline plot.
-        # self.streamline_plot = self.m.streamplot(plot_x, plot_y + ((plot_y - plot_y.min()) * 0.125), ua_r, va_r, color=speed_r,
-        # self.streamline_plot = self.axes.streamplot(plot_x, plot_y, ua_r, va_r, color=speed_r,
-        #                                             cmap=self.cmap, norm=self.norm, latlon=~self.cartesian, **kwargs)
-        # For cartopy, just pass a transform.
         self.streamline_plot = self.axes.streamplot(plot_x, plot_y, ua_r, va_r, color=speed_r, cmap=self.cmap,
                                                     norm=self.norm, **self._plot_projection, **kwargs)
 
@@ -1393,7 +1388,7 @@ class CrossPlotter(Plotter):
     >>> cross_points = [np.asarray([[413889.37304891, 5589079.54545454], [415101.00156087, 5589616.47727273]])]
     >>> c_plot = pf.plot.CrossPlotter(filereader, cmap='bwr', vmin=5, vmax=10)
     >>> c_plot.cross_section_init(cross_points, dist_res=5)
-    >>> c_plot.plot_pcolor_field('temp',150)
+    >>> c_plot.plot_pcolor_field('temp', 150)
     >>> plt.show()
 
     Notes
@@ -2093,10 +2088,10 @@ class Player(FuncAnimation):
         self.func = func
         self.setup(pos)
 
-        FuncAnimation.__init__(self, self.fig, self.func, frames=self.play(), init_func=init_func, fargs=fargs,
-                               save_count=save_count, **kwargs)
+        super().__init__(self.fig, self.func, frames=self.play(), init_func=init_func, fargs=fargs,
+                         save_count=save_count, **kwargs)
 
-    def play(self):
+    def play(self, *dummy):
         """ What to do when we play the animation. """
         while self.runs:
             self.i = self.i + self.forwards - (not self.forwards)
@@ -2106,37 +2101,37 @@ class Player(FuncAnimation):
                 self.stop()
                 yield self.i
 
-    def start(self):
+    def start(self, *dummy):
         """ Start the animation. """
         self.runs = True
         self.event_source.start()
 
-    def stop(self):
+    def stop(self, *dummy):
         """ Stop the animation. """
         self.runs = False
         self.event_source.stop()
 
-    def forward(self):
+    def forward(self, *dummy):
         """ Play forwards. """
         self.forwards = True
         self.start()
 
-    def backward(self):
+    def backward(self, *dummy):
         """ Play backwards. """
         self.forwards = False
         self.start()
 
-    def oneforward(self):
+    def oneforward(self, *dummy):
         """ Skip one forwards. """
         self.forwards = True
         self.onestep()
 
-    def onebackward(self):
+    def onebackward(self, *dummy):
         """ Skip one backwards. """
         self.forwards = False
         self.onestep()
 
-    def onestep(self):
+    def onestep(self, *dummy):
         """ Skip through one frame at a time. """
         if self.min < self.i < self.max:
             self.i = self.i + self.forwards - (not self.forwards)
@@ -2150,18 +2145,18 @@ class Player(FuncAnimation):
 
     def setup(self, pos):
         """ Set up the animation. """
-        playerax = self.fig.add_axes([pos[0],pos[1], 0.64, 0.04])
+        playerax = self.fig.add_axes([pos[0], pos[1], 0.64, 0.04])
         divider = mpl_toolkits.axes_grid1.make_axes_locatable(playerax)
         bax = divider.append_axes("right", size="80%", pad=0.05)
         sax = divider.append_axes("right", size="80%", pad=0.05)
         fax = divider.append_axes("right", size="80%", pad=0.05)
         ofax = divider.append_axes("right", size="100%", pad=0.05)
         sliderax = divider.append_axes("right", size="500%", pad=0.07)
-        self.button_oneback = matplotlib.widgets.Button(playerax, label=u'$\u29CF$')
-        self.button_back = matplotlib.widgets.Button(bax, label=u'$\u25C0$')
-        self.button_stop = matplotlib.widgets.Button(sax, label=u'$\u25A0$')
-        self.button_forward = matplotlib.widgets.Button(fax, label=u'$\u25B6$')
-        self.button_oneforward = matplotlib.widgets.Button(ofax, label=u'$\u29D0$')
+        self.button_oneback = matplotlib.widgets.Button(playerax, label='$\u29CF$')
+        self.button_back = matplotlib.widgets.Button(bax, label='$\u25C0$')
+        self.button_stop = matplotlib.widgets.Button(sax, label='$\u25A0$')
+        self.button_forward = matplotlib.widgets.Button(fax, label='$\u25B6$')
+        self.button_oneforward = matplotlib.widgets.Button(ofax, label='$\u29D0$')
         self.button_oneback.on_clicked(self.onebackward)
         self.button_back.on_clicked(self.backward)
         self.button_stop.on_clicked(self.stop)
@@ -2207,8 +2202,7 @@ def plot_domain(domain, mesh=False, depth=False, **kwargs):
     if mesh:
         mesh_plot = domain.domain_plot.axes.triplot(domain.domain_plot.mx, domain.domain_plot.my,
                                                     domain.grid.triangles, 'k-',
-                                                    linewidth=1, zorder=2000,
-                                                    transform=domain.domain_plot._plot_projection)
+                                                    linewidth=1, zorder=2000, **domain.domain_plot._plot_projection)
         domain.domain_plot.mesh_plot = mesh_plot
 
     if depth:

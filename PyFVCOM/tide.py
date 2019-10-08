@@ -10,7 +10,6 @@ from __future__ import print_function
 
 import os
 import sys
-from warnings import warn
 
 import numpy as np
 import scipy
@@ -18,7 +17,7 @@ from lxml import etree
 from netCDF4 import Dataset, date2num
 
 from PyFVCOM.grid import find_nearest_point, unstructured_grid_depths
-from PyFVCOM.utilities.general import fix_range
+from PyFVCOM.utilities.general import fix_range, warn
 from PyFVCOM.utilities.time import julian_day
 
 try:
