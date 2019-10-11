@@ -2243,6 +2243,9 @@ class Model(Domain):
         if nesting_type >= 2:
             for boundary in self.open_boundaries:
                 self.nest[-1].add_weights()
+            for nest in self.nest:
+                nest.add_weights()
+
 
     def add_nests_harmonics(self, harmonics_file, harmonics_vars=['u', 'v', 'zeta'], constituents=['M2', 'S2'],
                             pool_size=None):
