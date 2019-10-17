@@ -1404,9 +1404,9 @@ class CrossPlotter(Plotter):
     #  - Error handling for no wet/dry, no land
     #  - Plus a lot of other stuff. And tidy it up.
 
-    def __init__(self):
+    def __init__(self, filereader, **kwargs):
 
-        super(Plotter, self).__init__()
+        super().__init__(filereader, **kwargs)
 
         self.cross_plot_x = None
         self.cross_plot_y = None
