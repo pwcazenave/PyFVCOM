@@ -1550,6 +1550,42 @@ class CrossPlotter(Plotter):
         self.ylim_vals = [np.floor(np.nanmin(self.cross_plot_y_pcolor)), np.ceil(np.nanmax(self.cross_plot_y_pcolor)) + 1]
         self.xlim_vals = [np.nanmin(self.cross_plot_x_pcolor), np.nanmax(self.cross_plot_x_pcolor)]
 
+    def _save_existing_cross_section(self):
+
+
+        required_param = ['sample_points', 'sub_samp', 'sel_points', 'sample_points_ind', 'cross_plot_x', 'cross_plot_x_pcolor', 'cross_plot_y', 'cross_plot_y_pcolor',
+                                'chan_x', 'chan_y','wet_points_data','ylim_vals', 'xlim_vals']
+
+        cross_sect_dict = {}
+
+        for this_param in required_param:
+            try:
+                cross_sect_dict[this_param] = getattr(self, this_param)
+            except:
+                print('Missing {}'.format(this_param))
+
+        return cross_sect_dict
+
+
+    def _apply_existing_cross_section(self,cross_sect_dict):
+        """
+        For some multiproccesing applications its useful to precalculate the cross section (as in cross_section_init) then be able to apply it from a presaved dictionary.
+
+        Parameters
+        ----------
+        cross_sect_dict : dict
+            Must have the parameters of the         
+
+        """
+        required_param = ['sample_points', 'sub_samp', 'sel_points', 'sample_points_ind', 'cross_plot_x', 'cross_plot_x_pcolor', 'cross_plot_y', 'cross_plot_y_pcolor', 
+                                'chan_x', 'chan_y','wet_points_data','ylim_vals', 'xlim_vals']
+
+        for this_param in required_param:
+            try:       
+                setattr(self, this_param, cross_sect_dict[this_param])
+            except:
+                print('Missing {}'.format(this_param))
+
     def plot_pcolor_field(self, var, timestep):
         """
         Finish me.
