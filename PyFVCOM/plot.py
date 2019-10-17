@@ -1634,8 +1634,12 @@ class CrossPlotter(Plotter):
         timestep :
 
         """
-        self.ds.load_data([var], dims={'time': [timestep]})
-        var_sel = np.squeeze(getattr(self.ds.data, var))[..., self.sel_points]
+        if not hasattr(self.ds.data, var):
+            self.ds.load_data([var], dims={'time': [timestep]})
+            var_sel = np.squeeze(getattr(self.ds.data, var))[..., self.sel_points]
+        else:   
+            time_sel = np.squeeze(getattr(self.ds.data, var)[timestep,...])
+            var_sel = np.squeeze(time_sel)[..., self.sel_points]
 
         this_step_wet_points = np.asarray(self.wet_points_data[timestep, :], dtype=bool)
         var_sel[:, ~this_step_wet_points] = np.NaN
