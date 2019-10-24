@@ -1586,7 +1586,7 @@ class CrossPlotter(Plotter):
             except:
                 print('Missing {}'.format(this_param))
 
-    def plot_pcolor_field(self, var, timestep):
+    def plot_pcolor_field(self, var, timestep, plot_cbar=True):
         """
         Finish me.
 
@@ -1627,7 +1627,8 @@ class CrossPlotter(Plotter):
                                       **self._plot_projection)
 
         self.axes.plot(self.chan_x, self.chan_y, linewidth=2, color='black')
-        self.figure.colorbar(pc)
+        if plot_cbar:
+            self.figure.colorbar(pc)
         self.axes.set_ylim(self.ylim_vals)
         self.axes.set_xlim(self.xlim_vals)
 
