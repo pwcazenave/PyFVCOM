@@ -596,9 +596,7 @@ class CtdDB(ValidationDB):
         for station, pos, time_dt in zip(station_str, station_ll, station_dt):
             obs_depths, obs_vals = self.retreive_vars(station, var_names_db)
             node_ind = this_filereader.closest_node(pos)
-            time_ind = this_filereader.closest_time(time_dt)            
-
-
+            time_ind = this_filereader.closest_time(time_dt) 
 
     def find_ctd_records(self, filereader, start_date=None, end_date=None):
         """
@@ -667,9 +665,7 @@ class CtdDB(ValidationDB):
 
         return depth, vals
 
-    def obs_model_comp(self, ):
-        
-        
+    def obs_model_comp(self):
         return 
 
 class TideDB(ValidationDB):
@@ -1221,22 +1217,22 @@ class CompareICES(object):
     The ICES data used is in a premade h5 file. This how it was inherited and should be updated to a form we can
     reproduce.
 
-	Default ICES variables: 'TEMP', 'PSAL', 'DOXY(umol/l)', 'PHOS(umol/l)', 'SLCA(umol/l)', 'NTRA(umol/l)',
+    Default ICES variables: 'TEMP', 'PSAL', 'DOXY(umol/l)', 'PHOS(umol/l)', 'SLCA(umol/l)', 'NTRA(umol/l)',
 	                        'AMON(umol/l)', 'PHPH', 'ALKY(mmol/l)', 'CPHL(mg/m^3)'
 
     Example
     -------
-    from PyFVCOM.validation import ICES_comp
+    from PyFVCOM.validation import CompareICES
     import matplotlib.pyplot as plt
 
-    datafile="/data/euryale4/backup/momm/Data/ICES-data/CTD-bottle/EX187716.averaged.sorted.reindexed.h5"
-    modelroot="/data/euryale2/scratch/mbe/Models_2/FVCOM/rosa/output"
+    datafile="/data/sthenno1/backup/mbe/Data/ICES-data/CTD-bottle/EX187716.averaged.sorted.reindexed.h5"
+    modelroot="/data/sthenno1/backup/fvcom_outputs/rosa/run/output/aqua_v16_ersem/"
     years=[2005]
-    months = [2, 3]
-    modelfile=lambda y, m: "{}/{}/{:02d}/aqua_v16_0001.nc".format(modelroot, y, m)
+    months = [5]
+    modelfile=lambda y, m: "{}/{}/{:02d}/aqua_v16_avg_0001.nc".format(modelroot, y, m)
     modelfilelist = [modelfile(years[0], this_month) for this_month in months]
 
-    test_comp = ICES_comp(modelfilelist, datafile, noisy=True)
+    test_comp = CompareICES(modelfilelist, datafile, noisy=True, daily_avg=True)
     temp_ices, temp_model = test_comp.get_var_comp('TEMP')
     plt.scatter(temp_model, temp_ices)
     plt.xlabel('Modelled temperature')
