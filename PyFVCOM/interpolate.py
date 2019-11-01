@@ -359,6 +359,6 @@ class MPIUnstrucuturedInterpolateWorker():
                             data[non_nan], function='cubic', smooth=0)
             interped_data = interpolater(self.model_coords[non_nan,0], self.model_coords[non_nan,1]) 
         else:
-            interped_data = np.zeros(self.regular_grid.mesh_lons.shape)
+            interped_data = np.zeros(self.model_coords.shape)
             interped_data[:] = np.nan
         return interped_data
