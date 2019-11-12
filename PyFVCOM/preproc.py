@@ -6234,7 +6234,7 @@ class Restart(FileReader):
 
         self.replace_variable(variable, interpolated_coarse_data)
 
-    def write_restart(self, restart_file, **ncopts):
+    def write_restart(self, restart_file, global_atts=None, **ncopts):
         """
         Write out an FVCOM-formatted netCDF file based.
 
@@ -6252,7 +6252,10 @@ class Restart(FileReader):
             for name, dimension in self.ds.dimensions.items():
                 ds.createDimension(name, (len(dimension) if not dimension.isunlimited() else None))
             # Job-lot copy of the global attributes.
-            ds.setncatts(self.ds.__dict__)
+            if global_atts is None:
+                ds.setncatts(self.ds.__dict__)
+            else:
+                ds.setncatts(global_atts)
 
             # Make all the variables.
             for name, variable in self.ds.variables.items():
