@@ -768,6 +768,13 @@ class Plotter(object):
             xyt = proj_xyz[..., :2]
             ls = LineString(xyt.tolist())
             locs = axis.intersection(ls)
+            
+            if not self.cartesian:
+                meridians = np.arange(np.floor(np.min(self.extents[:2])), np.ceil(np.max(self.extents[:2])), self.tick_inc[0])
+                parallels = np.arange(np.floor(np.min(self.extents[2:])), np.ceil(np.max(self.extents[2:])), self.tick_inc[1])
+                self.m.drawparallels(parallels, labels=[1, 0, 0, 0], fontsize=self.fs, linewidth=None, ax=self.axes)
+                self.m.drawmeridians(meridians, labels=[0, 0, 0, 1], fontsize=self.fs, linewidth=None, ax=self.axes)
+
             if not locs:
                 tick = [None]
             else:

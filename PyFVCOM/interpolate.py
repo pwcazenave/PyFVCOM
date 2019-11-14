@@ -310,12 +310,12 @@ class MPIRegularInterpolateWorker():
             interped_data[:] = np.nan
         return interped_data
 
-class MPIUnstrucuturedInterpolateWorker():
+class MPIUnstructuredInterpolateWorker():
     """
     For interpolating unstructured data to the FVCOM grid. Currently only for single layer (e.g. surface) applications.
     """
 
-    def __init__(self, fvcom_file, data_coords_file, data_file, comm=None, verbose=False, cartesian=False):
+    def __init__(self, fvcom_file, data_coords_file, data_file, root=0, comm=None, verbose=False, cartesian=False):
         self.fvcom_file = FileReader(fvcom_file)
 
         self.have_mpi = True
@@ -355,9 +355,9 @@ class MPIUnstrucuturedInterpolateWorker():
     def _Interpolater(self, data):
         non_nan = ~np.isnan(data)
         if np.sum(non_nan) > 0:
-            interpolater = interp.Rbf(self.data_coords[non_nan,0], sself.data_coords[this_c_nan,1],
+            interpolater = si.Rbf(self.data_coords[non_nan,0], self.data_coords[non_nan,1],
                             data[non_nan], function='cubic', smooth=0)
-            interped_data = interpolater(self.model_coords[non_nan,0], self.model_coords[non_nan,1]) 
+            interped_data = interpolater(self.model_coords[:,0], self.model_coords[:,1]) 
         else:
             interped_data = np.zeros(self.model_coords.shape)
             interped_data[:] = np.nan
