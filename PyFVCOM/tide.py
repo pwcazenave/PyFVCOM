@@ -19,6 +19,7 @@ import numpy as np
 import utide
 
 from PyFVCOM.grid import find_nearest_point, unstructured_grid_depths
+from PyFVCOM.read import MFileReader
 from PyFVCOM.utilities.general import fix_range, warn
 from PyFVCOM.utilities.time import julian_day
 
