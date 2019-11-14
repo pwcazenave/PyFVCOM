@@ -1564,6 +1564,10 @@ def fvcomOutputHarmonicsMPI(output_file, model_files, analysisvars,  dims={}, co
     predict : boolean
 
     """
+    if not use_MPI:
+        print('Please install MPI before running (pip3 install mpi4py)')
+        return
+
     # Fixed width constituent names for netCDF output.
     cnames = [list(j) for j in ['{:4s}'.format(i) for i in constit]]
 
