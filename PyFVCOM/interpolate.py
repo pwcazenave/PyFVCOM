@@ -355,9 +355,9 @@ class MPIUnstructuredInterpolateWorker():
     def _Interpolater(self, data):
         non_nan = ~np.isnan(data)
         if np.sum(non_nan) > 0:
-            interpolater = interp.Rbf(self.data_coords[non_nan,0], sself.data_coords[this_c_nan,1],
+            interpolater = si.Rbf(self.data_coords[non_nan,0], self.data_coords[non_nan,1],
                             data[non_nan], function='cubic', smooth=0)
-            interped_data = interpolater(self.model_coords[non_nan,0], self.model_coords[non_nan,1]) 
+            interped_data = interpolater(self.model_coords[:,0], self.model_coords[:,1]) 
         else:
             interped_data = np.zeros(self.model_coords.shape)
             interped_data[:] = np.nan
