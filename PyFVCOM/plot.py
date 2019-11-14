@@ -943,7 +943,7 @@ class Plotter(object):
 
         """
 
-        xy_mask = np.full((len(self.lonc), len(self.latc)))
+        xy_mask = np.full((len(self.lonc), len(self.latc)), True)
         if dx is not None:
             if dy is None:
                 dy = dx
