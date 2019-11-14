@@ -310,12 +310,12 @@ class MPIRegularInterpolateWorker():
             interped_data[:] = np.nan
         return interped_data
 
-class MPIUnstrucuturedInterpolateWorker():
+class MPIUnstructuredInterpolateWorker():
     """
     For interpolating unstructured data to the FVCOM grid. Currently only for single layer (e.g. surface) applications.
     """
 
-    def __init__(self, fvcom_file, data_coords_file, data_file, comm=None, verbose=False, cartesian=False):
+    def __init__(self, fvcom_file, data_coords_file, data_file, root=0, comm=None, verbose=False, cartesian=False):
         self.fvcom_file = FileReader(fvcom_file)
 
         self.have_mpi = True
