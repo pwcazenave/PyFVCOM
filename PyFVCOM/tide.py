@@ -10,6 +10,7 @@ from __future__ import print_function
 
 import os
 import sys
+import copy
 
 import numpy as np
 import scipy
@@ -1541,7 +1542,7 @@ def _analyse_harmonics(times, elevations, domain_lats, constit, predict=False, n
 
 
 
-def fvcomOutputHarmonicsMPI(output_file, model_files, analysisvars,  dims={}, constit = ('M2', 'S2', 'N2', 'K2', 'K1', 'O1', 'P1', 'Q1', 'M4', 'MS4', 'MN4'), debug=[], dump_raw=False, predict=False):
+def fvcomOutputHarmonicsMPI(output_file, model_files, analysisvars,  dims={}, constit = ('M2', 'S2', 'N2', 'K2', 'K1', 'O1', 'P1', 'Q1', 'M4', 'MS4', 'MN4'), debug=[], dump_raw=False, predict=False, noisy=True):
 
     """
 
@@ -1575,10 +1576,6 @@ def fvcomOutputHarmonicsMPI(output_file, model_files, analysisvars,  dims={}, co
     comm = MPI.COMM_WORLD
     size = comm.Get_size()
     rank = comm.Get_rank()
-
-    if 'time' in debug:
-        print('rank {}: {} time start'.format(rank, datetime.now()), flush=True)
-        debug_start = datetime.now()
 
     nx = None
     ne = None
