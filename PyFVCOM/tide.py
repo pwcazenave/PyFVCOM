@@ -1612,7 +1612,7 @@ def fvcomOutputHarmonicsMPI(output_file, model_files, analysisvars,  dims={}, co
         ne_per_process = int(np.ceil(ne / size))
 
         # We have time now, so create a new variable for it so we can broadcast it to the workers.
-        times = date2num(fvcom.time.datetime)
+        times = date2num(fvcom.time.datetime, units='days since 1858-11-17 00:00:00')
 
         # Generate the netCDF output file and add data as we generate it
         # to save on memory.
