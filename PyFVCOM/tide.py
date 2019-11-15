@@ -211,10 +211,6 @@ class HarmonicOutput(object):
         self.nv = self._nc.createVariable('nv', 'f4', self._three_nele_dims, **self._ncopts)
         self.nv.setncattr('long_name', 'nodes surrounding element')
 
-        if self._dump_raw or self._predict:
-            self.Times = self._nc.createVariable('Times', 'c', ['time', 'DateStrLen'], **self._ncopts)
-            self.Times.setncattr('time_zone', 'UTC')
-
         if self._dump_raw:
             self.ua_raw = self._nc.createVariable('ua_raw', 'f4', self._nele_time_dims, **self._ncopts)
             self.ua_raw.setncattr('long_name', 'Modelled Eastward Water Depth-averaged Velocity')
