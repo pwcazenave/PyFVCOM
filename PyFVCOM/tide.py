@@ -18,6 +18,7 @@ from lxml import etree
 from netCDF4 import Dataset, date2num
 import numpy as np
 import utide
+from datetime import datetime
 
 from PyFVCOM.grid import find_nearest_point, unstructured_grid_depths
 from PyFVCOM.read import MFileReader
@@ -1417,12 +1418,14 @@ def _spectral_filtering(x, window):
 
 
 
-def _analyse_harmonics(times, elevations, domain_lats, constit, predict=False, noisy=False, debug=[], debug_start=None, **kwargs):
+def _analyse_harmonics(comm, times, elevations, domain_lats, constit, predict=False, noisy=False, report=10, debug=[], debug_start=None, **kwargs):
     """
     Worker function to analyse the time series [`times', `elevations'] for the locations in `latitudes'.
 
     Parameters
     ----------
+    rank : integer
+        Rank of MPI process
     times : matplotlib.date2num
         MATLAB-format times. Dimension is 1D array [times].
     elevations : ndarray
@@ -1435,6 +1438,8 @@ def _analyse_harmonics(times, elevations, domain_lats, constit, predict=False, n
         Predict a new time series from the harmonics (default = True).
     noisy : bool, optional
         Set to True to enable verbose output (defaults to False).
+    report : int, optional
+        Output statistics every Nth iteration
     debug : list, optional
         Control debugging level. Multiple strings from 'memory', 'shape' or 'values' can be specified resulting in
         debugging statements related to that aspect of the script. Defaults to no debugging output.
@@ -1457,6 +1462,9 @@ def _analyse_harmonics(times, elevations, domain_lats, constit, predict=False, n
         utide.reconstruct : take utide.solve() output and generate a new predicted time series.
 
     """
+
+    size = comm.Get_size()
+    rank = comm.Get_rank()
 
     if 'values' in debug:
         for elev in elevations:
@@ -1542,7 +1550,7 @@ def _analyse_harmonics(times, elevations, domain_lats, constit, predict=False, n
 
 
 
-def fvcomOutputHarmonicsMPI(output_file, model_files, analysisvars,  dims={}, constit = ('M2', 'S2', 'N2', 'K2', 'K1', 'O1', 'P1', 'Q1', 'M4', 'MS4', 'MN4'), debug=[], dump_raw=False, predict=False, noisy=True):
+def fvcomOutputHarmonicsMPI(output_file, model_files, analysisvars,  dims={}, constit = ('M2', 'S2', 'N2', 'K2', 'K1', 'O1', 'P1', 'Q1', 'M4', 'MS4', 'MN4'), debug=[], report=10, dump_raw=False, predict=False, noisy=True):
 
     """
 
@@ -1561,6 +1569,8 @@ def fvcomOutputHarmonicsMPI(output_file, model_files, analysisvars,  dims={}, co
         List of constituents to calculate
     debug : list
         Debug options, should be a list of strings, admissable values are 'shape', 'memory', 'values'
+    report : integer
+        Output timing statistics every Nth position
     dump_raw : boolean
 
     predict : boolean
@@ -1742,10 +1752,11 @@ def fvcomOutputHarmonicsMPI(output_file, model_files, analysisvars,  dims={}, co
             if 'memory' in debug:
                 print('05 : rank {}: memory usage (post-scatter, pre-analyse): {} MB'.format(rank, pid.memory_info().rss >> 20), flush=True)
 
-            harm = _analyse_harmonics(times,
+            harm = _analyse_harmonics(comm, times,
                            elevations,
                            lats,
                            noisy=noisy,
+                           report=report,
                            predict=predict,
                            constit=constit,
                            debug=debug,
