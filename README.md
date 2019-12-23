@@ -288,7 +288,7 @@ Provides
     - `FileReader.avg_volume_var`
     - `FileReader.time_to_index`
     - `FileReader.time_average`
-    - `FileReader.add_river_flow
+    - `FileReader.add_river_flow`
     - `FileReader.to_excel`
     - `FileReader.to_csv`
     - `read_nesting_nodes`
