@@ -242,7 +242,7 @@ Provides
     - `Model.write_tides`
     - `Model.add_rivers`
     - `Model.check_rivers`
-    - `Model.mask_river_delta`
+    - `Model.mask_river_estuary`
     - `Model.write_river_forcing`
     - `Model.write_river_namelist`
     - `Model.read_nemo_rivers`

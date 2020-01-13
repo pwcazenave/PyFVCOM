@@ -59,7 +59,7 @@ class Model(Domain):
         read_nemo_rivers
         read_ea_river_temperature_climatology
         check_rivers
-        mask_river_delta
+        mask_river_estuary
         add_groundwater
         add_probes
         add_stations
@@ -1559,12 +1559,12 @@ class Model(Domain):
         self.dims.river = len(self.river.node)
 
 
-    def mask_river_delta(self, nn_level = 2):
+    def mask_river_estuary(self, nn_level = 2):
         """
         Helper function to use river nodes array to make model mask of river 
-        delta area points. 
+        estuary area points. 
         The mask is a combination of river nodes and neighbours.
-        This can be used for seeting a minimum depth in bathymetry at river 
+        This can be used for setting a minimum depth in bathymetry at river 
         entry points.
 
         Parameters
@@ -1577,15 +1577,15 @@ class Model(Domain):
 
         Returns
         -------
-        riv_delta : np.ndarray bool
+        riv_estuary : np.ndarray bool
             A boolean array the size of self.grid.nodes where True indictes a
             a river node or connected node. False indictes unconnected nodes.
         """
 
-        riv_delta = expand_connected_nodes(
+        riv_estuary = expand_connected_nodes(
                 self.grid.nodes, self.grid.triangles, 
                 self.river.node, nn_level)
-        return riv_delta
+        return riv_estuary
 
 
     def _add_river_col(self, var_name, col_to_copy, no_cols_to_add):
