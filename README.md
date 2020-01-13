@@ -132,6 +132,7 @@ Provides
     - `connectivity`
     - `find_connected_nodes`
     - `find_connected_elements`
+    - `expand_connected_nodes`
     - `get_area`
     - `find_bad_node`
     - `trigradient`
@@ -241,6 +242,7 @@ Provides
     - `Model.write_tides`
     - `Model.add_rivers`
     - `Model.check_rivers`
+    - `Model.mask_river_delta`
     - `Model.write_river_forcing`
     - `Model.write_river_namelist`
     - `Model.read_nemo_rivers`

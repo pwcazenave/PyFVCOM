@@ -26,6 +26,7 @@ from PyFVCOM.grid import Domain, grid_metrics, read_fvcom_obc, nodes2elems
 from PyFVCOM.grid import OpenBoundary, find_connected_elements, mp_interp_func
 from PyFVCOM.grid import find_bad_node, element_side_lengths, reduce_triangulation
 from PyFVCOM.grid import write_fvcom_mesh, connectivity, haversine_distance, subset_domain
+from PyFVCOM.grid import expand_connected_nodes
 from PyFVCOM.read import FileReader, _TimeReader, control_volumes
 from PyFVCOM.utilities.general import flatten_list, PassiveStore, warn
 from PyFVCOM.utilities.time import date_range
@@ -58,6 +59,7 @@ class Model(Domain):
         read_nemo_rivers
         read_ea_river_temperature_climatology
         check_rivers
+        mask_river_delta
         add_groundwater
         add_probes
         add_stations
@@ -1555,6 +1557,36 @@ class Model(Domain):
 
         # Update the dimension
         self.dims.river = len(self.river.node)
+
+
+    def mask_river_delta(self, nn_level = 2):
+        """
+        Helper function to use river nodes array to make model mask of river 
+        delta area points. 
+        The mask is a combination of river nodes and neighbours.
+        This can be used for seeting a minimum depth in bathymetry at river 
+        entry points.
+
+        Parameters
+        ----------
+        nn_level : int, optional
+            The level of node connecting neighbours can be specified. This can 
+            recersively select a larger area around the entry point.
+            Set to 0 is just the river nodes. Set to 1 and above is river nodes 
+            and the specified level of connection.
+
+        Returns
+        -------
+        riv_delta : np.ndarray bool
+            A boolean array the size of self.grid.nodes where True indictes a
+            a river node or connected node. False indictes unconnected nodes.
+        """
+
+        riv_delta = expand_connected_nodes(
+                self.grid.nodes, self.grid.triangles, 
+                self.river.node, nn_level)
+        return riv_delta
+
 
     def _add_river_col(self, var_name, col_to_copy, no_cols_to_add):
         """

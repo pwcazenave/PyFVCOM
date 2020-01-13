@@ -3896,6 +3896,52 @@ def find_connected_elements(n, triangles):
     return surroundingidx
 
 
+def expand_connected_nodes(grid_nodes, tri, 
+                            initial_nodes, nn_level):
+    """
+    Use nodes array to make model mask of neighbouring points. The mask is a 
+    combination of initial nodes and neighbours.
+
+    Parameters
+    ----------
+    grid_nodes : np.ndarray
+        Array of model grid node IDs. Zero indexed. Shape is [nele].
+    tri : np.ndarray         
+        Triangulation matrix to find the connected nodes. Shape is [nele, 3].
+    initial_nodes : np.ndarray
+        Array of node IDs to find connected nodes and mask.
+    nn_level : int, optional
+        The level of node connecting neighbours can be specified. This can 
+        recersively select a larger area around the initial points.
+        Set to 0 returns a mask of the initial nodes. Set to 1 and above 
+        returns a mask that includes the connected nodes at the specified 
+        level of connection.
+
+    Returns
+    -------
+    node_mask : np.ndarray bool
+        A boolean array of shape [nele]. True indictes an input node or 
+        connected node and False indictes unconnected nodes.
+    """
+
+    if nn_level >= 1:
+        expand_nodes = initial_nodes * 1
+        for i in range(len(initial_nodes)):
+            con_node = find_connected_nodes(initial_nodes[i], tri)
+            expand_nodes = np.append(expand_nodes, con_node)
+
+        expand_nodes = np.unique(expand_nodes)
+        # recursivly calls itself with more nodes and less loop levels
+        node_mask = expand_connected_nodes(grid_nodes, tri, expand_nodes, 
+                                            nn_level - 1)
+
+    else:
+        node_mask = np.zeros((len(grid_nodes)), dtype=bool)
+        for i in range(len(initial_nodes)):
+            node_mask[initial_nodes[i]] = True
+    return node_mask
+
+
 def get_area(v1, v2, v3):
     """ Calculate the area of a triangle/set of triangles.
 
