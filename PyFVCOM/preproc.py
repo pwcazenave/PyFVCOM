@@ -2227,6 +2227,9 @@ class Model(Domain):
     def add_nests(self, nest_levels, nesting_type=3, verbose=False):
         """
         Add a set of nested levels to each open boundary.
+        Boundary levels are added in parallel and next to existing boundary 
+        nodes, lining the boundary inside the domain model. These levels 
+        are then weighted. 
 
         Parameters
         ----------
@@ -4289,10 +4292,13 @@ class Nest(object):
 
     def add_level(self):
         """
-        Function to add a nested level which is connected to the existing nested nodes and elements.
+        Function to add a nested level which is connected parallel to the 
+        existing nested nodes and elements. This function is used by 
+        self.add_nests()
 
-        This is useful for generating nested inputs from other model inputs (e.g. a regularly gridded model) in
-        conjunction with PyFVCOM.grid.OpenBoundary.add_nested_forcing().
+        This is useful for generating nested inputs from other model inputs 
+        (e.g. a regularly gridded model) in conjunction with 
+        PyFVCOM.grid.OpenBoundary.add_nested_forcing()).
 
         Provides
         --------
@@ -4346,17 +4352,21 @@ class Nest(object):
 
     def add_weights(self, power=0):
         """
-        For the open boundaries in self.boundaries, add a corresponding weight for the nodes and elements to each one.
+        For the open boundaries in self.boundaries, add a corresponding weight 
+        for the nodes and elements to each one. This makes sense if there are 
+        levels of boundary forcing in parallel to the external boundary nodes. 
+        This function is used by self.add_nests()
 
         Parameters
         ----------
         power : float, optional
-            Give an optional power with which weighting decreases with each successive nest. Defaults to 0 (i.e.
-            linear).
+            Give an optional power with which weighting decreases with each 
+            successive nest. Defaults to 0 (i.e. linear).
 
         Provides
         --------
-        Populates the self.boundaries open boundary objects with the relevant weight_node and weight_element arrays.
+        Populates the self.boundaries open boundary objects with the relevant 
+        weight_node and weight_element arrays.
 
         """
 
