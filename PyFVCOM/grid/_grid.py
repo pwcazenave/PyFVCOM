@@ -983,24 +983,24 @@ class Domain(object):
 
     def in_domain(self, x, y):
         """
-        Identify if point (x,y) is within the domain
+        Identify if point or array of points (x,y) is within the domain
 
         Parameters
         ----------
-        x,y : float
+        x,y : float or list like
             The position in spherical coordinates.
         
         Returns
         -------
-        inside : bool
+        inside : bool or boolean array
             True if given point is inside the domain
 
         """
 
-        if not hasattr(self, 'model_exterior'):
-            self.model_exterior = model_exterior(self.grid.lon, self.grid.lat, self.grid.triangles)
-
-        return self.model_exterior.contains(shapely.geometry.Point(x,y))
+        tri = Triangulation(self.grid.lon, self.grid.lat, self.grid.triangles)
+        finder = tri.get_trifinder()
+        
+        return finder(x,y) != -1
 
     def which_element(self, x, y):
         """
