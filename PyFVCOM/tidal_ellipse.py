@@ -421,7 +421,7 @@ def plot_ell(SEMA, ECC, INC, PHA, IND=[1]):
     An auxiliary function used in ap2ep and ep2ap for plotting tidal ellipse.
     The inputs, MA, ECC, INC and PHA are the output of ap2ep and IND is a
     vector for indices for plotting a particular ellipse, e.g., if IND=[2 3 1]
-    the ellipse corresponding to the indices of [2,3,1] will be plotted.
+    the ellipse corresponding to the indices of [2, 3, 1] will be plotted.
 
     By default, the first ellipse is always plotted.
 

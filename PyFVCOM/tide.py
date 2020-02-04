@@ -10,15 +10,19 @@ from __future__ import print_function
 
 import os
 import sys
-from warnings import warn
+import copy
 
 import numpy as np
 import scipy
 from lxml import etree
 from netCDF4 import Dataset, date2num
+import numpy as np
+import utide
+from datetime import datetime
 
 from PyFVCOM.grid import find_nearest_point, unstructured_grid_depths
-from PyFVCOM.utilities.general import fix_range
+from PyFVCOM.read import MFileReader
+from PyFVCOM.utilities.general import fix_range, warn
 from PyFVCOM.utilities.time import julian_day
 
 try:
@@ -29,6 +33,12 @@ except ImportError:
          ' installation. Some functions will be disabled.')
     use_sqlite = False
 
+try:
+    from mpi4py import MPI
+    use_MPI = True
+except ImportError:
+    warn('No MPI some functions will be disabled')
+    use_MPI = False
 
 class HarmonicOutput(object):
     """
@@ -200,10 +210,6 @@ class HarmonicOutput(object):
 
         self.nv = self._nc.createVariable('nv', 'f4', self._three_nele_dims, **self._ncopts)
         self.nv.setncattr('long_name', 'nodes surrounding element')
-
-        if self._dump_raw or self._predict:
-            self.Times = self._nc.createVariable('Times', 'c', ['time', 'DateStrLen'], **self._ncopts)
-            self.Times.setncattr('time_zone', 'UTC')
 
         if self._dump_raw:
             self.ua_raw = self._nc.createVariable('ua_raw', 'f4', self._nele_time_dims, **self._ncopts)
@@ -1402,3 +1408,421 @@ def _spectral_filtering(x, window):
     y = np.real(scipy.ifft(CxH))
     return y, Cx
 
+
+
+
+
+
+
+def _analyse_harmonics(comm, times, elevations, domain_lats, constit, predict=False, noisy=False, report=10, debug=[], debug_start=None, **kwargs):
+    """
+    Worker function to analyse the time series [`times', `elevations'] for the locations in `latitudes'.
+
+    Parameters
+    ----------
+    rank : integer
+        Rank of MPI process
+    times : matplotlib.date2num
+        MATLAB-format times. Dimension is 1D array [times].
+    elevations : ndarray
+        Array of time series [positions, times].
+    domain_lats : array-like
+        Latitudes for the positions in `elevations'. Dimension is 1D array [positions].
+    constit : list, tuple
+        List of harmonic constituents to use in the analysis.
+    predict : bool, optional
+        Predict a new time series from the harmonics (default = True).
+    noisy : bool, optional
+        Set to True to enable verbose output (defaults to False).
+    report : int, optional
+        Output statistics every Nth iteration
+    debug : list, optional
+        Control debugging level. Multiple strings from 'memory', 'shape' or 'values' can be specified resulting in
+        debugging statements related to that aspect of the script. Defaults to no debugging output.
+
+    The remaining kwargs are the same as for :meth:`~utide.solve()`.
+
+    Returns
+    -------
+	
+    harmonics : list
+        List of utide.solve output dictionaries in the order of the locations in elevations and latitudes. Dimensions
+        are [positions, 2, nconsts].
+    predicted : list, optional
+        If `predict' is set to True, return predicted time series based on the solution to the UTide analysis.
+        Defaults to False. Dimensions are [positions, times].
+
+    See Also
+    --------
+        utide.solve : the function to actually perform the harmonic analysis.
+        utide.reconstruct : take utide.solve() output and generate a new predicted time series.
+
+    """
+
+    size = comm.Get_size()
+    rank = comm.Get_rank()
+
+    if 'values' in debug:
+        for elev in elevations:
+            print('rank {}: analyse: elev: {}'.format(rank, elev.tolist()), flush=True)
+        print('rank {}: analyse: domain_lats: {}'.format(rank, domain_lats.tolist()), flush=True)
+
+    if 'memory' in debug:
+        print('09 : rank {}: analyse: memory usage (analyse start): {} MB'.format(rank, pid.memory_info().rss >> 20), flush=True)
+
+    npositions = len(domain_lats)
+
+    harmonics = np.full((npositions, 2, len(constit)), np.nan)
+    if predict:
+        predicted = np.full((npositions, len(times)), np.nan)
+
+    started = [datetime.now()]
+
+    for counter, position in enumerate(zip(elevations, domain_lats)):
+        timeseries, lat = position
+        # Don't do the analysis if we're in the padded region.
+        if np.isnan(lat):
+            if noisy and not debug:
+                print('warning: no valid latitude for position {} of {}'.format((size * counter) + 1, npositions * size), flush=True)
+            if 'values' in debug:
+                print('rank {}: no valid latitude for position {} of {}'.format(rank, (size * counter) + 1, npositions * size), flush=True)
+                print('rank {}: analyse: timeseries range: {}/{}'.format(rank, timeseries.min(), timeseries.max()), flush=True)
+            continue
+
+        if noisy and rank == 0:
+            print('position {} of {}'.format((size * counter) + 1, npositions * size), flush=True)
+
+        res = utide.solve(t=times, u=timeseries, lat=lat, method='ols', constit=constit, **kwargs)
+        # Get the order of the harmonic indices as utide returns them in a different order from that specified in
+        # constit. Annoying.
+        c_order = [res['name'].tolist().index(cc) for cc in constit]
+        harmonics[counter, ...] = res['g'][c_order], res['A'][c_order]
+
+        # Set verbose flag in reconstruct based on noisy unless we have been
+        # given a verbose flag for solve.
+        if 'verbose' not in kwargs:
+            verbose = noisy
+        else:
+            verbose = kwargs['verbose']
+
+        if predict:
+            reconstructed = utide.reconstruct(t=times, coef=res, verbose=verbose)
+            predicted[counter, ...] = reconstructed['h']
+        # Get some estimated time to completion.
+        if rank == 0:
+            started.append(datetime.now())
+            if noisy and (counter + 1) % report == 0:
+                average_time = np.diff(started).mean()
+                duration = started[-1] - started[0]
+                remaining_time = average_time * np.sum(~np.isnan(domain_lats))
+                msg = 'Time elapsed: {}, estimated time remaining: {}'
+                print(msg.format(duration, remaining_time - duration), flush=True)
+
+        if 'values' in debug:
+            print('rank {}: analyse: lat: {}'.format(rank, lat), flush=True)
+            print('rank {}: analyse: timeseries range: {}/{}'.format(rank, timeseries.min(), timeseries.max()), flush=True)
+            print('rank {}: analyse: times range: {} to {}'.format(rank, times.min(), times.max()), flush=True)
+            print('rank {}: analyse: res[\'g\']: {}'.format(rank, res['g'].tolist()), flush=True)
+            print('rank {}: analyse: res[\'A\']: {}'.format(rank, res['A'].tolist()), flush=True)
+        if 'shape' in debug:
+            print('rank {}: analyse: timeseries shape: {}'.format(rank, timeseries.shape), flush=True)
+            print('rank {}: analyse: harmonics[-1].shape: {}'.format(rank, harmonics[-1].shape), flush=True)
+
+    if 'values' in debug:
+        for h in range(npositions):
+            print('rank {}: analyse: harmonics [\'g\']: {}'.format(rank, harmonics[:, 0, h].tolist()), flush=True)
+            print('rank {}: analyse: harmonics [\'A\']: {}'.format(rank, harmonics[:, 1, h].tolist()), flush=True)
+
+    if 'memory' in debug:
+        print('-1 : rank {}: analyse: memory usage (analyse end): {} MB'.format(rank, pid.memory_info().rss >> 20), flush=True)
+
+    if debug:
+        sys.stdout.flush()
+
+    if predict:
+        return harmonics, predicted
+    else:
+        return harmonics
+
+
+
+def fvcomOutputHarmonicsMPI(output_file, model_files, analysisvars,  dims={}, constit = ('M2', 'S2', 'N2', 'K2', 'K1', 'O1', 'P1', 'Q1', 'M4', 'MS4', 'MN4'), debug=[], report=10, dump_raw=False, predict=False, noisy=True):
+
+    """
+
+
+    Parameters
+    ----------
+    output_file : str
+        Name of output file
+    model_files : list
+        List of strings of model files in sequential (time) order
+    analysisvars : list
+        List of strings of variables to analyse, admissable values are 'u', 'v', 'ua', 'va', 'zeta'
+    dims : dict
+        Dictionary of space dimensions to slice model files as required (is passed to FileReader)
+    constit : tuple-like
+        List of constituents to calculate
+    debug : list
+        Debug options, should be a list of strings, admissable values are 'shape', 'memory', 'values'
+    report : integer
+        Output timing statistics every Nth position
+    dump_raw : boolean
+
+    predict : boolean
+
+    """
+    if not use_MPI:
+        print('Please install MPI before running (pip3 install mpi4py)')
+        return
+
+    # Fixed width constituent names for netCDF output.
+    cnames = [list(j) for j in ['{:4s}'.format(i) for i in constit]]
+
+    comm = MPI.COMM_WORLD
+    size = comm.Get_size()
+    rank = comm.Get_rank()
+
+    nx = None
+    ne = None
+    nz = None
+    nt = None
+    nx_per_process = None
+    ne_per_process = None
+    npositions_local = None
+    npositions_global = None
+    variable_dimensions = None
+    latitudes = None
+
+    if rank == 0:
+        fvcom = MFileReader(model_files, dims=dims)
+        
+        if 'memory' in debug:
+            print('01 : rank {}: memory usage (loaded data): {} MB'.format(rank, pid.memory_info().rss >> 20), flush=True)
+        if 'shape' in debug:
+            print('rank {}: analysis vars {}'.format(rank, analysisvars))
+            print('rank {}: FVCOM time attributes {}'.format(rank, [i for i in fvcom.time]), flush=True)
+            print('rank {}: FVCOM grid attributes {}'.format(rank, [i for i in fvcom.grid]), flush=True)
+
+        # Get data dimensions based on the variables we've been asked to analyse.
+        nt = fvcom.dims.time
+        nx = fvcom.dims.node
+        ne = fvcom.dims.nele
+        nz = 0
+        if any(s in analysisvars for s in ('u', 'v')):
+            nz = fvcom.dims.siglay
+        nx_per_process = int(np.ceil(nx / size))
+        ne_per_process = int(np.ceil(ne / size))
+
+        # We have time now, so create a new variable for it so we can broadcast it to the workers.
+        times = date2num(fvcom.time.datetime, units='days since 1858-11-17 00:00:00')
+
+        # Generate the netCDF output file and add data as we generate it
+        # to save on memory.
+        if len(debug) > 0:
+            print('Saving harmonic analysis output to {}'.format(output_file), flush=True)
+
+        # Initialise the output object.
+        ncout = HarmonicOutput(output_file, fvcom, consts=cnames, files=model_files, predict=predict, dump_raw=dump_raw)
+
+        if 'memory' in debug:
+            print('02 : rank {}: memory usage (created netCDF): {} MB'.format(rank, pid.memory_info().rss >> 20), flush=True)
+    
+    nx = comm.bcast(nx, root=0)
+    ne = comm.bcast(ne, root=0)
+    nz = comm.bcast(nz, root=0)
+    nt = comm.bcast(nt, root=0)
+    nx_per_process = comm.bcast(nx_per_process, root=0)
+    ne_per_process = comm.bcast(ne_per_process, root=0)
+
+    # Get the times to all the workers.
+    if rank != 0:
+        times = np.full(nt, np.nan)
+    comm.Bcast([times, nt, MPI.DOUBLE], root=0)
+
+    if 'shape' in debug:
+        print('rank {}: nt {}'.format(rank, nt), flush=True)
+        print('rank {}: nx {}'.format(rank, nx), flush=True)
+        print('rank {}: nx_per_process {}'.format(rank, nx_per_process), flush=True)
+        print('rank {}: ne {}'.format(rank, ne), flush=True)
+        print('rank {}: ne_per_process {}'.format(rank, ne_per_process), flush=True)
+
+    for var in analysisvars:
+        if noisy and rank == 0:
+            print('Processing {}'.format(var), flush=True)
+        if 'values' in debug:
+            print('rank {}: var: {}'.format(rank, var), flush=True)
+
+        if rank == 0:
+            variable_dimensions = fvcom.ds.variables[var].dimensions
+        variable_dimensions = comm.bcast(variable_dimensions, root=0)
+        # Only do a single depth if we don't have a vertical dimension in the data.
+        if 'siglay' in variable_dimensions:
+            nz_local = nz
+        else:
+            nz_local = 1
+
+        for zlev in range(nz_local):
+            if noisy and rank == 0:
+                print('Depth {} of {}'.format(zlev + 1, nz_local), flush=True)
+
+            if rank == 0:
+                current_dims = copy.copy(dims)
+                current_dims.update({'siglay': [zlev]})  # iterable for MFileReader!
+
+                fvcom = MFileReader(model_files, variables=var, dims=current_dims)
+
+                # Drop the raw data into the netCDF now.
+                if dump_raw:
+                    if var == 'zeta':
+                        ncout.z_raw[:] = getattr(fvcom.data, var)
+                    elif var == 'u':
+                        ncout.u_raw[:, zlev, :] = getattr(fvcom.data, var)
+                    elif var == 'v':
+                        ncout.v_raw[:, zlev, :] = getattr(fvcom.data, var)
+                    elif var == 'ua':
+                        ncout.ua_raw[:] = getattr(fvcom.data, var)
+                    elif var == 'va':
+                        ncout.va_raw[:] = getattr(fvcom.data, var)
+
+                if 'node' in variable_dimensions:
+                    npositions_local = nx_per_process
+                    npositions_global = nx
+                elif 'nele' in variable_dimensions:
+                    npositions_local = ne_per_process
+                    npositions_global = ne
+                else:
+                    raise ValueError('Unsupported spatial dimension for {} (dimensions = {}).'.format(var, variable_dimensions))
+
+                flow = np.full((nt, npositions_local * size), np.nan)
+                flow[:, :npositions_global] = np.squeeze(getattr(fvcom.data, var))
+                # Only fill with NaNs when we're running in multiple cores.
+                if npositions_global != npositions_local:
+                    flow[:, npositions_global:] = np.nan
+
+            # Send those values to all the workers.
+            npositions_local = comm.bcast(npositions_local, root=0)
+            npositions_global = comm.bcast(npositions_global, root=0)
+
+            # Initialise all the sending arrays to None so things don't bomb out.
+            flow = None
+
+            # Initialise the arrays to which things get Scattered (*_per_process sized).
+            lats = np.full(npositions_local, np.nan)
+            elevations = np.full((npositions_local, nt), np.nan)
+            # Initialise the arrays to which things get Gathered (padded (*_per_process x size) arrays).
+            latitudes = np.full(npositions_local * size, np.nan)
+            harmonics = np.full((npositions_local * size, 2, len(constit)), np.nan)
+            predicted = np.full((npositions_local * size, nt), np.nan)
+
+            if 'memory' in debug:
+                print('03 : rank {}: memory usage (pre-loaded): {} MB'.format(rank, pid.memory_info().rss >> 20), flush=True)
+
+            # The I/O is scattered from the root to the workers, so we only have to load it on the root process.
+            if rank == 0:
+
+                if 'node' in variable_dimensions:
+                    latitudes[:npositions_global] = fvcom.grid.lat
+                elif 'nele' in variable_dimensions:
+                    latitudes[:npositions_global] = fvcom.grid.latc
+                else:
+                   raise ValueError('Unsupported spatial dimension for {} (dimensions = {}.'.format(var, variable_dimensions))
+
+                flow = np.full((npositions_local * size, nt), np.nan)
+                flow[:npositions_global, :] = np.squeeze(getattr(fvcom.data, var)).T
+
+                if 'shape' in debug:
+                    print('rank {}: lats shape: {}'.format(rank, lats.shape), flush=True)
+                    print('rank {}: elevations shape: {}'.format(rank, elevations.shape), flush=True)
+                    print('rank {}: latitudes shape: {}'.format(rank, latitudes.shape), flush=True)
+                    print('rank {}: flow shape: {}'.format(rank, flow.shape), flush=True)
+                    print('rank {}: harmonics shape: {}'.format(rank, harmonics.shape), flush=True)
+                    print('rank {}: predicted shape: {}'.format(rank, predicted.shape), flush=True)
+
+                if 'memory' in debug:
+                    print('04 : rank {}: memory usage (post-loaded): {} MB'.format(rank, pid.memory_info().rss >> 20), flush=True)
+
+            comm.Scatter(latitudes, lats, root=0)
+            comm.Scatter(flow, elevations, root=0)
+
+            if 'memory' in debug:
+                print('05 : rank {}: memory usage (post-scatter, pre-analyse): {} MB'.format(rank, pid.memory_info().rss >> 20), flush=True)
+
+            harm = _analyse_harmonics(comm, times,
+                           elevations,
+                           lats,
+                           noisy=noisy,
+                           report=report,
+                           predict=predict,
+                           constit=constit,
+                           debug=debug,
+                           verbose=False)
+            if predict:
+                harm, pred = harm
+
+            if 'memory' in debug:
+                print('06 : rank {}: memory usage (post-analyse): {} MB'.format(rank, pid.memory_info().rss >> 20), flush=True)
+            if 'shape' in debug:
+                print('rank {}: [scatter] harm shape: {}'.format(rank, harm.shape), flush=True)
+                print('rank {}: [gather] harmonics shape: {}'.format(rank, harmonics.shape), flush=True)
+                print('rank {}: npositions_local: {}'.format(rank, npositions_local), flush=True)
+                print('rank {}: npositions_global: {}'.format(rank, npositions_global), flush=True)
+                if predict:
+                    print('rank {}: [scatter] pred shape: {}'.format(rank, pred.shape), flush=True)
+                    print('rank {}: [gather] predicted shape: {}'.format(rank, predicted.shape), flush=True)
+
+            comm.Gather(harm, harmonics, root=0)
+            if predict:
+                comm.Gather(pred, predicted, root=0)
+
+            if 'memory' in debug:
+                print('07 : rank {}: memory usage (post-gather): {} MB'.format(rank, pid.memory_info().rss >> 20), flush=True)
+
+            if rank == 0:
+                # Drop the padded values.
+                # harmonics = harmonics[:npositions_global, ...]
+                harmonics = harmonics[~np.isnan(harmonics)].reshape(npositions_global, 2, len(constit))
+                if predict:
+                    # predicted = predicted[:npositions_global, :]
+                    predicted = predicted[~np.isnan(predicted)].reshape(npositions_global, len(times))
+
+                # Save to netCDF. All the netCDF variables are time first, space last, whereas the analysis variables
+                # are all space first. So transpose all the arrays when writing them.
+                if var == 'zeta':
+                    ncout.z_amp[:] = harmonics[:, 1, :].T
+                    ncout.z_phase[:] = harmonics[:, 0, :].T
+                    if predict:
+                        ncout.z_pred[:] = predicted.T
+                elif var == 'u':
+                    ncout.u_amp[:, zlev, ...] = harmonics[..., 1, :].T
+                    ncout.u_phase[:, zlev, ...] = harmonics[..., 0, :].T
+                    if predict:
+                        ncout.u_pred[:, zlev, :] = predicted.T
+                elif var == 'v':
+                    ncout.v_amp[:, zlev, ...] = harmonics[..., 1, :].T
+                    ncout.v_phase[:, zlev, ...] = harmonics[..., 0, :].T
+                    if predict:
+                        ncout.v_pred[:, zlev, :] = predicted.T
+                elif var == 'ua':
+                    ncout.ua_amp[:] = harmonics[..., 1, :].T
+                    ncout.ua_phase[:] = harmonics[..., 0, :].T
+                    if predict:
+                        ncout.ua_pred[:] = predicted.T
+                elif var == 'va':
+                    ncout.va_amp[:] = harmonics[..., 1, :].T
+                    ncout.va_phase[:] = harmonics[..., 0, :].T
+                    if predict:
+                        ncout.va_pred[:] = predicted.T
+                else:
+                    raise ValueError('Unsupported variable {}.'.format(var))
+
+                if 'memory' in debug:
+                    print('08 : rank {}: memory usage (post-netCDF): {} MB'.format(rank, pid.memory_info().rss >> 20), flush=True)
+    if rank == 0:
+        ncout.close()
+
+    if 'memory' in debug:
+        print('09 : rank {}: memory usage (end): {} MB'.format(rank, pid.memory_info().rss >> 20))
+
+    if len(debug) > 0 and rank == 0:
+        print('Done.')

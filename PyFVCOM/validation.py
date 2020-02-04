@@ -3,6 +3,10 @@ Validation of model outputs against in situ data stored and extracted from a dat
 
 This also includes the code to build the databases of time series data sets.
 
+General theory:
+    Build a set of validation observations 
+
+
 """
 
 import datetime as dt
@@ -10,6 +14,7 @@ import glob as gb
 import os
 import sqlite3 as sq
 import subprocess as sp
+import shapely.geometry as sg
 
 import matplotlib.path as mplPath
 import matplotlib.pyplot as plt
@@ -20,9 +25,9 @@ from PyFVCOM.grid import get_boundary_polygons, vincenty_distance
 from PyFVCOM.plot import Time, Plotter
 from PyFVCOM.read import FileReader
 from PyFVCOM.stats import calculate_coefficient, rmse
+from PyFVCOM.utilities.general import PassiveStore, flatten_list, warn
 
 SQL_UNIX_EPOCH = dt.datetime(1970, 1, 1, 0, 0, 0)
-
 
 class ValidationDB(object):
     """ Work with an SQLite database. """
@@ -361,6 +366,308 @@ def _make_normal_tide_series(h_series):
     return height_series
 
 
+class ValidationReader():
+    def __init__(self):
+        self.data = PassiveStore()
+        self.grid = PassiveStore()
+        self.time = PassiveStore()
+
+    def add_data(self, varname_list, data, lonlat, date_list, depth):
+        """
+        varname_list : list
+            List of N (fvcom equivalent) variable names
+        data : NxM float array
+            Data for   , where data doesn't exist for a particular variable-position-date-depth it should be passed as NaN
+        lonlat : Mx2 float array
+            Positions of the observation data, [Longitude, Latitude]
+        date_list : M list-like object of datetime.datetime objects
+            Times of observation data
+        depth : M float array
+            Depths of observations
+        """
+        if np.logical_or(len(lonlat) != len(date_list), len(date_list) != len(depth)):
+            print('Lonlat, date, and depth must have same number of entries')
+            return
+
+        if len(varname_list) == 1 and len(data.shape) == 1:
+            data = data[np.newaxis, :] 
+        elif len(data.shape) != 2:
+            print('Data must be 2d array')
+            return
+        elif np.logical_or(len(varname_list) != data.shape[0], len(date_list) != data.shape[1]):
+            if np.logical_and(len(varname_list) == data.shape[1], len(date_list) == data.shape[0]):
+                data = data.T
+            else:
+                print('Data array shape does not match variable and entry numbers')
+        elif len(varname_list) == len(date_list):
+            print('WARNING: Same number of variables as data entries, its up to you to make sure the data array is the correct orientation')
+
+
+        setattr(self.time, 'datetime', np.asarray(date_list))
+        setattr(self.grid, 'lon', np.squeeze(lonlat[:,0]))
+        setattr(self.grid, 'lat', np.squeeze(lonlat[:,1])) 
+        setattr(self.grid, 'depth', np.asarray(depth))
+
+        for i, this_var in enumerate(varname_list):
+            setattr(self.data, this_var, np.squeeze(data[i,:]))
+        
+
+
+class ValidationComparison(): 
+    def __init__(self, filereader, validationreader, varlist, mode='nodes', horizontal_match='nearest', vertical_match='interp', time_match='nearest', ignore_deep=True):
+        """ 
+        filereader : pyfvcom FileReader object
+            The model data to validate *without* the variable data loaded
+        validationreader : pyfvcom ValidationReader object 
+            Some object of validation data with the baseclass as ValidationReader
+        varlist : list
+            List of the variables to compare, names are fvcom variable names. At the moment they have to be either all node based or all element based.
+        mode : str, one of ['nodes', 'elements']
+            Whether the varlist are node or element based, eventually this should be done automatically (and handle a mixture of both)
+        horizontal_match : str, one of ['interp', 'nearest']
+            Matching horizontally between model and observation
+        vertical_match : str, one of ['interp', 'nearest']
+            Matching vertically between model and observation
+        ignore_deep : bool
+            Whether to ignore observations at depths below the model bathymetry. If false then observations deeper will all be adjusted to the max model depth.
+        """
+        self.fvcom_data = filereader
+        self.varlist = varlist
+        self.mode = mode
+        self.obs_data = validationreader
+
+        if horizontal_match not in ['interp', 'nearest'] or vertical_match not in ['interp', 'nearest'] or time_match not in ['interp', 'nearest']:
+            print('Unknown matching scheme')
+            return
+        else:
+            self.horizontal_match = horizontal_match
+            self.vertical_match = vertical_match
+            self.time_match = time_match
+
+        self.ignore_deep = ignore_deep
+
+    def find_matching_obs(self):
+        obs_in_mod_xy = np.asarray([self.fvcom_data.in_domain(this_lon, this_lat) for this_lon, this_lat in zip(self.obs_data.grid.lon, self.obs_data.grid.lat)])
+        obs_in_mod_t = np.logical_and(self.obs_data.time.datetime <= np.max(self.fvcom_data.time.datetime),
+                            self.obs_data.time.datetime >= np.min(self.fvcom_data.time.datetime))
+       
+        self.chosen_obs = np.logical_and(obs_in_mod_xy, obs_in_mod_t)
+        self.chosen_obs_ll = np.asarray([self.obs_data.grid.lon[self.chosen_obs], self.obs_data.grid.lat[self.chosen_obs]]).T
+        self.chosen_obs_dep = self.obs_data.grid.depth[self.chosen_obs]
+
+    def find_model_horizontal(self):
+        if self.mode == 'nodes':
+            if self.horizontal_match == 'nearest':
+                self.chosen_mod_nodes = np.squeeze(np.asarray([self.fvcom_data.closest_node(this_ll) for this_ll in self.chosen_obs_ll]))[:, np.newaxis]
+                self.chosen_mod_nodes_weights = np.ones(len(self.chosen_mod_nodes))[:, np.newaxis]
+            elif self.horizontal_match == 'interp':
+                chosen_mod_nodes = []
+                chosen_mod_nodes_weights = []
+
+                for this_obs_ll in self.chosen_obs_ll:
+                    this_ele = self.fvcom_data.which_element(this_obs_ll[0], this_obs_ll[1])
+                    this_nodes = np.squeeze(self.fvcom_data.grid.triangles[this_ele,:])
+                    this_nodes_lon = self.fvcom_data.grid.lon[this_nodes]
+                    this_nodes_lat = self.fvcom_data.grid.lat[this_nodes]
+                    this_nodes_dists = pf.grid.haversine_distance([this_nodes_lon, this_nodes_lat], this_obs_ll)
+                    this_tot_dist = np.sum(this_nodes_dists)
+                    this_wgts = this_nodes_dists/this_tot_dist
+            
+                    chosen_mod_nodes.append(this_nodes)
+                    chosen_mod_nodes_weights.append(this_wgts)
+
+                self.chosen_mod_nodes = np.asarray(chosen_mod_nodes)
+                self.chosen_mod_nodes_weights = np.asarray(chosen_mod_nodes_weights)
+
+        elif self.mode == 'elements':
+            if self.horizontal_match == 'nearest':
+                self.chosen_mod_nodes = self.fvcom_data.closest_element(self.chosen_obs_ll)
+                self.chosen_mod_nodes_weights = np.ones(len(self.chosen_mod_nodes))
+            elif self.horizontal_match == 'interp':
+                chosen_mod_nodes = []
+                chosen_mod_nodes_weights = [] 
+                # fill in using grid.nbe, trickier cos of boundary elements (-1s)
+
+    def find_model_time(self):
+        if self.time_match == 'nearest':
+            self.chosen_mod_times = np.asarray([self.fvcom_data.closest_time(this_t) for this_t in self.obs_data.time.datetime[self.chosen_obs]])[:, np.newaxis]
+            self.chosen_mod_times_weights = np.ones(len(self.chosen_mod_times))[:, np.newaxis]
+        elif self.time_match == 'interp':
+            temp_closest_times = np.asarray([self.fvcom_data.closest_time(this_t) for this_t in self.obs_data.time.datetime[self.chosen_obs]])
+            
+            chosen_mod_times = []
+            chosen_mod_times_weights = []
+            for this_time, this_ind in zip(self.obs_data.time.datetime[self.chosen_obs], temp_closest_times):
+                if this_time >= self.fvcom_data.time.datetime[this_ind]:
+                    time_inds = [this_ind, this_ind + 1]
+                else:
+                    time_inds = [this_ind -1, this_ind]
+    
+                diff_1 = (this_time - self.fvcom_data.time.datetime[time_inds[0]]).seconds
+                diff_2 = (self.fvcom_data.time.datetime[time_inds[1]] - this_time).seconds
+
+                wgts = [1-(diff_1/(diff_1 + diff_2)), 1-(diff_2/(diff_1 + diff_2))]
+
+                chosen_mod_times.append(time_inds)
+                chosen_mod_times_weights.append(wgts)
+    
+            self.chosen_mod_times = np.asarray(chosen_mod_times)
+            self.chosen_mod_times_weights = np.asarray(chosen_mod_times_weights)
+
+    def find_model_vertical(self):
+        if not hasattr(self.fvcom_data.grid, 'depth'):
+            self.fvcom_data._get_cv_volumes()
+
+        if not hasattr(self, 'chosen_mod_nodes'):
+            print('Not found horizontal match yet')
+            return
+        if not hasattr(self, 'chosen_mod_times'):
+            print('Not found time match yet')
+            return
+
+        if self.mode == 'nodes':
+            self.mod_h = self.fvcom_data.grid.depth
+            self.mod_depths = -self.mod_h[:,np.newaxis, :]*self.fvcom_data.grid.siglay[np.newaxis, :,:]
+        
+        elif self.mode == 'elements':
+            setattr(self.fvcom_data.data, 'zeta_centre', pf.grid.node_to_centre(self.fvcom_data.zeta, self.fvcom_data))
+            self.mod_h = self.fvcom_data.data.zeta_centre + self.grid.h_center
+            self.mod_depths = self.mod_h[:,np.newaxis, :]*self.fvcom_data.grid.siglay_center[np.newaxis, :,:]
+
+        self.mod_obs_depths_all_t = np.sum(self.mod_depths[:,:,self.chosen_mod_nodes]*self.chosen_mod_nodes_weights[np.newaxis, np.newaxis,:], axis=-1)
+        self.mod_obs_depths = np.diagonal(np.squeeze(self.mod_obs_depths_all_t[self.chosen_mod_times,:]))
+        
+        if self.vertical_match == 'nearest':
+            self.chosen_mod_depths = np.asarray([np.argmin(np.abs(this_mod_obs_dep - this_dep)) for this_mod_obs_dep, this_dep in zip(self.mod_obs_depths, self.obs_data.grid.depth[self.chosen_obs])])[:,np.newaxis]
+            self.chosen_mod_depths_weights = np.ones(self.chosen_mod_depths.shape)
+
+        elif self.vertical_match == 'interp':
+            self.chosen_mod_depths = a
+            self.chosen_mod_weights = b 
+
+        if self.ignore_deep:
+            self.max_mod_dep = np.max(self.mod_depths, axis=1)[self.chosen_mod_times, self.chosen_mod_nodes].diagonal()
+            adjust_chosen =  self.obs_data.grid.depth[self.chosen_obs] <= self.max_mod_dep
+            
+            self.chosen_obs[self.chosen_obs == True][~adjust_chosen] = False
+            self.chosen_obs_dep = self.chosen_obs_dep[adjust_chosen]
+            self.chosen_obs_ll = self.chosen_obs_ll[adjust_chosen,:]
+            self.chosen_mod_depths = self.chosen_mod_depths[adjust_chosen,:]
+            self.chosen_mod_depths_weights = self.chosen_mod_depths_weights[adjust_chosen,:]
+            self.chosen_mod_nodes = self.chosen_mod_nodes[adjust_chosen,:]
+            self.chosen_mod_nodes_weights = self.chosen_mod_nodes_weights[adjust_chosen,:]
+            self.chosen_mod_times = self.chosen_mod_times[adjust_chosen,:]
+            self.chosen_mod_times_weights = self.chosen_mod_times_weights[adjust_chosen,:]
+ 
+    def get_matching_mod(self, varlist, return_time_ll_depth=False):
+        match_dict = {}
+        for this_var in varlist:
+            self.fvcom_data.load_data([this_var])
+            raw_data = getattr(self.fvcom_data.data, this_var)
+ 
+            # Do horizontal weighting first as largest dimension
+            chosen_horiz = np.sum(raw_data[:,:,self.chosen_mod_nodes] * self.chosen_mod_nodes_weights[np.newaxis, np.newaxis, :], axis=-1)
+
+            # Then by time
+            chosen_time = np.sum(chosen_horiz[self.chosen_mod_times,:] * self.chosen_mod_times_weights[:, np.newaxis, np.newaxis], axis=1)
+
+            # Then by depth
+            chosen_depth = np.sum(chosen_time[:, self.chosen_mod_depths, :] * self.chosen_mod_depths_weights[np.newaxis,:,np.newaxis], axis=2)
+            
+            chosen = chosen_depth.diagonal().diagonal()
+ 
+            obs_data = getattr(self.obs_data.data, this_var)[self.chosen_obs]
+            delattr(self.fvcom_data.data, this_var)
+            match_dict[this_var] = [chosen, obs_data]
+
+        if return_time_ll_depth:
+            tld = [self.obs_data.time.datetime[self.chosen_obs], self.chosen_obs_ll, self.chosen_obs_dep]
+            match_dict = (match_dict, tld)
+
+        return match_dict
+    
+class CtdDB(ValidationDB):
+    """      """
+
+    def get_fr_ctd_comp(self, filereader_str_list, var_list):
+
+        station_str, station_ll, station_dt = self.find_ctd_records(this_filereader)
+         
+        for station, pos, time_dt in zip(station_str, station_ll, station_dt):
+            obs_depths, obs_vals = self.retreive_vars(station, var_names_db)
+            node_ind = this_filereader.closest_node(pos)
+            time_ind = this_filereader.closest_time(time_dt) 
+
+    def find_ctd_records(self, filereader, start_date=None, end_date=None):
+        """
+        
+        Parameters
+        ----------
+        filereader : PyFVCOM filereader object (something with grid.lon, grid.lat, grid.triangles)       
+
+        start_date : datetime, optional
+            
+        end_date : datetime, optional
+        """
+        if start_date is None:
+            start_date = min(filereader.time.datetime)
+        if end_date is None:
+            end_date = max(filereader.time.datetime)
+
+
+        start_year = start_date.year
+        end_year = end_date.year
+
+        poss_stations = np.asarray(self.select_qry('Stations', 'yearStart >= {} and yearEnd <= {}'.format(start_year, end_year)))
+        
+        station_dt = np.asarray([dt.datetime.strptime(this_entry[3], '%Y-%m-%d %H:%M:%S') for this_entry in poss_stations])  
+        chosen_stations = np.logical_and(station_dt >=start_date, station_dt <= end_date)
+        poss_stations = poss_stations[chosen_stations]
+        station_dt = station_dt[chosen_stations]
+
+        station_ll = np.asarray([[float(this_entry[2]), float(this_entry[1])]for this_entry in poss_stations])
+
+        outer_bnd_poly = get_boundary_polygons(filereader.grid.triangles)[0] 
+        domain_poly = sg.Polygon(np.asarray([filereader.grid.lon[outer_bnd_poly], filereader.grid.lat[outer_bnd_poly]]).T)
+        station_pts = [sg.Point(this_pt) for this_pt in station_ll] 
+        station_isin = [domain_poly.contains(this_pt) for this_pt in station_pts] 
+
+        station_dt = station_dt[station_isin]
+        station_ll = station_ll[station_isin]
+        station_str = [this_entry[0] for this_entry in poss_stations[station_isin]]
+
+        for i, this_str in enumerate(station_str):
+            if this_str[0].isdigit():
+                station_str[i] = 'b{}'.format(this_str)
+        
+        return np.asarray(station_str), station_ll, station_dt
+
+    def retreive_vars(self, station_str, var_name_list, ctd_table_cols=None):
+
+        if ctd_table_cols is None:
+            ctd_table_cols = np.asarray(['SequenceNumber', 'Depth', 'OxygenConcentration', 'FluorometerVoltage', 'DownwellingIrradiance', 'OxygenSaturation', 
+                                'Transmittance', 'Attenuance', 'Pressure', 'Salinity','SigmaTheta', 'Temperature', 'ConversionFactor'])
+
+        ctd_raw_data = self.select_qry(station_str, '')
+
+        depth = ctd_raw_data[:, np.squeeze(np.argwhere(ctd_table_cols == 'Depth'))]
+
+        vals = []
+
+        for this_var in var_name_list:
+            var_ind = np.squeeze(np.argwhere(ctd_table_cols == this_var))
+            if var_ind == 0:
+                print('Variable not in ctd table')
+            else:
+                vals.append(ctd_raw_data[:, np.squeeze(np.argwhere(ctd_table_cols == this_var))])
+ 
+        vals = np.asarray(vals).T
+
+        return depth, vals
+
+    def obs_model_comp(self):
+        return 
+
 class TideDB(ValidationDB):
     """ Create a time series database and query it. """
 
@@ -447,7 +754,7 @@ class TideDB(ValidationDB):
             dates, data = None, None
         else:
             return_data = np.asarray(return_data)
-            date_list = [epochsec_to_dt(this_time) for this_time in return_data[:,0]]
+            date_list = [epochsec_to_dt(this_time) for this_time in return_data[:, 0]]
             dates, data = np.asarray(date_list), return_data[:, 1:]
 
         return dates, data
@@ -634,7 +941,7 @@ observations_meta_data = {'buoy_name':'L4', 'year':'2015', 'ctd_new_file_type': 
             'buoy_filepath': , '/data/euryale4/backup/mbe/Data/WCO_data/L4/Buoy_data/l4_cont_data_2015.txt', 'lon':-4.217, 'lat':50.250}
 
 model_filestr_lambda = lambda m: '/data/euryale4/backup/mbe/Models/FVCOM/tamar_v2/run/output/depth_tweak2/2006/{:02d}/tamar_v2_0001.nc'.format(m)
-available_months = np.arange(1,13)
+available_months = np.arange(1, 13)
 model_file_list = [model_filestr_lambda(this_month) for this_month in available_months]
 
 """
@@ -652,10 +959,10 @@ class WCODB(ValidationDB):
         # Insert information into the error flags table
         self._add_sql_strings()
         for this_table, this_str in self.wco_tables.items():
-            self.create_table(this_key, this_val)
-        sites_data = [(0, 'L4',-4.217,50.250, ' '), (1, 'E1',-4.368,50.035,' ')]
+            self.create_table(this_table, this_str)
+        sites_data = [(0, 'L4', -4.217, 50.250, ' '), (1, 'E1', -4.368, 50.035, ' ')]
         self.insert_into_table('sites', sites_data)
-        measurement_type_data = [(0,'CTD measurements'), (1, 'Surface buoy measurements')]
+        measurement_type_data = [(0, 'CTD measurements'), (1, 'Surface buoy measurements')]
         self.insert_into_table('measurement_types', measurement_type_data)
         self.execute_sql('create index date_index on obs (time_int);')
 
@@ -753,8 +1060,8 @@ class WCODB(ValidationDB):
             print('No data available')
         else:
             return_data = np.asarray(return_data)
-            date_list = [epochsec_to_dt(this_time) for this_time in return_data[:,0]]
-            dates, data = np.asarray(date_list), return_data[:,1:]
+            date_list = [epochsec_to_dt(this_time) for this_time in return_data[:, 0]]
+            dates, data = np.asarray(date_list), return_data[:, 1:]
 
         return dates, data
 
@@ -770,7 +1077,7 @@ class WCOObsFile(object):
         if depth is not None:
             self.observation_dict['depth'] = np.tile(depth, len(self.observation_dict['dt_time']))
 
-    def _add_file(self,filename,remove_undated=True):
+    def _add_file(self, filename, remove_undated=True):
         """
         TODO: Add docstring
 
@@ -791,7 +1098,7 @@ class WCOObsFile(object):
             if not remove_undated or 'dt_time' in this_obs:
                 obs_dict_list.append(this_obs)
         rm_file = [os.remove(this_file) for this_file in temp_file_list]
-        return {this_key:np.hstack([this_dict[this_key] for this_dict in obs_dict_list]) for this_key in obs_dict_list[0]}
+        return {this_key: np.hstack([this_dict[this_key] for this_dict in obs_dict_list]) for this_key in obs_dict_list[0]}
 
     def _add_file_part(self, filename):
         """
@@ -806,11 +1113,11 @@ class WCOObsFile(object):
 
         # Load the files, some use semi-colon delimiters, some whitespace...
         if ';' in str(np.loadtxt('temp_header_file.txt', delimiter='no_delimination_needed', dtype=str)):
-            observations_raw = np.loadtxt('temp_file.txt', delimiter=';',dtype=str)
-            observations_header = np.loadtxt('temp_header_file.txt', delimiter=';',dtype=str)
+            observations_raw = np.loadtxt('temp_file.txt', delimiter=';', dtype=str)
+            observations_header = np.loadtxt('temp_header_file.txt', delimiter=';', dtype=str)
         elif ',' in str(np.loadtxt('temp_header_file.txt', delimiter='no_delimination_needed', dtype=str)):
-            observations_raw = np.loadtxt('temp_file.txt', delimiter=',',dtype=str)
-            observations_header = np.loadtxt('temp_header_file.txt', delimiter=',',dtype=str)
+            observations_raw = np.loadtxt('temp_file.txt', delimiter=',', dtype=str)
+            observations_header = np.loadtxt('temp_header_file.txt', delimiter=',', dtype=str)
         else:
             observations_raw = np.loadtxt('temp_file.txt', dtype=str)
             observations_header = np.loadtxt('temp_header_file.txt', dtype=str)
@@ -827,10 +1134,10 @@ class WCOObsFile(object):
             if np.any(np.isin(this_possible, observations_header)):
                 this_col = np.where(np.isin(observations_header, this_possible))[0]
                 if this_var == 'time' or this_var =='date' or this_var=='Jd':
-                    observation_dict[this_var] = np.squeeze(np.asarray(observations_raw[:,this_col], dtype=str))
+                    observation_dict[this_var] = np.squeeze(np.asarray(observations_raw[:, this_col], dtype=str))
                     time_vars.append(this_possible[np.isin(this_possible, observations_header)])
                 else:
-                    observation_dict[this_var] = np.squeeze(np.asarray(observations_raw[:,this_col], dtype=float))
+                    observation_dict[this_var] = np.squeeze(np.asarray(observations_raw[:, this_col], dtype=float))
         if 'date' in observation_dict:
             observation_dict['dt_time'] = self._parse_dates_to_dt(observation_dict, time_vars)
         return observation_dict
@@ -840,9 +1147,12 @@ class WCOObsFile(object):
         TODO: Add docstring
 
         """
-        self.possible_vars = {'temp':np.asarray(['Tv290C', 'SST', ' Mean SST (degC)']), 'salinity':np.asarray(['Sal00', 'Sal', ' Mean SST (degC)']),
-                        'depth':np.asarray(['DepSM']),    'date':np.asarray(['mm/dd/yyyy', 'Year', ' Date (YYMMDD)']),
-                        'julian_day':np.asarray(['Jd']), 'time':np.asarray(['hh:mm:ss', 'Time', ' Time (HHMMSS)'])}
+        self.possible_vars = {'temp': np.asarray(['Tv290C', 'SST', ' Mean SST (degC)']),
+                              'salinity': np.asarray(['Sal00', 'Sal', ' Mean SST (degC)']),
+                              'depth': np.asarray(['DepSM']),
+                              'date': np.asarray(['mm/dd/yyyy', 'Year', ' Date (YYMMDD)']),
+                              'julian_day': np.asarray(['Jd']),
+                              'time': np.asarray(['hh:mm:ss', 'Time', ' Time (HHMMSS)'])}
 
     @staticmethod
     def _parse_dates_to_dt(obs_dict, time_vars):
@@ -894,201 +1204,35 @@ class WCOParseFile(WCOObsFile):
             except ValueError:
                 print('Error in file {}'.format(this_file))
         # Flatten the list of dictionaries to one dictionary
-        self.observation_dict = {this_key:np.hstack([this_dict[this_key] for this_dict in observation_dict_list]) for this_key in observation_dict_list[0]}
+        self.observation_dict = {this_key: np.hstack([this_dict[this_key] for this_dict in observation_dict_list]) for this_key in observation_dict_list[0]}
         self.observation_dict['dt_time'] = np.hstack(dt_list)
 
-
-class CSVFormatter(object):
-    """
-    TODO: Add docstring and code!
-
-    """
-
-    def __init__(self, filename):
-        """
-        TODO: Add docstring and code!
-
-        """
-        pass
-
-
-class CompareData(object):
-    """
-    Compare the WCO data.
-
-    """
-
-    def __init__(self, buoy_list, model_ident, wco_database, max_time_threshold=dt.timedelta(hours=1), max_depth_threshold = 100, probe_depths=None):
-        self.model_ident = model_ident
-        self.database_obj = wco_database
-        self.buoy_list = buoy_list
-
-        self.model_data = {}
-        if probe_depths is not None:
-            for this_ind, this_buoy in enumerate(buoy_list):
-                self.model_data[this_buoy]['depth'] = probe_depths[this_ind]
-
-        self.observations = {}
-        for this_buoy in self.buoy_list:
-            self.observations[this_buoy] = {}
-
-    def retrieve_file_data(self):
-        """
-        TODO: Add docstring
-
-        """
-        pass
-
-    def retrieve_obs_data(self, buoy_name, var, measurement_type=None):
-        """
-        TODO: Add docstring
-
-        """
-        if not hasattr(self.model_date_mm):
-            print('Retrieve model data first')
-            return
-        obs_dt, obs_raw = self.database_obj.get_obs_data(buoy_name, var, self.model_date_mm[0], self.model_date_mm[1], measurement_type)
-        obs_depth = obs_raw[:,0]
-        obs_var = obs_raw[:,1]
-        self.observations[buoy_name][var] = obs_dict
-
-    def get_comp_data_interpolated(self, buoy_name, var_list):
-        """
-        TODO: Add docstring
-
-        """
-        if not hasattr(self, comp_dict):
-            self.comp_dict = {}
-
-        obs_dates = np.unique([this_date.date() for this_date in observations['time']])
-        obs_comp = {}
-        for this_ind, this_obs_time in enumerate(obs_dates):
-            if this_obs_date >= model_time_mm[0].date() and this_obs_date <= model_time_mm[1].date():
-                this_obs_choose = [this_time.date() == this_obs_date for this_time in self.observations[buoy_name]['dt_time']]
-                t
-                this_time_before, this_time_after = self.model_closest_both_times(this_obs_time)
-
-                this_obs_deps = self.observations[buoy_name]['depth'][this_obs_choose]
-                for var in var_list:
-                    this_obs = self.observations[buoy_name][var][this_obs_choose]
-                    this_model = np.squeeze(fvcom_data_reader.data.temp[this_time_close,...])
-                    this_model_interp = np.squeeze(np.interp(this_obs_deps, model_depths, this_model))
-
-                    try:
-                        obs_comp[var].append(this_comp)
-                    except KeyError:
-                        obs_comp[var] = this_comp
-
-                    max_obs_depth.append(np.max(this_obs_deps))
-
-        self.comp_dict[buoy_name] = obs_comp
-
-    def comp_data_nearest(self, buoy_name, var_list):
-        """
-        TODO: Add docstring and code!
-
-        """
-        pass
-
-    def model_closest_time(self):
-        """
-        TODO: Add docstring and code!
-
-        """
-        pass
-
-
-class CompareDataFileReader(CompareData):
-    def retrieve_file_data(self):
-        """
-        TODO: Add docstring
-
-        """
-        where_str = 'buoy_name in ('
-        for this_buoy in self.buoy_list:
-            where_str+=this_buoy + ','
-        where_str = where_str[0:-1] + ')'
-        buoy_lat_lons = self.wco_database.select_query('sites', where_str, 'buoy_name, lon, lat')
-
-        first_file = True
-        model_all_dicts = {}
-
-        for this_file in self.file_list:
-            if first_file:
-                fvcom_data_reader = FileReader(this_file, ['temp', 'salinity'])
-                close_node = []
-                for this_buoy_ll in buoy_lat_lons:
-                    close_node.append()
-
-                model_depths = fvcom_data_reader.grid.siglay * fvcom_data_reader.grid.h * -1
-
-                for this_buoy in self.buoy_list:
-                    model_all_dicts[this_buoy] = {'dt_time': mod_times, 'temp': mod_t_vals, 'salinity': mod_s_vals}
-
-                first_file = False
-            else:
-                fvcom_data_reader = FileReader(this_file, ['temp', 'salinity'], dims={'node':[close_node]})
-                for this_buoy in self.buoy_list:
-                    model_all_dicts
-
-        model_depths = fvcom_data_reader.grid.siglay * fvcom_data_reader.grid.h * -1
-        for this_buoy in self.buoy_list:
-            model_all_dicts[this_buoy]['depth'] = model_dp
-            self.model_data[this_buoy] = model_all_dicts[this_buoy]
-
-    def model_closest_time(self, find_time):
-        """
-        TODO: Add docstring and code!
-
-        """
-        return closest_time
-
-
-class CompareDataProbe(CompareData):
-    """
-    TODO: Add docstring
-
-    """
-
-    def retrieve_file_data(self):
-        """
-        TODO: Add docstring
-
-        """
-        for this_buoy in self.buoy_list:
-            t_filelist = []
-            s_filelist = []
-            for this_dir in self.model_ident:
-                t_filelist.append(this_dir + this_buoy + '_t1.dat')
-                s_filelist.append(this_dir + this_buoy + '_s1.dat')
-            mod_times, mod_t_vals, mod_pos = pf.read.read_probes(t_filelist, locations=True, datetimes=True)
-            mod_times, mod_s_vals, mod_pos = pf.read.read_probes(s_filelist, locations=True, datetimes=True)
-            model_dict = {'dt_time':mod_times, 'temp':mod_t_vals, 'salinity':mod_s_vals}
-            self.model_data[this_buoy] = model_dict
 
 
 class CompareICES(object):
     """
-    A class for comparing FVCOM(-ERSEM) models to ICES bottle data. It is a fvcom-ised and class-ised version of code written 
-    by Momme Butenschon for NEMO output.
+    A class for comparing FVCOM(-ERSEM) models to ICES bottle data. It is a fvcom-ised and class-ised version of code
+    written by Momme Butenschon for NEMO output.
 
-    The ICES data used is in a premade h5 file. This how it was inherited and should be updated to a form we can reproduce. 
-	Default ICES variables: 'TEMP','PSAL', 'DOXY(umol/l)', 'PHOS(umol/l)', 'SLCA(umol/l)', 'NTRA(umol/l)', 'AMON(umol/l)',
-                            'PHPH', 'ALKY(mmol/l)', 'CPHL(mg/m^3)'
+    The ICES data used is in a premade h5 file. This how it was inherited and should be updated to a form we can
+    reproduce.
+
+    Default ICES variables: 'TEMP', 'PSAL', 'DOXY(umol/l)', 'PHOS(umol/l)', 'SLCA(umol/l)', 'NTRA(umol/l)',
+	                        'AMON(umol/l)', 'PHPH', 'ALKY(mmol/l)', 'CPHL(mg/m^3)'
 
     Example
     -------
-    from PyFVCOM.validation import ICES_comp
+    from PyFVCOM.validation import CompareICES
     import matplotlib.pyplot as plt
 
-    datafile="/data/euryale4/backup/momm/Data/ICES-data/CTD-bottle/EX187716.averaged.sorted.reindexed.h5"
-    modelroot="/data/euryale2/scratch/mbe/Models_2/FVCOM/rosa/output"
+    datafile="/data/sthenno1/backup/mbe/Data/ICES-data/CTD-bottle/EX187716.averaged.sorted.reindexed.h5"
+    modelroot="/data/sthenno1/backup/fvcom_outputs/rosa/run/output/aqua_v16_ersem/"
     years=[2005]
-    months = [2,3]
-    modelfile=lambda y,m: "{}/{}/{:02d}/aqua_v16_0001.nc".format(modelroot,y,m)
+    months = [5]
+    modelfile=lambda y, m: "{}/{}/{:02d}/aqua_v16_avg_0001.nc".format(modelroot, y, m)
     modelfilelist = [modelfile(years[0], this_month) for this_month in months]
 
-    test_comp = ICES_comp(modelfilelist, datafile, noisy=True)
+    test_comp = CompareICES(modelfilelist, datafile, noisy=True, daily_avg=True)
     temp_ices, temp_model = test_comp.get_var_comp('TEMP')
     plt.scatter(temp_model, temp_ices)
     plt.xlabel('Modelled temperature')
@@ -1098,7 +1242,7 @@ class CompareICES(object):
     To Do
     -----
     Make script to generate the ICES datafile
-    Parrellelelise
+    Parallelise
     Add plotting
     Change null value to non numeric
 
@@ -1197,7 +1341,7 @@ class CompareICES(object):
             ices_lon = np.asarray(self.ices_data['lon'])[~remove_data]
             ices_lat = np.asarray(self.ices_data['lat'])[~remove_data]
 
-            ices_data = {var:ices_data, 'depths':ices_depths, 'dates':ices_dates, 'lon':ices_lon, 'lat':ices_lat}    
+            ices_data = {var: ices_data, 'depths': ices_depths, 'dates': ices_dates, 'lon': ices_lon, 'lat': ices_lat}
         
         return ices_data, model_data
 
@@ -1208,7 +1352,7 @@ class CompareICES(object):
         """
 
         # Read the ICES datafile
-        df=read_hdf(self.ices_file,"df")
+        df = read_hdf(self.ices_file, "df")
 
         start_step_len = 1000000
         end_step_len = 10
@@ -1220,12 +1364,12 @@ class CompareICES(object):
             start_step_len = start_step_len/10
         df = df[int(start_index):]
 
-        for n,sample in df.iterrows():
+        for n, sample in df.iterrows():
             if self.noisy:
                 print('ICES sample {}'.format(n))
 
             h = int(np.floor(sample['Hr']/100))
-            sample_dt = dt.datetime(int(sample['Year']),int(sample['Mnth']),int(sample['Dy']),h,int(sample['Hr'] - h*100))
+            sample_dt = dt.datetime(int(sample['Year']), int(sample['Mnth']), int(sample['Dy']), h, int(sample['Hr'] - h * 100))
             if sample_dt > np.max(self.zeta_filereader.time.datetime):
                 break
             
@@ -1236,7 +1380,7 @@ class CompareICES(object):
                     node_ind = self.zeta_filereader.closest_node([sample['Longdeg'], sample['Latdeg']], haversine=True)
 
                     if self.daily_avg: # For daily averages match by day, otherwise use nearest time
-                        sample_dt = dt.datetime(int(sample['Year']),int(sample['Mnth']),int(sample['Dy']))
+                        sample_dt = dt.datetime(int(sample['Year']), int(sample['Mnth']), int(sample['Dy']))
 
                     model_time_ind = self.zeta_filereader.closest_time(sample_dt)
                     model_dt = self.zeta_filereader.time.datetime[model_time_ind]
@@ -1307,16 +1451,16 @@ class CompareICES(object):
                 else:
                     return
             this_day_index = np.where(np.asarray(current_modelfile_dt) == this_day)[0]
-            this_day_fr = FileReader(self.model_files[current_modelfile_ind], self.model_varkeys, 
-                                                                    dims={'time':np.arange(np.min(this_day_index),np.max(this_day_index)+1)}) 
+            this_day_fr = FileReader(self.model_files[current_modelfile_ind], self.model_varkeys,
+                                     dims={'time': np.arange(np.min(this_day_index), np.max(this_day_index) + 1)})
             this_day_obs_inds = np.where(np.asarray([this_dt.date() for this_dt in self.ices_data['time_dt']]) == this_day)[0]
-    
+
             for this_record_ind in this_day_obs_inds:
                 for key in self.var_keys:
                     if self.ices_data[key][this_record_ind] >-9.99e9:
                         this_model_key = self.ices_model_conversion[key]
                         space_ind = self.model_data['node_ind'][this_record_ind]
-                        dep_ind = self.model_data['z_ind'][this_record_ind] 
+                        dep_ind = self.model_data['z_ind'][this_record_ind]
                         time_ind = this_day_fr.closest_time(self.ices_data['time_dt'][this_record_ind])
 
                         if "+" in this_model_key:
@@ -1353,8 +1497,8 @@ class CompareICES(object):
         TODO: Add docstring
 
         """
-        self.var_keys = ['TEMP','PSAL', 'DOXY(umol/l)', 'PHOS(umol/l)', 'SLCA(umol/l)', 'NTRA(umol/l)', 'AMON(umol/l)',
-                            'PHPH', 'ALKY(mmol/l)', 'CPHL(mg/m^3)']
+        self.var_keys = ['TEMP', 'PSAL', 'DOXY(umol/l)', 'PHOS(umol/l)', 'SLCA(umol/l)', 'NTRA(umol/l)', 'AMON(umol/l)',
+                         'PHPH', 'ALKY(mmol/l)', 'CPHL(mg/m^3)']
 
     def _checkSample(self, sample):
         """
@@ -1368,7 +1512,7 @@ class CompareICES(object):
         return hasData
 
     @staticmethod
-    def _checkDepth(z,dep_lays_choose):
+    def _checkDepth(z, dep_lays_choose):
         """
         TODO: Add docstring
 

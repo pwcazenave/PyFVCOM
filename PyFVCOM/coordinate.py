@@ -94,7 +94,7 @@ def _get_zone_number(longitude, latitude):
         elif longitude <= 42:
             return 37
 
-    return int((longitude + 180) / 6) + 1
+    return int(((longitude + 180) % 360) / 6) + 1
 
 
 def _get_zone_letter(latitude):

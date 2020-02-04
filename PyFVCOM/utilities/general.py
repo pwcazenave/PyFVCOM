@@ -1,6 +1,6 @@
 import itertools
 import numpy as np
-import itertools
+import warnings
 from html.parser import HTMLParser
 from re import sub
 from sys import stderr
@@ -201,6 +201,7 @@ def cleanhtml(text):
         print_exc(file=stderr)
         return text
 
+
 def cart2pol(x, y, degrees=False):
     """
     Apparantly this doesn't exist in numpy already. Originally from SO.
@@ -210,6 +211,7 @@ def cart2pol(x, y, degrees=False):
     if degrees:
         phi = np.mod(np.rad2deg(phi), 360)
     return(rho, phi)
+
 
 def pol2cart(rho, phi, degrees=False):
     """
@@ -221,3 +223,16 @@ def pol2cart(rho, phi, degrees=False):
     x = rho * np.cos(phi)
     y = rho * np.sin(phi)
     return(x, y)
+
+
+def _warn(*args, **kwargs):
+    """ Custom warning function which doesn't print the code to screen. """
+    # Mainly taken inspiration from https://stackoverflow.com/questions/2187269.
+    msg = warnings.WarningMessage(*args, **kwargs)
+    print(f'{msg.message} ({msg.filename}:{msg.lineno})')
+
+
+# Update the warnings module with the custom warning function and then make warn an object in this module.
+warnings.showwarning = _warn
+warn = warnings.warn
+

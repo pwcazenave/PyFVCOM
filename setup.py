@@ -1,12 +1,13 @@
 from setuptools import setup
 
-version = '2.1.3'
+version = '2.2.0'
 
 setup(
     name='PyFVCOM',
     packages=['PyFVCOM', 'PyFVCOM.ctd', 'PyFVCOM.grid', 'PyFVCOM.utilities'],
     version=version,
-    description=("PyFVCOM is a collection of various tools and utilities which can be used to extract, analyse and plot input and output files from FVCOM."),
+    description=("PyFVCOM is a collection of various tools which can be used to generate inputs files and interact "
+                 "with FVCOM outputs."),
     author='Pierre Cazenave',
     author_email='pica@pml.ac.uk',
     url='https://gitlab.ecosystem-modelling.pml.ac.uk/fvcom/PyFVCOM',
@@ -14,6 +15,7 @@ setup(
     keywords=['fvcom', 'unstructured grid', 'mesh'],
     license='MIT',
     platforms='any',
-    install_requires=['jdcal', 'lxml', 'matplotlib', 'netCDF4', 'networkx', 'numpy>=1.13.0', 'pandas', 'pyproj', 'pytz', 'scipy', 'pyshp', 'UTide', 'shapely'],
+    install_requires=['jdcal', 'lxml', 'matplotlib', 'netCDF4', 'networkx', 'numpy>=1.13.0', 'pandas', 'xlsxwriter',
+                      'pyproj', 'pytz', 'scipy', 'pyshp', 'UTide', 'shapely', 'descartes'],
     classifiers=[]
 )

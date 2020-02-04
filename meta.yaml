@@ -1,0 +1,46 @@
+{% set name = "PyFVCOM" %}
+{% set version = "2.2.0" %}
+
+package:
+  name: "{{ name|lower }}"
+  version: "{{ version }}"
+
+build:
+  number: 0
+  script: "{{ PYTHON }} -m pip install . --no-deps --ignore-installed -vv "
+
+source:
+  path: ./
+  
+requirements:
+  host:
+    - python
+    - pip
+    - numpy>=1.15
+  run:
+    - python
+    - ipython
+    - numpy>=1.15
+    - jdcal
+    - lxml
+    - matplotlib
+    - basemap
+    - cartopy
+    - netCDF4
+    - networkx
+    - pandas
+    - xlsxwriter
+    - pyproj
+    - pytz
+    - scipy
+    - pyshp
+    - UTide
+    - shapely
+    - descartes
+
+about:
+  home: https://gitlab.ecosystem-modelling.pml.ac.uk/fvcom/PyFVCOM
+  license: MIT
+  license_family: MIT
+  summary: PyFVCOM is a collection of various tools which can be used to generate inputs files and interact with FVCOM outputs.
+

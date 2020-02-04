@@ -937,12 +937,12 @@ def zbar(data, levels):
 
     """
 
-    data = np.transpose(data, [1,0,2])
+    data = np.transpose(data, [1, 0, 2])
 
     if len(levels.shape) > 2:
-        levels = np.transpose(levels, [1,0,2])
+        levels = np.transpose(levels, [1, 0, 2])
     else:
-        levels = np.tile(levels[:,np.newaxis,:], [1,data.shape[1],1])
+        levels = np.tile(levels[:, np.newaxis, :], [1, data.shape[1], 1])
 
     return np.average(data, axis=0, weights=levels)
 
