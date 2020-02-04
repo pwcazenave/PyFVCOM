@@ -26,6 +26,7 @@ from PyFVCOM.grid import Domain, grid_metrics, read_fvcom_obc, nodes2elems
 from PyFVCOM.grid import OpenBoundary, find_connected_elements, mp_interp_func
 from PyFVCOM.grid import find_bad_node, element_side_lengths, reduce_triangulation
 from PyFVCOM.grid import write_fvcom_mesh, connectivity, haversine_distance, subset_domain
+from PyFVCOM.grid import expand_connected_nodes
 from PyFVCOM.read import FileReader, _TimeReader, control_volumes
 from PyFVCOM.utilities.general import flatten_list, PassiveStore, warn
 from PyFVCOM.utilities.time import date_range
@@ -58,6 +59,7 @@ class Model(Domain):
         read_nemo_rivers
         read_ea_river_temperature_climatology
         check_rivers
+        mask_river_estuary
         add_groundwater
         add_probes
         add_stations
@@ -1556,6 +1558,36 @@ class Model(Domain):
         # Update the dimension
         self.dims.river = len(self.river.node)
 
+
+    def mask_river_estuary(self, nn_level = 2):
+        """
+        Helper function to use river nodes array to make model mask of river 
+        estuary area points. 
+        The mask is a combination of river nodes and neighbours.
+        This can be used for setting a minimum depth in bathymetry at river 
+        entry points.
+
+        Parameters
+        ----------
+        nn_level : int, optional
+            The level of node connecting neighbours can be specified. This can 
+            recersively select a larger area around the entry point.
+            Set to 0 is just the river nodes. Set to 1 and above is river nodes 
+            and the specified level of connection.
+
+        Returns
+        -------
+        riv_estuary : np.ndarray bool
+            A boolean array the size of self.grid.nodes where True indictes a
+            a river node or connected node. False indictes unconnected nodes.
+        """
+
+        riv_estuary = expand_connected_nodes(
+                self.grid.nodes, self.grid.triangles, 
+                self.river.node, nn_level)
+        return riv_estuary
+
+
     def _add_river_col(self, var_name, col_to_copy, no_cols_to_add):
         """
         Helper function to copy the existing data for river variable to a new splinter river (when they are split for
@@ -2195,6 +2227,9 @@ class Model(Domain):
     def add_nests(self, nest_levels, nesting_type=3, verbose=False):
         """
         Add a set of nested levels to each open boundary.
+        Boundary levels are added in parallel and next to existing boundary 
+        nodes, lining the boundary inside the domain model. These levels 
+        are then weighted. 
 
         Parameters
         ----------
@@ -4257,10 +4292,13 @@ class Nest(object):
 
     def add_level(self):
         """
-        Function to add a nested level which is connected to the existing nested nodes and elements.
+        Function to add a nested level which is connected parallel to the 
+        existing nested nodes and elements. This function is used by 
+        self.add_nests()
 
-        This is useful for generating nested inputs from other model inputs (e.g. a regularly gridded model) in
-        conjunction with PyFVCOM.grid.OpenBoundary.add_nested_forcing().
+        This is useful for generating nested inputs from other model inputs 
+        (e.g. a regularly gridded model) in conjunction with 
+        PyFVCOM.grid.OpenBoundary.add_nested_forcing()).
 
         Provides
         --------
@@ -4314,17 +4352,21 @@ class Nest(object):
 
     def add_weights(self, power=0):
         """
-        For the open boundaries in self.boundaries, add a corresponding weight for the nodes and elements to each one.
+        For the open boundaries in self.boundaries, add a corresponding weight 
+        for the nodes and elements to each one. This makes sense if there are 
+        levels of boundary forcing in parallel to the external boundary nodes. 
+        This function is used by self.add_nests()
 
         Parameters
         ----------
         power : float, optional
-            Give an optional power with which weighting decreases with each successive nest. Defaults to 0 (i.e.
-            linear).
+            Give an optional power with which weighting decreases with each 
+            successive nest. Defaults to 0 (i.e. linear).
 
         Provides
         --------
-        Populates the self.boundaries open boundary objects with the relevant weight_node and weight_element arrays.
+        Populates the self.boundaries open boundary objects with the relevant 
+        weight_node and weight_element arrays.
 
         """
 
