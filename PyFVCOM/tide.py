@@ -22,6 +22,7 @@ from datetime import datetime
 
 from PyFVCOM.grid import find_nearest_point, unstructured_grid_depths
 from PyFVCOM.read import MFileReader
+from PyFVCOM.preproc import RegularReader
 from PyFVCOM.utilities.general import fix_range, warn
 from PyFVCOM.utilities.time import julian_day
 
@@ -1546,7 +1547,7 @@ def _analyse_harmonics(comm, times, elevations, domain_lats, constit, predict=Fa
 
 
 
-def fvcomOutputHarmonicsMPI(output_file, model_files, analysisvars,  dims={}, constit = ('M2', 'S2', 'N2', 'K2', 'K1', 'O1', 'P1', 'Q1', 'M4', 'MS4', 'MN4'), debug=[], report=10, dump_raw=False, predict=False, noisy=True):
+def fvcomOutputHarmonicsMPI(output_file, model_files, analysisvars,  dims={}, constit = ('M2', 'S2', 'N2', 'K2', 'K1', 'O1', 'P1', 'Q1', 'M4', 'MS4', 'MN4'), debug=[], report=10, dump_raw=False, predict=False, noisy=True, file_type='fvcom'):
 
     """
 
@@ -1570,6 +1571,11 @@ def fvcomOutputHarmonicsMPI(output_file, model_files, analysisvars,  dims={}, co
     dump_raw : boolean
 
     predict : boolean
+    
+    noisy : boolean
+
+    filetype : string
+        Either 'fvcom' or '
 
     """
     if not use_MPI:
@@ -1595,7 +1601,7 @@ def fvcomOutputHarmonicsMPI(output_file, model_files, analysisvars,  dims={}, co
     latitudes = None
 
     if rank == 0:
-        fvcom = MFileReader(model_files, dims=dims)
+        fvcom = _load_multi_files(file_list, file_type, dims=dims)
         
         if 'memory' in debug:
             print('01 : rank {}: memory usage (loaded data): {} MB'.format(rank, pid.memory_info().rss >> 20), flush=True)
@@ -1670,7 +1676,7 @@ def fvcomOutputHarmonicsMPI(output_file, model_files, analysisvars,  dims={}, co
                 current_dims = copy.copy(dims)
                 current_dims.update({'siglay': [zlev]})  # iterable for MFileReader!
 
-                fvcom = MFileReader(model_files, variables=var, dims=current_dims)
+                fvcom = _load_multi_files(model_files, file_type, dims=current_dims, var=var)
 
                 # Drop the raw data into the netCDF now.
                 if dump_raw:
@@ -1826,3 +1832,23 @@ def fvcomOutputHarmonicsMPI(output_file, model_files, analysisvars,  dims={}, co
 
     if len(debug) > 0 and rank == 0:
         print('Done.')
+
+
+def _load_multi_files(file_list, file_type, dims=None, var=None):
+
+    if filetype == 'fvcom':
+        return MFileReader(file_list, var, dims=dims)
+
+    else:
+        reader = RegularReader(file_list, dims=dims)
+        reader.grid.lon = reader.grid.lon.ravel()
+        reader.grid.lat = reader.grid.lat.ravel()
+     
+        if var is not None:
+            old_var = getattr(reader.data, var)
+            setattr(reader.data, var, old_var.reshape(old_var.shape[0], old_var.shape[1], old_var.shape[2]*old_var.shape[3]))
+
+        reader.dims.node = len(reader.grid.lon)
+        reader.dims.nele = len(reader.grid.lat)
+
+        return reader
