@@ -231,8 +231,8 @@ class MPIRegularInterpolateWorker():
                 # retriangulate for each depth layer, can be multiple if there are split regions and interpolate
                 for this_depth_lay_ind, this_depth_lay in enumerate(self.regular_grid.dep_lays):
                     if self._noisy:
-                        print('Rank {}: Time step {}, Depth {}'.format(self.rank, this_t, this_depth_lay_ind))
-                    this_depth_layer_nodes = np.where(self.fvcom_grid.total_depth[this_t, :] >= this_depth_lay)[0]
+                        print('Rank {}: Time step {} Depth {}'.format(self.rank, this_t, this_depth_lay_ind))
+                    this_depth_layer_nodes = np.where(self.fvcom_grid.total_depth[this_t,:] >=this_depth_lay)[0]
                     if this_depth_layer_nodes.size:
                         this_depth_tri = reduce_triangulation(self.fvcom_grid.triangles, this_depth_layer_nodes)
 
