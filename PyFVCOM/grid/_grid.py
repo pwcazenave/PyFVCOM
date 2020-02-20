@@ -989,7 +989,7 @@ class Domain(object):
 
         return isintriangle(tri_x, tri_y, x, y)
 
-    def in_domain(self, x, y):
+    def in_domain(self, x, y, z=None, z_meth='nearest_neighbour'):
         """
         Identify if point or array of points (x,y) is within the domain
 
@@ -998,6 +998,13 @@ class Domain(object):
         x,y : float or list like
             The position in spherical coordinates.
         
+        z : Optional, float or list like
+            The depth, positive down relative to surface.
+
+        z_meth : Optional, str
+            To determine if a point is within the bathymetry it has to be interpolated to that 
+            point. Methods for doing this are 'nearest_neighbour' or [others yet to be implemented]
+
         Returns
         -------
         inside : bool or boolean array
@@ -1007,8 +1014,27 @@ class Domain(object):
 
         tri = Triangulation(self.grid.lon, self.grid.lat, self.grid.triangles)
         finder = tri.get_trifinder()
-        
-        return finder(x,y) != -1
+        in_domain_xy = finder(x,y) != -1
+
+        if z is not None:        
+            if z_meth == 'nearest_neighbour':
+                 
+                node_dist = self.closest_node(np.asarray([x,y]), return_dists=True)
+                ele_dist = self.closest_element(np.asarray([x,y]), return_dists=True)
+
+                node_check = np.logical_and(in_domain_xy, node_dist[1] <= ele_dist[1])
+                ele_check = np.logical_and(in_domain_xy, ele_dist[1] < node_dist[1])
+
+                in_domain_xy[node_check] = z[node_check] <= self.grid.h[node_dist[0][node_check]]
+                in_domain_xy[ele_check] = z[ele_check] <= self.grid.h_center[ele_dist[0][ele_check]]
+                
+            else:
+                print('Other interpolation methods not implemented yet')
+                return None
+
+        return in_domain_xy
+
+
 
     def which_element(self, x, y):
         """
