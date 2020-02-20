@@ -628,7 +628,7 @@ class Domain(object):
         return (a for a in self.__dict__.keys() if not a.startswith('_'))
 
     @staticmethod
-    def _closest_point(x, y, lon, lat, where, threshold=np.inf, vincenty=False, haversine=False):
+    def _closest_point(x, y, lon, lat, where, threshold=np.inf, vincenty=False, haversine=False, return_dists=False):
         """
         Find the index of the closest node to the supplied position (x, y). Set `cartesian' to True for cartesian
         coordinates (defaults to spherical).
@@ -653,6 +653,8 @@ class Domain(object):
         haversine : bool, optional
             Use the simpler but much faster Haversine distance calculation. Allows specification of point in lon/lat
             but threshold in metres.
+        return_dists : bool, optional
+            Return the distance to the identified closest point as well as index, units are as for threshold
 
         Returns
         -------
@@ -669,9 +671,12 @@ class Domain(object):
         # vincenty are both False), then we can use the quick find_nearest_point function; if either of haversine or
         # vincenty have been given, we need to use the distance conversion functions, which are slower.
         if not vincenty and not haversine:
-            _, _, _, index = find_nearest_point(x, y, *where, maxDistance=threshold)
+            _, _, dist, index = find_nearest_point(x, y, *where, maxDistance=threshold)
             if np.any(np.isnan(index)):
                 index[np.isnan(index)] = None
+
+            if return_dists:
+                index = [index, dist]
 
         # Note: this is really slow! Computing the distances between the entire grid and the point of interest is
         # very slow. There must be a faster way of doing this! which fall inside the `where' bounding box.
@@ -690,10 +695,13 @@ class Domain(object):
                     index = np.argmin(dist)
                 else:
                     index = None
+        
+            if return_dists:
+                index = [index, dist.min()]
 
         return index
 
-    def closest_node(self, where, cartesian=False, threshold=np.inf, vincenty=False, haversine=False):
+    def closest_node(self, where, cartesian=False, threshold=np.inf, vincenty=False, haversine=False, return_dists=False):
         """
         Find the index of the closest node to the supplied position (x, y). Set `cartesian' to True for cartesian
         coordinates (defaults to spherical).
@@ -726,9 +734,9 @@ class Domain(object):
         else:
             x, y = self.grid.lon, self.grid.lat
 
-        return self._closest_point(x, y, self.grid.lon, self.grid.lat, where, threshold=threshold, vincenty=vincenty, haversine=haversine)
+        return self._closest_point(x, y, self.grid.lon, self.grid.lat, where, threshold=threshold, vincenty=vincenty, haversine=haversine, return_dists=return_dists)
 
-    def closest_element(self, where, cartesian=False, threshold=np.inf, vincenty=False, haversine=False):
+    def closest_element(self, where, cartesian=False, threshold=np.inf, vincenty=False, haversine=False, return_dists=False):
         """
         Find the index of the closest element to the supplied position (x, y). Set `cartesian' to True for cartesian
         coordinates (defaults to spherical).
@@ -761,7 +769,7 @@ class Domain(object):
         else:
             x, y = self.grid.lonc, self.grid.latc
 
-        return self._closest_point(x, y, self.grid.lonc, self.grid.latc, where, threshold=threshold, vincenty=vincenty, haversine=haversine)
+        return self._closest_point(x, y, self.grid.lonc, self.grid.latc, where, threshold=threshold, vincenty=vincenty, haversine=haversine, return_dists=return_dists)
 
     def horizontal_transect_nodes(self, positions):
         """
