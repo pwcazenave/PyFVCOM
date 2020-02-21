@@ -989,7 +989,7 @@ class Domain(object):
 
         return isintriangle(tri_x, tri_y, x, y)
 
-    def in_domain(self, x, y, z=None, z_meth='nearest_neighbour'):
+    def in_domain(self, x, y, z=None, z_meth='nearest_neighbour', cartesian=False):
         """
         Identify if point or array of points (x,y) is within the domain
 
@@ -1012,16 +1012,22 @@ class Domain(object):
 
         """
 
-        tri = Triangulation(self.grid.lon, self.grid.lat, self.grid.triangles)
+        if cartesian:
+            grid_x = self.grid.x
+            grid_y = self.grid.y
+        else:
+            grid_x = self.grid.lon
+            grid_y = self.grid.lat
+
+        tri = Triangulation(grid_x, grid_y, self.grid.triangles)
         finder = tri.get_trifinder()
         in_domain_xy = finder(x,y) != -1
 
         if z is not None:        
             if z_meth == 'nearest_neighbour':
                  
-                node_dist = self.closest_node(np.asarray([x,y]), return_dists=True)
-                ele_dist = self.closest_element(np.asarray([x,y]), return_dists=True)
-
+                node_dist = self.closest_node(np.asarray([x,y]), cartesian=cartesian, return_dists=True)
+                ele_dist = self.closest_element(np.asarray([x,y]), cartesian=cartesian, return_dists=True)
                 node_check = np.logical_and(in_domain_xy, node_dist[1] <= ele_dist[1])
                 ele_check = np.logical_and(in_domain_xy, ele_dist[1] < node_dist[1])
 
