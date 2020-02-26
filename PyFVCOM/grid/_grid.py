@@ -989,7 +989,7 @@ class Domain(object):
 
         return isintriangle(tri_x, tri_y, x, y)
 
-    def in_domain(self, x, y, z=None, z_meth='nearest_neighbour', cartesian=False):
+    def in_domain(self, x, y, z=None, z_meth='barycentric', cartesian=False):
         """
         Identify if point or array of points (x,y) is within the domain
 
@@ -1034,6 +1034,12 @@ class Domain(object):
                 in_domain_xy[node_check] = z[node_check] <= self.grid.h[node_dist[0][node_check]]
                 in_domain_xy[ele_check] = z[ele_check] <= self.grid.h_center[ele_dist[0][ele_check]]
                 
+            elif z_meth == 'barycentric':
+                xy_red = np.asarray([x,y]).T[in_domain_xy]
+                interped_h = interpolate_node_barycentric(xy_red, self.grid.h, grid_x, grid_y, self.grid.triangles)
+                in_depth = z[in_domain_xy] <= interped_h
+                in_domain_xy[in_domain_xy==True] = in_depth
+
             else:
                 print('Other interpolation methods not implemented yet')
                 return None
@@ -5633,3 +5639,75 @@ class GraphFVCOMdepth(Graph):
 
         return np.asarray(self.node_index[np.asarray(red_node_list)])
 
+
+
+def get_barycentric_coords(x, y,x_tri, y_tri):
+    """ Get barycentric coordinates.
+    
+    Compute and return barycentric coordinates for the point (x,y) within the
+    triangle defined by x/y coordinates stored in the arrays x_tri and y_tri.
+     
+    Code by James Clark from PyLAG
+
+    Parameters:
+    -----------
+    x : float  
+        x-position.
+    
+    y : float
+        y-position.
+    
+    x_tri : C array, float
+        Triangle x coordinates.
+        
+    y_tri : C array, float
+        Triangle y coordinates.
+    
+    Returns:
+    --------
+
+    phi : C array, float
+        Barycentric coordinates.
+    """
+
+    a1 = x_tri[1] - x_tri[0]
+    a2 = y_tri[2] - y_tri[0]
+    a3 = y_tri[1] - y_tri[0]
+    a4 = x_tri[2] - x_tri[0]
+
+    # Determinant
+    det = a1 * a2 - a3 * a4
+
+    phi = [0,0,0]
+    # Transformation to barycentric coordinates
+    phi[2] = (a1*(y - y_tri[0]) - a3*(x - x_tri[0]))/det
+    phi[1] = (a2*(x - x_tri[2]) - a4*(y - y_tri[2]))/det
+    phi[0] = 1.0 - phi[1] - phi[2]
+
+    return phi
+
+def _get_ele_nodes(positions, x, y, triangles):
+    tri = Triangulation(x, y, triangles)
+    finder = tri.get_trifinder()
+    eles = finder(positions[:,0], positions[:,1])
+    return triangles[eles,:]                
+
+
+def _interpolate_within_element(var, phi):
+    return var[0] * phi[0] +  var[1] * phi[1] + var[2] * phi[2]
+
+
+def interpolate_node_barycentric(positions, data, x, y, triangles):
+    """
+    Interpolate linearly from node values to positions using barycentric coordinates.
+    This is to mimic the functions in PyLAG
+
+    """
+    position_ele_nodes = _get_ele_nodes(positions, x, y, triangles)
+
+    interped_data = []
+    for this_pos, this_nodes in zip(positions, position_ele_nodes):
+        this_phi = get_barycentric_coords(this_pos[0], this_pos[1], x[this_nodes], y[this_nodes])
+        interped_data.append(_interpolate_within_element(data[this_nodes], this_phi))
+
+    return np.asarray(interped_data)
