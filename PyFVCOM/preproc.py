@@ -350,7 +350,7 @@ class Model(Domain):
 
         setattr(self.grid, 'roughness', roughness)
 
-    def write_bed_roughness(self, roughness_file, ncopts={'zlib': True, 'complevel': 7}, **kwargs):
+    def write_bed_roughness(self, roughness_file, ncopts={'zlib': True, 'complevel': 7}, format='NETCDF4', **kwargs):
         """
         Write the bed roughness to netCDF.
 
@@ -368,7 +368,7 @@ class Model(Domain):
                    'history': 'File created using {} from PyFVCOM'.format(inspect.stack()[0][3])}
         dims = {'nele': self.dims.nele}
 
-        with WriteForcing(str(roughness_file), dims, global_attributes=globals, clobber=True, format='NETCDF4', **kwargs) as z0:
+        with WriteForcing(str(roughness_file), dims, global_attributes=globals, clobber=True, format=format, **kwargs) as z0:
             # Add the variables.
             atts = {'long_name': 'bottom roughness', 'units': 'm', 'type': 'data'}
             z0.add_variable('z0b', self.grid.roughness, ['nele'], attributes=atts, ncopts=ncopts)
@@ -489,7 +489,7 @@ class Model(Domain):
 
         return time_out_dt, interp_sst
 
-    def write_sstgrd(self, output_file, ncopts={'zlib': True, 'complevel': 7}, **kwargs):
+    def write_sstgrd(self, output_file, ncopts={'zlib': True, 'complevel': 7}, format='NETCDF4', **kwargs):
         """
         Generate a sea surface temperature data assimilation file for the given FVCOM domain from the self.sst data.
 
@@ -514,7 +514,7 @@ class Model(Domain):
                    'CoordinateProjection': 'init=WGS84'}
         dims = {'nele': self.dims.nele, 'node': self.dims.node, 'time': 0, 'DateStrLen': 26, 'three': 3}
 
-        with WriteForcing(str(output_file), dims, global_attributes=globals, clobber=True, format='NETCDF4', **kwargs) as sstgrd:
+        with WriteForcing(str(output_file), dims, global_attributes=globals, clobber=True, format=format, **kwargs) as sstgrd:
             # Add the variables.
             atts = {'long_name': 'nodel longitude', 'units': 'degrees_east'}
             sstgrd.add_variable('lon', self.grid.lon, ['node'], attributes=atts, ncopts=ncopts)
@@ -745,7 +745,7 @@ class Model(Domain):
         self.ady.ady = ady
         self.ady.time = dates
 
-    def write_adygrd(self, output_file, ncopts={'zlib': True, 'complevel': 7}, **kwargs):
+    def write_adygrd(self, output_file, ncopts={'zlib': True, 'complevel': 7}, format='NETCDF4', **kwargs):
         """
         Generate a Gelbstoff absorption file for the given FVCOM domain from the self.ady data.
 
@@ -768,7 +768,7 @@ class Model(Domain):
                    'CoordinateProjection': 'init=WGS84'}
         dims = {'nele': self.dims.nele, 'node': self.dims.node, 'time': 0, 'DateStrLen': 26, 'three': 3}
 
-        with WriteForcing(str(output_file), dims, global_attributes=globals, clobber=True, format='NETCDF4', **kwargs) as sstgrd:
+        with WriteForcing(str(output_file), dims, global_attributes=globals, clobber=True, format=format, **kwargs) as sstgrd:
            # Add the variables.
             atts = {'long_name': 'nodel longitude', 'units': 'degrees_east'}
             sstgrd.add_variable('lon', self.grid.lon, ['node'], attributes=atts, ncopts=ncopts)
@@ -1284,7 +1284,7 @@ class Model(Domain):
 
         grid_metrics(self.grid.tri, noisy=noisy)
 
-    def write_tides(self, output_file, ncopts={'zlib': True, 'complevel': 7}, **kwargs):
+    def write_tides(self, output_file, ncopts={'zlib': True, 'complevel': 7}, format='NETCDF4', **kwargs):
         """
         Generate a tidal elevation forcing file for the given FVCOM domain from the tide data in each open boundary
         object.
@@ -1316,7 +1316,7 @@ class Model(Domain):
                    'history': 'File created using {} from PyFVCOM'.format(inspect.stack()[0][3])}
         dims = {'nobc': self.dims.open_boundary_nodes, 'time': 0, 'DateStrLen': 26}
 
-        with WriteForcing(str(output_file), dims, global_attributes=globals, clobber=True, format='NETCDF4', **kwargs) as elev:
+        with WriteForcing(str(output_file), dims, global_attributes=globals, clobber=True, format=format, **kwargs) as elev:
             # Add the variables.
             atts = {'long_name': 'Open Boundary Node Number', 'grid': 'obc_grid'}
             # Don't forget to offset the open boundary node IDs by one to account for Python indexing!
@@ -1653,7 +1653,7 @@ class Model(Domain):
         else:
             return possible_nodes[0]
 
-    def write_river_forcing(self, output_file, ersem=False, ncopts={'zlib': True, 'complevel': 7}, sediments=False,
+    def write_river_forcing(self, output_file, ersem=False, ncopts={'zlib': True, 'complevel': 7}, sediments=False, format='NETCDF4',
                             **kwargs):
         """
         Write out an FVCOM river forcing netCDF file.
@@ -1701,7 +1701,7 @@ class Model(Domain):
                    'info': self.river.history,
                    'history': 'File created using {} from PyFVCOM'.format(inspect.stack()[0][3])}
         dims = {'namelen': 80, 'rivers': self.dims.river, 'time': 0, 'DateStrLen': 26}
-        with WriteForcing(str(output_file), dims, global_attributes=globals, clobber=True, format='NETCDF4', **kwargs) as river:
+        with WriteForcing(str(output_file), dims, global_attributes=globals, clobber=True, format=format, **kwargs) as river:
             # We need to force the river names to be right-padded to 80 characters and transposed for the netCDF array.
             river_names = stringtochar(np.asarray(self.river.names, dtype='S80'))
             river.add_variable('river_names', river_names, ['rivers', 'namelen'], format='c', ncopts=ncopts)
@@ -2523,7 +2523,7 @@ class Model(Domain):
             self.dims.node = len(self.grid.lon)
             self.dims.nele = len(self.grid.lonc)
 
-    def write_nested_forcing(self, ncfile, type=3, adjust_tides=None, ersem_metadata=None, **kwargs):
+    def write_nested_forcing(self, ncfile, type=3, adjust_tides=None, ersem_metadata=None, format='NETCDF4', **kwargs):
         """
         Write out the given nested forcing into the specified netCDF file.
 
@@ -2626,7 +2626,7 @@ class Model(Domain):
         dims = {'nele': elements_number, 'node': nodes_number, 'time': 0, 'DateStrLen': 26, 'three': 3,
                 'siglay': self.dims.layers, 'siglev': self.dims.levels}
 
-        with WriteForcing(str(ncfile), dims, global_attributes=globals, clobber=True, format='NETCDF4', **kwargs) as nest_ncfile:
+        with WriteForcing(str(ncfile), dims, global_attributes=globals, clobber=True, format=format, **kwargs) as nest_ncfile:
             # Add standard times.
             nest_ncfile.write_fvcom_time(self.time.datetime, ncopts=ncopts)
 
@@ -2974,7 +2974,7 @@ class Model(Domain):
             self.groundwater.temperature[:, node_index[0]] = t
             self.groundwater.salinity[:, node_index[0]] = s
 
-    def write_groundwater(self, output_file, surface=False, ncopts={'zlib': True, 'complevel': 7}, **kwargs):
+    def write_groundwater(self, output_file, surface=False, ncopts={'zlib': True, 'complevel': 7}, format='NETCDF4', **kwargs):
         """
         Generate a groundwater forcing file for the given FVCOM domain from the data in self.groundwater object. It
         should contain flux, temp and salt attributes (generated from self.add_groundwater).
@@ -3004,7 +3004,7 @@ class Model(Domain):
         # on elements.
         dims = {'node': self.dims.node, 'nele': self.dims.nele, 'time': 0, 'DateStrLen': 26}
 
-        with WriteForcing(str(output_file), dims, global_attributes=globals, clobber=True, format='NETCDF4', **kwargs) as groundwater:
+        with WriteForcing(str(output_file), dims, global_attributes=globals, clobber=True, format=format, **kwargs) as groundwater:
             # Add the variables.
             atts = {'long_name': f'{name.lower()}water volume flux',
                     'units': 'm3 s-1',
@@ -3205,7 +3205,7 @@ class Model(Domain):
             setattr(boundary.tide, 'zeta', elevation[..., mask])
             setattr(boundary.tide, 'time', datetimes)
 
-    def write_tsobc(self, tsobc_file, ersem_metadata=None, **kwargs):
+    def write_tsobc(self, tsobc_file, ersem_metadata=None, format='NETCDF4', **kwargs):
         """
         Write out the interpolated boundary data (in self.open_boundaries[*].data) into the specified netCDF file.
 
@@ -3261,7 +3261,7 @@ class Model(Domain):
         dims = {'nobc': nodes_number, 'time': 0, 'DateStrLen': 26, 'siglay': self.dims.layers,
                 'siglev': self.dims.levels}
 
-        with WriteForcing(str(tsobc_file), dims, global_attributes=globals, clobber=True, format='NETCDF4', **kwargs) as ncfile:
+        with WriteForcing(str(tsobc_file), dims, global_attributes=globals, clobber=True, format=format, **kwargs) as ncfile:
             # Add standard times.
             ncfile.write_fvcom_time(self.time.datetime, ncopts=ncopts)
 
