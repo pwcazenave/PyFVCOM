@@ -805,7 +805,7 @@ class Model(Domain):
             lines = f.readlines()
             for line in lines:
                 if not line.strip('\n').strip('\r'):
-                  continue
+                    continue
                 line = line.strip()
                 option, value = line.split('=')
                 option = option.strip().lower()
