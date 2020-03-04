@@ -804,6 +804,8 @@ class Model(Domain):
         with open(sigma_file, 'r') as f:
             lines = f.readlines()
             for line in lines:
+                if not line.strip('\n').strip('\r'):
+                  continue
                 line = line.strip()
                 option, value = line.split('=')
                 option = option.strip().lower()
