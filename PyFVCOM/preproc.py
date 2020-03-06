@@ -213,24 +213,44 @@ class Model(Domain):
         self.time.Times = [t.strftime('%Y-%m-%dT%H:%M:%S.%f') for t in getattr(self.time, 'datetime')]
 
     def _initialise_open_boundaries_on_nodes(self):
-        """ Add the relevant node-based grid information for any open boundaries we've got. """
+        """ Add the relevant node-based grid information for any open 
+        boundaries we've got. """
 
         self.open_boundaries = []
-        self.dims.open_boundary_nodes = 0  # assume no open boundary nodes
+        self.dims.open_boundary_nodes = 0 # assume no open boundary nodes
+        self.dims.open_boundary_elements = 0 # assume no open boundary elements
         if self.grid.open_boundary_nodes:
             for nodes in self.grid.open_boundary_nodes:
+                # Add boundary nodes
                 self.open_boundaries.append(OpenBoundary(nodes))
                 # Update the dimensions.
                 self.dims.open_boundary_nodes += len(nodes)
                 # Add the positions of the relevant bits of information.
                 for attribute in ('lon', 'lat', 'x', 'y', 'h'):
                     try:
-                        setattr(self.open_boundaries[-1].grid, attribute, getattr(self.grid, attribute)[nodes, ...])
+                        setattr(self.open_boundaries[-1].grid, attribute, 
+                                getattr(self.grid, attribute)[nodes, ...])
                     except AttributeError:
                         pass
+
+                # Add boundary elements
+                elements = find_connected_elements(
+                        nodes, self.grid.triangles)
+                self.open_boundaries[-1].elements = elements
+                # Update the dimensions.
+                self.dims.open_boundary_elements += len(elements)
+                # Add the positions of the relevant bits of information.
+                for attribute in ('lonc', 'latc', 'xc', 'yc', 'h_center'):
+                    try:
+                        setattr(self.open_boundaries[-1].grid, attribute, 
+                                getattr(self.grid, attribute)[elements, ...])
+                    except AttributeError:
+                        pass
+
                 # Add all the time data.
                 setattr(self.open_boundaries[-1].time, 'start', self.start)
                 setattr(self.open_boundaries[-1].time, 'end', self.end)
+
 
     def _update_open_boundaries(self):
         """
