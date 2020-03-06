@@ -1238,73 +1238,122 @@ class OpenBoundary(object):
         # Feels a bit ridiculous having a whole method for this...
         setattr(self, 'type', obc_type)
 
-    def add_tpxo_tides(self, tpxo_harmonics, predict='zeta', interval=1 / 24, constituents=['M2'], serial=False,
-                       interp_method='linear', pool_size=None, noisy=False):
+    def add_tpxo_tides(self, tpxo_harmonics, predict='zeta', interval=1 / 24, 
+                        constituents=['M2'], serial=False,
+                        interp_method='linear', complex=False,
+                        pool_size=None, noisy=False):
         """
         Add TPXO tides at the open boundary nodes.
 
         Parameters
         ----------
-        tpxo_harmonics : str, pathlib.Path
+        tpxo_harmonics : str, pathlib.Path, list
             Path to the TPXO harmonics netCDF file to use.
+            Can be a list of paths for each constituent.
         predict : str, optional
             Type of data to predict. Select 'zeta' (default), 'u' or 'v'.
         interval : str, optional
             Time sampling interval in days. Defaults to 1 hour.
         constituents : list, optional
-            List of constituent names to use in UTide.reconstruct. Defaults to ['M2'].
+            List of constituent names to use in UTide.reconstruct. 
+            Defaults to ['M2'].
         serial : bool, optional
             Run in serial rather than parallel. Defaults to parallel.
         interp_method : str
-            The interpolation method to use. Defaults to 'linear'. Passed to scipy.interp.RegularGridInterpolator,
+            The interpolation method to use. Defaults to 'linear'. 
+            Passed to scipy.interp.RegularGridInterpolator,
             so choose any valid one for that.
+        complex : bool
+            Specify if input file is define in terms of tidal amplitude and 
+            phase or as a cartesian complex with Real and Imaginary parts.
+            This should be set to True for TPXO9 and False for earlier versions
+            of TPXO.
         pool_size : int, optional
-            Specify number of processes for parallel run. By default it uses all available.
+            Specify number of processes for parallel run. By default it uses 
+            all available.
         noisy : bool, optional
-            Set to True to enable some sort of progress output. Defaults to False.
+            Set to True to enable some sort of progress output. 
+            Defaults to False.
 
         """
 
         if not hasattr(self.time, 'start'):
-            raise AttributeError('No time data have been added to this OpenBoundary object, so we cannot predict tides.')
+            raise AttributeError('No time data have been added to this ' 
+                    + 'OpenBoundary object, so we cannot predict tides.')
         self.tide.time = date_range(self.time.start - relativedelta(days=1),
                                     self.time.end + relativedelta(days=1),
                                     inc=interval)
 
         constituent_name = 'con'
-        if predict == 'zeta':
-            amplitude_name, phase_name = 'ha', 'hp'
-            x, y = copy.copy(self.grid.lon), self.grid.lat
-            lon_name, lat_name = 'lon_z', 'lat_z'
-        elif predict == 'u':
-            amplitude_name, phase_name = 'ua', 'up'
-            x, y = copy.copy(self.grid.lonc), self.grid.latc
-            lon_name, lat_name = 'lon_u', 'lat_u'
-        elif predict == 'v':
-            amplitude_name, phase_name = 'va', 'vp'
-            x, y = copy.copy(self.grid.lonc), self.grid.latc
-            lon_name, lat_name = 'lon_v', 'lat_v'
+        if complex:
+            if predict == 'zeta':
+                part1_name, part2_name = 'hRe', 'hIm'
+                x, y = copy.copy(self.grid.lon), self.grid.lat
+                lon_name, lat_name = 'lon_z', 'lat_z'
+            elif predict == 'u':
+                part1_name, part2_name = 'uRe', 'uIm'
+                x, y = copy.copy(self.grid.lonc), self.grid.latc
+                lon_name, lat_name = 'lon_u', 'lat_u'
+            elif predict == 'v':
+                part1_name, part2_name = 'vRe', 'vIm'
+                x, y = copy.copy(self.grid.lonc), self.grid.latc
+                lon_name, lat_name = 'lon_v', 'lat_v'
 
-        names = {'amplitude_name': amplitude_name,
-                 'phase_name': phase_name,
+        else:
+            if predict == 'zeta':
+                part1_name, part2_name = 'ha', 'hp'
+                x, y = copy.copy(self.grid.lon), self.grid.lat
+                lon_name, lat_name = 'lon_z', 'lat_z'
+            elif predict == 'u':
+                part1_name, part2_name = 'ua', 'up'
+                x, y = copy.copy(self.grid.lonc), self.grid.latc
+                lon_name, lat_name = 'lon_u', 'lat_u'
+            elif predict == 'v':
+                part1_name, part2_name = 'va', 'vp'
+                x, y = copy.copy(self.grid.lonc), self.grid.latc
+                lon_name, lat_name = 'lon_v', 'lat_v'
+
+        names = {'part1_name': part1_name,
+                 'part2_name': part2_name,
                  'lon_name': lon_name,
                  'lat_name': lat_name,
                  'constituent_name': constituent_name}
-        harmonics_lon, harmonics_lat, amplitudes, phases, available_constituents = self._load_harmonics(tpxo_harmonics,
-                                                                                                        constituents,
-                                                                                                        names)
-        interpolated_amplitudes, interpolated_phases = self._interpolate_tpxo_harmonics(x, y,
-                                                                                        amplitudes, phases,
-                                                                                        harmonics_lon, harmonics_lat,
-                                                                                        interp_method=interp_method)
+
+        if isinstance(tpxo_harmonics, list):
+            available_constituents = []
+            amplitudes = []
+            phases = []
+            for harm in tpxo_harmonics:
+                (harmonics_lon, harmonics_lat, amplitudes_tmp, phases_tmp, 
+                        available_constituents_tmp
+                        ) = self._load_harmonics(harm, constituents, 
+                        names, complex=complex)
+                if len(available_constituents_tmp):
+                    amplitudes.append(amplitudes_tmp)
+                    phases.append(phases_tmp)
+                    available_constituents.append(available_constituents_tmp[0])
+            amplitudes = np.array(amplitudes)
+            phases = np.array(phases)
+        else:
+            (harmonics_lon, harmonics_lat, amplitudes, phases, 
+                    available_constituents
+                    ) = self._load_harmonics(tpxo_harmonics, constituents, 
+                    names, complex=complex)
+
+
+        (interpolated_amplitudes, interpolated_phases
+                ) = self._interpolate_tpxo_harmonics(x, y, amplitudes, phases,
+                harmonics_lon, harmonics_lat, interp_method=interp_method)
 
         self.tide.constituents = available_constituents
 
         # Predict the tides
-        results = self._prepare_tides(interpolated_amplitudes, interpolated_phases, y, serial, pool_size)
+        results = self._prepare_tides(interpolated_amplitudes, 
+                interpolated_phases, y, serial, pool_size)
 
         # Dump the results into the object.
-        setattr(self.tide, predict, np.asarray(results).T)  # put the time dimension first, space last.
+        setattr(self.tide, predict, np.asarray(results).T)  
+        # put the time dimension first, space last.
 
     def add_fvcom_tides(self, fvcom_harmonics, predict='zeta', interval=1/24, constituents=['M2'], serial=False,
                         pool_size=None, noisy=False):
@@ -1320,13 +1369,16 @@ class OpenBoundary(object):
         interval : str, optional
             Time sampling interval in days. Defaults to 1 hour.
         constituents : list, optional
-            List of constituent names to use in UTide.reconstruct. Defaults to ['M2'].
+            List of constituent names to use in UTide.reconstruct. 
+            Defaults to ['M2'].
         serial : bool, optional
             Run in serial rather than parallel. Defaults to parallel.
         pool_size : int, optional
-            Specify number of processes for parallel run. By default it uses all available.
+            Specify number of processes for parallel run. By default it uses 
+            all available.
         noisy : bool, optional
-            Set to True to enable some sort of progress output. Defaults to False.
+            Set to True to enable some sort of progress output. 
+            Defaults to False.
 
         """
 
@@ -1366,7 +1418,7 @@ class OpenBoundary(object):
                  'constituent_name': constituent_name}
         harmonics_lon, harmonics_lat, amplitudes, phases, available_constituents = self._load_harmonics(fvcom_harmonics,
                                                                                                         constituents,
-                                                                                                        names)
+                                                                                                        names, complex=False)
         if predict in ['zeta', 'ua', 'va']:
             amplitudes = amplitudes[:, np.newaxis, :]
             phases = phases[:, np.newaxis, :]
@@ -1423,7 +1475,7 @@ class OpenBoundary(object):
         return results
 
     @staticmethod
-    def _load_harmonics(harmonics, constituents, names):
+    def _load_harmonics(harmonics, constituents, names, complex=False):
         """
         Load the given variables from the given file.
 
@@ -1435,11 +1487,18 @@ class OpenBoundary(object):
             The list of tidal constituents to load.
         names : dict
             Dictionary with the variables names:
-                amplitude_name - amplitude data
-                phase_name - phase data
+                part1_name - amplitude data or real data
+                part2_name - phase data or imaginary data
                 lon_name - longitude data
                 lat_name - latitude data
                 constituent_name - constituent names
+            Part1 is amplitude and part2 is phase unless 'complex' is True. 
+            If 'complex' is True, part1 is Real and part2 is Imaginary.
+        complex : bool
+            Specify if input file is define in terms of tidal amplitude and 
+            phase or as a cartesian complex with Real and Imaginary parts.
+            This should be set to True for TPXO9 and False for earlier versions
+            of TPXO.
 
         Returns
         -------
@@ -1448,29 +1507,62 @@ class OpenBoundary(object):
         phases : np.darray
             The amplitudes for the given constituents.
         fvcom_constituents : list
-            The constituents which have been requested that actually exist in the harmonics netCDF file.
+            The constituents which have been requested that actually exist 
+            in the harmonics netCDF file.
 
         """
 
         with Dataset(str(harmonics), 'r') as tides:
-            const = [''.join(i).upper().strip() for i in tides.variables[names['constituent_name']][:].astype(str)]
-            # If we've been given constituents that aren't in the harmonics data, just find the indices we do have.
-            cidx = [const.index(i) for i in constituents if i in const]
+            if any(isinstance(i, list) for i in tides.variables[
+                    names['constituent_name']][:].astype(str)):
+                const = ([''.join(i).upper().strip() for i in tides.variables[
+                        names['constituent_name']][:].astype(str)])
+            else:
+                const = ([''.join(tides.variables[
+                        names['constituent_name']][:].astype(str)
+                        ).upper().strip()])
+            # If we've been given constituents that aren't in the harmonics 
+            # data, just find the indices we do have.
+            cidx = [constituents.index(i) for i in constituents if i in const]
             # Save the names of the constituents we've actually used.
             available_constituents = [constituents[i] for i in cidx]
+            if len(available_constituents) == 0:
+                return ([], [], [], [], [])
 
             harmonics_lon = tides.variables[names['lon_name']][:]
             harmonics_lat = tides.variables[names['lat_name']][:]
 
-            amplitude_shape = tides.variables[names['amplitude_name']][:].shape
-            if amplitude_shape[0] == len(const):
-                amplitudes = tides.variables[names['amplitude_name']][cidx, ...]
-                phases = tides.variables[names['phase_name']][cidx, ...]
-            elif amplitude_shape[-1] == len(const):
-                amplitudes = tides.variables[names['amplitude_name']][..., cidx].T
-                phases = tides.variables[names['phase_name']][..., cidx].T
+            part1_shape = tides.variables[names['part1_name']][:].shape
+            if complex:
+                if part1_shape[0] == len(const):
+                    real = tides.variables[names['part1_name']][cidx, ...]
+                    imag = tides.variables[names['part2_name']][cidx, ...]
+                elif part1_shape[-1] == len(const):
+                    real = (tides.variables[names['part1_name']]
+                            [..., cidx].T)
+                    imag = (tides.variables[names['part2_name']]
+                            [..., cidx].T)
+                else:
+                    real = tides.variables[names['part1_name']][:]
+                    imag = tides.variables[names['part2_name']][:]
 
-        return harmonics_lon, harmonics_lat, amplitudes, phases, available_constituents
+                amplitudes = np.abs(real + 1j * imag)
+                phases = np.arctan2(-imag, real) / (np.pi * 180)
+
+            else:
+                if part1_shape[0] == len(const):
+                    amplitudes = tides.variables[names['part1_name']][cidx, ...]
+                    phases = tides.variables[names['part2_name']][cidx, ...]
+                elif part1_shape[-1] == len(const):
+                    amplitudes = (tides.variables[names['part1_name']]
+                            [..., cidx].T)
+                    phases = tides.variables[names['part2_name']][..., cidx].T
+                else:
+                    amplitudes = tides.variables[names['part1_name']][:]
+                    phases = tides.variables[names['part2_name']][:]
+
+        return (harmonics_lon, harmonics_lat, amplitudes, 
+                phases, available_constituents)
 
     @staticmethod
     def _match_coords(pts_1, pts_2, epsilon=10):
