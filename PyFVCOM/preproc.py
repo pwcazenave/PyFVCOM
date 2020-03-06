@@ -178,7 +178,7 @@ class Model(Domain):
         self._add_time()
 
         # Initialise the open boundary objects from the nodes we've read in from the grid (if any).
-        self._initialise_open_boundaries_on_nodes()
+        self._initialise_open_boundaries()
 
         # Initialise the river structure.
         self._prep_rivers()
@@ -213,8 +213,17 @@ class Model(Domain):
         self.time.Times = [t.strftime('%Y-%m-%dT%H:%M:%S.%f') for t in getattr(self.time, 'datetime')]
 
     def _initialise_open_boundaries_on_nodes(self):
-        """ Add the relevant node-based grid information for any open 
-        boundaries we've got. """
+        """ Add the relevant node and element based grid information for any 
+        open boundaries we've got. 
+        This is a helper function to maintain function name compatibility.
+        """
+        self._initialise_open_boundaries()
+
+
+    def _initialise_open_boundaries(self):
+        """ Add the relevant node and element based grid information for any 
+        open boundaries we've got. 
+        """
 
         self.open_boundaries = []
         self.dims.open_boundary_nodes = 0 # assume no open boundary nodes
@@ -250,7 +259,6 @@ class Model(Domain):
                 # Add all the time data.
                 setattr(self.open_boundaries[-1].time, 'start', self.start)
                 setattr(self.open_boundaries[-1].time, 'end', self.end)
-
 
     def _update_open_boundaries(self):
         """
