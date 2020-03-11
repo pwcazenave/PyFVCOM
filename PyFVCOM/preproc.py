@@ -222,7 +222,13 @@ class Model(Domain):
 
     def _initialise_open_boundaries(self):
         """ Add the relevant node and element based grid information for any 
-        open boundaries we've got. 
+        open boundaries we've got. The open boundaries nodes are defined by 
+        reading the relavant open boundary file in _GridReader().
+        The open boundaries intitialised here have zero depth levels and 
+        separate boundary edges into items of the self.open_boundaries list.
+
+        See the subclass Nest for adding vertical depth levels and horizontal 
+        nesting levels.
         """
 
         self.open_boundaries = []
@@ -262,10 +268,11 @@ class Model(Domain):
 
     def _update_open_boundaries(self):
         """
-        Call this when we've done something which affects the open boundary objects and we need to update their
-        properties.
+        Call this when we've done something which affects the open boundary 
+        objects and we need to update their properties.
 
-        For example, this updates sigma information if we've added the sigma distribution to the Model object.
+        For example, this updates sigma information if we've added the sigma 
+        distribution to the Model object.
 
         """
 
@@ -275,9 +282,11 @@ class Model(Domain):
                 try:
                     # Ignore element-based data for now.
                     if 'center' not in attribute:
-                        setattr(boundary.sigma, attribute, getattr(self.sigma, attribute)[boundary.nodes, ...])
+                        setattr(boundary.sigma, attribute, getattr(
+                                self.sigma, attribute)[boundary.nodes, ...])
                 except (IndexError, TypeError):
-                    setattr(boundary.sigma, attribute, getattr(self.sigma, attribute))
+                    setattr(boundary.sigma, attribute, getattr(
+                            self.sigma, attribute))
                 except AttributeError:
                     pass
 
@@ -2256,15 +2265,18 @@ class Model(Domain):
 
     def add_nests(self, nest_levels, nesting_type=3, verbose=False):
         """
-        Add a set of nested levels to each open boundary.
-        Boundary levels are added in parallel and next to existing boundary 
-        nodes, lining the boundary inside the domain model. These levels 
+        Add a set of nested levels to each item in self.open_boundaries. Each 
+        nest level is an instance of Nest which is similar to OpenBoundary
+        but with vertical depth levels.
+        Horizontal nested levels are added in adjacent to existing boundary 
+        nodes, lining the boundary inside the domain model. These nested levels 
         are then weighted. 
 
         Parameters
         ----------
         nest_levels : int
-            Number of node levels in addition to the existing open boundary.
+            Number of horizontal adjacent node levels in addition to the 
+            existing open boundary. This can be 0 to just add depth levels.
         nesting_type : int
             FVCOM nesting type (1, 2 or 3). Defaults to 3.
         verbose : bool, optional
@@ -2274,42 +2286,58 @@ class Model(Domain):
         --------
         self.nests : list
             List of PyFVCOM.preproc.Nest objects.
+            The structure is 
+            self.open_boundary[self.dims.open_boundary].nest[
+                    self.dims.nest_levels]
 
         """
 
-        self.nest = []
+        self.dims.nest_levels = nest_levels
 
         if len(self.open_boundaries) == 0:
             raise AttributeError('No open boundaries on which to add nests')
 
-        for boundary in self.open_boundaries:
+        for i in range(self.dims.open_boundary):
             if not hasattr(self.sigma, 'levels'):
-                raise AttributeError('Missing sigma grid information. Add it before creating nests.')
-            self.nest.append(Nest(self.grid, self.sigma, boundary, verbose=verbose))
+                raise AttributeError('Missing sigma grid information. Add it ' 
+                        + 'before creating nests.')
+            self.open_boundaries[i].nest = [Nest(self.grid, self.sigma, 
+                    self.open_boundaries[i], ids=self.open_boundaries[i].nodes,
+                    verbose=verbose)]
+
+            # Grab the time from the open_boundary.
+            setattr(self.open_boundaries[i].nest[-1], 'time', 
+                    self.open_boundaries[i].time)
+
             # Add all the nested levels and assign weights as necessary.
-            for _ in range(nest_levels):
-                self.nest[-1].add_level()
+            for _ in range(self.dims.nest_levels):
+                self.open_boundaries[i].add_nest_level()
 
-        # Find missing elements on the last-but-one nested boundary. These are defined as those whose the three nodes
-        # are included but the element isn't. This replicates what FVCOM does when it computes the elements to
-        # include in a nested output file (since a nested input file for FVCOM is just defined as a list of node IDs).
-        boundary_nodes = self.nest[-1].boundaries[-1].nodes
-        boundary_elements = self.nest[-1].boundaries[-2].elements
-        missing_elements = np.argwhere(np.all(np.isin(self.grid.triangles, boundary_nodes), axis=1)).ravel()
-        if len(missing_elements) > 0:
-            if self._noisy:
-                print('Adding missing bounded elements for the last boundary in the nest.')
-            self.nest[-1].boundaries[-2].elements = np.unique(np.hstack([missing_elements, boundary_elements]))
+            # Find missing elements on the last-but-one nested boundary. These 
+            # are defined as those whose the three nodes are included but the 
+            # element isn't. This replicates what FVCOM does when it computes 
+            # the elements to include in a nested output file (since a nested 
+            # input file for FVCOM is just defined as a list of node IDs).
+            boundary_nodes = self.open_boundaries[i].nest[-1].nodes
+            boundary_elements = self.open_boundaries[i].nest[-2].elements
+            missing_elements = np.argwhere(np.all(np.isin(self.grid.triangles, 
+                    boundary_nodes), axis=1)).ravel()
+            if len(missing_elements) > 0:
+                if self._noisy:
+                    print('Adding missing bounded elements for the last '
+                            + 'boundary in the nest.')
+                self.open_boundaries[i].nest[-2].elements = np.unique(
+                        np.hstack([missing_elements, boundary_elements]))
             # Update the associated boundary information.
-            self.nest[-1]._update_open_boundaries()
+            self.open_boundaries[i].nest[-2]._update_nest()
 
-        # Add weights (if given) after we've done all the fiddling with the boundary elements so we don't have to
-        # deal with masking them or adding extra ones.
+        # Add weights (if given) after we've done all the fiddling with the 
+        # boundary elements so we don't have to deal with masking them or 
+        # adding extra ones.
         if nesting_type >= 2:
-            for boundary in self.open_boundaries:
-                self.nest[-1].add_weights()
-            for nest in self.nest:
-                nest.add_weights()
+            for i in range(self.dims.open_boundary):
+                for n in range(self.dims.nest_levels):
+                    self.open_boundaries[i].nest[n].add_nest_weights()
 
 
     def add_nests_harmonics(self, harmonics_file, harmonics_vars=['u', 'v', 'zeta'], constituents=['M2', 'S2'],
@@ -4212,21 +4240,18 @@ def write_model_namelist(namelist_file, namelist_config, mode='w'):
             f.write('/\n\n')
 
 
-class Nest(object):
+class Nest(OpenBoundary):
     """
-    Class to hold a set of open boundaries as OpenBoundary objects.
-
-    TODO: This should be a subclass of Domain and OpenBoundary since a nest is just a weird unstructured grid. By
-     subclassing OpenBoundary, we'd get all the useful interpolation methods; subclassing Domain would simplify the
-     storage of the model grid and subsequent writing out to netCDF. Doing this would mean removing the
-     self.boundaries and instead only having a self.grid which has only the nested nodes and elements in it. The only
-     disadvantage I can see at the moment is that adding the weights is more difficult to do this way since we don't
-     have any way of easily identify what level of a nest we're in. However, that can instead be added as an option to
-     add_level to make it generate a list of weights for each set of nodes and elements that have been added.
-
+    Class to hold a set of nests levels similar to OpenBoundary objects but 
+    with depth levels and horizontal nest levels. This is a subclass of 
+    OpenBoundary and inherits all the properties of the OpenBoundary it was 
+    initialised with. An OpenBoundary needs to be present before initialising
+    Nest. Use preproc.Model.add_nests() to set up the list of Nest objects.
+    Note: Nest should be initialised with the nodes of the 
+    required nest level as ids in additon to grid, sigma and boundary. 
     """
 
-    def __init__(self, grid, sigma, boundary, verbose=False):
+    def __init__(self, grid, sigma, boundary, verbose=False, *args, **kwargs):
         """
         Create a nested boundary object.
 
@@ -4236,191 +4261,125 @@ class Nest(object):
             The model grid within which the nest will sit.
         sigma : PyFVCOM.model.OpenBoundary.sigma
             The vertical sigma coordinate configuration for the current grid.
-        boundary : PyFVCOM.grid.OpenBoundary, list
-            An open boundary or list of open boundaries with which to initialise this nest.
+        boundary : PyFVCOM.grid.OpenBoundary or list
+            An open boundary with which to initialise this nest.
+        ids : np.ndarray
+            Array of unstructured grid IDs representing the nodes of a nest 
+            level.
+        mode : str, optional
+            Specify whether the IDs given are node ('nodes') or element-centre 
+            ('elements') IDs. Defaults to 'nodes'.
         verbose : bool, optional
             Set to True to enable verbose output. Defaults to False.
 
         """
 
+        # Inherit everything from PyFVCOM.grid.OpenBoundary, but extend it for 
+        # our purposes. This doesn't work with Python 2.
+        super().__init__(*args, **kwargs)
+
         self._debug = False
         self._noisy = verbose
 
+        self.all_grid = copy.copy(grid)
+        self.all_sigma = copy.copy(sigma)
         self.grid = copy.copy(grid)
         self.sigma = copy.copy(sigma)
 
+        # This gets circular so we can access attributes of the parent
+        # OpenBoundary instance 
+        # i.e open_boundary = open_boundaries.nest.super_boundaries
+        # This means we can let Nest iterate over instances of 
+        # itself to keep the nest functions in Nest instead of OpenBoundary
         if isinstance(boundary, list):
-            self.boundaries = boundary
+            self.super_boundaries = boundary
         elif isinstance(boundary, OpenBoundary):
-            self.boundaries = [boundary]
+            self.super_boundaries = [boundary]
         else:
-            raise ValueError("Unsupported boundary type {}. Supply PyFVCOM.grid.OpenBoundary or `list'.".format(type(boundary)))
-        # Add the sigma and grid structure attributes. This is a bit inefficient as we end up doing it for every
-        # boundary each time we add a new boundary.
-        self._update_open_boundaries()
+            raise ValueError("Unsupported boundary type {}. Supply "
+                + "PyFVCOM.grid.OpenBoundary or `list'.".format(type(boundary)))
+        # Add the sigma and grid structure attributes. This is a bit 
+        # inefficient as we end up doing it for every boundary each time we 
+        # add a new nest.
+        self._update_nest()
 
     def __iter__(self):
         return (a for a in dir(self) if not a.startswith('_'))
 
-    def _update_open_boundaries(self):
+    def _update_nest(self):
         """
-        Call this when we've done something which affects the open boundary objects and we need to update their
-        properties.
+        Call this when we've done something which affects the nest objects 
+        and we need to update their properties.
 
-        For example, this updates sigma information if we've added the sigma distribution to the Model object.
-
+        For example, this updates sigma information if we've added the sigma 
+        distribution to the Model object.
+        
+        This samples self.all_grid and self.all_sigma with the nest nodes and 
+        elements and give the values for each nest location to self.grid
+        and self.sigma.
         """
 
-        # Add the grid and sigma data to any open boundaries we've got loaded.
-        for ii, boundary in enumerate(self.boundaries):
+        # Add the grid and sigma data to any nests we've got loaded.
+        #nest = self.super_boundaries.nest[ind]
+        #for ii, nest in enumerate(self.super_boundaries.nest[ind:ind + 1]):
+        #if self._debug:
+        #    print('Adding grid info to nest {} of {}'.format(
+        #            ii + 1, len(self.super_boundaries.nest)))
+        for attribute in self.all_grid:
             if self._debug:
-                print('Adding grid info to boundary {} of {}'.format(ii + 1, len(self.boundaries)))
-            for attribute in self.grid:
-                if self._debug:
-                    print('\t{}'.format(attribute))
-                try:
-                    if 'center' not in attribute and attribute not in ['lonc', 'latc', 'xc', 'yc']:
-                        setattr(boundary.grid, attribute, getattr(self.grid, attribute)[boundary.nodes, ...])
-                        if self._debug:
-                            print(f'\tUpdating grid node attribute: {attribute}')
-                    else:
-                        if np.any(boundary.elements):
-                            setattr(boundary.grid, attribute, getattr(self.grid, attribute)[boundary.elements, ...])
-                            if self._debug:
-                                print(f'\tUpdating grid element attribute: {attribute}')
-                except (IndexError, TypeError):
-                    setattr(boundary.grid, attribute, getattr(self.grid, attribute))
+                print('\t{}'.format(attribute))
+            try:
+                if ('center' not in attribute and attribute 
+                        not in ['lonc', 'latc', 'xc', 'yc']):
+                    setattr(self.grid, attribute, getattr(self.all_grid, 
+                            attribute)[self.nodes, ...])
                     if self._debug:
-                        print(f'\tTransferring grid attribute: {attribute}')
-                except AttributeError as e:
-                    if self._debug:
-                        print(e)
-                    pass
-
-            if self._debug:
-                print('Adding sigma info to boundary {} of {}'.format(ii + 1, len(self.boundaries)))
-            for attribute in self.sigma:
-                if self._debug:
-                    print('\t{}'.format(attribute))
-                try:
-                    if 'center' not in attribute:
-                        setattr(boundary.sigma, attribute, getattr(self.sigma, attribute)[boundary.nodes, ...])
-                        if self._debug:
-                            print(f'\tUpdating sigma node attribute: {attribute}')
-                    else:
-                        if np.any(boundary.elements):
-                            setattr(boundary.sigma, attribute, getattr(self.sigma, attribute)[boundary.elements, ...])
-                            if self._debug:
-                                print(f'\tUpdating sigma element attribute: {attribute}')
-                except (IndexError, TypeError):
-                    setattr(boundary.sigma, attribute, getattr(self.sigma, attribute))
-                    if self._debug:
-                        print(f'\tTransferring sigma attribute: {attribute}')
-                except AttributeError as e:
-                    if self._debug:
-                        print(e)
-
-    def add_level(self):
-        """
-        Function to add a nested level which is connected parallel to the 
-        existing nested nodes and elements. This function is used by 
-        self.add_nests()
-
-        This is useful for generating nested inputs from other model inputs 
-        (e.g. a regularly gridded model) in conjunction with 
-        PyFVCOM.grid.OpenBoundary.add_nested_forcing()).
-
-        Provides
-        --------
-        Adds a new PyFVCOM.grid.OpenBoundary object in self.boundaries
-
-        """
-
-        if self._noisy:
-            print(f'Add level {len(self.boundaries)} to the nest.')
-
-        # Find all the elements connected to the last set of open boundary nodes.
-        if not np.any(self.boundaries[-1].nodes):
-            raise ValueError('No open boundary nodes in the current open boundary. Please add some and try again.')
-
-        new_level_boundaries = []
-        # Work off the last boundary's nodes to get the connected elements and nodes. No need to iterate through
-        # everything as this gets recursive as we add more boundaries.
-        this_boundary = self.boundaries[-1]
-        level_elements = find_connected_elements(this_boundary.nodes, self.grid.triangles)
-        # Find the nodes and elements in the existing nests.
-        nest_nodes = flatten_list([i.nodes for i in self.boundaries])
-        nest_elements = flatten_list([i.elements for i in self.boundaries if np.any(i.elements)])
-
-        # Get unique elements and add them to the current boundary. This way we end up with the right number
-        # of layers of elements (i.e. they're bounded by a string of nodes on each side).
-        unique_elements = np.setdiff1d(level_elements, nest_elements)
-        if this_boundary.elements is None:
-            this_boundary.elements = unique_elements.tolist()
-        else:
-            if self._noisy:
-                warn(f'We already have elements on nest level {len(self.boundaries)}.')
-            # print(unique_elements, this_boundary.elements)
-            # this_boundary.elements = unique_elements.tolist()
-
-        # Get the nodes connected to the elements we've extracted.
-        level_nodes = np.unique(self.grid.triangles[level_elements, :])
-        # Remove ones we already have in the nest.
-        unique_nodes = np.setdiff1d(level_nodes, nest_nodes)
-        if len(unique_nodes) > 0:
-            # Create a new open boundary from those nodes.
-            new_boundary = OpenBoundary(unique_nodes)
-
-            # Grab the time from the previous one.
-            setattr(new_boundary, 'time', this_boundary.time)
-            new_level_boundaries.append(new_boundary)
-
-            self.boundaries += new_level_boundaries
-
-            # Populate the grid and sigma objects too.
-            self._update_open_boundaries()
-
-    def add_weights(self, power=0):
-        """
-        For the open boundaries in self.boundaries, add a corresponding weight 
-        for the nodes and elements to each one. This makes sense if there are 
-        levels of boundary forcing in parallel to the external boundary nodes. 
-        This function is used by self.add_nests()
-
-        Parameters
-        ----------
-        power : float, optional
-            Give an optional power with which weighting decreases with each 
-            successive nest. Defaults to 0 (i.e. linear).
-
-        Provides
-        --------
-        Populates the self.boundaries open boundary objects with the relevant 
-        weight_node and weight_element arrays.
-
-        """
-
-        if self._noisy:
-            print('Add weights to the nested boundary.')
-
-        for index, boundary in enumerate(self.boundaries, 1):
-            if power == 0:
-                weight_node = 1 / index
-            else:
-                weight_node = 1 / (index**power)
-
-            boundary.weight_node = np.repeat(weight_node, len(boundary.nodes))
-            # We will always have one fewer sets of elements as the nodes bound the elements.
-            if not np.any(boundary.elements) and boundary is not self.boundaries[-1]:
-                raise ValueError('No elements defined in this nest. Adding weights requires elements.')
-            elif np.any(boundary.elements):
-                # We should get here on all boundaries bar the last since the last open boundary has no elements in a
-                # nest.
-                if power == 0:
-                    weight_element = 1 / index
+                        print(f'\tUpdating grid node attribute: '
+                                + '{attribute}')
                 else:
-                    weight_element = 1 / (index**power)
-                boundary.weight_element = np.repeat(weight_element, len(boundary.elements))
+                    if np.any(self.elements):
+                        setattr(self.grid, attribute, getattr(
+                                self.all_grid, attribute)[self.elements, ...])
+                        if self._debug:
+                            print(f'\tUpdating grid element attribute: '
+                                    + '{attribute}')
+            except (IndexError, TypeError):
+                setattr(self.grid, attribute, getattr(self.all_grid, attribute))
+                if self._debug:
+                    print(f'\tTransferring grid attribute: {attribute}')
+            except AttributeError as e:
+                if self._debug:
+                    print(e)
+                pass
+
+        #if self._debug:
+        #    print('Adding sigma info to nest {} of {}'.format(
+        #            ii + 1, len(self.super_boundaries.nest)))
+        for attribute in self.sigma:
+            if self._debug:
+                print('\t{}'.format(attribute))
+            try:
+                if 'center' not in attribute:
+                    setattr(self.sigma, attribute, getattr(self.all_sigma, 
+                            attribute)[self.nodes, ...])
+                    if self._debug:
+                        print(f'\tUpdating sigma node attribute: '
+                                + '{attribute}')
+                else:
+                    if np.any(self.elements):
+                        setattr(self.sigma, attribute, getattr(
+                            self.all_sigma, attribute)[self.elements, ...])
+                        if self._debug:
+                            print(f'\tUpdating sigma element attribute: '
+                                    + '{attribute}')
+            except (IndexError, TypeError):
+                setattr(self.sigma, attribute, getattr(
+                        self.all_sigma, attribute))
+                if self._debug:
+                    print(f'\tTransferring sigma attribute: {attribute}')
+            except AttributeError as e:
+                if self._debug:
+                    print(e)
 
     def add_tpxo_tides(self, *args, **kwargs):
         """
