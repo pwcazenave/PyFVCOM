@@ -1830,6 +1830,55 @@ class OpenBoundary(object):
             # Populate the grid and sigma objects too.
             self._update_nest()
 
+    def add_nest_weights(self, power=0):
+        """
+        For the nests in self.open_boundaries, add a corresponding weight 
+        for the nodes and elements to each one. This makes sense if there are 
+        levels of boundary forcing in parallel to the external boundary nodes. 
+        This function is used by preproc.Model.add_nests()
+
+        Parameters
+        ----------
+        power : float, optional
+            Give an optional power with which weighting decreases with each 
+            successive nest. Defaults to 0 (i.e. linear).
+
+        Provides
+        --------
+        Populates the Nest objects with the relevant 
+        weight_node and weight_element arrays.
+
+        """
+
+        if self._noisy:
+            print('Add weights to the nested boundary.')
+
+        # The first nest object in the list is the OpenBoundary nodes so start 
+        # at index 1
+        for index, this_nest in enumerate(self.nest, 1):
+            if power == 0:
+                weight_node = 1 / index
+            else:
+                weight_node = 1 / (index**power)
+
+            this_nest.weight_node = np.repeat(weight_node, 
+                    len(this_nest.nodes))
+            # We will always have one fewer sets of elements as the nodes 
+            # bound the elements.
+            if (not np.any(this_nest.elements) and 
+                    this_nest is not self.nest[-1]):
+                raise ValueError('No elements defined in this nest. '
+                        + 'Adding weights requires elements.')
+            elif np.any(this_nest.elements):
+                # We should get here on all boundaries bar the last since the 
+                # last open boundary has no elements in a nest.
+                if power == 0:
+                    weight_element = 1 / index
+                else:
+                    weight_element = 1 / (index**power)
+                this_nest.weight_element = np.repeat(weight_element, 
+                        len(this_nest.elements))
+
     def add_nested_forcing(self, fvcom_name, coarse_name, coarse, interval=1, constrain_coordinates=False,
                            mode='nodes', tide_adjust=False, verbose=False):
         """
