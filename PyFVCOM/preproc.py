@@ -23,10 +23,11 @@ import numpy as np
 import scipy.optimize
 from PyFVCOM.coordinate import utm_from_lonlat, lonlat_from_utm
 from PyFVCOM.grid import Domain, grid_metrics, read_fvcom_obc, nodes2elems
-from PyFVCOM.grid import OpenBoundary, find_connected_elements, mp_interp_func
+from PyFVCOM.grid import find_connected_elements, mp_interp_func
 from PyFVCOM.grid import find_bad_node, element_side_lengths, reduce_triangulation
 from PyFVCOM.grid import write_fvcom_mesh, connectivity, haversine_distance, subset_domain
 from PyFVCOM.grid import expand_connected_nodes
+from PyFVCOM.grid import OpenBoundary, Nest
 from PyFVCOM.read import FileReader, _TimeReader, control_volumes
 from PyFVCOM.utilities.general import flatten_list, PassiveStore, warn
 from PyFVCOM.utilities.time import date_range
@@ -164,7 +165,6 @@ class Model(Domain):
         self.time = PassiveStore()
         self.sigma = PassiveStore()
         self.sst = PassiveStore()
-        self.nest = PassiveStore()
         self.stations = PassiveStore()
         self.probes = PassiveStore()
         self.ady = PassiveStore()
@@ -2336,8 +2336,7 @@ class Model(Domain):
         # adding extra ones.
         if nesting_type >= 2:
             for i in range(self.dims.open_boundary):
-                for n in range(self.dims.nest_levels):
-                    self.open_boundaries[i].nest[n].add_nest_weights()
+                self.open_boundaries[i].add_nest_weights()
 
 
     def add_nests_harmonics(self, harmonics_file, harmonics_vars=['u', 'v', 'zeta'], constituents=['M2', 'S2'],
@@ -4238,259 +4237,6 @@ def write_model_namelist(namelist_file, namelist_config, mode='w'):
                 else:
                     f.write('\n')
             f.write('/\n\n')
-
-
-class Nest(OpenBoundary):
-    """
-    Class to hold a set of nests levels similar to OpenBoundary objects but 
-    with depth levels and horizontal nest levels. This is a subclass of 
-    OpenBoundary and inherits all the properties of the OpenBoundary it was 
-    initialised with. An OpenBoundary needs to be present before initialising
-    Nest. Use preproc.Model.add_nests() to set up the list of Nest objects.
-    Note: Nest should be initialised with the nodes of the 
-    required nest level as ids in additon to grid, sigma and boundary. 
-    """
-
-    def __init__(self, grid, sigma, boundary, verbose=False, *args, **kwargs):
-        """
-        Create a nested boundary object.
-
-        Parameters
-        ----------
-        grid : PyFVCOM.grid.Domain
-            The model grid within which the nest will sit.
-        sigma : PyFVCOM.model.OpenBoundary.sigma
-            The vertical sigma coordinate configuration for the current grid.
-        boundary : PyFVCOM.grid.OpenBoundary or list
-            An open boundary with which to initialise this nest.
-        ids : np.ndarray
-            Array of unstructured grid IDs representing the nodes of a nest 
-            level.
-        mode : str, optional
-            Specify whether the IDs given are node ('nodes') or element-centre 
-            ('elements') IDs. Defaults to 'nodes'.
-        verbose : bool, optional
-            Set to True to enable verbose output. Defaults to False.
-
-        """
-
-        # Inherit everything from PyFVCOM.grid.OpenBoundary, but extend it for 
-        # our purposes. This doesn't work with Python 2.
-        super().__init__(*args, **kwargs)
-
-        self._debug = False
-        self._noisy = verbose
-
-        self.all_grid = copy.copy(grid)
-        self.all_sigma = copy.copy(sigma)
-        self.grid = copy.copy(grid)
-        self.sigma = copy.copy(sigma)
-
-        # This gets circular so we can access attributes of the parent
-        # OpenBoundary instance 
-        # i.e open_boundary = open_boundaries.nest.super_boundaries
-        # This means we can let Nest iterate over instances of 
-        # itself to keep the nest functions in Nest instead of OpenBoundary
-        if isinstance(boundary, list):
-            self.super_boundaries = boundary
-        elif isinstance(boundary, OpenBoundary):
-            self.super_boundaries = [boundary]
-        else:
-            raise ValueError("Unsupported boundary type {}. Supply "
-                + "PyFVCOM.grid.OpenBoundary or `list'.".format(type(boundary)))
-        # Add the sigma and grid structure attributes. This is a bit 
-        # inefficient as we end up doing it for every boundary each time we 
-        # add a new nest.
-        self._update_nest()
-
-    def __iter__(self):
-        return (a for a in dir(self) if not a.startswith('_'))
-
-    def _update_nest(self):
-        """
-        Call this when we've done something which affects the nest objects 
-        and we need to update their properties.
-
-        For example, this updates sigma information if we've added the sigma 
-        distribution to the Model object.
-        
-        This samples self.all_grid and self.all_sigma with the nest nodes and 
-        elements and give the values for each nest location to self.grid
-        and self.sigma.
-        """
-
-        # Add the grid and sigma data to any nests we've got loaded.
-        #nest = self.super_boundaries.nest[ind]
-        #for ii, nest in enumerate(self.super_boundaries.nest[ind:ind + 1]):
-        #if self._debug:
-        #    print('Adding grid info to nest {} of {}'.format(
-        #            ii + 1, len(self.super_boundaries.nest)))
-        for attribute in self.all_grid:
-            if self._debug:
-                print('\t{}'.format(attribute))
-            try:
-                if ('center' not in attribute and attribute 
-                        not in ['lonc', 'latc', 'xc', 'yc']):
-                    setattr(self.grid, attribute, getattr(self.all_grid, 
-                            attribute)[self.nodes, ...])
-                    if self._debug:
-                        print(f'\tUpdating grid node attribute: '
-                                + '{attribute}')
-                else:
-                    if np.any(self.elements):
-                        setattr(self.grid, attribute, getattr(
-                                self.all_grid, attribute)[self.elements, ...])
-                        if self._debug:
-                            print(f'\tUpdating grid element attribute: '
-                                    + '{attribute}')
-            except (IndexError, TypeError):
-                setattr(self.grid, attribute, getattr(self.all_grid, attribute))
-                if self._debug:
-                    print(f'\tTransferring grid attribute: {attribute}')
-            except AttributeError as e:
-                if self._debug:
-                    print(e)
-                pass
-
-        #if self._debug:
-        #    print('Adding sigma info to nest {} of {}'.format(
-        #            ii + 1, len(self.super_boundaries.nest)))
-        for attribute in self.sigma:
-            if self._debug:
-                print('\t{}'.format(attribute))
-            try:
-                if 'center' not in attribute:
-                    setattr(self.sigma, attribute, getattr(self.all_sigma, 
-                            attribute)[self.nodes, ...])
-                    if self._debug:
-                        print(f'\tUpdating sigma node attribute: '
-                                + '{attribute}')
-                else:
-                    if np.any(self.elements):
-                        setattr(self.sigma, attribute, getattr(
-                            self.all_sigma, attribute)[self.elements, ...])
-                        if self._debug:
-                            print(f'\tUpdating sigma element attribute: '
-                                    + '{attribute}')
-            except (IndexError, TypeError):
-                setattr(self.sigma, attribute, getattr(
-                        self.all_sigma, attribute))
-                if self._debug:
-                    print(f'\tTransferring sigma attribute: {attribute}')
-            except AttributeError as e:
-                if self._debug:
-                    print(e)
-
-    def add_tpxo_tides(self, *args, **kwargs):
-        """
-        Add TPXO tides at the set of open boundaries.
-
-        Parameters
-        ----------
-        tpxo_harmonics : str, pathlib.Path
-            Path to the TPXO harmonics netCDF file to use.
-        predict : str, optional
-            Type of data to predict. Select 'zeta' (default), 'u' or 'v'.
-        interval : str, optional
-            Time sampling interval in days. Defaults to 1 hour.
-        constituents : list, optional
-            List of constituent names to use in UTide.reconstruct. Defaults to ['M2'].
-        serial : bool, optional
-            Run in serial rather than parallel. Defaults to parallel.
-        pool_size : int, optional
-            Specify number of processes for parallel run. By default it uses all available.
-        noisy : bool, optional
-            Set to True to enable some sort of progress output. Defaults to False.
-
-        """
-
-        if self._noisy:
-            print('Interpolate TPXO tides to the nested boundary.')
-
-        for boundary in self.boundaries:
-            boundary.add_tpxo_tides(*args, **kwargs)
-
-    def add_nested_forcing(self, *args, **kwargs):
-        """
-        Interpolate the given data onto the open boundary nodes for the period from `self.time.start' to
-        `self.time.end'.
-
-        Parameters
-        ----------
-        fvcom_name : str
-            The data field name to add to the nest object which will be written to netCDF for FVCOM.
-        coarse_name : str
-            The data field name to use from the coarse object.
-        coarse : RegularReader
-            The regularly gridded data to interpolate onto the open boundary nodes. This must include time, lon,
-            lat and depth data as well as the time series to interpolate (4D volume [time, depth, lat, lon]).
-        interval : float, optional
-            Time sampling interval in days. Defaults to 1 day.
-        constrain_coordinates : bool, optional
-            Set to True to constrain the open boundary coordinates (lon, lat, depth) to the supplied coarse data.
-            This essentially squashes the open boundary to fit inside the coarse data and is, therefore, a bit of a
-            fudge! Defaults to False.
-        mode : bool, optional
-            Set to 'nodes' to interpolate onto the open boundary node positions or 'elements' for the elements for
-            z-level data. For 2D data, set to 'surface' (interpolates to the node positions ignoring depth
-            coordinates). Also supported are 'sigma_nodes' and `sigma_elements' which means we have spatially (and
-            optionally temporally) varying water depths (i.e. sigma layers rather than z-levels). Defaults to 'nodes'.
-        tide_adjust : bool, optional
-            Some nested forcing doesn't include tidal components and these have to be added from predictions using
-            harmonics. With this set to true the interpolated forcing has the tidal component (required to already
-            exist in self.tide) added to the final data.
-        verbose : bool, optional
-            Set to True to enable verbose output. Defaults to False (no verbose output).
-
-        """
-        for ii, boundary in enumerate(self.boundaries):
-            if self._noisy:
-                print(f'Interpolating {args[1]} forcing for nested boundary {ii + 1} of {len(self.boundaries)}')
-            boundary.add_nested_forcing(*args, **kwargs)
-
-    def add_fvcom_tides(self, *args, **kwargs):
-        """
-        Add FVCOM-derived tides at the set of open boundaries.
-
-        Parameters
-        ----------
-        fvcom_harmonics : str, pathlib.Path
-            Path to the FVCOM harmonics netCDF file to use.
-        predict : str, optional
-            Type of data to predict. Select 'zeta' (default), 'u' or 'v'.
-        interval : str, optional
-            Time sampling interval in days. Defaults to 1 hour.
-        constituents : list, optional
-            List of constituent names to use in UTide.reconstruct. Defaults to ['M2'].
-        serial : bool, optional
-            Run in serial rather than parallel. Defaults to parallel.
-        pool_size : int, optional
-            Specify number of processes for parallel run. By default it uses all available.
-        noisy : bool, optional
-            Set to True to enable some sort of progress output. Defaults to False.
-
-        """
-        for ii, boundary in enumerate(self.boundaries):
-            # Check if we have elements since outer layer of nest doesn't
-            if kwargs['predict'] in ['u', 'v', 'ua', 'va'] and not np.any(boundary.elements):
-                if self._noisy:
-                    print(f'Skipping prediction of {kwargs["predict"]} for boundary {ii + 1} of {len(self.boundaries)}: no elements defined')
-            else:
-                if self._noisy:
-                    print(f'Predicting {kwargs["predict"]} for boundary {ii + 1} of {len(self.boundaries)}')
-                boundary.add_fvcom_tides(*args, **kwargs)
-
-    def avg_nest_force_vel(self):
-        """
-        Create depth-averaged velocities (`ua', `va') in the open boundary object boundary.data data.
-
-        """
-        for ii, boundary in enumerate(self.boundaries, 1):
-            if np.any(boundary.elements):
-                if self._noisy:
-                    print(f'Creating ua, va for boundary {ii} of {len(self.boundaries)}')
-                boundary.avg_nest_force_vel()
-
 
 def read_regular(regular, variables, noisy=False, **kwargs):
     """
