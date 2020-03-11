@@ -1109,7 +1109,12 @@ def mp_interp_func(input):
 
 class OpenBoundary(object):
     """
-    FVCOM grid open boundary object. Handles reading, writing and interpolating.
+    FVCOM grid open boundary object. Handles reading, writing and interpolating.    This object can either have zero depth level as a standard open boundary
+    or the subclass Nest can hold additional information with multiple vertical
+    depth levels and multiple horizontal nesting levels. 
+
+    This is called by Model._initialise_open_boundaries() and Model.add_nests()
+    
 
     Not sure this is the right place for this. Might be better placed in PyFVCOM.preproc. Also, this should probably
     be a superclass of Nest as an open boundary is just a special case of a PyFVCOM.preproc.Nest (one with 0 levels,
@@ -1757,6 +1762,73 @@ class OpenBoundary(object):
         zeta = pred['h']
 
         return zeta
+
+    def add_nest_level(self):
+        """
+        Function to add a nested level which is connected parallel to the 
+        existing nested nodes and elements. This function is used by 
+        preproc.Model.add_nests() and add Nest objects to the list after the 
+        first Nest object is initialised.
+
+        This is useful for generating nested inputs from other model inputs 
+        (e.g. a regularly gridded model) in conjunction with 
+        PyFVCOM.grid.OpenBoundary.add_nested_forcing()).
+
+        Provides
+        --------
+        Adds a new PyFVCOM.Nest object to the list 
+        self.open_boundaries[self.dims.open_boundary].nest[
+                self.dims.nest_levels]
+
+        """
+
+        if self._noisy:
+            print(f'Add level {len(self.nest)} to the nest.')
+
+        # Find all the elements connected to the last set of open boundary nodes.
+        if not np.any(self.nodes):
+            raise ValueError('No open boundary nodes in the current open 
+                    boundary. Please add some and try again.')
+
+        new_level_nest = []
+        # Work off the last nest's nodes to get the connected elements 
+        # and nodes. No need to iterate through everything as this gets 
+        # recursive as we add more boundaries.
+        this_nest = self.nest[-1]
+        level_elements = find_connected_elements(this_nest.nodes, 
+                this_nest.all_grid.triangles)
+        # Find the nodes and elements in the existing nests.
+        nest_nodes = flatten_list([i.nodes for i in self.nest])
+        nest_elements = flatten_list(
+                [i.elements for i in self.nest if np.any(i.elements)])
+
+        # Get unique elements and add them to the current nest. This way 
+        # we end up with the right number of layers of elements (i.e. they're 
+        # bounded by a string of nodes on each side).
+        unique_elements = np.setdiff1d(level_elements, nest_elements)
+        if this_nest.elements is None:
+            this_nest.elements = unique_elements.tolist()
+        else:
+            if self._noisy:
+                warn(f'We already have elements on nest level 
+                        {len(self.boundaries)}.')
+            # print(unique_elements, this_boundary.elements)
+            # this_boundary.elements = unique_elements.tolist()
+
+        # Get the nodes connected to the elements we've extracted.
+        level_nodes = np.unique(this_nest.all_grid.triangles[level_elements, :])
+        # Remove ones we already have in the nest.
+        unique_nodes = np.setdiff1d(level_nodes, nest_nodes)
+        if len(unique_nodes) > 0:
+            # Create a new nest level from those nodes.
+            self.nest.append(Nest(this_nest.all_grid, this_nest.all_sigma, 
+                    this_nest.super_boundaries, ids=unique_nodes)
+
+            # Grab the time from the previous one.
+            setattr(self.nest[-1], 'time', this_nest.time)
+
+            # Populate the grid and sigma objects too.
+            self._update_nest()
 
     def add_nested_forcing(self, fvcom_name, coarse_name, coarse, interval=1, constrain_coordinates=False,
                            mode='nodes', tide_adjust=False, verbose=False):
