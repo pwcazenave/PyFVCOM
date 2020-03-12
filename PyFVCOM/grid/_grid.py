@@ -1821,7 +1821,8 @@ class OpenBoundary(object):
         if len(unique_nodes) > 0:
             # Create a new nest level from those nodes.
             self.nest.append(Nest(this_nest.all_grid, this_nest.all_sigma, 
-                    this_nest.super_boundaries, ids=unique_nodes))
+                    this_nest.super_boundaries, ids=unique_nodes, 
+                    verbose=self.nest[-1]._noisy))
 
             # Grab the time from the previous one.
             setattr(self.nest[-1], 'time', this_nest.time)
@@ -2436,35 +2437,6 @@ class Nest(OpenBoundary):
                 if self._debug:
                     print(e)
 
-    def add_tpxo_tides(self, *args, **kwargs):
-        """
-        Add TPXO tides at the set of open boundaries.
-
-        Parameters
-        ----------
-        tpxo_harmonics : str, pathlib.Path
-            Path to the TPXO harmonics netCDF file to use.
-        predict : str, optional
-            Type of data to predict. Select 'zeta' (default), 'u' or 'v'.
-        interval : str, optional
-            Time sampling interval in days. Defaults to 1 hour.
-        constituents : list, optional
-            List of constituent names to use in UTide.reconstruct. Defaults to ['M2'].
-        serial : bool, optional
-            Run in serial rather than parallel. Defaults to parallel.
-        pool_size : int, optional
-            Specify number of processes for parallel run. By default it uses all available.
-        noisy : bool, optional
-            Set to True to enable some sort of progress output. Defaults to False.
-
-        """
-
-        if self._noisy:
-            print('Interpolate TPXO tides to the nested boundary.')
-
-        for boundary in self.boundaries:
-            boundary.add_tpxo_tides(*args, **kwargs)
-
     def add_nested_forcing(self, *args, **kwargs):
         """
         Interpolate the given data onto the open boundary nodes for the period from `self.time.start' to
@@ -2502,38 +2474,6 @@ class Nest(OpenBoundary):
             if self._noisy:
                 print(f'Interpolating {args[1]} forcing for nested boundary {ii + 1} of {len(self.boundaries)}')
             boundary.add_nested_forcing(*args, **kwargs)
-
-    def add_fvcom_tides(self, *args, **kwargs):
-        """
-        Add FVCOM-derived tides at the set of open boundaries.
-
-        Parameters
-        ----------
-        fvcom_harmonics : str, pathlib.Path
-            Path to the FVCOM harmonics netCDF file to use.
-        predict : str, optional
-            Type of data to predict. Select 'zeta' (default), 'u' or 'v'.
-        interval : str, optional
-            Time sampling interval in days. Defaults to 1 hour.
-        constituents : list, optional
-            List of constituent names to use in UTide.reconstruct. Defaults to ['M2'].
-        serial : bool, optional
-            Run in serial rather than parallel. Defaults to parallel.
-        pool_size : int, optional
-            Specify number of processes for parallel run. By default it uses all available.
-        noisy : bool, optional
-            Set to True to enable some sort of progress output. Defaults to False.
-
-        """
-        for ii, boundary in enumerate(self.boundaries):
-            # Check if we have elements since outer layer of nest doesn't
-            if kwargs['predict'] in ['u', 'v', 'ua', 'va'] and not np.any(boundary.elements):
-                if self._noisy:
-                    print(f'Skipping prediction of {kwargs["predict"]} for boundary {ii + 1} of {len(self.boundaries)}: no elements defined')
-            else:
-                if self._noisy:
-                    print(f'Predicting {kwargs["predict"]} for boundary {ii + 1} of {len(self.boundaries)}')
-                boundary.add_fvcom_tides(*args, **kwargs)
 
     def avg_nest_force_vel(self):
         """

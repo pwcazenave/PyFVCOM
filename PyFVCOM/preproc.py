@@ -2339,37 +2339,86 @@ class Model(Domain):
                 self.open_boundaries[i].add_nest_weights()
 
 
-    def add_nests_harmonics(self, harmonics_file, harmonics_vars=['u', 'v', 'zeta'], constituents=['M2', 'S2'],
-                            pool_size=None):
+    def add_nests_harmonics(self, harmonics_file, 
+                harmonics_vars=['u', 'v', 'zeta'], constituents=['M2', 'S2'],
+                pool_size=None, tpxo=False, complex=False, *args, **kwargs):
         """
-        Adds series of values based on harmonic predictions to the boundaries in the nest object
+        Adds series of values based on harmonic predictions to the boundaries 
+        in the nest object
 
         Parameters
         ----------
-        harmonics_file : str
-            Path to the harmonics netcdf
+        harmonics_file : str or list
+            Path to the harmonics netcdf. If list, each file in the list 
+            corresponds to a constituent.
         harmonics_vars : list, optional
             The variables to predict
         constituents : list, optional
             The tidal constituents to use for predictions
         pool_size : int, optional
-            The number of multiprocessing tasks to use in the intepolation of the harmonics and doing the
+            The number of multiprocessing tasks to use in the intepolation 
+            of the harmonics and doing the
             predictions. None causes it to use all available.
+        tpxo : bool
+            If true the input harmonics_file is a TPXO file. If false the 
+            input harmonics_file is an FVCOM-derived file.
+        complex : bool
+            If tpxo is True, specify if TPXO input file is define in terms of 
+            tidal amplitude and phase or as a cartesian complex with Real 
+            and Imaginary parts. This should be set to True for TPXO9 and 
+            False for earlier versions of TPXO. If tpxo is False this flag
+            is not used.
 
         Provides
         --------
         self.nests.boundaries[:].tide.* : array
-            Arrays of the predicted series associated with each boundary in the tide sub object
+            Arrays of the predicted series associated with each boundary in 
+            the tide sub object
 
         """
-        for ii, this_nest in enumerate(self.nest):
-            print('Adding harmonics to nest {} of {}'.format(ii + 1, len(self.nest)))
-            for this_var in harmonics_vars:
-                this_nest.add_fvcom_tides(harmonics_file, predict=this_var, constituents=constituents, interval=self.sampling, pool_size=pool_size)
+
+        for i, this_boundary in enumerate(self.open_boundaries):
+            for ii, this_nest in enumerate(this_boundary.nest):
+                for iii, this_var in enumerate(harmonics_vars):
+                    if this_nest._noisy:
+                        print('Adding harmonics to boundary {} of {} '.format(
+                                i + 1, len(self.open_boundaries))
+                                + 'in nest {} of {}'.format(
+                                ii + 1, len(this_boundary.nest))
+                                + ' variable {}'.format(this_var))
+
+                    if (this_var in ['u', 'v', 'ua', 'va'] and not 
+                        np.any(this_nest.elements)):
+                        # Check if we have elements since outer layer of 
+                        # nest does not.
+                        if this_nest._noisy:
+                            print('Skipping prediction of '
+                                    + '{} for nest {} of {}:'.format(
+                                    this_var, ii + 1, len(this_boundary.nest))
+                                    + ' no elements defined')
+                        continue
+
+                    # This method directly calls OpenBoundary.add_tpxo_tides()
+                    # because Nest is a subclass of OpenBoundary
+                    if tpxo:
+                        this_nest.add_tpxo_tides(harmonics_file, 
+                                predict=this_var, 
+                                constituents=constituents, 
+                                interval=self.sampling, 
+                                complex=complex,
+                                pool_size=pool_size)
+                    # This method directly calls OpenBoundary.add_fvcom_tides()
+                    # because Nest is a subclass of OpenBoundary
+                    else:
+                        this_nest.add_fvcom_tides(harmonics_file, 
+                                predict=this_var, 
+                                constituents=constituents, 
+                                interval=self.sampling, 
+                                pool_size=pool_size)
 
     def add_nests_regular(self, fvcom_var, regular_reader, regular_var, **kwargs):
         """
-        TODO: Docstring
+        Adds nested forcing to boundaries
 
         """
         for i, this_nest in enumerate(self.nest):
