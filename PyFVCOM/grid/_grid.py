@@ -1879,39 +1879,47 @@ class OpenBoundary(object):
                 this_nest.weight_element = np.repeat(weight_element, 
                         len(this_nest.elements))
 
-    def add_nested_forcing(self, fvcom_name, coarse_name, coarse, interval=1, constrain_coordinates=False,
-                           mode='nodes', tide_adjust=False, verbose=False):
+    def add_nested_forcing(self, fvcom_name, coarse_name, coarse, interval=1, 
+                            constrain_coordinates=False,
+                            mode='nodes', tide_adjust=False, verbose=False):
         """
-        Interpolate the given data onto the open boundary nodes for the period from `self.time.start' to
-        `self.time.end'.
+        Interpolate the given data onto the open boundary nodes for the period 
+        from 'self.time.start' to 'self.time.end'.
 
         Parameters
         ----------
         fvcom_name : str
-            The data field name to add to the nest object which will be written to netCDF for FVCOM.
+            The data field name to add to the nest object which will be 
+            written to netCDF for FVCOM.
         coarse_name : str
             The data field name to use from the coarse object.
         coarse : RegularReader
-            The regularly gridded data to interpolate onto the open boundary nodes. This must include time, lon,
-            lat and depth data as well as the time series to interpolate (4D volume [time, depth, lat, lon]).
+            The regularly gridded data to interpolate onto the open boundary 
+            nodes. This must include time, lon, lat and depth data as well as 
+            the time series to interpolate (4D volume [time, depth, lat, lon]).
         interval : float, optional
             Time sampling interval in days. Defaults to 1 day.
         constrain_coordinates : bool, optional
-            Set to True to constrain the open boundary coordinates (lon, lat, depth) to the supplied coarse data.
-            This essentially squashes the open boundary to fit inside the coarse data and is, therefore, a bit of a
-            fudge! Defaults to False.
+            Set to True to constrain the open boundary coordinates (lon, lat, 
+            depth) to the supplied coarse data. This essentially squashes the 
+            open boundary to fit inside the coarse data and is, therefore, a 
+            bit of a fudge! Defaults to False.
         mode : bool, optional
-            Set to 'nodes' to interpolate onto the open boundary node positions or 'elements' for the elements for
-            z-level data. For 2D data, set to 'surface' (interpolates to the node positions ignoring depth
-            coordinates). Also supported are 'sigma_nodes' and `sigma_elements' which means we have spatially (and
-            optionally temporally) varying water depths (i.e. sigma layers rather than z-levels). Defaults to 'nodes'.
+            Set to 'nodes' to interpolate onto the open boundary node 
+            positions or 'elements' for the elements. 'nodes and 'elements' 
+            are for input data on z-levels. For 2D data, set to 'surface' 
+            (interpolates to the node positions ignoring depth coordinates). 
+            Also supported are 'sigma_nodes' and 'sigma_elements' which means 
+            we have spatially (and optionally temporally) varying water depths 
+            (i.e. sigma layers rather than z-levels). Defaults to 'nodes'.
         tide_adjust : bool, optional
-            Some nested forcing doesn't include tidal components and these have to be added from predictions using
-            harmonics. With this set to true the interpolated forcing has the tidal component (required to already
-            exist in self.tide) added to the final data.
+            Some nested forcing doesn't include tidal components and these 
+            have to be added from predictions using harmonics. With this set 
+            to true the interpolated forcing has the tidal component (required 
+            to already exist in self.tide) added to the final data.
         verbose : bool, optional
-            Set to True to enable verbose output. Defaults to False (no verbose output).
-
+            Set to True to enable verbose output. Defaults to False 
+            (no verbose output).
         """
 
         # Check we have what we need.
@@ -1932,16 +1940,24 @@ class OpenBoundary(object):
                 return
 
         if raise_error:
-            raise AttributeError('Add vertical sigma coordinates in order to interpolate forcing along this boundary.')
+            raise AttributeError('Add vertical sigma coordinates in order to '
+                    + 'interpolate forcing along this boundary.')
 
-        # Populate the time data. Why did I put the time data in here rather than self.time? This is annoying.
+        # Populate the time data. Why did I put the time data in here rather 
+        # than self.time? This is annoying.
         self.data.time = PassiveStore()
         self.data.time.interval = interval
-        self.data.time.datetime = date_range(self.time.start, self.time.end, inc=interval)
-        self.data.time.time = date2num(getattr(self.data.time, 'datetime'), units='days since 1858-11-17 00:00:00')
-        self.data.time.Itime = np.floor(getattr(self.data.time, 'time'))  # integer Modified Julian Days
-        self.data.time.Itime2 = (getattr(self.data.time, 'time') - getattr(self.data.time, 'Itime')) * 24 * 60 * 60 * 1000  # milliseconds since midnight
-        self.data.time.Times = [t.strftime('%Y-%m-%dT%H:%M:%S.%f') for t in getattr(self.data.time, 'datetime')]
+        self.data.time.datetime = date_range(self.time.start, self.time.end, 
+                inc=interval)
+        self.data.time.time = date2num(getattr(self.data.time, 'datetime'), 
+                units='days since 1858-11-17 00:00:00')
+        self.data.time.Itime = np.floor(getattr(self.data.time, 'time'))  
+        # integer Modified Julian Days
+        self.data.time.Itime2 = (getattr(self.data.time, 'time') 
+                - getattr(self.data.time, 'Itime')) * 24 * 60 * 60 * 1000  
+                # milliseconds since midnight
+        self.data.time.Times = [t.strftime('%Y-%m-%dT%H:%M:%S.%f') 
+                for t in getattr(self.data.time, 'datetime')]
 
         if 'elements' in mode:
             boundary_points = self.elements
@@ -1962,67 +1978,92 @@ class OpenBoundary(object):
             y[y < coarse.grid.lat.min()] = coarse.grid.lat.min()
             y[y > coarse.grid.lat.max()] = coarse.grid.lat.max()
 
-            # Internal landmasses also need to be dealt with, so test if a point lies within the mask of the grid and
+            # Internal landmasses also need to be dealt with, so test if a 
+            # point lies within the mask of the grid and
             # move it to the nearest in grid point if so.
             if not mode == 'surface':
-                land_mask = getattr(coarse.data, coarse_name)[0, ...].mask[0, :, :]
+                land_mask = getattr(coarse.data, coarse_name
+                        )[0, ...].mask[0, :, :]
             else:
                 land_mask = getattr(coarse.data, coarse_name)[0, ...].mask
 
             sea_points = np.ones(land_mask.shape)
             sea_points[land_mask] = np.nan
 
-            ft_sea = RegularGridInterpolator((coarse.grid.lat, coarse.grid.lon), sea_points, method='linear', fill_value=np.nan)
+            ft_sea = RegularGridInterpolator((coarse.grid.lat, coarse.grid.lon),
+                    sea_points, method='linear', fill_value=np.nan)
             internal_points = np.isnan(ft_sea(np.asarray([y, x]).T))
 
             if np.any(internal_points):
                 xv, yv = np.meshgrid(coarse.grid.lon, coarse.grid.lat)
-                valid_ll = np.asarray([x[~internal_points], y[~internal_points]]).T
+                valid_ll = np.asarray([x[~internal_points], 
+                        y[~internal_points]]).T
                 for this_ind in np.where(internal_points)[0]:
-                    nearest_valid_ind = np.argmin((valid_ll[:, 0] - x[this_ind])**2 + (valid_ll[:, 1] - y[this_ind])**2)
+                    nearest_valid_ind = np.argmin(
+                            (valid_ll[:, 0] - x[this_ind])**2 
+                            + (valid_ll[:, 1] - y[this_ind])**2)
                     x[this_ind] = valid_ll[nearest_valid_ind, 0]
                     y[this_ind] = valid_ll[nearest_valid_ind, 1]
 
-            # The depth data work differently as we need to squeeze each FVCOM water column into the available coarse
-            # data. The only way to do this is to adjust each FVCOM water column in turn by comparing with the
+            # The depth data work differently as we need to squeeze each 
+            # FVCOM water column into the available coarse
+            # data. The only way to do this is to adjust each FVCOM water 
+            # column in turn by comparing with the
             # closest coarse depth.
             if mode != 'surface':
-                coarse_depths = np.tile(coarse.grid.depth, [coarse.dims.lat, coarse.dims.lon, 1]).transpose(2, 0, 1)
-                coarse_depths = np.ma.masked_array(coarse_depths, mask=getattr(coarse.data, coarse_name)[0, ...].mask)
+                coarse_depths = np.tile(coarse.grid.depth, [coarse.dims.lat, 
+                        coarse.dims.lon, 1]).transpose(2, 0, 1)
+                coarse_depths = np.ma.masked_array(coarse_depths, 
+                        mask=getattr(coarse.data, coarse_name)[0, ...].mask)
                 coarse_depths = np.max(coarse_depths, axis=0)
             
-                # Find any places where only the zero depth layer exists and copy down 
-                zero_depth_water = np.where(np.logical_and(coarse_depths == 0, ~coarse_depths.mask))
+                # Find any places where only the zero depth layer exists and 
+                # copy down 
+                zero_depth_water = np.where(np.logical_and(coarse_depths == 0, 
+                        ~coarse_depths.mask))
                 if zero_depth_water[0].size:
                     data_mod = getattr(coarse.data, coarse_name)
-                    data_mod[:, 1, zero_depth_water[0], zero_depth_water[1]] = data_mod[:, 0, zero_depth_water[0], zero_depth_water[1]]
-                    data_mod.mask[:, 1, zero_depth_water[0], zero_depth_water[1]] = False
-                    setattr(coarse.data, coarse_name, data_mod) # Probably isn't needed cos pointers but for clarity
+                    data_mod[:, 1, zero_depth_water[0], zero_depth_water[1]] = (
+                            data_mod[:, 0, zero_depth_water[0], 
+                            zero_depth_water[1]])
+                    (data_mod.mask[:, 1, zero_depth_water[0], 
+                            zero_depth_water[1]]) = False
+                    setattr(coarse.data, coarse_name, data_mod) 
+                            # Probably isn't needed cos pointers but for clarity
 
                 coarse_depths = np.ma.filled(coarse_depths, 0)
 
-                # Go through each open boundary position and if its depth is deeper than the closest coarse data,
-                # squash the open boundary water column into the coarse water column.
+                # Go through each open boundary position and if its depth is 
+                # deeper than the closest coarse data,
+                # squash the open boundary water column into the coarse water 
+                # column.
                 for idx, node in enumerate(zip(x, y, z)):
                     nearest_lon_ind = np.argmin((coarse.grid.lon - node[0])**2)
                     nearest_lat_ind = np.argmin((coarse.grid.lat - node[1])**2)
 
                     if node[0] < coarse.grid.lon[nearest_lon_ind]:
-                        nearest_lon_ind = [nearest_lon_ind -1, nearest_lon_ind, nearest_lon_ind -1, nearest_lon_ind]
+                        nearest_lon_ind = [nearest_lon_ind -1, nearest_lon_ind, 
+                                nearest_lon_ind -1, nearest_lon_ind]
                     else:
-                        nearest_lon_ind = [nearest_lon_ind, nearest_lon_ind + 1, nearest_lon_ind, nearest_lon_ind + 1]
+                        nearest_lon_ind = [nearest_lon_ind, nearest_lon_ind + 1,
+                                nearest_lon_ind, nearest_lon_ind + 1]
 
                     if node[1] < coarse.grid.lat[nearest_lat_ind]:
-                        nearest_lat_ind = [nearest_lat_ind -1, nearest_lat_ind -1, nearest_lat_ind, nearest_lat_ind]
+                        nearest_lat_ind = [nearest_lat_ind -1, nearest_lat_ind 
+                                -1, nearest_lat_ind, nearest_lat_ind]
                     else:
-                        nearest_lat_ind = [nearest_lat_ind, nearest_lat_ind, nearest_lat_ind + 1, nearest_lat_ind + 1]
+                        nearest_lat_ind = [nearest_lat_ind, nearest_lat_ind, 
+                                nearest_lat_ind + 1, nearest_lat_ind + 1]
 
-                    grid_depth = np.min(coarse_depths[nearest_lat_ind, nearest_lon_ind])
+                    grid_depth = np.min(coarse_depths[nearest_lat_ind, 
+                            nearest_lon_ind])
 
                     if grid_depth < node[2].max():
-                        # Squash the FVCOM water column into the coarse water column.
+                        # Squash the FVCOM water column into the coarse water 
+                        # column.
                         z[idx, :] = (node[2] / node[2].max()) * grid_depth
-                # Fix all depths which are shallower than the shallowest coarse depth. This is more straightforward as
+                # Fix all depths which are shallower than the shallowest 
+                # coarse depth. This is more straightforward as
                 # it's a single minimum across all the open boundary positions.
                 z[z < coarse.grid.depth.min()] = coarse.grid.depth.min()
 
@@ -2031,21 +2072,29 @@ class OpenBoundary(object):
         nz = z.shape[-1]
 
         if verbose:
-            print(f'Interpolating {nt} times, {nz} vertical layers and {nx} points')
+            print('Interpolating {} times, {} '.format(nt, nz)
+                    + 'vertical layers and {} points'.format(nx))
 
-        # Make arrays of lon, lat, depth and time for non-sigma interpolation. Need to make the coordinates match the
-        # coarse data shape and then flatten the lot. We should be able to do the interpolation in one shot this way,
-        # but we have to be careful our coarse data covers our model domain (space and time).
+        # Make arrays of lon, lat, depth and time for non-sigma interpolation. 
+        # Need to make the coordinates match the
+        # coarse data shape and then flatten the lot. We should be able to do 
+        # the interpolation in one shot this way,
+        # but we have to be careful our coarse data covers our model domain 
+        # (space and time).
         if mode == 'surface':
             if verbose:
                 print('Interpolating surface data...', end=' ')
 
-            # We should use np.meshgrid here instead of all this tiling business.
-            boundary_grid = np.array((np.tile(self.data.time.time, [nx, 1]).T.ravel(),
-                                      np.tile(y, [nt, 1]).transpose(0, 1).ravel(),
-                                      np.tile(x, [nt, 1]).transpose(0, 1).ravel())).T
-            ft = RegularGridInterpolator((coarse.time.time, coarse.grid.lat, coarse.grid.lon),
-                                         getattr(coarse.data, coarse_name), method='linear', fill_value=np.nan)
+            # We should use np.meshgrid here instead of all this tiling 
+            # business.
+            boundary_grid = np.array((
+                    np.tile(self.data.time.time, [nx, 1]).T.ravel(),
+                    np.tile(y, [nt, 1]).transpose(0, 1).ravel(),
+                    np.tile(x, [nt, 1]).transpose(0, 1).ravel())).T
+            ft = RegularGridInterpolator((coarse.time.time, 
+                    coarse.grid.lat, coarse.grid.lon),
+                    getattr(coarse.data, coarse_name), 
+                    method='linear', fill_value=np.nan)
             # Reshape the results to match the un-ravelled boundary_grid array.
             interpolated_coarse_data = ft(boundary_grid).reshape([nt, -1])
         elif 'sigma' in mode:
@@ -2053,37 +2102,47 @@ class OpenBoundary(object):
                 print('Interpolating sigma data...', end=' ')
 
             nt = coarse.dims.time  # rename!
-            interp_args = [(boundary_points, x, y, self.sigma.layers_z, coarse, coarse_name, self._debug, t) for t in np.arange(nt)]
+            interp_args = [(boundary_points, x, y, self.sigma.layers_z, 
+                    coarse, coarse_name, self._debug, t) for t in np.arange(nt)]
             if hasattr(coarse, 'ds'):
                 coarse.ds.close()
                 delattr(coarse, 'ds')
             pool = multiprocessing.Pool()
             results = pool.map(self._brute_force_interpolator, interp_args)
 
-            # Now we have those data interpolated in space (horizontal and vertical), interpolate to match in time.
-            interp_args = [(coarse.time.time, j, self.data.time.time) for i in np.asarray(results).T for j in i]
+            # Now we have those data interpolated in space (horizontal and 
+            # vertical), interpolate to match in time.
+            interp_args = [(coarse.time.time, j, self.data.time.time) 
+                    for i in np.asarray(results).T for j in i]
             results = pool.map(self._interpolate_in_time, interp_args)
             pool.close()
 
-            # Reshape and transpose to be the correct size for writing to netCDF (time, depth, node).
-            interpolated_coarse_data = np.asarray(results).reshape(nz, nx, -1).transpose(2, 0, 1)
+            # Reshape and transpose to be the correct size for writing to 
+            # netCDF (time, depth, node).
+            interpolated_coarse_data = np.asarray(results).reshape(
+                      nz, nx, -1).transpose(2, 0, 1)
         else:
             if verbose:
                 print('Interpolating z-level data...', end=' ')
-            # Assume it's z-level data (e.g. HYCOM, CMEMS). We should use np.meshgrid here instead of all this tiling
+            # Assume it's z-level data (e.g. HYCOM, CMEMS). We should use 
+            # np.meshgrid here instead of all this tiling
             # business.
-            boundary_grid = np.array((np.tile(self.data.time.time, [nx, nz, 1]).T.ravel(),
-                                      np.tile(z.T, [nt, 1, 1]).ravel(),
-                                      np.tile(y, [nz, nt, 1]).transpose(1, 0, 2).ravel(),
-                                      np.tile(x, [nz, nt, 1]).transpose(1, 0, 2).ravel())).T
-            ft = RegularGridInterpolator((coarse.time.time, coarse.grid.depth, coarse.grid.lat, coarse.grid.lon),
-                                         np.ma.filled(getattr(coarse.data, coarse_name), np.nan), method='linear',
-                                         fill_value=np.nan)
-            # Reshape the results to match the un-ravelled boundary_grid array (time, depth, node).
+            boundary_grid = np.array((
+                    np.tile(self.data.time.time, [nx, nz, 1]).T.ravel(),
+                    np.tile(z.T, [nt, 1, 1]).ravel(),
+                    np.tile(y, [nz, nt, 1]).transpose(1, 0, 2).ravel(),
+                    np.tile(x, [nz, nt, 1]).transpose(1, 0, 2).ravel())).T
+            ft = RegularGridInterpolator((coarse.time.time, coarse.grid.depth, 
+                    coarse.grid.lat, coarse.grid.lon),
+                    np.ma.filled(getattr(coarse.data, coarse_name), np.nan), 
+                    method='linear', fill_value=np.nan)
+            # Reshape the results to match the un-ravelled boundary_grid 
+            # array (time, depth, node).
             interpolated_coarse_data = ft(boundary_grid).reshape([nt, nz, -1])
 
         if tide_adjust and fvcom_name in ['u', 'v', 'ua', 'va']:
-            interpolated_coarse_data = interpolated_coarse_data + getattr(self.tide, fvcom_name)
+            interpolated_coarse_data = interpolated_coarse_data + getattr(
+                    self.tide, fvcom_name)
 
         # Drop the interpolated data into the data object.
         setattr(self.data, fvcom_name, interpolated_coarse_data)
@@ -2436,44 +2495,6 @@ class Nest(OpenBoundary):
             except AttributeError as e:
                 if self._debug:
                     print(e)
-
-    def add_nested_forcing(self, *args, **kwargs):
-        """
-        Interpolate the given data onto the open boundary nodes for the period from `self.time.start' to
-        `self.time.end'.
-
-        Parameters
-        ----------
-        fvcom_name : str
-            The data field name to add to the nest object which will be written to netCDF for FVCOM.
-        coarse_name : str
-            The data field name to use from the coarse object.
-        coarse : RegularReader
-            The regularly gridded data to interpolate onto the open boundary nodes. This must include time, lon,
-            lat and depth data as well as the time series to interpolate (4D volume [time, depth, lat, lon]).
-        interval : float, optional
-            Time sampling interval in days. Defaults to 1 day.
-        constrain_coordinates : bool, optional
-            Set to True to constrain the open boundary coordinates (lon, lat, depth) to the supplied coarse data.
-            This essentially squashes the open boundary to fit inside the coarse data and is, therefore, a bit of a
-            fudge! Defaults to False.
-        mode : bool, optional
-            Set to 'nodes' to interpolate onto the open boundary node positions or 'elements' for the elements for
-            z-level data. For 2D data, set to 'surface' (interpolates to the node positions ignoring depth
-            coordinates). Also supported are 'sigma_nodes' and `sigma_elements' which means we have spatially (and
-            optionally temporally) varying water depths (i.e. sigma layers rather than z-levels). Defaults to 'nodes'.
-        tide_adjust : bool, optional
-            Some nested forcing doesn't include tidal components and these have to be added from predictions using
-            harmonics. With this set to true the interpolated forcing has the tidal component (required to already
-            exist in self.tide) added to the final data.
-        verbose : bool, optional
-            Set to True to enable verbose output. Defaults to False (no verbose output).
-
-        """
-        for ii, boundary in enumerate(self.boundaries):
-            if self._noisy:
-                print(f'Interpolating {args[1]} forcing for nested boundary {ii + 1} of {len(self.boundaries)}')
-            boundary.add_nested_forcing(*args, **kwargs)
 
     def avg_nest_force_vel(self):
         """

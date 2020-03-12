@@ -2416,19 +2416,57 @@ class Model(Domain):
                                 interval=self.sampling, 
                                 pool_size=pool_size)
 
-    def add_nests_regular(self, fvcom_var, regular_reader, regular_var, **kwargs):
+    def add_nests_regular(self, fvcom_name, coarse_name, coarse, 
+                          **kwargs):
         """
-        Adds nested forcing to boundaries
+        Adds nested forcing to boundaries.
+        Interpolate the given data onto the open boundary nodes for the 
+        period from 'self.time.start' to 'self.time.end'.
 
+        Parameters
+        ----------
+        fvcom_name : str
+            The data field name to add to the nest object which will be 
+            written to netCDF for FVCOM.
+        coarse_name : str
+            The data field name to use from the coarse object.
+        coarse : RegularReader
+            The regularly gridded data to interpolate onto the open boundary 
+            nodes. This must include time, lon, lat and depth data as well as 
+            the time series to interpolate (4D volume [time, depth, lat, lon]).
+        interval : float, optional
+            Time sampling interval in days. Defaults to 1 day.
+        constrain_coordinates : bool, optional
+            Set to True to constrain the open boundary coordinates 
+            (lon, lat, depth) to the supplied coarse data.
+            This essentially squashes the open boundary to fit inside the 
+            coarse data and is, therefore, a bit of a
+            fudge! Defaults to False.
+        mode : bool, optional
+            Set to 'nodes' to interpolate onto the open boundary node 
+            positions or 'elements' for the elements. 'nodes and 'elements' 
+            are for input data on z-levels. For 2D data, set to 'surface' 
+            (interpolates to the node positions ignoring depth coordinates). 
+            Also supported are 'sigma_nodes' and 'sigma_elements' which means 
+            we have spatially (and optionally temporally) varying water depths 
+            (i.e. sigma layers rather than z-levels). Defaults to 'nodes'.
+        tide_adjust : bool, optional
+            Some nested forcing doesn't include tidal components and these 
+            have to be added from predictions using harmonics. With this set 
+            to true the interpolated forcing has the tidal component (required 
+            to already exist in self.tide) added to the final data.
+        verbose : bool, optional
+            Set to True to enable verbose output. Defaults to False 
+            (no verbose output).
         """
-        for i, this_nest in enumerate(self.nest):
-            if fvcom_var in ['u', 'v']:
-                mode='elements'
-            elif fvcom_var in ['zeta']:
-                mode='surface'
-            else:
-                mode='nodes'
-            this_nest.add_nested_forcing(fvcom_var, regular_var, regular_reader, interval=self.sampling, mode=mode, **kwargs)
+
+        for i, this_boundary in enumerate(self.open_boundaries):
+            for ii, this_nest in enumerate(this_boundary.nest):
+                if this_nest._noisy:
+                    print('Interpolating {} forcing for '.format(coarse_name) 
+                            + 'nested boundary {} of {}'.format(
+                            i + 1, len(self.open_boundaries)))
+                this_nest.add_nested_forcing(fvcom_name, coarse_name, coarse, **kwargs)
 
     def avg_nest_force_vel(self):
         """
