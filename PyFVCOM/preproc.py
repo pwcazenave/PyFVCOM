@@ -2271,6 +2271,9 @@ class Model(Domain):
         Horizontal nested levels are added in adjacent to existing boundary 
         nodes, lining the boundary inside the domain model. These nested levels 
         are then weighted. 
+        Note: the last nested level in the open_boundary.nest output list does
+        not have elements so that each element is bounded by a string of nodes 
+        on each side.
 
         Parameters
         ----------
@@ -2337,7 +2340,6 @@ class Model(Domain):
         if nesting_type >= 2:
             for i in range(self.dims.open_boundary):
                 self.open_boundaries[i].add_nest_weights()
-
 
     def add_nests_harmonics(self, harmonics_file, 
                 harmonics_vars=['u', 'v', 'zeta'], constituents=['M2', 'S2'],
@@ -2464,19 +2466,28 @@ class Model(Domain):
             for ii, this_nest in enumerate(this_boundary.nest):
                 if this_nest._noisy:
                     print('Interpolating {} forcing for '.format(coarse_name) 
-                            + 'nested boundary {} of {}'.format(
-                            i + 1, len(self.open_boundaries)))
-                this_nest.add_nested_forcing(fvcom_name, coarse_name, coarse, **kwargs)
+                            + 'boundary {} of {} '.format(
+                            i + 1, len(self.open_boundaries))
+                            + 'in nest {} of {}'.format(
+                            ii + 1, len(this_boundary.nest)))
+                this_nest.add_nested_forcing(fvcom_name, coarse_name, 
+                        coarse, **kwargs)
 
     def avg_nest_force_vel(self):
         """
-        TODO: Add docstring.
-
-        :return:
+        Create depth-averaged velocities (`ua', `va') in the nest 
+        object.
 
         """
-        for this_nest in self.nest:
-            this_nest.avg_nest_force_vel()
+        for i, this_boundary in enumerate(self.open_boundaries):
+            for ii, this_nest in enumerate(this_boundary.nest):
+                if this_nest._noisy:
+                    print('Averaging forcing for ua and va on'
+                            + 'boundary {} of {} '.format(
+                            i + 1, len(self.open_boundaries))
+                            + 'in nest {} of {}'.format(
+                            ii + 1, len(this_boundary.nest)))
+                this_nest.add_nest_force_vel()
 
     def load_nested_forcing(self, existing_nest, variables=None, filter_times=False, filter_points=False, verbose=False):
         """

@@ -1356,12 +1356,17 @@ class OpenBoundary(object):
         results = self._prepare_tides(interpolated_amplitudes, 
                 interpolated_phases, y, serial, pool_size)
 
+        # Define the bool of required time
+        tbool = ((self.tide.time >= self.time.start) 
+                & (self.tide.time <= self.time.end))
+
         # Dump the results into the object.
-        setattr(self.tide, predict, np.asarray(results).T)  
+        setattr(self.tide, predict, np.asarray(results).T[tbool, ...])  
         # put the time dimension first, space last.
 
-    def add_fvcom_tides(self, fvcom_harmonics, predict='zeta', interval=1/24, constituents=['M2'], serial=False,
-                        pool_size=None, noisy=False):
+    def add_fvcom_tides(self, fvcom_harmonics, predict='zeta', interval=1/24, 
+            constituents=['M2'], serial=False,
+            pool_size=None, noisy=False):
         """
         Add FVCOM-derived tides at the open boundary nodes.
 
@@ -1388,7 +1393,8 @@ class OpenBoundary(object):
         """
 
         if not hasattr(self.time, 'start'):
-            raise AttributeError('No time data have been added to this OpenBoundary object, so we cannot predict tides.')
+            raise AttributeError('No time data have been added to this '
+                    + 'OpenBoundary object, so we cannot predict tides.')
         self.tide.time = date_range(self.time.start - relativedelta(days=1),
                                     self.time.end + relativedelta(days=1),
                                     inc=interval)
@@ -1421,50 +1427,70 @@ class OpenBoundary(object):
                  'lon_name': lon_name,
                  'lat_name': lat_name,
                  'constituent_name': constituent_name}
-        harmonics_lon, harmonics_lat, amplitudes, phases, available_constituents = self._load_harmonics(fvcom_harmonics,
-                                                                                                        constituents,
-                                                                                                        names, complex=False)
+        (harmonics_lon, harmonics_lat, amplitudes, 
+                phases, available_constituents) = self._load_harmonics(
+                fvcom_harmonics,
+                constituents,
+                names, complex=False)
         if predict in ['zeta', 'ua', 'va']:
             amplitudes = amplitudes[:, np.newaxis, :]
             phases = phases[:, np.newaxis, :]
 
         results = []
         for i in np.arange(amplitudes.shape[1]):
-            locations_match, match_indices = self._match_coords(np.asarray([x, y]).T, np.asarray([harmonics_lon, harmonics_lat]).T)
+            locations_match, match_indices = self._match_coords(
+                    np.asarray([x, y]).T, 
+                    np.asarray([harmonics_lon, harmonics_lat]).T)
             if locations_match:
                 if noisy:
                     print('Coords match, skipping interpolation')
                 interpolated_amplitudes = amplitudes[:, i, match_indices].T
                 interpolated_phases = phases[:, i, match_indices].T
             else:
-                interpolated_amplitudes, interpolated_phases = self._interpolate_fvcom_harmonics(x, y,
-                                                                                                 amplitudes[:, i, :],
-                                                                                                 phases[:, i, :],
-                                                                                                 harmonics_lon,
-                                                                                                 harmonics_lat,
-                                                                                                 pool_size)
+                interpolated_amplitudes, interpolated_phases = (
+                        self._interpolate_fvcom_harmonics(x, y,
+                        amplitudes[:, i, :],
+                        phases[:, i, :],
+                        harmonics_lon,
+                        harmonics_lat,
+                        pool_size))
             self.tide.constituents = available_constituents
 
             # Predict the tides
-            results.append(np.asarray(self._prepare_tides(interpolated_amplitudes, interpolated_phases,
-                                                          y, serial, pool_size, noisy)).T)
+            results.append(np.asarray(self._prepare_tides(
+                    interpolated_amplitudes, interpolated_phases,
+                    y, serial, pool_size, noisy)).T)
 
-        # Dump the results into the object. Put the time dimension first, space last.
-        setattr(self.tide, predict, np.squeeze(np.transpose(np.asarray(results), (1, 0, 2))))
+        # Define the bool of required time
+        tbool = ((self.tide.time >= self.time.start) 
+                & (self.tide.time <= self.time.end))
 
-    def _prepare_tides(self, amplitudes, phases, latitudes, serial=False, pool_size=None, noisy=False):
-        # Prepare the UTide inputs for the constituents we've loaded.
-        const_idx = np.asarray([ut_constants['const']['name'].tolist().index(i) for i in self.tide.constituents])
+        # Dump the results into the object. Put the time dimension 
+        # first, space last.
+        setattr(self.tide, predict, np.squeeze(np.transpose(
+                np.asarray(results), (1, 0, 2)))[tbool, ...])
+
+    def _prepare_tides(self, amplitudes, phases, latitudes, serial=False, 
+            pool_size=None, noisy=False):
+        """
+        Prepare the UTide inputs for the constituents we've loaded.
+
+        """
+        const_idx = np.asarray([ut_constants['const']['name'].tolist().index(i) 
+                for i in self.tide.constituents])
         frq = ut_constants['const']['freq'][const_idx]
 
         coef = Bunch(name=self.tide.constituents, mean=0, slope=0)
         coef['aux'] = Bunch(reftime=729572.47916666674, lind=const_idx, frq=frq)
-        coef['aux']['opt'] = Bunch(twodim=False, nodsatlint=False, nodsatnone=False,
-                                   gwchlint=False, gwchnone=False, notrend=True, prefilt=[])
+        coef['aux']['opt'] = Bunch(twodim=False, nodsatlint=False, 
+                nodsatnone=False, gwchlint=False, gwchnone=False, 
+                notrend=True, prefilt=[])
 
-        # Prepare the time data for predicting the time series. UTide needs MATLAB times.
+        # Prepare the time data for predicting the time series. 
+        # UTide needs MATLAB times.
         times = mtime(self.tide.time)
-        args = [(latitudes[i], times, coef, amplitudes[i], phases[i], noisy) for i in range(len(latitudes))]
+        args = [(latitudes[i], times, coef, amplitudes[i], phases[i], noisy) 
+                for i in range(len(latitudes))]
         if serial:
             results = []
             for arg in args:
@@ -2141,14 +2167,32 @@ class OpenBoundary(object):
             interpolated_coarse_data = ft(boundary_grid).reshape([nt, nz, -1])
 
         if tide_adjust and fvcom_name in ['u', 'v', 'ua', 'va']:
-            interpolated_coarse_data = interpolated_coarse_data + getattr(
-                    self.tide, fvcom_name)
+            if fvcom_name in ['u', 'v']:
+                tide_levels = np.tile(getattr(self.tide, fvcom_name)
+                        [:, np.newaxis, :], [1, nz, 1])
+                interpolated_coarse_data = (interpolated_coarse_data 
+                        + tide_levels)
+            else:
+                interpolated_coarse_data = interpolated_coarse_data + getattr(
+                        self.tide, fvcom_name)
 
         # Drop the interpolated data into the data object.
         setattr(self.data, fvcom_name, interpolated_coarse_data)
 
         if verbose:
             print('done.')
+
+    def avg_nest_force_vel(self):
+        """
+        Create depth-averaged velocities (`ua', `va') in the current 
+        self.data data.
+
+        """
+        layer_thickness = (self.sigma.levels_center.T[0:-1, :] 
+                - self.sigma.levels_center.T[1:, :])
+        self.data.ua = zbar(self.data.u, layer_thickness)
+        self.data.va = zbar(self.data.v, layer_thickness)
+
 
     @staticmethod
     def _brute_force_interpolator(args):
@@ -2346,15 +2390,6 @@ class OpenBoundary(object):
 
         return interpolated_data
 
-    def avg_nest_force_vel(self):
-        """
-        Create depth-averaged velocities (`ua', `va') in the current self.data data.
-
-        """
-        layer_thickness = self.sigma.levels_center.T[0:-1, :] - self.sigma.levels_center.T[1:, :]
-        self.data.ua = zbar(self.data.u, layer_thickness)
-        self.data.va = zbar(self.data.v, layer_thickness)
-
 class Nest(OpenBoundary):
     """
     Class to hold a set of nests levels similar to OpenBoundary objects but 
@@ -2434,12 +2469,6 @@ class Nest(OpenBoundary):
         and self.sigma.
         """
 
-        # Add the grid and sigma data to any nests we've got loaded.
-        #nest = self.super_boundaries.nest[ind]
-        #for ii, nest in enumerate(self.super_boundaries.nest[ind:ind + 1]):
-        #if self._debug:
-        #    print('Adding grid info to nest {} of {}'.format(
-        #            ii + 1, len(self.super_boundaries.nest)))
         for attribute in self.all_grid:
             if self._debug:
                 print('\t{}'.format(attribute))
@@ -2467,9 +2496,6 @@ class Nest(OpenBoundary):
                     print(e)
                 pass
 
-        #if self._debug:
-        #    print('Adding sigma info to nest {} of {}'.format(
-        #            ii + 1, len(self.super_boundaries.nest)))
         for attribute in self.sigma:
             if self._debug:
                 print('\t{}'.format(attribute))
@@ -2495,17 +2521,6 @@ class Nest(OpenBoundary):
             except AttributeError as e:
                 if self._debug:
                     print(e)
-
-    def avg_nest_force_vel(self):
-        """
-        Create depth-averaged velocities (`ua', `va') in the open boundary object boundary.data data.
-
-        """
-        for ii, boundary in enumerate(self.boundaries, 1):
-            if np.any(boundary.elements):
-                if self._noisy:
-                    print(f'Creating ua, va for boundary {ii} of {len(self.boundaries)}')
-                boundary.avg_nest_force_vel()
 
 def read_sms_mesh(mesh, nodestrings=False):
     """
