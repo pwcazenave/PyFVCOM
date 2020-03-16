@@ -2800,11 +2800,8 @@ class Model(Domain):
                             continue
 
                         if adjust_tides is not None and var in adjust_tides:
-                            # The harmonics are calculated -/+ one day 
-                            tide_times_choose = np.isin(nest.tide.time, 
-                                    nest.data.time.datetime)
                             boundary_data = boundary_data + getattr(
-                                    nest.tide, var)[tide_times_choose, :]
+                                    nest.tide, var)
 
                         out_dict[var][0][..., this_index] = boundary_data
                     else:

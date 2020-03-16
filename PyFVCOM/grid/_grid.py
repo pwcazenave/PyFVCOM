@@ -1356,6 +1356,7 @@ class OpenBoundary(object):
         results = self._prepare_tides(interpolated_amplitudes, 
                 interpolated_phases, y, serial, pool_size)
 
+        # The harmonics are calculated -/+ one day 
         # Define the bool of required time
         tbool = ((self.tide.time >= self.time.start) 
                 & (self.tide.time <= self.time.end))
@@ -1461,6 +1462,7 @@ class OpenBoundary(object):
                     interpolated_amplitudes, interpolated_phases,
                     y, serial, pool_size, noisy)).T)
 
+        # The harmonics are calculated -/+ one day 
         # Define the bool of required time
         tbool = ((self.tide.time >= self.time.start) 
                 & (self.tide.time <= self.time.end))
