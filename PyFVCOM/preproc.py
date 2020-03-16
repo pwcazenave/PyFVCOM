@@ -2499,6 +2499,16 @@ class Model(Domain):
                             i + 1, len(self.open_boundaries))
                             + 'in nest {} of {}'.format(
                             ii + 1, len(this_boundary.nest)))
+                
+                if not np.any(this_nest.elements):
+                # Check if we have elements since outer layer of 
+                # nest does not.
+                    if this_nest._noisy:
+                        print('Skipping velocity average '
+                                + 'for nest {} of {}:'.format(
+                                ii + 1, len(this_boundary.nest))
+                                + ' no elements defined')
+                    continue
                 this_nest.avg_nest_force_vel()
 
     def load_nested_forcing(self, existing_nest, variables=None, filter_times=False, filter_points=False, verbose=False):
