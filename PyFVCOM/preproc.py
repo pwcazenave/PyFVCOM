@@ -829,7 +829,8 @@ class Model(Domain):
 
         Notes
         -----
-        This is more or less a direct python translation of the original MATLAB fvcom-toolbox function read_sigma.m
+        This is more or less a direct python translation of the original 
+        MATLAB fvcom-toolbox function read_sigma.m
 
         """
 
@@ -878,22 +879,30 @@ class Model(Domain):
 
         # Calculate the sigma level distributions at each grid node.
         if sigtype.lower() == 'generalized':
-            # Do some checks if we've got uniform or generalised coordinates to make sure the input is correct.
+            # Do some checks if we've got uniform or generalised coordinates 
+            # to make sure the input is correct.
             if len(zku) != ku:
-                raise ValueError('Number of zku values does not match the number specified in ku')
+                raise ValueError('Number of zku values does not match the '
+                        + 'number specified in ku')
             if len(zkl) != kl:
-                raise ValueError('Number of zkl values does not match the number specified in kl')
+                raise ValueError('Number of zkl values does not match the '
+                        + 'number specified in kl')
             sigma_levels = np.empty((self.dims.node, nlev)) * np.nan
             for i in range(self.dims.node):
-                sigma_levels[i, :] = self.sigma_generalized(nlev, dl, du, self.grid.h[i], min_constant_depth)
+                sigma_levels[i, :] = self.sigma_generalized(
+                        nlev, dl, du, self.grid.h[i], min_constant_depth)
         elif sigtype.lower() == 'uniform':
-            sigma_levels = np.repeat(self.sigma_geometric(nlev, 1), self.dims.node).reshape(self.dims.node, -1)
+            sigma_levels = np.tile(self.sigma_geometric(nlev, 1), 
+                    (self.dims.node, 1))
         elif sigtype.lower() == 'geometric':
-            sigma_levels = np.repeat(self.sigma_geometric(nlev, sigpow), self.dims.node).reshape(self.dims.node, -1)
+            sigma_levels = np.tile(self.sigma_geometric(nlev, sigpow), 
+                    (self.dims.node, 1))
         elif sigtype.lower() == 'tanh':
-            sigma_levels = np.repeat(self.sigma_tanh(nlev, dl, du), self.dims.node).reshape(self.dims.node, -1)
+            sigma_levels = np.tile(self.sigma_tanh(nlev, dl, du), 
+                    (self.dims.node, 1))
         else:
-            raise ValueError('Unrecognised sigtype {} (is it supported?)'.format(sigtype))
+            raise ValueError('Unrecognised sigtype '
+                    + '{} (is it supported?)'.format(sigtype))
 
         # Create a sigma layer variable (i.e. midpoint in the sigma levels).
         sigma_layers = sigma_levels[:, 0:-1] + (np.diff(sigma_levels, axis=1) / 2)
@@ -2265,9 +2274,12 @@ class Model(Domain):
 
     def add_nests(self, nest_levels, nesting_type=3, verbose=False):
         """
-        Add a set of nested levels to each item in self.open_boundaries. Each 
-        nest level is an instance of Nest which is similar to OpenBoundary
-        but with vertical depth levels.
+        Initialises a set of nested levels to each item in 
+        self.open_boundaries. Each nest level is an instance of Nest which is 
+        similar to OpenBoundary but with vertical depth levels. The nest 
+        functions should be used if velocity forcing at the boundary is 
+        required. If only zeta boundary forcing is required it is possible 
+        to use the grid.OpenBoundary functions directly.
         Horizontal nested levels are added in adjacent to existing boundary 
         nodes, lining the boundary inside the domain model. These nested levels 
         are then weighted. 
@@ -2487,7 +2499,7 @@ class Model(Domain):
                             i + 1, len(self.open_boundaries))
                             + 'in nest {} of {}'.format(
                             ii + 1, len(this_boundary.nest)))
-                this_nest.add_nest_force_vel()
+                this_nest.avg_nest_force_vel()
 
     def load_nested_forcing(self, existing_nest, variables=None, filter_times=False, filter_points=False, verbose=False):
         """
@@ -2678,7 +2690,8 @@ class Model(Domain):
             self.dims.node = len(self.grid.lon)
             self.dims.nele = len(self.grid.lonc)
 
-    def write_nested_forcing(self, ncfile, type=3, adjust_tides=None, ersem_metadata=None, format='NETCDF4', **kwargs):
+    def write_nested_forcing(self, ncfile, type=3, adjust_tides=None, 
+                ersem_metadata=None, format='NETCDF4', **kwargs):
         """
         Write out the given nested forcing into the specified netCDF file.
 
@@ -2689,31 +2702,41 @@ class Model(Domain):
         type : int, optional
             Type of model nesting. Defaults to 3 (indirect weighted nesting).
         adjust_tides : list, optional
-            Which variables (if any) to adjust by adding the predicted tidal signal from the harmonics. This
-            expects that these variables exist in boundary.tide
+            Which variables (if any) to adjust by adding the predicted tidal 
+            signal from the harmonics. This expects that these variables exist 
+            in boundary.tide
         ersem_metadata : PyFVCOM.utilities.general.PassiveStore, optional
-            If we have ERSEM variables in each Nest OpenBoundary object, we need corresponding metadata. We use the
-            attributes object from the RegularReader output for this (worth knowing: there's a handy method on
-            RegularReader.atts (get_attribute) which will load attributes for a given variable name). If this
-            argument is omitted but data exist in self.open_boundaries[*].data, they will not be written to file. In
-            contrast, variables in the metadata which don't exist in the open boundary data will raise an error. Make
+            If we have ERSEM variables in each Nest OpenBoundary object, we 
+            need corresponding metadata. We use the attributes object from the 
+            RegularReader output for this (worth knowing: there's a handy 
+            method on RegularReader.atts (get_attribute) which will load 
+            attributes for a given variable name). If this argument is omitted 
+            but data exist in self.open_boundaries[*].data, they will not be 
+            written to file. In contrast, variables in the metadata which 
+            don't exist in the open boundary data will raise an error. Make
             sure you've got your house in order!
 
-        Remaining kwargs are passed to WriteForcing with the exception of ncopts which is passed to
-        WriteForcing.add_variable.
+        Remaining kwargs are passed to WriteForcing with the exception of 
+        ncopts which is passed to WriteForcing.add_variable.
 
         """
 
         nests = self.nest
         # Get all the nodes, elements and weights ready for dumping to netCDF.
-        nodes = flatten_list([boundary.nodes for nest in nests for boundary in nest.boundaries])
-        elements = flatten_list([boundary.elements for nest in nests for boundary in nest.boundaries if np.any(boundary.elements)])
+        nodes = flatten_list([boundary.nodes 
+                for nest in nests for boundary in nest.boundaries])
+        elements = flatten_list([boundary.elements 
+                for nest in nests for boundary in nest.boundaries 
+                if np.any(boundary.elements)])
         if type == 3:
-            weight_nodes = flatten_list([boundary.weight_node for nest in nests for boundary in nest.boundaries])
-            weight_elements = flatten_list([boundary.weight_element for nest in nests for boundary in nest.boundaries if np.any(boundary.elements)])
+            weight_nodes = flatten_list([boundary.weight_node 
+                    for nest in nests for boundary in nest.boundaries])
+            weight_elements = flatten_list([boundary.weight_element 
+                    for nest in nests for boundary in nest.boundaries 
+                    if np.any(boundary.elements)])
 
-        # Get all the interpolated data too. We need to concatenate in the same order as we've done above, so just be
-        # careful.
+        # Get all the interpolated data too. We need to concatenate in the 
+        # same order as we've done above, so just be careful.
         time_number = len(self.time.datetime)
         nodes_number = len(nodes)
         elements_number = len(elements)
