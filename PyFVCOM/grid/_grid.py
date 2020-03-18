@@ -1791,7 +1791,7 @@ class OpenBoundary(object):
 
         return zeta
 
-    def add_nest_level(self):
+    def add_nest_level(self, nest_nodes, nest_elements):
         """
         Function to add a nested level which is connected parallel to the 
         existing nested nodes and elements. This function is used by 
@@ -1824,10 +1824,6 @@ class OpenBoundary(object):
         this_nest = self.nest[-1]
         level_elements = find_connected_elements(this_nest.nodes, 
                 this_nest.all_grid.triangles)
-        # Find the nodes and elements in the existing nests.
-        nest_nodes = flatten_list([i.nodes for i in self.nest])
-        nest_elements = flatten_list(
-                [i.elements for i in self.nest if np.any(i.elements)])
 
         # Get unique elements and add them to the current nest. This way 
         # we end up with the right number of layers of elements (i.e. they're 

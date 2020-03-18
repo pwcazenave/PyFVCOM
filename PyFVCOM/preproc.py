@@ -2309,6 +2309,15 @@ class Model(Domain):
 
         self.dims.nest_levels = nest_levels
 
+        # List of existing nodes and elements so we don't duplicate when 
+        # adding levels if two boundaries are close together
+        nest_nodes = np.array(flatten_list([boundary.nodes 
+                for boundary in self.open_boundaries]))
+        nest_elements = np.array([])
+        #nest_elements = np.array(flatten_list([boundary.elements 
+                #for boundary in self.open_boundaries 
+                #if np.any(boundary.elements)]))
+
         if len(self.open_boundaries) == 0:
             raise AttributeError('No open boundaries on which to add nests')
 
@@ -2326,7 +2335,14 @@ class Model(Domain):
 
             # Add all the nested levels and assign weights as necessary.
             for _ in range(self.dims.nest_levels):
-                self.open_boundaries[i].add_nest_level()
+                self.open_boundaries[i].add_nest_level(
+                        nest_nodes, nest_elements)
+                nest_nodes = np.append(nest_nodes, flatten_list(
+                        self.open_boundaries[i].nest[-1].nodes))
+                if np.any(self.open_boundaries[i].nest[-1].elements):
+                    nest_elements = np.append(nest_elements, flatten_list(
+                            self.open_boundaries[i].nest[-1].elements))
+                print(nest_elements)
 
             # Find missing elements on the last-but-one nested boundary. These 
             # are defined as those whose the three nodes are included but the 
@@ -2701,7 +2717,7 @@ class Model(Domain):
             self.dims.nele = len(self.grid.lonc)
 
     def write_nested_forcing(self, ncfile, type=3, adjust_tides=None, 
-                ersem_metadata=None, format='NETCDF4', **kwargs):
+                ersem_metadata=None, format='NETCDF4', verbose=False, **kwargs):
         """
         Write out the given nested forcing into the specified netCDF file.
 
@@ -2725,6 +2741,9 @@ class Model(Domain):
             written to file. In contrast, variables in the metadata which 
             don't exist in the open boundary data will raise an error. Make
             sure you've got your house in order!
+        verbose : bool, optional
+            Set to True to enable verbose output. Defaults to False 
+            (no verbose output).
 
         Remaining kwargs are passed to WriteForcing with the exception of 
         ncopts which is passed to WriteForcing.add_variable.
@@ -2777,10 +2796,11 @@ class Model(Domain):
                 'temp': [temperature, 'nodes'], 'salinity': [salinity, 'nodes'],
                 'hyw': [hyw, 'nodes']}
 
-        for boundary in self.open_boundaries:
-            for nest in boundary.nest:
+        for i, boundary in enumerate(self.open_boundaries):
+            for ii, nest in enumerate(boundary.nest):
+
                 # Make boolean arrays for the match up between the current 
-                # nest boundary and flat indices.
+                # nest level and flat indices.
                 temp_indices = {'nodes': np.isin(nodes, nest.nodes),
                                 'elements': np.isin(elements, nest.elements)}
 
@@ -2789,8 +2809,9 @@ class Model(Domain):
                         pass
                     elif var in out_dict.keys():
                         this_index = temp_indices[out_dict[var][1]]
+
                         # Skip out if we don't have any indices for this index. 
-                        # This happens on the first boundary for elements.
+                        # This happens on the first nest level for elements.
                         if not np.any(this_index):
                             continue
 
@@ -2802,6 +2823,18 @@ class Model(Domain):
                         if adjust_tides is not None and var in adjust_tides:
                             boundary_data = boundary_data + getattr(
                                     nest.tide, var)
+
+                        if verbose:
+                            print('Process {} for writing '.format(var)
+                                    + 'boundary {} of {} '.format(
+                                    i + 1, len(self.open_boundaries))
+                                    + 'in nest {} of {}'.format(
+                                    ii + 1, len(boundary.nest)))
+
+                        if verbose:
+                            print(out_dict[var][0].shape, out_dict[var][1], 
+                                    out_dict[var][0][..., this_index].shape, 
+                                    boundary_data.shape)
 
                         out_dict[var][0][..., this_index] = boundary_data
                     else:
@@ -4948,9 +4981,16 @@ class RegularReader(FileReader):
             depthvar = 'nav_lev'
             depthdim = self.dims.z
         else:
-            raise AttributeError('Unrecognised depth dimension name')
+            depthname = 'None'
+            depthvar = 'None'
+            depthdim = 0
+            #raise AttributeError('Unrecognised depth dimension name')
+            warn('Unrecognised depth dimension name')
 
-        depth_compare = self.ds.dimensions[depthname].size == depthdim
+        if not depthname == 'None':
+            depth_compare = self.ds.dimensions[depthname].size == depthdim
+        else:
+            depth_compare = True
 
         return depthname, depthvar, depthdim, depth_compare
 
