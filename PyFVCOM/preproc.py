@@ -2313,7 +2313,7 @@ class Model(Domain):
         # adding levels if two boundaries are close together
         nest_nodes = np.array(flatten_list([boundary.nodes 
                 for boundary in self.open_boundaries]))
-        nest_elements = np.array([])
+        nest_elements = np.array([], dtype=int)
         #nest_elements = np.array(flatten_list([boundary.elements 
                 #for boundary in self.open_boundaries 
                 #if np.any(boundary.elements)]))
@@ -2339,10 +2339,10 @@ class Model(Domain):
                         nest_nodes, nest_elements)
                 nest_nodes = np.append(nest_nodes, flatten_list(
                         self.open_boundaries[i].nest[-1].nodes))
-                if np.any(self.open_boundaries[i].nest[-1].elements):
+                # Note elements are not in new nest level
+                if np.any(self.open_boundaries[i].nest[-2].elements):
                     nest_elements = np.append(nest_elements, flatten_list(
-                            self.open_boundaries[i].nest[-1].elements))
-                print(nest_elements)
+                            self.open_boundaries[i].nest[-2].elements))
 
             # Find missing elements on the last-but-one nested boundary. These 
             # are defined as those whose the three nodes are included but the 
