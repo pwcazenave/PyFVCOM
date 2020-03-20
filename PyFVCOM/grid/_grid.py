@@ -2168,7 +2168,7 @@ class OpenBoundary(object):
             # array (time, depth, node).
             interpolated_coarse_data = ft(boundary_grid).reshape([nt, nz, -1])
 
-        if tide_adjust and fvcom_name in ['u', 'v', 'ua', 'va']:
+        if tide_adjust and fvcom_name in ['u', 'v', 'ua', 'va', 'zeta']:
             if fvcom_name in ['u', 'v']:
                 tide_levels = np.tile(getattr(self.tide, fvcom_name)
                         [:, np.newaxis, :], [1, nz, 1])
