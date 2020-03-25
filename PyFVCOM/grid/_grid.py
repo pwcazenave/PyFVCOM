@@ -1360,6 +1360,7 @@ class OpenBoundary(object):
         # Define the bool of required time
         tbool = ((self.tide.time >= self.time.start) 
                 & (self.tide.time <= self.time.end))
+        self.tide.time = self.tide.time[tbool]
 
         # Dump the results into the object.
         setattr(self.tide, predict, np.asarray(results).T[tbool, ...])  
@@ -1466,6 +1467,7 @@ class OpenBoundary(object):
         # Define the bool of required time
         tbool = ((self.tide.time >= self.time.start) 
                 & (self.tide.time <= self.time.end))
+        self.tide.time = self.tide.time[tbool]
 
         # Dump the results into the object. Put the time dimension 
         # first, space last.
