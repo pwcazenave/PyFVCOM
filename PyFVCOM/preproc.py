@@ -14,7 +14,7 @@ Pierre Cazenave (Plymouth Marine Laboratory)
 import copy
 import inspect
 import multiprocessing
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import partial
 from pathlib import Path
 from warnings import warn
@@ -2294,6 +2294,19 @@ class Model(Domain):
             existing open boundary. This can be 0 to just add depth levels.
         nesting_type : int
             FVCOM nesting type (1, 2 or 3). Defaults to 3.
+            1: Direct nesting -- The input is the direct NCNEST output of large 
+            domain FVCOM model. 
+            2: Indirect nesting -- Same as “1” except the input file is the 
+            subtidal values from the NCNEST output of large domain. For this 
+            case, the subdomain model will retain its own tidal forcing at the 
+            nesting boundary.  When this option is selected, Forman’s tidal 
+            analysis program will be turned on to remove the subdomain 
+            model-predicted subtidal elevations at nodes and velocity at cells 
+            in the nesting boundary zone. 
+            3: Relaxing nesting -- This is used for nesting FVCOM with a 
+            structured-grid model.  This module was configured for nesting 
+            FVCOM with global-HYCOM. It can be modified to be used for other 
+            structured-grid  models.
         verbose : bool, optional
             Set to True to enable verbose output. Defaults to False.
 
@@ -2371,10 +2384,11 @@ class Model(Domain):
 
     def add_nests_harmonics(self, harmonics_file, 
                 harmonics_vars=['u', 'v', 'zeta'], constituents=['M2', 'S2'],
-                pool_size=None, tpxo=False, complex=False, *args, **kwargs):
+                pool_size=None, tpxo=False, complex=False,
+                scale=1, bathy_file='', bathy_var='', *args, **kwargs):
         """
         Adds series of values based on harmonic predictions to the boundaries 
-        in the nest object
+        in the nest object.
 
         Parameters
         ----------
@@ -2398,6 +2412,17 @@ class Model(Domain):
             and Imaginary parts. This should be set to True for TPXO9 and 
             False for earlier versions of TPXO. If tpxo is False this flag
             is not used.
+        scale : float, optional
+            A scale multiplier constant to convert input units to the FVCOM 
+            required units. For surface elevation this is meters and for 
+            velocities this is meters / second.
+        bathy_file : str, optional
+            Path to the bathymetry file associated with the harmonics_file. 
+            This may be important for unit conversion. TPXO9 for example has
+            integrated transports instead of velocities and needs the 
+            bathymetry file.
+        bathy_var : str, optional
+            Name of variable in bathy_file for the depth.
 
         Provides
         --------
@@ -2436,7 +2461,8 @@ class Model(Domain):
                                 constituents=constituents, 
                                 interval=self.sampling, 
                                 complex=complex,
-                                pool_size=pool_size)
+                                pool_size=pool_size, scale=scale, 
+                                bathy_file=bathy_file, bathy_var=bathy_var)
                     # This method directly calls OpenBoundary.add_fvcom_tides()
                     # because Nest is a subclass of OpenBoundary
                     else:
@@ -2527,13 +2553,15 @@ class Model(Domain):
                     continue
                 this_nest.avg_nest_force_vel()
 
-    def load_nested_forcing(self, existing_nest, variables=None, filter_times=False, filter_points=False, verbose=False):
+    def load_nested_forcing(self, existing_nest, variables=None, 
+                filter_times=False, filter_points=False, verbose=False):
         """
-        Load the existing nested forcing file into the current set of nested boundaries in
-        self.nest[*].boundaries[*].data.
+        Load the existing nested forcing file into the current set of nested 
+        boundaries in self.open_boundaries[*].nest[*].data.
 
-        This works best if the nests in self.nest are exactly the same as the data being loaded. That might take some
-        manual fiddling to get right.
+        This works best if the nests in self.open_boundaries are exactly the 
+        same as the data being loaded. That might take some manual fiddling 
+        to get right.
 
         Parameters
         ----------
@@ -2544,8 +2572,8 @@ class Model(Domain):
         filter_times : bool, optional
             Set to True to remove duplicate time data from the nesting file.
         filter_points : bool, optional
-            Set to True to remove nodes not in the supplied existing nesting file from the current set of nested
-            boundaries. Defaults to False.
+            Set to True to remove nodes not in the supplied existing nesting 
+            file from the current set of nested boundaries. Defaults to False.
         verbose : bool, optional
             Set to True to enable verbose output. Defaults to False.
 
@@ -2555,151 +2583,235 @@ class Model(Domain):
             if variables is None:
                 variables = ds.variables.keys()
 
-            # Check the time values in the netCDF are equal to the times we've got.
-            ds_time = num2date(ds.variables['Itime'][:] + ds.variables['Itime2'][:] / 1000 / 60 / 60 / 24,
-                               units=ds.variables['Itime'].units)
+            # Check the time values in the netCDF are equal to the times 
+            # we've got.
+            ds_time = num2date(ds.variables['Itime'][:] 
+                    + ds.variables['Itime2'][:] / 1000 / 60 / 60 / 24,
+                    units=ds.variables['Itime'].units)
+            round_to = np.round((self.time.datetime[1] 
+                    - self.time.datetime[0]).seconds)
+            for i in range(len(ds_time)):
+                # roundTime Author: Thierry Husson 2012
+                seconds = (ds_time[i].replace(tzinfo=None) 
+                        - ds_time[i].min).seconds
+                rounding = (seconds + round_to/2) // round_to * round_to
+                ds_time[i] = ds_time[i] + timedelta(0, 
+                        rounding - seconds, -ds_time[i].microsecond)
 
             if filter_times:
-                # Some nesting files have duplicated times (!?). Remove them here.
-                bad_times = np.argwhere(np.asarray([i.total_seconds() for i in np.diff(ds_time)]) == 0).ravel()
+                # Some nesting files have duplicated times (!?). Remove 
+                # them here.
+                bad_times = np.argwhere(np.asarray([i.total_seconds() 
+                        for i in np.diff(ds_time)]) == 0).ravel()
 
                 ds_time = np.delete(ds_time, bad_times)
 
             if np.any(self.time.datetime != ds_time):
                 raise ValueError('Non-matching time data.')
 
-            # Grab the cartesian coordinates for the closest lookups. Realistically this could do spherical too by
-            # leveraging the haversine argument to closest_{node,element}. Another day, perhaps.
+            # Grab the cartesian coordinates for the closest lookups. 
+            # Realistically this could do spherical too by
+            # leveraging the haversine argument to closest_{node,element}. 
+            # Another day, perhaps.
             x, y = ds.variables['lon'][:], ds.variables['lat'][:]
             xc, yc = ds.variables['lonc'][:], ds.variables['latc'][:]
             nc_nodes = self.closest_node((x, y))
             nc_elements = self.closest_element((xc, yc))
 
-            nest_nodes = flatten_list([boundary.nodes for nest in self.nest for boundary in nest.boundaries])
-            nest_elements = flatten_list([boundary.elements for nest in self.nest for boundary in nest.boundaries if np.any(boundary.elements)])
+            nest_nodes = flatten_list([nest.nodes 
+                    for boundary in self.open_boundaries 
+                    for nest in boundary.nest])
+            nest_elements = flatten_list([nest.elements 
+                    for boundary in self.open_boundaries
+                    for nest in boundary.nest 
+                    if np.any(nest.elements)])
 
-            # Should this use the nest nodes and elements as canonical and grab whatever data we've got in the
-            # netCDF (even if it's not exactly in the right place) or should it error in that situation? The name
-            # of the option seems to imply that we'll filter one or the other. I think we'll go with filter as in
-            # "exclude ones from the netCDF which aren't in the nest nodes and elements".
+            # Should this use the nest nodes and elements as canonical and 
+            # grab whatever data we've got in the netCDF (even if it's not 
+            # exactly in the right place) or should it error in that 
+            # situation? The name of the option seems to imply that we'll 
+            # filter one or the other. I think we'll go with filter as in
+            # "exclude ones from the netCDF which aren't in the nest nodes 
+            # and elements".
             #
-            # If there's a bug in here, I feel for whoever has to look at this to try to figure out how to fix it. 
-            # It's an impenetrable mess of masking. There must be a simpler way to do this and I encourage whoever it
-            # is to find it!
+            # If there's a bug in here, I feel for whoever has to look at this 
+            # to try to figure out how to fix it. It's an impenetrable mess of 
+            # masking. There must be a simpler way to do this and I encourage 
+            # whoever it is to find it!
             if filter_points:
                 match_nodes = set(nc_nodes) - set(nest_nodes)
                 match_elements = set(nc_elements) - set(nest_elements)
-                for nest in self.nest:
-                    for boundary in nest.boundaries:
-                        node_mask = np.isin(boundary.nodes, list(match_nodes), invert=True)
+                for boundary in self.open_boundaries:
+                    for nest in boundary.nest:
+                        node_mask = np.isin(nest.nodes, list(match_nodes), 
+                                invert=True)
                         if self._debug:
-                            if np.sum(node_mask) != len(boundary.nodes):
-                                print(f'Hmmm, dodgy node filtering! {np.sum(node_mask)}, {len(boundary.nodes)}')
+                            if np.sum(node_mask) != len(nest.nodes):
+                                print(f'Hmmm, dodgy node filtering! '
+                                        + '{np.sum(node_mask)}, '
+                                        + '{len(boundary.nodes)}')
                             else:
                                 print('OK node filtering')
                         if np.any(node_mask):
-                            boundary.nodes = np.asarray(boundary.nodes)[node_mask].tolist()
+                            nest.nodes = np.asarray(nest.nodes)[
+                                    node_mask].tolist()
                             for var in ('lon', 'lat', 'x', 'y', 'h', 'types'):
-                                if hasattr(boundary.grid, var):
-                                    setattr(boundary.grid, var, getattr(boundary.grid, var)[node_mask])
+                                if hasattr(nest.grid, var):
+                                    setattr(nest.grid, var, 
+                                            getattr(nest.grid, var)[node_mask])
                             for var in ('layers', 'levels'):
-                                if hasattr(boundary.sigma, var):
-                                    setattr(boundary.sigma, var, getattr(boundary.sigma, var)[node_mask])
-                        if hasattr(boundary, 'weight_node'):
-                            boundary.weight_node = boundary.weight_node[node_mask]
+                                if hasattr(nest.sigma, var):
+                                    setattr(nest.sigma, var, 
+                                            getattr(nest.sigma, var)[node_mask])
+                        if hasattr(nest, 'weight_node'):
+                            nest.weight_node = nest.weight_node[node_mask]
 
-                        if boundary.elements is not None:
-                            element_mask = np.isin(boundary.elements, list(match_elements), invert=True)
+                        if nest.elements is not None:
+                            element_mask = np.isin(nest.elements, 
+                                    list(match_elements), invert=True)
                             if self._debug:
-                                if np.sum(element_mask) != len(boundary.elements):
-                                    print(f'Hmmm, dodgy element filtering! {np.sum(element_mask)}, {len(boundary.elements)}')
+                                if np.sum(element_mask) != len(nest.elements):
+                                    print(f'Hmmm, dodgy element filtering! '
+                                            + '{np.sum(element_mask)}, '
+                                            + '{len(boundary.elements)}')
                                 else:
                                     print('OK element filtering')
                             if np.any(element_mask):
-                                boundary.elements = np.asarray(boundary.elements)[element_mask].tolist()
-                                for var in ('lonc', 'latc', 'xc', 'yc', 'h_center'):
-                                    if hasattr(boundary.grid, var):
-                                        setattr(boundary.grid, var, getattr(boundary.grid, var)[element_mask])
+                                nest.elements = np.asarray(nest.elements)[
+                                        element_mask].tolist()
+                                for var in ('lonc', 'latc', 'xc', 'yc', 
+                                            'h_center'):
+                                    if hasattr(nest.grid, var):
+                                        setattr(nest.grid, var, 
+                                                getattr(nest.grid, var)
+                                                [element_mask])
                                 for var in ('layers_center', 'levels_center'):
-                                    if hasattr(boundary.sigma, var):
-                                        setattr(boundary.sigma, var, getattr(boundary.sigma, var)[element_mask])
-                                if hasattr(boundary, 'weight_element'):
-                                    boundary.weight_element = boundary.weight_element[element_mask]
-                        boundary.grid.triangles = reduce_triangulation(self.grid.triangles, boundary.grid.nodes)
-                        boundary.grid.nv = boundary.grid.triangles.T + 1
+                                    if hasattr(nest.sigma, var):
+                                        setattr(nest.sigma, var, 
+                                                getattr(nest.sigma, var)
+                                                [element_mask])
+                                if hasattr(nest, 'weight_element'):
+                                    nest.weight_element = (nest.weight_element
+                                            [element_mask])
+                        nest.grid.triangles = reduce_triangulation(
+                                self.grid.triangles, nest.grid.nodes)
+                        nest.grid.nv = nest.grid.triangles.T + 1
 
-                # Add any ones present in the given nesting file to the current set of nests. To pick which nested
-                # level to add it to, find the nested level which has the closest point and stick it in that.
+                # Add any ones present in the given nesting file to the 
+                # current set of nests. To pick which nested level to add it 
+                # to, find the nested level which has the closest point and 
+                # stick it in that.
                 nest_dist = []
-                nc_points = np.argwhere(nc_nodes == list(set(nc_nodes) - set(nest_nodes))).ravel()
+                nc_points = np.argwhere(nc_nodes == list(set(nc_nodes) 
+                        - set(nest_nodes))).ravel()
                 for point in nc_points:
                     px, py = x[point], y[point]
-                    for n_index, nest in enumerate(self.nest):
+                    for b_index, boundary in enumerate(self.open_boundary):
                         nest_dist.append([])
-                        for b_index, boundary in enumerate(nest.boundaries):
-                            nest_dist[-1].append(np.min(np.abs(np.hypot(boundary.grid.x - px, boundary.grid.y - py))))
+                        for n_index, nest in enumerate(boundary.nest):
+                            nest_dist[-1].append(np.min(np.abs(np.hypot(
+                                    nest.grid.x - px, 
+                                    nest.grid.y - py))))
 
                     target_min = np.min(flatten_list(nest_dist))
-                    for j, dist_nest in enumerate(nest_dist):
-                        for k, dist_boundary in enumerate(dist_nest):
-                            if dist_boundary == target_min:
-                                nest_index, boundary_index = j, k
+                    for j, dist_boundary in enumerate(nest_dist):
+                        for k, dist_nest in enumerate(dist_boundary):
+                            if dist_nest == target_min:
+                                boundary_index, nest_index = j, k
 
                     # Now add the netCDF point to that boundary.
-                    self.nest[nest_index].boundaries[boundary_index].nodes += [nc_nodes[point]]
+                    (self.open_boundaries[boundary_index].nest[nest_index]
+                            .nodes) += [nc_nodes[point]]
                     for var in ('x', 'y'):
-                        current_value = getattr(self.nest[nest_index].boundaries[boundary_index].grid, var)
-                        current_value = np.hstack((current_value, ds.variables[var][point]))
-                        setattr(self.nest[nest_index].boundaries[boundary_index].grid, var, current_value)
-                    lon, lat = lonlat_from_utm(self.nest[nest_index].boundaries[boundary_index].grid.x,
-                                               self.nest[nest_index].boundaries[boundary_index].grid.y,
-                                               self.nest[nest_index].boundaries[boundary_index].grid.zone)
-                    self.nest[nest_index].boundaries[boundary_index].grid.lon = lon
-                    self.nest[nest_index].boundaries[boundary_index].grid.lat = lat
+                        current_value = getattr(self.open_boundary
+                                [boundary_index]
+                                .nest[nest_index].grid, var)
+                        current_value = np.hstack((current_value, 
+                                ds.variables[var][point]))
+                        setattr(self.open_boundary[boundary_index]
+                                .nest[nest_index].grid, var, 
+                                current_value)
+                    lon, lat = lonlat_from_utm(
+                            self.open_boundary[boundary_index].nest[nest_index]
+                            .grid.x,
+                            self.open_boundary[boundary_index].nest[nest_index]
+                            .grid.y,
+                            self.open_boundary[boundary_index].nest[nest_index]
+                            .grid.zone)
+                    (self.open_boundary[boundary_index].nest[nest_index]
+                            .grid.lon) = lon
+                    (self.open_boundary[boundary_index].nest[nest_index]
+                            .grid.lat) = lat
                     for var in ('layers', 'levels'):
-                        current_value = getattr(self.nest[nest_index].boundaries[boundary_index].sigma, var)
-                        current_value = np.vstack((current_value, ds.variables[f'sig{var[:3]}'][..., point]))
-                        setattr(self.nest[nest_index].boundaries[boundary_index].sigma, var, current_value)
+                        current_value = getattr(self.open_boundary
+                                [boundary_index].nest[nest_index].sigma, var)
+                        current_value = np.vstack((current_value, 
+                                ds.variables[f'sig{var[:3]}'][..., point]))
+                        setattr(self.open_boundary[boundary_index]
+                                .nest[nest_index].sigma, var, current_value)
 
                     # Redo the triangulation now.
                     triangles = reduce_triangulation(self.grid.triangles,
-                                                     self.nest[nest_index].boundaries[boundary_index].nodes)
-                    self.nest[nest_index].boundaries[boundary_index].triangles = triangles
+                            self.open_boundary[boundary_index]
+                            .nest[nest_index].nodes)
+                    (self.open_boundary[boundary_index].nest[nest_index]
+                            .triangles) = triangles
                     # Also redo the elements for the current nest.
-                    self.nest[nest_index].boundaries[boundary_index].elements = np.unique(triangles.ravel())
+                    (self.open_boundary[boundary_index].nest[nest_index]
+                            .elements) = np.unique(triangles.ravel())
 
-            # Fix the order of the positions in the data from the netCDF file to match those in the boundaries.
-            nest_nodes = flatten_list([boundary.nodes for nest in self.nest for boundary in nest.boundaries])
-            nest_elements = flatten_list([boundary.elements for nest in self.nest for boundary in nest.boundaries if boundary.elements is not None])
-            nc_node_order = [nc_nodes.tolist().index(i) for i in nest_nodes if i in nc_nodes]
-            nc_element_order = [nc_elements.tolist().index(i) for i in nest_elements if i in nc_elements]
+            # Fix the order of the positions in the data from the netCDF file 
+            # to match those in the boundaries.
+            nest_nodes = flatten_list([nest.nodes 
+                    for boundary in self.open_boundaries 
+                    for nest in boundary.nest])
+            nest_elements = flatten_list([nest.elements 
+                    for boundary in self.open_boundaries 
+                    for nest in boundary.nest 
+                    if nest.elements is not None])
+            nc_node_order = [nc_nodes.tolist().index(i) for i in nest_nodes 
+                    if i in nc_nodes]
+            nc_element_order = [nc_elements.tolist().index(i) 
+                    for i in nest_elements if i in nc_elements]
 
-            for ni, nest in enumerate(self.nest, 1):
-                # Boundary indexing for the verbose output doesn't start at 1 here because we have the original open
-                # boundary included and the output from add_level would conflict. It's a minor thing, but basically
-                # add_level says we've added 5 levels and then this would say there are 6 levels.
-                for bi, boundary in enumerate(nest.boundaries):
+            for bi, boundary in enumerate(self.open_boundaries, 1):
+                # Boundary indexing for the verbose output doesn't start at 1 
+                # here because we have the original open boundary included and 
+                # the output from add_level would conflict. It's a minor 
+                # thing, but basically add_level says we've added 5 levels and 
+                # then this would say there are 6 levels.
+                for ni, nest in enumerate(boundary.nest):
                     for var in variables:
                         has_time = 'time' in ds.variables[var].dimensions
-                        has_space = 'node' in ds.variables[var].dimensions or 'nele' in ds.variables[var].dimensions
+                        has_space = ('node' in ds.variables[var].dimensions or 
+                                'nele' in ds.variables[var].dimensions)
                         if has_time and has_space:
-                            # Split the existing nodes/elements into the current open boundary nodes.
+                            # Split the existing nodes/elements into the 
+                            # current open boundary nodes.
                             if 'node' in ds.variables[var].dimensions:
-                                nc_mask = np.isin(nc_nodes[nc_node_order], boundary.nodes)
+                                nc_mask = np.isin(nc_nodes[nc_node_order], 
+                                        nest.nodes)
                                 # Holy nested indexing, Batman!
-                                data = ds.variables[var][:][..., nc_node_order][..., nc_mask]
+                                data = (ds.variables[var][:]
+                                        [..., nc_node_order][..., nc_mask])
                             else:
-                                if boundary.elements is not None:
-                                    nc_mask = np.isin(nc_elements[nc_element_order], boundary.elements)
+                                if nest.elements is not None:
+                                    nc_mask = np.isin(nc_elements[
+                                            nc_element_order], 
+                                            nest.elements)
                                     # Holy nested indexing, Batman!
-                                    data = ds.variables[var][:][..., nc_element_order][..., nc_mask]
+                                    data = (ds.variables[var][:]
+                                            [..., nc_element_order]
+                                            [..., nc_mask])
                                 else:
-                                    # This is the last boundary and thus has no element data.
+                                    # This is the last boundary and thus has 
+                                    # no element data.
                                     continue
 
-                            # Check if we got any valid points here. We won't get any on the last boundary. That
-                            # raises the question why does it even have elements associated with it? Another day,
-                            # perhaps.
+                            # Check if we got any valid points here. We won't 
+                            # get any on the last boundary. That raises the 
+                            # question why does it even have elements 
+                            # associated with it? Another day, perhaps.
                             if data.shape[-1] == 0:
                                 continue
 
@@ -2707,9 +2819,11 @@ class Model(Domain):
                                 data = np.delete(data, bad_times, axis=0)
 
                             if verbose:
-                                print(f'Transferring {var} from the existing nesting file for nest {ni}, level {bi}')
+                                print(f'Transferring {var} from the existing'
+                                        + ' nesting file for nest '
+                                        + '{ni}, level {bi}')
 
-                            setattr(boundary.data, var, data)
+                            setattr(nest.data, var, data)
 
         # Update dimensions if we've fiddled with things
         if filter_points:
