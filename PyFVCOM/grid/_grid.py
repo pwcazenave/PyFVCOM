@@ -1246,7 +1246,8 @@ class OpenBoundary(object):
     def add_tpxo_tides(self, tpxo_harmonics, predict='zeta', interval=1 / 24, 
                         constituents=['M2'], serial=False,
                         interp_method='linear', complex=False,
-                        pool_size=None, noisy=False):
+                        pool_size=None, scale=1, 
+                        bathy_file='', bathy_var='', noisy=False):
         """
         Add TPXO tides at the open boundary nodes.
 
@@ -1276,6 +1277,17 @@ class OpenBoundary(object):
         pool_size : int, optional
             Specify number of processes for parallel run. By default it uses 
             all available.
+        scale : float, optional
+            A scale multiplier constant to convert input units to the FVCOM 
+            required units. For surface elevation this is meters and for 
+            velocities this is meters / second.
+        bathy_file : str, optional
+            Path to the bathymetry file associated with the harmonics_file. 
+            This may be important for unit conversion. TPXO9 for example has
+            integrated transports instead of velocities and needs the 
+            bathymetry file.
+        bathy_var : str, optional
+            Name of variable in bathy_file for the depth.
         noisy : bool, optional
             Set to True to enable some sort of progress output. 
             Defaults to False.
@@ -1345,7 +1357,6 @@ class OpenBoundary(object):
                     ) = self._load_harmonics(tpxo_harmonics, constituents, 
                     names, complex=complex)
 
-
         (interpolated_amplitudes, interpolated_phases
                 ) = self._interpolate_tpxo_harmonics(x, y, amplitudes, phases,
                 harmonics_lon, harmonics_lat, interp_method=interp_method)
@@ -1355,6 +1366,44 @@ class OpenBoundary(object):
         # Predict the tides
         results = self._prepare_tides(interpolated_amplitudes, 
                 interpolated_phases, y, serial, pool_size)
+
+        results = np.asarray(results) * scale
+
+        if not bathy_file == '':
+            if bathy_var == '':
+                raise AttributeError('Please specify bathy_var in input.')
+            with Dataset(bathy_file, 'r') as bdata:
+                h = bdata[bathy_var][:]
+                # lat and lon should be the same and harmonics_lon and 
+                # harmonics_lat
+
+            if np.ndim(harmonics_lon) != 1 and np.ndim(harmonics_lat) != 1:
+                warn('Harmonics are given as 2D arrays: trying to convert to '
+                        + '1D for the interpolation.')
+                harmonics_lon = np.unique(harmonics_lon)
+                harmonics_lat = np.unique(harmonics_lat)
+
+            h_interp = RegularGridInterpolator((harmonics_lon, 
+                    harmonics_lat), h, method=interp_method, 
+                    fill_value=None)
+
+            # Fix our input position longitudes to be in the 0-360 range to 
+            # match the harmonics data range, if necessary.
+            if harmonics_lon.min() >= 0:
+                x[x < 0] += 360
+
+            if x.min() < harmonics_lon.min():
+                harmonics_lon[harmonics_lon == harmonics_lon.min()] = x.min()
+
+            # Make our boundary positions suitable for interpolation with a 
+            # RegularGridInterpolator.
+            xx = np.tile(x, [1, x.shape[0]])
+            yy = np.tile(y, [1, y.shape[0]])
+            h_int = h_interp((x, y)).T
+
+            # Convert from transport to velocity
+            results = results / np.tile(h_int, (results.shape[1], 1)).T
+
 
         # The harmonics are calculated -/+ one day 
         # Define the bool of required time
