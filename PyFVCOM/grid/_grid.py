@@ -1305,29 +1305,29 @@ class OpenBoundary(object):
         if complex:
             if predict == 'zeta':
                 part1_name, part2_name = 'hRe', 'hIm'
-                x, y = copy.copy(self.grid.lon), self.grid.lat
+                x, y = copy.copy(self.grid.lon), copy.copy(self.grid.lat)
                 lon_name, lat_name = 'lon_z', 'lat_z'
             elif predict == 'u':
                 part1_name, part2_name = 'uRe', 'uIm'
-                x, y = copy.copy(self.grid.lonc), self.grid.latc
+                x, y = copy.copy(self.grid.lonc), copy.copy(self.grid.latc)
                 lon_name, lat_name = 'lon_u', 'lat_u'
             elif predict == 'v':
                 part1_name, part2_name = 'vRe', 'vIm'
-                x, y = copy.copy(self.grid.lonc), self.grid.latc
+                x, y = copy.copy(self.grid.lonc), copy.copy(self.grid.latc)
                 lon_name, lat_name = 'lon_v', 'lat_v'
 
         else:
             if predict == 'zeta':
                 part1_name, part2_name = 'ha', 'hp'
-                x, y = copy.copy(self.grid.lon), self.grid.lat
+                x, y = copy.copy(self.grid.lon), copy.copy(self.grid.lat)
                 lon_name, lat_name = 'lon_z', 'lat_z'
             elif predict == 'u':
                 part1_name, part2_name = 'ua', 'up'
-                x, y = copy.copy(self.grid.lonc), self.grid.latc
+                x, y = copy.copy(self.grid.lonc), copy.copy(self.grid.latc)
                 lon_name, lat_name = 'lon_u', 'lat_u'
             elif predict == 'v':
                 part1_name, part2_name = 'va', 'vp'
-                x, y = copy.copy(self.grid.lonc), self.grid.latc
+                x, y = copy.copy(self.grid.lonc), copy.copy(self.grid.latc)
                 lon_name, lat_name = 'lon_v', 'lat_v'
 
         names = {'part1_name': part1_name,
@@ -1713,23 +1713,45 @@ class OpenBoundary(object):
         # Since interpolating phase directly is a bad idea (cos of the 360 -> 0 degree thing) convert to vectors first
         harmonics_u, harmonics_v = pol2cart(amp_data, phase_data, degrees=True) 
 
+        # Depending on the location of the model domain we may need to shift
+        # the harmonic data to match it.
+        if (harmonics_lon.min() >= 0):
+            if x.min() < 0:
+                # Fix our harmonics data position longitudes to be in the -180
+                # to 180 range to match the FVCOM range
+                index1 = np.nonzero((harmonics_lon > 180) 
+                        | (harmonics_lon < -180))[0]
+                index2 = np.nonzero((harmonics_lon <= 180) 
+                        & (harmonics_lon >= 0))[0]
+                harmonics_u = np.ma.append(harmonics_u[:, index1, :], 
+                        harmonics_u[:, index2, :], axis=1)
+                harmonics_v = np.ma.append(harmonics_v[:, index1, :], 
+                        harmonics_v[:, index2, :], axis=1)
+                harmonics_lon = np.ma.append(harmonics_lon[index1], 
+                        harmonics_lon[index2], axis=0)
+                harmonics_lon[harmonics_lon > 180] -= 360
+        if (harmonics_lon.max() < 180):
+            if x.max() >= 180:
+                # Fix our harmonics data position longitudes to be in the 0-360 
+                # range to match the FVCOM range
+                index1 = np.nonzero((harmonics_lon <= 180) 
+                        | (harmonics_lon >= 0))[0]
+                index2 = np.nonzero((harmonics_lon > 180) 
+                        & (harmonics_lon < -180))[0]
+                harmonics_u = np.ma.append(harmonics_u[:, index1, :], 
+                        harmonics_u[:, index2, :], axis=1)
+                harmonics_v = np.ma.append(harmonics_v[:, index1, :], 
+                        harmonics_v[:, index2, :], axis=1)
+                harmonics_lon = np.ma.append(harmonics_lon[index1], 
+                        harmonics_lon[index2], axis=0)
+                harmonics_lon[harmonics_lon < 0] += 360
+
+
         # Make a dummy first dimension since we need it for the RegularGridInterpolator but don't actually
         # interpolated along it.
         c_data = np.arange(amp_data.shape[0])
         u_interp = RegularGridInterpolator((c_data, harmonics_lon, harmonics_lat), harmonics_u, method=interp_method, fill_value=None)
         v_interp = RegularGridInterpolator((c_data, harmonics_lon, harmonics_lat), harmonics_v, method=interp_method, fill_value=None)
-
-        # Fix our input position longitudes to be in the 0-360 range to match the harmonics data range,
-        # if necessary.
-        if harmonics_lon.min() >= 0:
-            x[x < 0] += 360
-
-        # Since everything should be in the 0-360 range, stuff which is between the Greenwich meridian and the
-        # first harmonics data point is now outside the interpolation domain, which yields an error since
-        # RegularGridInterpolator won't tolerate data outside the defined bounding box. As such, we need to
-        # squeeze the interpolation locations to the range of the open boundary positions.
-        if x.min() < harmonics_lon.min():
-            harmonics_lon[harmonics_lon == harmonics_lon.min()] = x.min()
 
         # Make our boundary positions suitable for interpolation with a RegularGridInterpolator.
         xx = np.tile(x, [amp_data.shape[0], 1])
