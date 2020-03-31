@@ -2357,23 +2357,25 @@ class Model(Domain):
                     nest_elements = np.append(nest_elements, flatten_list(
                             self.open_boundaries[i].nest[-2].elements))
 
-            # Find missing elements on the last-but-one nested boundary. These 
-            # are defined as those whose the three nodes are included but the 
-            # element isn't. This replicates what FVCOM does when it computes 
-            # the elements to include in a nested output file (since a nested 
-            # input file for FVCOM is just defined as a list of node IDs).
-            boundary_nodes = self.open_boundaries[i].nest[-1].nodes
-            boundary_elements = self.open_boundaries[i].nest[-2].elements
-            missing_elements = np.argwhere(np.all(np.isin(self.grid.triangles, 
-                    boundary_nodes), axis=1)).ravel()
-            if len(missing_elements) > 0:
-                if self._noisy:
-                    print('Adding missing bounded elements for the last '
-                            + 'boundary in the nest.')
-                self.open_boundaries[i].nest[-2].elements = np.unique(
-                        np.hstack([missing_elements, boundary_elements]))
-            # Update the associated boundary information.
-            self.open_boundaries[i].nest[-2]._update_nest()
+                # Find missing elements on the last-but-one nested boundary. 
+                # These are defined as those whose the three nodes are included 
+                # but the element isn't. This replicates what FVCOM does when 
+                # it computes the elements to include in a nested output file 
+                # (since a nested input file for FVCOM is just defined as a 
+                # list of node IDs).
+                boundary_nodes = self.open_boundaries[i].nest[-1].nodes
+                boundary_elements = self.open_boundaries[i].nest[-2].elements
+                missing_elements = np.argwhere(np.all(np.isin(
+                        self.grid.triangles, 
+                        boundary_nodes), axis=1)).ravel()
+                if len(missing_elements) > 0:
+                    if self._noisy:
+                        print('Adding missing bounded elements for the last '
+                                + 'boundary in the nest.')
+                    self.open_boundaries[i].nest[-2].elements = np.unique(
+                            np.hstack([missing_elements, boundary_elements]))
+                # Update the associated boundary information.
+                self.open_boundaries[i].nest[-2]._update_nest()
 
         # Add weights (if given) after we've done all the fiddling with the 
         # boundary elements so we don't have to deal with masking them or 
