@@ -1374,8 +1374,8 @@ class OpenBoundary(object):
                 raise AttributeError('Please specify bathy_var in input.')
             with Dataset(bathy_file, 'r') as bdata:
                 h = bdata[bathy_var][:]
-                # lat and lon should be the same and harmonics_lon and 
-                # harmonics_lat
+                harmonics_lon = bdata['lon_' + bathy_var[-1:]][:]
+                harmonics_lat = bdata['lat_' + bathy_var[-1:]][:]
 
             if np.ndim(harmonics_lon) != 1 and np.ndim(harmonics_lat) != 1:
                 warn('Harmonics are given as 2D arrays: trying to convert to '
@@ -1383,17 +1383,35 @@ class OpenBoundary(object):
                 harmonics_lon = np.unique(harmonics_lon)
                 harmonics_lat = np.unique(harmonics_lat)
 
+            if any(harmonics_lon > 180) & any(x < 0):
+                # Fix our harmonics data position longitudes to be in the -180
+                # to 180 range to match the FVCOM range
+                tmp_h = h * 1
+                tmp_lon = harmonics_lon * 1
+                index1 = ((harmonics_lon > 180) | (harmonics_lon < -180))
+                index2 = ((harmonics_lon <= 180) & (harmonics_lon >= 0))
+                h[:np.sum(index1), :] = tmp_h[index1, :] 
+                h[np.sum(index1):, :] = tmp_h[index2, :]
+                harmonics_lon[:np.sum(index1)] = tmp_lon[index1] 
+                harmonics_lon[np.sum(index1):] = tmp_lon[index2]
+                harmonics_lon[harmonics_lon > 180] -= 360
+
+            if any(harmonics_lon < 0) & any(x > 180):
+                # Fix our harmonics data position longitudes to be in the 0-360 
+                # range to match the FVCOM range
+                tmp_h = h * 1
+                tmp_lon = harmonics_lon * 1
+                index1 = ((harmonics_lon <= 180) & (harmonics_lon >= 0))
+                index2 = ((harmonics_lon > 180) | (harmonics_lon < -180))
+                h[:np.sum(index1), :] = tmp_h[index1, :] 
+                h[np.sum(index1):, :] = tmp_h[index2, :]
+                harmonics_lon[:np.sum(index1)] = tmp_lon[index1] 
+                harmonics_lon[np.sum(index1):] = tmp_lon[index2]
+                harmonics_lon[harmonics_lon < 0] += 360
+
             h_interp = RegularGridInterpolator((harmonics_lon, 
                     harmonics_lat), h, method=interp_method, 
                     fill_value=None)
-
-            # Fix our input position longitudes to be in the 0-360 range to 
-            # match the harmonics data range, if necessary.
-            if harmonics_lon.min() >= 0:
-                x[x < 0] += 360
-
-            if x.min() < harmonics_lon.min():
-                harmonics_lon[harmonics_lon == harmonics_lon.min()] = x.min()
 
             # Make our boundary positions suitable for interpolation with a 
             # RegularGridInterpolator.
