@@ -414,7 +414,7 @@ class Model(Domain):
             atts = {'long_name': 'bottom roughness minimum', 'units': 'None', 'type': 'data'}
             z0.add_variable('cbcmin', None, ['nele'], attributes=atts, ncopts=ncopts)
 
-    def interp_sst_assimilation(self, sst_dir, offset=0, serial=False, pool_size=None, noisy=False):
+    def interp_sst_assimilation(self, sst_dir, offset=0, serial=False, pool_size=None, var_name='analysed_sst', var_offset=-273.15, noisy=False):
         """
         Interpolate SST data from remote sensing data onto the supplied model
         grid.
@@ -431,6 +431,12 @@ class Model(Domain):
             Specify number of processes for parallel run. By default it uses all available.
         noisy : bool, optional
             Set to True to enable some sort of progress output. Defaults to False.
+        var_name : str, optional
+            Name of variable in NetCDF file to be interpolated. 
+            Defaults to 'analysed_sst'.
+        var_offset : float, optional
+            Offset value to convert units of variable of input file. 
+            Defaults to -273.15.
 
         Returns
         -------
@@ -443,10 +449,10 @@ class Model(Domain):
         Example
         -------
         >>> from PyFVCOM.preproc import Model
-        >>> sst_dir = '/home/mbe/Data/SST_data/2006/'
+        >>> sst_dir = '/home/mbe/Data/SST_data/'
         >>> model = Model('/home/mbe/Models/FVCOM/tamar/tamar_v2_grd.dat',
         >>>     native_coordinates='cartesian', zone='30N')
-        >>> model.interp_sst_assimilation(sst_dir, 2006, pool_size=20)
+        >>> model.interp_sst_assimilation(sst_dir, pool_size=20)
         >>> # Save to netCDF
         >>> model.write_sstgrd('casename_sstgrd.nc')
 
@@ -476,13 +482,15 @@ class Model(Domain):
         if serial:
             results = []
             for sst_file in sst_files:
-                results.append(self._inter_sst_worker(lonlat, sst_file, noisy))
+                results.append(self._inter_sst_worker(lonlat, sst_file, 
+                        noisy, var_name=var_name, var_offset=var_offset))
         else:
             if not pool_size:
                 pool = multiprocessing.Pool()
             else:
                 pool = multiprocessing.Pool(pool_size)
-            part_func = partial(self._inter_sst_worker, lonlat, noisy=noisy)
+            part_func = partial(self._inter_sst_worker, lonlat, 
+                    noisy=noisy, var_name=var_name, var_offset=var_offset)
             results = pool.map(part_func, sst_files)
             pool.close()
 
@@ -494,6 +502,9 @@ class Model(Domain):
             # to want times at midday.
             dates[i] = datetime(*[getattr(result[0][0], i) for i in ('year', 'month', 'day')], 12)
             sst[i, :] = result[1]
+
+        if noisy:
+            print()
 
         # Sort by time.
         idx = np.argsort(dates)
@@ -512,8 +523,17 @@ class Model(Domain):
 
         with Dataset(sst_file, 'r') as sst_file_nc:
             sst_eo = np.squeeze(sst_file_nc.variables[var_name][:]) + var_offset  # Kelvin to Celsius
-            mask = sst_file_nc.variables['mask']
-            if len(sst_eo.shape) ==3 and len(mask) ==2:
+            
+            if 'mask' in sst_file_nc.variables.keys():
+                mask = np.squeeze(sst_file_nc.variables['mask'])
+            elif ('_FillValue' in sst_file_nc.variables[var_name].__dict__
+                    or np.ma.is_masked(sst_eo)):
+                mask = sst_eo.mask * 1
+            else:
+                mask = np.zeros((sst_eo.shape))
+                warn('No mask or fill value found in netCDF.')
+
+            if len(sst_eo.shape) ==3 and len(mask.shape) ==2:
                 sst_eo[np.tile(mask[:][np.newaxis, :], (sst_eo.shape[0], 1, 1)) == 1] = np.nan
             else:
                 sst_eo[mask == 1] = np.nan
@@ -523,6 +543,10 @@ class Model(Domain):
 
         ft = RegularGridInterpolator((sst_lon, sst_lat), sst_eo.T, method='linear', fill_value=None)
         interp_sst = ft(fvcom_lonlat.T)
+
+        fm = RegularGridInterpolator((sst_lon, sst_lat), mask.T, method='linear', fill_value=None)
+        interp_mask = fm(fvcom_lonlat.T)
+        interp_sst[interp_mask != 0] = np.nan
 
         return time_out_dt, interp_sst
 
