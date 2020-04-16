@@ -247,23 +247,28 @@ class GridReaderNetCDF(object):
             except KeyError:
                 if self._noisy:
                     print('Missing {} from the netCDF file. Trying to recreate it from other sources.'.format(var))
-                if self.nv.max() == len(self.x):
-                    try:
-                        setattr(self, var, nodes2elems(getattr(self, var.split('_')[0]), self.triangles))
-                    except IndexError:
-                        # Maybe the array's the wrong way around. Flip it and try again.
-                        setattr(self, var, nodes2elems(getattr(self, var.split('_')[0]).T, self.triangles))
-                else:
+
+                test_nv = True
+                if self.nv.size:
+                    if self.nv.max() == len(self.x):
+                        test_nv = False
+                        try:
+                            setattr(self, var, nodes2elems(getattr(self, var.split('_')[0]), self.triangles))
+                        except IndexError:
+                            # Maybe the array's the wrong way around. Flip it and try again.
+                            setattr(self, var, nodes2elems(getattr(self, var.split('_')[0]).T, self.triangles))
+                        
+                if test_nv:
                     # The triangulation is invalid, so we can't properly move our existing data, so just set things
                     # to 0 but at least they're the right shape. Warn accordingly.
                     if self._noisy:
                         print('{} cannot be migrated to element centres (invalid triangulation). Setting to zero.'.format(var))
                     if var == 'siglev_center':
-                        setattr(self, var, np.zeros((ds.dimensions['siglev'].size, dims.nele)))
+                        setattr(self, var, np.zeros((ds.dimensions['siglev'].size, len(self._dims['nele']))))
                     elif var == 'siglay_center':
-                        setattr(self, var, np.zeros((ds.dimensions['siglay'].size, dims.nele)))
+                        setattr(self, var, np.zeros((ds.dimensions['siglay'].size, len(self._dims['nele']))))
                     elif var == 'h_center':
-                        setattr(self, var, np.zeros((dims.nele)))
+                        setattr(self, var, np.zeros((len(self._dims['nele']))))
                     else:
                         raise ValueError('Inexplicably, we have a variable not in the loop we have defined.')
 
