@@ -4742,7 +4742,7 @@ def rotate_points(x, y, origin, angle):
     return xr, yr
 
 
-def get_boundary_polygons(triangle, noisy=False, nodes=None):
+def get_boundary_polygons(triangle, noisy=False, nodes=None, double_start_end=False):
     """
     Gets a list of the grid boundary nodes ordered correctly.
 
@@ -4754,11 +4754,12 @@ def get_boundary_polygons(triangle, noisy=False, nodes=None):
     triangle : np.ndarray
         The triangle connectivity matrix as produced by the read_fvcom_mesh
         function.
-
     nodes : optional, np.ndarray
         Optionally a Nx2 array of coordinates for nodes in the grid, if passed the function will
         additionally return a boolean of whether the polygons are boundaries (domain on interior)
         or islands (domain on the exterior)
+    double_start_end : optional, boolean
+        Optionally add the start point to the end of each boundary polygon; useful for plotting
 
     Returns
     -------
@@ -4804,6 +4805,11 @@ def get_boundary_polygons(triangle, noisy=False, nodes=None):
 
         boundary_polygon_list.append(np.asarray(boundary_node_list))
         nodes_lt_4 = np.asarray(list(set(nodes_lt_4) - set(boundary_node_list)), dtype=int)
+    if double_start_end:
+        new_bp_list = []
+        for this_poly in boundary_polygon_list:
+            new_bp_list.append(np.append(this_poly, this_poly[0]))
+        boundary_polygon_list = new_bp_list
 
     if nodes is None:
         return boundary_polygon_list
