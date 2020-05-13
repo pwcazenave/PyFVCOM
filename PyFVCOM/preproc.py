@@ -5019,7 +5019,7 @@ class RegularReader(FileReader):
             return np.unravel_index(index, self.grid.lon.shape)
 
 
-class NEMOReader(RegularReader):
+class NEMOReaderNew(RegularReader):
     """
     Class to read in regularly gridded model output. This provides a similar interface to a PyFVCOM.read.FileReader
     object but with an extra spatial dimension. This is currently based on CMEMS model outputs (i.e. NEMO).
@@ -5027,7 +5027,7 @@ class NEMOReader(RegularReader):
     Author(s)
     ---------
     Pierre Cazenave (Plymouth Marine Laboratory)
-
+    
     Credits
     -------
     This code leverages ideas (and in some cases, code) from PySeidon (https://github.com/GrumpyNounours/PySeidon)
@@ -5082,12 +5082,16 @@ class NEMOReader(RegularReader):
                 if 'deptht' in self._dims:
                     self.tmask = self.tmask[..., self._dims['deptht'], :, :]
                 # Make it so it fits with time-varying data.
-                self.tmask = np.tile(np.squeeze(self.tmask), [self.dims.time_counter, 1, 1, 1])
+                #self.tmask = np.tile(np.squeeze(self.tmask), [self.dims.time_counter, 1, 1, 1])
+                self.tmask = np.tile(np.squeeze(self.tmask), [self.dims.time, 1, 1, 1])
             for var in self.data:
                 # We could use masking here, but this feels more bulletproof (I think some bits of numpy/scipy ignore
                 # masks when interpolating).
                 current_data = getattr(self.data, var)
-                current_data[~self.tmask] = np.nan
+                #current_data[~self.tmask] = np.nan
+                if len(current_data.shape) == 3:
+                    self.tmask = self.tmask[:,0,:,:]
+                current_data[self.tmask] = np.nan        
                 setattr(self.data, var, current_data)
         else:
             # If we don't have a tmask file, we'll try our best to minimise potential issues with crappy NEMO data.
@@ -5117,7 +5121,7 @@ class NEMOReader(RegularReader):
         if hasattr(self.dims, 'lat'):
             yname = 'lat'
             ydim = self.dims.lat
-        elif hasattr(self.dims, 'x'):
+        elif hasattr(self.dims, 'y'):
             yname = 'y'
             ydim = self.dims.y
         else:
@@ -5198,8 +5202,11 @@ class NEMOReader(RegularReader):
 
         """
         if grid_variables is None:
-            grid_variables = {'lon': 'nav_lon', 'nav_lat': 'lat', 'x': 'x', 'y': 'y', 'depth': 'depth',
+            grid_variables = {'lon': 'nav_lon', 'lat': 'nav_lat', 'x': 'x', 'y': 'y', 'depth': 'deptht',
                               'Longitude': 'Longitude', 'Latitude': 'Latitude'}
+            self.dims.lon = self.dims.x    
+            self.dims.lat = self.dims.y   
+
 
         self.grid = PassiveStore()
         # Get the grid data.
@@ -5264,6 +5271,7 @@ class NEMOReader(RegularReader):
         # Make 1D arrays of the positions since that's the case for CMEMS data.
         self.grid.lon = np.unique(self.grid.nav_lon)
         self.grid.lat = np.unique(self.grid.nav_lat)
+
 
         # Check if we've been given vertical dimensions to subset in too, and if so, do that. Check we haven't
         # already done this if the 'node' and 'nele' sections above first.

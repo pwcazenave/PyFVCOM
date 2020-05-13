@@ -1703,6 +1703,12 @@ class OpenBoundary(object):
             # Keep positive down depths.
             z = -self.sigma.layers_z
 
+        ## 2D lat lon to 1D lat, lon  , maz (is this okay?)
+        #if len(coarse.grid.lat)==2:
+        #    coarse.grid.lat = coarse.grid.lat[:,0]
+        #if len(coarse.grid.lon)==2:
+        #    coarse.grid.lon = coarse.grid.lon[0,:]
+
         if constrain_coordinates:
             x[x < coarse.grid.lon.min()] = coarse.grid.lon.min()
             x[x > coarse.grid.lon.max()] = coarse.grid.lon.max()
@@ -1713,13 +1719,16 @@ class OpenBoundary(object):
             # move it to the nearest in grid point if so.
             if not mode == 'surface':
                 land_mask = getattr(coarse.data, coarse_name)[0, ...].mask[0, :, :]
+                #land_mask = coarse.tmask[0, 0, ...]     # maz
             else:
                 land_mask = getattr(coarse.data, coarse_name)[0, ...].mask
+                #land_mask = coarse.tmask[0, ...]        # maz
 
             sea_points = np.ones(land_mask.shape)
             sea_points[land_mask] = np.nan
 
             ft_sea = RegularGridInterpolator((coarse.grid.lat, coarse.grid.lon), sea_points, method='linear', fill_value=np.nan)
+#            ft_sea = RegularGridInterpolator((coarse.grid.nav_lat[0,:], coarse.grid.nav_lon[:,0]), sea_points, method='linear', fill_value=np.nan)
             internal_points = np.isnan(ft_sea(np.asarray([y, x]).T))
 
             if np.any(internal_points):
