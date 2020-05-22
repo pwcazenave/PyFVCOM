@@ -1403,7 +1403,9 @@ class Model(Domain):
     def add_rivers(self, positions, names, times, flux, temperature, salinity, threshold=np.inf, history='', info='',
                    ersem=None, sediments=None):
         """
-        Add river nodes closest to the given locations.
+        Add river nodes closest to the given locations. Checks for rivers 
+        placed on the same node. For rivers sharing a node, the flux is 
+        summed and other variables are given a weighted average.
 
         Parameters
         ----------
@@ -1497,14 +1499,65 @@ class Model(Domain):
                 for var in ('Z4_c', 'Z5_c', 'Z5_n', 'Z5_p', 'Z6_c', 'Z6_n', 'Z6_p'):
                     setattr(self.river, var, [])
         else:
-            self.river.names = [names[i] for i in river_index]
-            setattr(self.river, 'flux', flux[:, river_index])
-            setattr(self.river, 'salinity', salinity[:, river_index])
-            setattr(self.river, 'temperature', temperature[:, river_index])
+
+            # Check for multiple rivers on one node and add them together
+
+            river_index = np.array(river_index, dtype=int)
+            uni_nodes = np.unique(self.river.node)
+            uni_names = []
+            uni_flux = np.ma.zeros((flux.shape[0], len(uni_nodes)))
+            uni_salinity = np.ma.zeros((salinity.shape[0], len(uni_nodes)))
+            uni_temperature = np.ma.zeros((temperature.shape[0], 
+                    len(uni_nodes)))
+            if ersem:
+                uni_ersem = {}
+                for variable in ersem:
+                    uni_ersem[variable] = np.ma.zeros((
+                            ersem[variable].shape[0], len(uni_nodes)))
+            if sediments:
+                uni_sediments = {}
+                for variable in sediments:
+                    uni_sediments[variable] = np.ma.zeros((
+                            sediments[variable].shape[0], len(uni_nodes)))
+
+            for ui, ni in enumerate(uni_nodes):
+                same_node = river_index[self.river.node == ni]
+                uni_flux[:, ui] = np.ma.sum(flux[:, same_node], axis=1)
+
+                weight = np.zeros(np.shape(flux[:, same_node]))
+                for sn in range(len(same_node)):
+                    weight[:, sn] = flux[:, same_node[sn]] / uni_flux[:, ui]
+                
+                # Weighted average based on time variable river flux
+                uni_salinity[:, ui] = np.ma.sum(salinity[:, same_node] 
+                        * weight, axis=1)
+                uni_temperature[:, ui] = np.ma.sum(temperature[:, same_node] 
+                        * weight, axis=1)
+                sel_names = [names[n] for n in same_node]
+                uni_names.append('+'.join(sel_names))
+
+                if ersem:
+                    for variable in ersem:
+                        uni_ersem[variable][:, ui] = np.ma.sum(
+                                ersem[variable][:, same_node] * weight, axis=1)
+                if sediments:
+                    for variable in sediments:
+                        uni_sediments[variable][:, ui] = np.ma.sum(
+                                sediments[variable][:, same_node] 
+                                * weight, axis=1)
+
+            self.river.names = uni_names
+            setattr(self.river, 'flux', uni_flux)
+            setattr(self.river, 'salinity', uni_salinity)
+            setattr(self.river, 'temperature', uni_temperature)
+
+            self.river.node = uni_nodes
+            self.dims.river = len(uni_nodes)
+
 
             if ersem:
                 for variable in ersem:
-                    setattr(self.river, variable, ersem[variable][:, river_index])
+                    setattr(self.river, variable, uni_ersem[variable])
 
                 # Add small zooplankton values if we haven't been given any already. Taken to be 10^-6 of Western
                 # Channel Observatory L4 initial conditions.
@@ -1522,7 +1575,7 @@ class Model(Domain):
 
             if sediments:
                 for variable in sediments:
-                    setattr(self.river, variable, sediments[variable][:, river_index])
+                    setattr(self.river, variable, uni_sediments[variable])
 
     def check_rivers(self, max_discharge=None, min_depth=None, open_boundary_proximity=None, noisy=False):
         """
