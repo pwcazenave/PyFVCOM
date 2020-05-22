@@ -1551,7 +1551,7 @@ class Model(Domain):
             setattr(self.river, 'salinity', uni_salinity)
             setattr(self.river, 'temperature', uni_temperature)
 
-            self.river.node = uni_nodes
+            self.river.node = uni_nodes.tolist()
             self.dims.river = len(uni_nodes)
 
 
