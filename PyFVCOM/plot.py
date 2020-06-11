@@ -950,7 +950,10 @@ class Plotter(object):
 
         """
 
-        xy_mask = np.full((len(self.lonc), len(self.latc)), True)
+        if not self._FileReader:
+            xy_mask = np.full((len(self.lonc), len(self.latc)), True)
+        else:
+            xy_mask = np.full((len(self.lonc)), True)
         if dx is not None:
             if dy is None:
                 dy = dx
@@ -990,7 +993,7 @@ class Plotter(object):
                                                 *args,
                                                 **self._plot_projection,
                                                 **kwargs)
-            self.cbar = self.m(self.quiver_plot)
+            self.cbar = self.m.colorbar(self.quiver_plot)
             self.cbar.ax.tick_params(labelsize=self.fs)
             if self.cb_label:
                 self.cbar.set_label(self.cb_label)

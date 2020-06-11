@@ -36,7 +36,7 @@ from utide.utilities import Bunch
 
 from PyFVCOM.coordinate import utm_from_lonlat, lonlat_from_utm
 from PyFVCOM.ocean import zbar
-from PyFVCOM.utilities.general import PassiveStore, fix_range, cart2pol, pol2cart, warn
+from PyFVCOM.utilities.general import PassiveStore, fix_range, cart2pol, pol2cart, warn, flatten_list
 from PyFVCOM.utilities.time import date_range
 
 
@@ -247,23 +247,28 @@ class GridReaderNetCDF(object):
             except KeyError:
                 if self._noisy:
                     print('Missing {} from the netCDF file. Trying to recreate it from other sources.'.format(var))
-                if self.nv.max() == len(self.x):
-                    try:
-                        setattr(self, var, nodes2elems(getattr(self, var.split('_')[0]), self.triangles))
-                    except IndexError:
-                        # Maybe the array's the wrong way around. Flip it and try again.
-                        setattr(self, var, nodes2elems(getattr(self, var.split('_')[0]).T, self.triangles))
-                else:
+
+                test_nv = True
+                if self.nv.size:
+                    if self.nv.max() == len(self.x):
+                        test_nv = False
+                        try:
+                            setattr(self, var, nodes2elems(getattr(self, var.split('_')[0]), self.triangles))
+                        except IndexError:
+                            # Maybe the array's the wrong way around. Flip it and try again.
+                            setattr(self, var, nodes2elems(getattr(self, var.split('_')[0]).T, self.triangles))
+                        
+                if test_nv:
                     # The triangulation is invalid, so we can't properly move our existing data, so just set things
                     # to 0 but at least they're the right shape. Warn accordingly.
                     if self._noisy:
                         print('{} cannot be migrated to element centres (invalid triangulation). Setting to zero.'.format(var))
                     if var == 'siglev_center':
-                        setattr(self, var, np.zeros((ds.dimensions['siglev'].size, dims.nele)))
+                        setattr(self, var, np.zeros((ds.dimensions['siglev'].size, len(self._dims['nele']))))
                     elif var == 'siglay_center':
-                        setattr(self, var, np.zeros((ds.dimensions['siglay'].size, dims.nele)))
+                        setattr(self, var, np.zeros((ds.dimensions['siglay'].size, len(self._dims['nele']))))
                     elif var == 'h_center':
-                        setattr(self, var, np.zeros((dims.nele)))
+                        setattr(self, var, np.zeros((len(self._dims['nele']))))
                     else:
                         raise ValueError('Inexplicably, we have a variable not in the loop we have defined.')
 
@@ -1112,10 +1117,14 @@ def mp_interp_func(input):
     interp = LinearNDInterpolator((lon, lat), data)
     return interp((x, y))
 
-
 class OpenBoundary(object):
     """
-    FVCOM grid open boundary object. Handles reading, writing and interpolating.
+    FVCOM grid open boundary object. Handles reading, writing and interpolating.    This object can either have zero depth level as a standard open boundary
+    or the subclass Nest can hold additional information with multiple vertical
+    depth levels and multiple horizontal nesting levels. 
+
+    This is called by Model._initialise_open_boundaries() and Model.add_nests()
+    
 
     Not sure this is the right place for this. Might be better placed in PyFVCOM.preproc. Also, this should probably
     be a superclass of Nest as an open boundary is just a special case of a PyFVCOM.preproc.Nest (one with 0 levels,
@@ -1177,6 +1186,7 @@ class OpenBoundary(object):
         self.sigma = PassiveStore()
         self.time = PassiveStore()
         self.data = PassiveStore()
+        self.nest = PassiveStore()
 
     def __iter__(self):
         return (a for a in self.__dict__.keys() if not a.startswith('_'))
@@ -1244,76 +1254,199 @@ class OpenBoundary(object):
         # Feels a bit ridiculous having a whole method for this...
         setattr(self, 'type', obc_type)
 
-    def add_tpxo_tides(self, tpxo_harmonics, predict='zeta', interval=1 / 24, constituents=['M2'], serial=False,
-                       interp_method='linear', pool_size=None, noisy=False):
+    def add_tpxo_tides(self, tpxo_harmonics, predict='zeta', interval=1 / 24, 
+                        constituents=['M2'], serial=False,
+                        interp_method='linear', complex=False,
+                        pool_size=None, scale=1, 
+                        bathy_file='', bathy_var='', noisy=False):
         """
         Add TPXO tides at the open boundary nodes.
 
         Parameters
         ----------
-        tpxo_harmonics : str, pathlib.Path
+        tpxo_harmonics : str, pathlib.Path, list
             Path to the TPXO harmonics netCDF file to use.
+            Can be a list of paths for each constituent.
         predict : str, optional
             Type of data to predict. Select 'zeta' (default), 'u' or 'v'.
         interval : str, optional
             Time sampling interval in days. Defaults to 1 hour.
         constituents : list, optional
-            List of constituent names to use in UTide.reconstruct. Defaults to ['M2'].
+            List of constituent names to use in UTide.reconstruct. 
+            Defaults to ['M2'].
         serial : bool, optional
             Run in serial rather than parallel. Defaults to parallel.
         interp_method : str
-            The interpolation method to use. Defaults to 'linear'. Passed to scipy.interp.RegularGridInterpolator,
+            The interpolation method to use. Defaults to 'linear'. 
+            Passed to scipy.interp.RegularGridInterpolator,
             so choose any valid one for that.
+        complex : bool
+            Specify if input file is define in terms of tidal amplitude and 
+            phase or as a cartesian complex with Real and Imaginary parts.
+            This should be set to True for TPXO9 and False for earlier versions
+            of TPXO.
         pool_size : int, optional
-            Specify number of processes for parallel run. By default it uses all available.
+            Specify number of processes for parallel run. By default it uses 
+            all available.
+        scale : float, optional
+            A scale multiplier constant to convert input units to the FVCOM 
+            required units. For surface elevation this is meters and for 
+            velocities this is meters / second.
+        bathy_file : str, optional
+            Path to the bathymetry file associated with the harmonics_file. 
+            This may be important for unit conversion. TPXO9 for example has
+            integrated transports instead of velocities and needs the 
+            bathymetry file.
+        bathy_var : str, optional
+            Name of variable in bathy_file for the depth.
         noisy : bool, optional
-            Set to True to enable some sort of progress output. Defaults to False.
+            Set to True to enable some sort of progress output. 
+            Defaults to False.
 
         """
 
         if not hasattr(self.time, 'start'):
-            raise AttributeError('No time data have been added to this OpenBoundary object, so we cannot predict tides.')
+            raise AttributeError('No time data have been added to this ' 
+                    + 'OpenBoundary object, so we cannot predict tides.')
         self.tide.time = date_range(self.time.start - relativedelta(days=1),
                                     self.time.end + relativedelta(days=1),
                                     inc=interval)
 
         constituent_name = 'con'
-        if predict == 'zeta':
-            amplitude_name, phase_name = 'ha', 'hp'
-            x, y = copy.copy(self.grid.lon), self.grid.lat
-            lon_name, lat_name = 'lon_z', 'lat_z'
-        elif predict == 'u':
-            amplitude_name, phase_name = 'ua', 'up'
-            x, y = copy.copy(self.grid.lonc), self.grid.latc
-            lon_name, lat_name = 'lon_u', 'lat_u'
-        elif predict == 'v':
-            amplitude_name, phase_name = 'va', 'vp'
-            x, y = copy.copy(self.grid.lonc), self.grid.latc
-            lon_name, lat_name = 'lon_v', 'lat_v'
+        if complex:
+            if predict == 'zeta':
+                part1_name, part2_name = 'hRe', 'hIm'
+                x, y = copy.copy(self.grid.lon), copy.copy(self.grid.lat)
+                lon_name, lat_name = 'lon_z', 'lat_z'
+            elif predict == 'u':
+                part1_name, part2_name = 'uRe', 'uIm'
+                x, y = copy.copy(self.grid.lonc), copy.copy(self.grid.latc)
+                lon_name, lat_name = 'lon_u', 'lat_u'
+            elif predict == 'v':
+                part1_name, part2_name = 'vRe', 'vIm'
+                x, y = copy.copy(self.grid.lonc), copy.copy(self.grid.latc)
+                lon_name, lat_name = 'lon_v', 'lat_v'
 
-        names = {'amplitude_name': amplitude_name,
-                 'phase_name': phase_name,
+        else:
+            if predict == 'zeta':
+                part1_name, part2_name = 'ha', 'hp'
+                x, y = copy.copy(self.grid.lon), copy.copy(self.grid.lat)
+                lon_name, lat_name = 'lon_z', 'lat_z'
+            elif predict == 'u':
+                part1_name, part2_name = 'ua', 'up'
+                x, y = copy.copy(self.grid.lonc), copy.copy(self.grid.latc)
+                lon_name, lat_name = 'lon_u', 'lat_u'
+            elif predict == 'v':
+                part1_name, part2_name = 'va', 'vp'
+                x, y = copy.copy(self.grid.lonc), copy.copy(self.grid.latc)
+                lon_name, lat_name = 'lon_v', 'lat_v'
+
+        names = {'part1_name': part1_name,
+                 'part2_name': part2_name,
                  'lon_name': lon_name,
                  'lat_name': lat_name,
                  'constituent_name': constituent_name}
-        harmonics_lon, harmonics_lat, amplitudes, phases, available_constituents = self._load_harmonics(tpxo_harmonics,
-                                                                                                        constituents,
-                                                                                                        names)
-        interpolated_amplitudes, interpolated_phases = self._interpolate_tpxo_harmonics(x, y,
-                                                                                        amplitudes, phases,
-                                                                                        harmonics_lon, harmonics_lat,
-                                                                                        interp_method=interp_method)
+
+        if isinstance(tpxo_harmonics, list):
+            available_constituents = []
+            amplitudes = []
+            phases = []
+            for harm in tpxo_harmonics:
+                (harmonics_lon, harmonics_lat, amplitudes_tmp, phases_tmp, 
+                        available_constituents_tmp
+                        ) = self._load_harmonics(harm, constituents, 
+                        names, complex=complex)
+                if len(available_constituents_tmp):
+                    amplitudes.append(amplitudes_tmp)
+                    phases.append(phases_tmp)
+                    available_constituents.append(available_constituents_tmp[0])
+            amplitudes = np.array(amplitudes)
+            phases = np.array(phases)
+        else:
+            (harmonics_lon, harmonics_lat, amplitudes, phases, 
+                    available_constituents
+                    ) = self._load_harmonics(tpxo_harmonics, constituents, 
+                    names, complex=complex)
+
+        (interpolated_amplitudes, interpolated_phases
+                ) = self._interpolate_tpxo_harmonics(x, y, amplitudes, phases,
+                harmonics_lon, harmonics_lat, interp_method=interp_method)
 
         self.tide.constituents = available_constituents
 
         # Predict the tides
-        results = self._prepare_tides(interpolated_amplitudes, interpolated_phases, y, serial, pool_size)
+        results = self._prepare_tides(interpolated_amplitudes, 
+                interpolated_phases, y, serial, pool_size)
+
+        results = np.asarray(results) * scale
+
+        if not bathy_file == '':
+            if bathy_var == '':
+                raise AttributeError('Please specify bathy_var in input.')
+            with Dataset(bathy_file, 'r') as bdata:
+                h = bdata[bathy_var][:]
+                harmonics_lon = bdata['lon_' + bathy_var[-1:]][:]
+                harmonics_lat = bdata['lat_' + bathy_var[-1:]][:]
+
+            if np.ndim(harmonics_lon) != 1 and np.ndim(harmonics_lat) != 1:
+                warn('Harmonics are given as 2D arrays: trying to convert to '
+                        + '1D for the interpolation.')
+                harmonics_lon = np.unique(harmonics_lon)
+                harmonics_lat = np.unique(harmonics_lat)
+
+            if any(harmonics_lon > 180) & any(x < 0):
+                # Fix our harmonics data position longitudes to be in the -180
+                # to 180 range to match the FVCOM range
+                tmp_h = h * 1
+                tmp_lon = harmonics_lon * 1
+                index1 = ((harmonics_lon > 180) | (harmonics_lon < -180))
+                index2 = ((harmonics_lon <= 180) & (harmonics_lon >= 0))
+                h[:np.sum(index1), :] = tmp_h[index1, :] 
+                h[np.sum(index1):, :] = tmp_h[index2, :]
+                harmonics_lon[:np.sum(index1)] = tmp_lon[index1] 
+                harmonics_lon[np.sum(index1):] = tmp_lon[index2]
+                harmonics_lon[harmonics_lon > 180] -= 360
+
+            if any(harmonics_lon < 0) & any(x > 180):
+                # Fix our harmonics data position longitudes to be in the 0-360 
+                # range to match the FVCOM range
+                tmp_h = h * 1
+                tmp_lon = harmonics_lon * 1
+                index1 = ((harmonics_lon <= 180) & (harmonics_lon >= 0))
+                index2 = ((harmonics_lon > 180) | (harmonics_lon < -180))
+                h[:np.sum(index1), :] = tmp_h[index1, :] 
+                h[np.sum(index1):, :] = tmp_h[index2, :]
+                harmonics_lon[:np.sum(index1)] = tmp_lon[index1] 
+                harmonics_lon[np.sum(index1):] = tmp_lon[index2]
+                harmonics_lon[harmonics_lon < 0] += 360
+
+            h_interp = RegularGridInterpolator((harmonics_lon, 
+                    harmonics_lat), h, method=interp_method, 
+                    fill_value=None)
+
+            # Make our boundary positions suitable for interpolation with a 
+            # RegularGridInterpolator.
+            xx = np.tile(x, [1, x.shape[0]])
+            yy = np.tile(y, [1, y.shape[0]])
+            h_int = h_interp((x, y)).T
+
+            # Convert from transport to velocity
+            results = results / np.tile(h_int, (results.shape[1], 1)).T
+
+
+        # The harmonics are calculated -/+ one day 
+        # Define the bool of required time
+        tbool = ((self.tide.time >= self.time.start) 
+                & (self.tide.time <= self.time.end))
+        self.tide.time = self.tide.time[tbool]
 
         # Dump the results into the object.
-        setattr(self.tide, predict, np.asarray(results).T)  # put the time dimension first, space last.
+        setattr(self.tide, predict, np.asarray(results).T[tbool, ...])  
+        # put the time dimension first, space last.
 
-    def add_fvcom_tides(self, fvcom_harmonics, predict='zeta', interval=1/24, constituents=['M2'], serial=False,
-                        pool_size=None, noisy=False):
+    def add_fvcom_tides(self, fvcom_harmonics, predict='zeta', interval=1/24, 
+            constituents=['M2'], serial=False,
+            pool_size=None, noisy=False):
         """
         Add FVCOM-derived tides at the open boundary nodes.
 
@@ -1326,18 +1459,22 @@ class OpenBoundary(object):
         interval : str, optional
             Time sampling interval in days. Defaults to 1 hour.
         constituents : list, optional
-            List of constituent names to use in UTide.reconstruct. Defaults to ['M2'].
+            List of constituent names to use in UTide.reconstruct. 
+            Defaults to ['M2'].
         serial : bool, optional
             Run in serial rather than parallel. Defaults to parallel.
         pool_size : int, optional
-            Specify number of processes for parallel run. By default it uses all available.
+            Specify number of processes for parallel run. By default it uses 
+            all available.
         noisy : bool, optional
-            Set to True to enable some sort of progress output. Defaults to False.
+            Set to True to enable some sort of progress output. 
+            Defaults to False.
 
         """
 
         if not hasattr(self.time, 'start'):
-            raise AttributeError('No time data have been added to this OpenBoundary object, so we cannot predict tides.')
+            raise AttributeError('No time data have been added to this '
+                    + 'OpenBoundary object, so we cannot predict tides.')
         self.tide.time = date_range(self.time.start - relativedelta(days=1),
                                     self.time.end + relativedelta(days=1),
                                     inc=interval)
@@ -1370,50 +1507,72 @@ class OpenBoundary(object):
                  'lon_name': lon_name,
                  'lat_name': lat_name,
                  'constituent_name': constituent_name}
-        harmonics_lon, harmonics_lat, amplitudes, phases, available_constituents = self._load_harmonics(fvcom_harmonics,
-                                                                                                        constituents,
-                                                                                                        names)
+        (harmonics_lon, harmonics_lat, amplitudes, 
+                phases, available_constituents) = self._load_harmonics(
+                fvcom_harmonics,
+                constituents,
+                names, complex=False)
         if predict in ['zeta', 'ua', 'va']:
             amplitudes = amplitudes[:, np.newaxis, :]
             phases = phases[:, np.newaxis, :]
 
         results = []
         for i in np.arange(amplitudes.shape[1]):
-            locations_match, match_indices = self._match_coords(np.asarray([x, y]).T, np.asarray([harmonics_lon, harmonics_lat]).T)
+            locations_match, match_indices = self._match_coords(
+                    np.asarray([x, y]).T, 
+                    np.asarray([harmonics_lon, harmonics_lat]).T)
             if locations_match:
                 if noisy:
                     print('Coords match, skipping interpolation')
                 interpolated_amplitudes = amplitudes[:, i, match_indices].T
                 interpolated_phases = phases[:, i, match_indices].T
             else:
-                interpolated_amplitudes, interpolated_phases = self._interpolate_fvcom_harmonics(x, y,
-                                                                                                 amplitudes[:, i, :],
-                                                                                                 phases[:, i, :],
-                                                                                                 harmonics_lon,
-                                                                                                 harmonics_lat,
-                                                                                                 pool_size)
+                interpolated_amplitudes, interpolated_phases = (
+                        self._interpolate_fvcom_harmonics(x, y,
+                        amplitudes[:, i, :],
+                        phases[:, i, :],
+                        harmonics_lon,
+                        harmonics_lat,
+                        pool_size))
             self.tide.constituents = available_constituents
 
             # Predict the tides
-            results.append(np.asarray(self._prepare_tides(interpolated_amplitudes, interpolated_phases,
-                                                          y, serial, pool_size, noisy)).T)
+            results.append(np.asarray(self._prepare_tides(
+                    interpolated_amplitudes, interpolated_phases,
+                    y, serial, pool_size, noisy)).T)
 
-        # Dump the results into the object. Put the time dimension first, space last.
-        setattr(self.tide, predict, np.squeeze(np.transpose(np.asarray(results), (1, 0, 2))))
+        # The harmonics are calculated -/+ one day 
+        # Define the bool of required time
+        tbool = ((self.tide.time >= self.time.start) 
+                & (self.tide.time <= self.time.end))
+        self.tide.time = self.tide.time[tbool]
 
-    def _prepare_tides(self, amplitudes, phases, latitudes, serial=False, pool_size=None, noisy=False):
-        # Prepare the UTide inputs for the constituents we've loaded.
-        const_idx = np.asarray([ut_constants['const']['name'].tolist().index(i) for i in self.tide.constituents])
+        # Dump the results into the object. Put the time dimension 
+        # first, space last.
+        setattr(self.tide, predict, np.squeeze(np.transpose(
+                np.asarray(results), (1, 0, 2)))[tbool, ...])
+
+    def _prepare_tides(self, amplitudes, phases, latitudes, serial=False, 
+            pool_size=None, noisy=False):
+        """
+        Prepare the UTide inputs for the constituents we've loaded.
+
+        """
+        const_idx = np.asarray([ut_constants['const']['name'].tolist().index(i) 
+                for i in self.tide.constituents])
         frq = ut_constants['const']['freq'][const_idx]
 
         coef = Bunch(name=self.tide.constituents, mean=0, slope=0)
         coef['aux'] = Bunch(reftime=729572.47916666674, lind=const_idx, frq=frq)
-        coef['aux']['opt'] = Bunch(twodim=False, nodsatlint=False, nodsatnone=False,
-                                   gwchlint=False, gwchnone=False, notrend=True, prefilt=[])
+        coef['aux']['opt'] = Bunch(twodim=False, nodsatlint=False, 
+                nodsatnone=False, gwchlint=False, gwchnone=False, 
+                notrend=True, prefilt=[])
 
-        # Prepare the time data for predicting the time series. UTide needs MATLAB times.
+        # Prepare the time data for predicting the time series. 
+        # UTide needs MATLAB times.
         times = mtime(self.tide.time)
-        args = [(latitudes[i], times, coef, amplitudes[i], phases[i], noisy) for i in range(len(latitudes))]
+        args = [(latitudes[i], times, coef, amplitudes[i], phases[i], noisy) 
+                for i in range(len(latitudes))]
         if serial:
             results = []
             for arg in args:
@@ -1429,7 +1588,7 @@ class OpenBoundary(object):
         return results
 
     @staticmethod
-    def _load_harmonics(harmonics, constituents, names):
+    def _load_harmonics(harmonics, constituents, names, complex=False):
         """
         Load the given variables from the given file.
 
@@ -1441,11 +1600,18 @@ class OpenBoundary(object):
             The list of tidal constituents to load.
         names : dict
             Dictionary with the variables names:
-                amplitude_name - amplitude data
-                phase_name - phase data
+                part1_name - amplitude data or real data
+                part2_name - phase data or imaginary data
                 lon_name - longitude data
                 lat_name - latitude data
                 constituent_name - constituent names
+            Part1 is amplitude and part2 is phase unless 'complex' is True. 
+            If 'complex' is True, part1 is Real and part2 is Imaginary.
+        complex : bool
+            Specify if input file is define in terms of tidal amplitude and 
+            phase or as a cartesian complex with Real and Imaginary parts.
+            This should be set to True for TPXO9 and False for earlier versions
+            of TPXO.
 
         Returns
         -------
@@ -1454,29 +1620,62 @@ class OpenBoundary(object):
         phases : np.darray
             The amplitudes for the given constituents.
         fvcom_constituents : list
-            The constituents which have been requested that actually exist in the harmonics netCDF file.
+            The constituents which have been requested that actually exist 
+            in the harmonics netCDF file.
 
         """
 
         with Dataset(str(harmonics), 'r') as tides:
-            const = [''.join(i).upper().strip() for i in tides.variables[names['constituent_name']][:].astype(str)]
-            # If we've been given constituents that aren't in the harmonics data, just find the indices we do have.
-            cidx = [const.index(i) for i in constituents if i in const]
+            if any(isinstance(i, list) for i in tides.variables[
+                    names['constituent_name']][:].astype(str)):
+                const = ([''.join(i).upper().strip() for i in tides.variables[
+                        names['constituent_name']][:].astype(str)])
+            else:
+                const = ([''.join(tides.variables[
+                        names['constituent_name']][:].astype(str)
+                        ).upper().strip()])
+            # If we've been given constituents that aren't in the harmonics 
+            # data, just find the indices we do have.
+            cidx = [constituents.index(i) for i in constituents if i in const]
             # Save the names of the constituents we've actually used.
             available_constituents = [constituents[i] for i in cidx]
+            if len(available_constituents) == 0:
+                return ([], [], [], [], [])
 
             harmonics_lon = tides.variables[names['lon_name']][:]
             harmonics_lat = tides.variables[names['lat_name']][:]
 
-            amplitude_shape = tides.variables[names['amplitude_name']][:].shape
-            if amplitude_shape[0] == len(const):
-                amplitudes = tides.variables[names['amplitude_name']][cidx, ...]
-                phases = tides.variables[names['phase_name']][cidx, ...]
-            elif amplitude_shape[-1] == len(const):
-                amplitudes = tides.variables[names['amplitude_name']][..., cidx].T
-                phases = tides.variables[names['phase_name']][..., cidx].T
+            part1_shape = tides.variables[names['part1_name']][:].shape
+            if complex:
+                if part1_shape[0] == len(const):
+                    real = tides.variables[names['part1_name']][cidx, ...]
+                    imag = tides.variables[names['part2_name']][cidx, ...]
+                elif part1_shape[-1] == len(const):
+                    real = (tides.variables[names['part1_name']]
+                            [..., cidx].T)
+                    imag = (tides.variables[names['part2_name']]
+                            [..., cidx].T)
+                else:
+                    real = tides.variables[names['part1_name']][:]
+                    imag = tides.variables[names['part2_name']][:]
 
-        return harmonics_lon, harmonics_lat, amplitudes, phases, available_constituents
+                amplitudes = np.abs(real + 1j * imag)
+                phases = np.arctan2(-imag, real) / (np.pi * 180)
+
+            else:
+                if part1_shape[0] == len(const):
+                    amplitudes = tides.variables[names['part1_name']][cidx, ...]
+                    phases = tides.variables[names['part2_name']][cidx, ...]
+                elif part1_shape[-1] == len(const):
+                    amplitudes = (tides.variables[names['part1_name']]
+                            [..., cidx].T)
+                    phases = tides.variables[names['part2_name']][..., cidx].T
+                else:
+                    amplitudes = tides.variables[names['part1_name']][:]
+                    phases = tides.variables[names['part2_name']][:]
+
+        return (harmonics_lon, harmonics_lat, amplitudes, 
+                phases, available_constituents)
 
     @staticmethod
     def _match_coords(pts_1, pts_2, epsilon=10):
@@ -1512,9 +1711,11 @@ class OpenBoundary(object):
         return np.all(is_matched), np.asarray(match_indices, dtype=int)
 
     @staticmethod
-    def _interpolate_tpxo_harmonics(x, y, amp_data, phase_data, harmonics_lon, harmonics_lat, interp_method):
+    def _interpolate_tpxo_harmonics(x, y, amp_data, phase_data, harmonics_lon, 
+                harmonics_lat, interp_method):
         """
-        Interpolate from the harmonics data onto the current open boundary positions.
+        Interpolate from the harmonics data onto the current open boundary 
+        positions.
 
         Parameters
         ----------
@@ -1533,35 +1734,66 @@ class OpenBoundary(object):
         """
 
         if np.ndim(harmonics_lon) != 1 and np.ndim(harmonics_lat) != 1:
-            # Creating the RegularGridInterpolator object will fail if we've got 2D position arrays with a
-            # ValueError. So, this is fragile, but try first assuming we've got the right shape arrays and try again
-            # if that fails with the unique coordinates in the relevant position arrays.
-            warn('Harmonics are given as 2D arrays: trying to convert to 1D for the interpolation.')
+            # Creating the RegularGridInterpolator object will fail if we've 
+            # got 2D position arrays with a ValueError. So, this is fragile, 
+            # but try first assuming we've got the right shape arrays and try 
+            # again if that fails with the unique coordinates in the relevant 
+            # position arrays.
+            warn('Harmonics are given as 2D arrays: trying to convert to 1D '
+                    + 'for the interpolation.')
             harmonics_lon = np.unique(harmonics_lon)
             harmonics_lat = np.unique(harmonics_lat)
 
-        # Since interpolating phase directly is a bad idea (cos of the 360 -> 0 degree thing) convert to vectors first
+        # Since interpolating phase directly is a bad idea (cos of the 
+        # 360 -> 0 degree thing) convert to vectors first
         harmonics_u, harmonics_v = pol2cart(amp_data, phase_data, degrees=True) 
 
-        # Make a dummy first dimension since we need it for the RegularGridInterpolator but don't actually
-        # interpolated along it.
+        # Depending on the location of the model domain we may need to shift
+        # the harmonic data to match it.
+        if any(harmonics_lon > 180) & any(x < 0):
+            # Fix our harmonics data position longitudes to be in the -180
+            # to 180 range to match the FVCOM range
+            tmp_u = harmonics_u * 1
+            tmp_v = harmonics_v * 1
+            tmp_lon = harmonics_lon * 1
+            index1 = ((harmonics_lon > 180) | (harmonics_lon < -180))
+            index2 = ((harmonics_lon <= 180) & (harmonics_lon >= 0))
+            harmonics_u[:, :np.sum(index1), :] = tmp_u[:, index1, :] 
+            harmonics_u[:, np.sum(index1):, :] = tmp_u[:, index2, :]
+            harmonics_v[:, :np.sum(index1), :] = tmp_v[:, index1, :] 
+            harmonics_v[:, np.sum(index1):, :] = tmp_v[:, index2, :]
+            harmonics_lon[:np.sum(index1)] = tmp_lon[index1] 
+            harmonics_lon[np.sum(index1):] = tmp_lon[index2]
+            harmonics_lon[harmonics_lon > 180] -= 360
+
+        if any(harmonics_lon < 0) & any(x > 180):
+            # Fix our harmonics data position longitudes to be in the 0-360 
+            # range to match the FVCOM range
+            tmp_u = harmonics_u * 1
+            tmp_v = harmonics_v * 1
+            tmp_lon = harmonics_lon * 1
+            index1 = ((harmonics_lon <= 180) & (harmonics_lon >= 0))
+            index2 = ((harmonics_lon > 180) | (harmonics_lon < -180))
+            harmonics_u[:, :np.sum(index1), :] = tmp_u[:, index1, :] 
+            harmonics_u[:, np.sum(index1):, :] = tmp_u[:, index2, :]
+            harmonics_v[:, :np.sum(index1), :] = tmp_v[:, index1, :] 
+            harmonics_v[:, np.sum(index1):, :] = tmp_v[:, index2, :]
+            harmonics_lon[:np.sum(index1)] = tmp_lon[index1] 
+            harmonics_lon[np.sum(index1):] = tmp_lon[index2]
+            harmonics_lon[harmonics_lon < 0] += 360
+
+        # Make a dummy first dimension since we need it for the 
+        # RegularGridInterpolator but don't actually interpolated along it.
         c_data = np.arange(amp_data.shape[0])
-        u_interp = RegularGridInterpolator((c_data, harmonics_lon, harmonics_lat), harmonics_u, method=interp_method, fill_value=None)
-        v_interp = RegularGridInterpolator((c_data, harmonics_lon, harmonics_lat), harmonics_v, method=interp_method, fill_value=None)
+        u_interp = RegularGridInterpolator((c_data, harmonics_lon, 
+                harmonics_lat), harmonics_u, method=interp_method, 
+                fill_value=None)
+        v_interp = RegularGridInterpolator((c_data, harmonics_lon, 
+                harmonics_lat), harmonics_v, method=interp_method, 
+                fill_value=None)
 
-        # Fix our input position longitudes to be in the 0-360 range to match the harmonics data range,
-        # if necessary.
-        if harmonics_lon.min() >= 0:
-            x[x < 0] += 360
-
-        # Since everything should be in the 0-360 range, stuff which is between the Greenwich meridian and the
-        # first harmonics data point is now outside the interpolation domain, which yields an error since
-        # RegularGridInterpolator won't tolerate data outside the defined bounding box. As such, we need to
-        # squeeze the interpolation locations to the range of the open boundary positions.
-        if x.min() < harmonics_lon.min():
-            harmonics_lon[harmonics_lon == harmonics_lon.min()] = x.min()
-
-        # Make our boundary positions suitable for interpolation with a RegularGridInterpolator.
+        # Make our boundary positions suitable for interpolation with a 
+        # RegularGridInterpolator.
         xx = np.tile(x, [amp_data.shape[0], 1])
         yy = np.tile(y, [amp_data.shape[0], 1])
         ccidx = np.tile(c_data, [len(x), 1]).T
@@ -1672,39 +1904,163 @@ class OpenBoundary(object):
 
         return zeta
 
-    def add_nested_forcing(self, fvcom_name, coarse_name, coarse, interval=1, constrain_coordinates=False,
-                           mode='nodes', tide_adjust=False, verbose=False):
+    def add_nest_level(self, nest_nodes, nest_elements):
         """
-        Interpolate the given data onto the open boundary nodes for the period from `self.time.start' to
-        `self.time.end'.
+        Function to add a nested level which is connected parallel to the 
+        existing nested nodes and elements. This function is used by 
+        preproc.Model.add_nests() and add Nest objects to the list after the 
+        first Nest object is initialised.
+        This fucntion adds the new elements attached to nodes of the previous
+        nest level to the previous nest level and then finds the nodes attached
+        to those elements and appends them to a new Nest object at the new nest
+        level.
+
+        This is useful for generating nested inputs from other model inputs 
+        (e.g. a regularly gridded model) in conjunction with 
+        PyFVCOM.grid.OpenBoundary.add_nested_forcing()).
+
+        Provides
+        --------
+        Adds a new PyFVCOM.Nest object to the list 
+        self.open_boundaries[self.dims.open_boundary].nest[
+                self.dims.nest_levels]
+
+        """
+
+        if self.nest[-1]._noisy:
+            print(f'Add level {len(self.nest)} to the nest.')
+
+        # Find all the elements connected to the last set of open boundary nodes.
+        if not np.any(self.nodes):
+            raise ValueError('No open boundary nodes in the current open '
+                    + 'boundary. Please add some and try again.')
+
+        # Work off the last nest's nodes to get the connected elements 
+        # and nodes. No need to iterate through everything as this gets 
+        # recursive as we add more boundaries.
+        this_nest = self.nest[-1]
+        level_elements = find_connected_elements(this_nest.nodes, 
+                this_nest.all_grid.triangles)
+
+        # Get unique elements and add them to the current nest. This way 
+        # we end up with the right number of layers of elements (i.e. they're 
+        # bounded by a string of nodes on each side).
+        unique_elements = np.setdiff1d(level_elements, nest_elements)
+        if this_nest.elements is None:
+            this_nest.elements = unique_elements.tolist()
+        else:
+            if self.nest[-1]._noisy:
+                warn('We already have elements on nest level '
+                        + '{:d}.'.format(len(self.boundaries)))
+            # print(unique_elements, this_boundary.elements)
+            # this_boundary.elements = unique_elements.tolist()
+
+        # Get the nodes connected to the elements we've extracted.
+        level_nodes = np.unique(this_nest.all_grid.triangles[level_elements, :])
+        # Remove ones we already have in the nest.
+        unique_nodes = np.setdiff1d(level_nodes, nest_nodes)
+        if len(unique_nodes) > 0:
+            # Create a new nest level from those nodes.
+            self.nest.append(Nest(this_nest.all_grid, this_nest.all_sigma, 
+                    this_nest.super_boundaries, ids=unique_nodes, 
+                    verbose=self.nest[-1]._noisy))
+
+            # Grab the time from the previous one.
+            setattr(self.nest[-1], 'time', this_nest.time)
+
+            # Populate the grid and sigma objects too.
+            self.nest[-1]._update_nest()
+
+    def add_nest_weights(self, power=0):
+        """
+        For the nests in self.open_boundaries, add a corresponding weight 
+        for the nodes and elements to each one. This makes sense if there are 
+        levels of boundary forcing in parallel to the external boundary nodes. 
+        This function is used by preproc.Model.add_nests()
+
+        Parameters
+        ----------
+        power : float, optional
+            Give an optional power with which weighting decreases with each 
+            successive nest. Defaults to 0 (i.e. linear).
+
+        Provides
+        --------
+        Populates the Nest objects with the relevant 
+        weight_node and weight_element arrays.
+
+        """
+
+        if self.nest[-1]._noisy:
+            print('Add weights to the nested boundary.')
+
+        # The first nest object in the list is the OpenBoundary nodes so start 
+        # at index 1
+        for index, this_nest in enumerate(self.nest, 1):
+            if power == 0:
+                weight_node = 1 / index
+            else:
+                weight_node = 1 / (index**power)
+
+            this_nest.weight_node = np.repeat(weight_node, 
+                    len(this_nest.nodes))
+            # We will always have one fewer sets of elements as the nodes 
+            # bound the elements.
+            if (not np.any(this_nest.elements) and 
+                    this_nest is not self.nest[-1]):
+                raise ValueError('No elements defined in this nest. '
+                        + 'Adding weights requires elements.')
+            elif np.any(this_nest.elements):
+                # We should get here on all boundaries bar the last since the 
+                # last open boundary has no elements in a nest.
+                if power == 0:
+                    weight_element = 1 / index
+                else:
+                    weight_element = 1 / (index**power)
+                this_nest.weight_element = np.repeat(weight_element, 
+                        len(this_nest.elements))
+
+    def add_nested_forcing(self, fvcom_name, coarse_name, coarse, interval=1, 
+                            constrain_coordinates=False,
+                            mode='nodes', tide_adjust=False, verbose=False):
+        """
+        Interpolate the given data onto the open boundary nodes for the period 
+        from 'self.time.start' to 'self.time.end'.
 
         Parameters
         ----------
         fvcom_name : str
-            The data field name to add to the nest object which will be written to netCDF for FVCOM.
+            The data field name to add to the nest object which will be 
+            written to netCDF for FVCOM.
         coarse_name : str
             The data field name to use from the coarse object.
         coarse : RegularReader
-            The regularly gridded data to interpolate onto the open boundary nodes. This must include time, lon,
-            lat and depth data as well as the time series to interpolate (4D volume [time, depth, lat, lon]).
+            The regularly gridded data to interpolate onto the open boundary 
+            nodes. This must include time, lon, lat and depth data as well as 
+            the time series to interpolate (4D volume [time, depth, lat, lon]).
         interval : float, optional
             Time sampling interval in days. Defaults to 1 day.
         constrain_coordinates : bool, optional
-            Set to True to constrain the open boundary coordinates (lon, lat, depth) to the supplied coarse data.
-            This essentially squashes the open boundary to fit inside the coarse data and is, therefore, a bit of a
-            fudge! Defaults to False.
+            Set to True to constrain the open boundary coordinates (lon, lat, 
+            depth) to the supplied coarse data. This essentially squashes the 
+            open boundary to fit inside the coarse data and is, therefore, a 
+            bit of a fudge! Defaults to False.
         mode : bool, optional
-            Set to 'nodes' to interpolate onto the open boundary node positions or 'elements' for the elements for
-            z-level data. For 2D data, set to 'surface' (interpolates to the node positions ignoring depth
-            coordinates). Also supported are 'sigma_nodes' and `sigma_elements' which means we have spatially (and
-            optionally temporally) varying water depths (i.e. sigma layers rather than z-levels). Defaults to 'nodes'.
+            Set to 'nodes' to interpolate onto the open boundary node 
+            positions or 'elements' for the elements. 'nodes and 'elements' 
+            are for input data on z-levels. For 2D data, set to 'surface' 
+            (interpolates to the node positions ignoring depth coordinates). 
+            Also supported are 'sigma_nodes' and 'sigma_elements' which means 
+            we have spatially (and optionally temporally) varying water depths 
+            (i.e. sigma layers rather than z-levels). Defaults to 'nodes'.
         tide_adjust : bool, optional
-            Some nested forcing doesn't include tidal components and these have to be added from predictions using
-            harmonics. With this set to true the interpolated forcing has the tidal component (required to already
-            exist in self.tide) added to the final data.
+            Some nested forcing doesn't include tidal components and these 
+            have to be added from predictions using harmonics. With this set 
+            to true the interpolated forcing has the tidal component (required 
+            to already exist in self.tide) added to the final data.
         verbose : bool, optional
-            Set to True to enable verbose output. Defaults to False (no verbose output).
-
+            Set to True to enable verbose output. Defaults to False 
+            (no verbose output).
         """
 
         # Check we have what we need.
@@ -1725,16 +2081,24 @@ class OpenBoundary(object):
                 return
 
         if raise_error:
-            raise AttributeError('Add vertical sigma coordinates in order to interpolate forcing along this boundary.')
+            raise AttributeError('Add vertical sigma coordinates in order to '
+                    + 'interpolate forcing along this boundary.')
 
-        # Populate the time data. Why did I put the time data in here rather than self.time? This is annoying.
+        # Populate the time data. Why did I put the time data in here rather 
+        # than self.time? This is annoying.
         self.data.time = PassiveStore()
         self.data.time.interval = interval
-        self.data.time.datetime = date_range(self.time.start, self.time.end, inc=interval)
-        self.data.time.time = date2num(getattr(self.data.time, 'datetime'), units='days since 1858-11-17 00:00:00')
-        self.data.time.Itime = np.floor(getattr(self.data.time, 'time'))  # integer Modified Julian Days
-        self.data.time.Itime2 = (getattr(self.data.time, 'time') - getattr(self.data.time, 'Itime')) * 24 * 60 * 60 * 1000  # milliseconds since midnight
-        self.data.time.Times = [t.strftime('%Y-%m-%dT%H:%M:%S.%f') for t in getattr(self.data.time, 'datetime')]
+        self.data.time.datetime = date_range(self.time.start, self.time.end, 
+                inc=interval)
+        self.data.time.time = date2num(getattr(self.data.time, 'datetime'), 
+                units='days since 1858-11-17 00:00:00')
+        self.data.time.Itime = np.floor(getattr(self.data.time, 'time'))  
+        # integer Modified Julian Days
+        self.data.time.Itime2 = (getattr(self.data.time, 'time') 
+                - getattr(self.data.time, 'Itime')) * 24 * 60 * 60 * 1000  
+                # milliseconds since midnight
+        self.data.time.Times = [t.strftime('%Y-%m-%dT%H:%M:%S.%f') 
+                for t in getattr(self.data.time, 'datetime')]
 
         if 'elements' in mode:
             boundary_points = self.elements
@@ -1755,67 +2119,92 @@ class OpenBoundary(object):
             y[y < coarse.grid.lat.min()] = coarse.grid.lat.min()
             y[y > coarse.grid.lat.max()] = coarse.grid.lat.max()
 
-            # Internal landmasses also need to be dealt with, so test if a point lies within the mask of the grid and
+            # Internal landmasses also need to be dealt with, so test if a 
+            # point lies within the mask of the grid and
             # move it to the nearest in grid point if so.
             if not mode == 'surface':
-                land_mask = getattr(coarse.data, coarse_name)[0, ...].mask[0, :, :]
+                land_mask = getattr(coarse.data, coarse_name
+                        )[0, ...].mask[0, :, :]
             else:
                 land_mask = getattr(coarse.data, coarse_name)[0, ...].mask
 
             sea_points = np.ones(land_mask.shape)
             sea_points[land_mask] = np.nan
 
-            ft_sea = RegularGridInterpolator((coarse.grid.lat, coarse.grid.lon), sea_points, method='linear', fill_value=np.nan)
+            ft_sea = RegularGridInterpolator((coarse.grid.lat, coarse.grid.lon),
+                    sea_points, method='linear', fill_value=np.nan)
             internal_points = np.isnan(ft_sea(np.asarray([y, x]).T))
 
             if np.any(internal_points):
                 xv, yv = np.meshgrid(coarse.grid.lon, coarse.grid.lat)
-                valid_ll = np.asarray([x[~internal_points], y[~internal_points]]).T
+                valid_ll = np.asarray([x[~internal_points], 
+                        y[~internal_points]]).T
                 for this_ind in np.where(internal_points)[0]:
-                    nearest_valid_ind = np.argmin((valid_ll[:, 0] - x[this_ind])**2 + (valid_ll[:, 1] - y[this_ind])**2)
+                    nearest_valid_ind = np.argmin(
+                            (valid_ll[:, 0] - x[this_ind])**2 
+                            + (valid_ll[:, 1] - y[this_ind])**2)
                     x[this_ind] = valid_ll[nearest_valid_ind, 0]
                     y[this_ind] = valid_ll[nearest_valid_ind, 1]
 
-            # The depth data work differently as we need to squeeze each FVCOM water column into the available coarse
-            # data. The only way to do this is to adjust each FVCOM water column in turn by comparing with the
+            # The depth data work differently as we need to squeeze each 
+            # FVCOM water column into the available coarse
+            # data. The only way to do this is to adjust each FVCOM water 
+            # column in turn by comparing with the
             # closest coarse depth.
             if mode != 'surface':
-                coarse_depths = np.tile(coarse.grid.depth, [coarse.dims.lat, coarse.dims.lon, 1]).transpose(2, 0, 1)
-                coarse_depths = np.ma.masked_array(coarse_depths, mask=getattr(coarse.data, coarse_name)[0, ...].mask)
+                coarse_depths = np.tile(coarse.grid.depth, [coarse.dims.lat, 
+                        coarse.dims.lon, 1]).transpose(2, 0, 1)
+                coarse_depths = np.ma.masked_array(coarse_depths, 
+                        mask=getattr(coarse.data, coarse_name)[0, ...].mask)
                 coarse_depths = np.max(coarse_depths, axis=0)
             
-                # Find any places where only the zero depth layer exists and copy down 
-                zero_depth_water = np.where(np.logical_and(coarse_depths == 0, ~coarse_depths.mask))
+                # Find any places where only the zero depth layer exists and 
+                # copy down 
+                zero_depth_water = np.where(np.logical_and(coarse_depths == 0, 
+                        ~coarse_depths.mask))
                 if zero_depth_water[0].size:
                     data_mod = getattr(coarse.data, coarse_name)
-                    data_mod[:, 1, zero_depth_water[0], zero_depth_water[1]] = data_mod[:, 0, zero_depth_water[0], zero_depth_water[1]]
-                    data_mod.mask[:, 1, zero_depth_water[0], zero_depth_water[1]] = False
-                    setattr(coarse.data, coarse_name, data_mod) # Probably isn't needed cos pointers but for clarity
+                    data_mod[:, 1, zero_depth_water[0], zero_depth_water[1]] = (
+                            data_mod[:, 0, zero_depth_water[0], 
+                            zero_depth_water[1]])
+                    (data_mod.mask[:, 1, zero_depth_water[0], 
+                            zero_depth_water[1]]) = False
+                    setattr(coarse.data, coarse_name, data_mod) 
+                            # Probably isn't needed cos pointers but for clarity
 
                 coarse_depths = np.ma.filled(coarse_depths, 0)
 
-                # Go through each open boundary position and if its depth is deeper than the closest coarse data,
-                # squash the open boundary water column into the coarse water column.
+                # Go through each open boundary position and if its depth is 
+                # deeper than the closest coarse data,
+                # squash the open boundary water column into the coarse water 
+                # column.
                 for idx, node in enumerate(zip(x, y, z)):
                     nearest_lon_ind = np.argmin((coarse.grid.lon - node[0])**2)
                     nearest_lat_ind = np.argmin((coarse.grid.lat - node[1])**2)
 
                     if node[0] < coarse.grid.lon[nearest_lon_ind]:
-                        nearest_lon_ind = [nearest_lon_ind -1, nearest_lon_ind, nearest_lon_ind -1, nearest_lon_ind]
+                        nearest_lon_ind = [nearest_lon_ind -1, nearest_lon_ind, 
+                                nearest_lon_ind -1, nearest_lon_ind]
                     else:
-                        nearest_lon_ind = [nearest_lon_ind, nearest_lon_ind + 1, nearest_lon_ind, nearest_lon_ind + 1]
+                        nearest_lon_ind = [nearest_lon_ind, nearest_lon_ind + 1,
+                                nearest_lon_ind, nearest_lon_ind + 1]
 
                     if node[1] < coarse.grid.lat[nearest_lat_ind]:
-                        nearest_lat_ind = [nearest_lat_ind -1, nearest_lat_ind -1, nearest_lat_ind, nearest_lat_ind]
+                        nearest_lat_ind = [nearest_lat_ind -1, nearest_lat_ind 
+                                -1, nearest_lat_ind, nearest_lat_ind]
                     else:
-                        nearest_lat_ind = [nearest_lat_ind, nearest_lat_ind, nearest_lat_ind + 1, nearest_lat_ind + 1]
+                        nearest_lat_ind = [nearest_lat_ind, nearest_lat_ind, 
+                                nearest_lat_ind + 1, nearest_lat_ind + 1]
 
-                    grid_depth = np.min(coarse_depths[nearest_lat_ind, nearest_lon_ind])
+                    grid_depth = np.min(coarse_depths[nearest_lat_ind, 
+                            nearest_lon_ind])
 
                     if grid_depth < node[2].max():
-                        # Squash the FVCOM water column into the coarse water column.
+                        # Squash the FVCOM water column into the coarse water 
+                        # column.
                         z[idx, :] = (node[2] / node[2].max()) * grid_depth
-                # Fix all depths which are shallower than the shallowest coarse depth. This is more straightforward as
+                # Fix all depths which are shallower than the shallowest 
+                # coarse depth. This is more straightforward as
                 # it's a single minimum across all the open boundary positions.
                 z[z < coarse.grid.depth.min()] = coarse.grid.depth.min()
 
@@ -1824,21 +2213,29 @@ class OpenBoundary(object):
         nz = z.shape[-1]
 
         if verbose:
-            print(f'Interpolating {nt} times, {nz} vertical layers and {nx} points')
+            print('Interpolating {} times, {} '.format(nt, nz)
+                    + 'vertical layers and {} points'.format(nx))
 
-        # Make arrays of lon, lat, depth and time for non-sigma interpolation. Need to make the coordinates match the
-        # coarse data shape and then flatten the lot. We should be able to do the interpolation in one shot this way,
-        # but we have to be careful our coarse data covers our model domain (space and time).
+        # Make arrays of lon, lat, depth and time for non-sigma interpolation. 
+        # Need to make the coordinates match the
+        # coarse data shape and then flatten the lot. We should be able to do 
+        # the interpolation in one shot this way,
+        # but we have to be careful our coarse data covers our model domain 
+        # (space and time).
         if mode == 'surface':
             if verbose:
                 print('Interpolating surface data...', end=' ')
 
-            # We should use np.meshgrid here instead of all this tiling business.
-            boundary_grid = np.array((np.tile(self.data.time.time, [nx, 1]).T.ravel(),
-                                      np.tile(y, [nt, 1]).transpose(0, 1).ravel(),
-                                      np.tile(x, [nt, 1]).transpose(0, 1).ravel())).T
-            ft = RegularGridInterpolator((coarse.time.time, coarse.grid.lat, coarse.grid.lon),
-                                         getattr(coarse.data, coarse_name), method='linear', fill_value=np.nan)
+            # We should use np.meshgrid here instead of all this tiling 
+            # business.
+            boundary_grid = np.array((
+                    np.tile(self.data.time.time, [nx, 1]).T.ravel(),
+                    np.tile(y, [nt, 1]).transpose(0, 1).ravel(),
+                    np.tile(x, [nt, 1]).transpose(0, 1).ravel())).T
+            ft = RegularGridInterpolator((coarse.time.time, 
+                    coarse.grid.lat, coarse.grid.lon),
+                    getattr(coarse.data, coarse_name), 
+                    method='linear', fill_value=np.nan)
             # Reshape the results to match the un-ravelled boundary_grid array.
             interpolated_coarse_data = ft(boundary_grid).reshape([nt, -1])
         elif 'sigma' in mode:
@@ -1846,43 +2243,71 @@ class OpenBoundary(object):
                 print('Interpolating sigma data...', end=' ')
 
             nt = coarse.dims.time  # rename!
-            interp_args = [(boundary_points, x, y, self.sigma.layers_z, coarse, coarse_name, self._debug, t) for t in np.arange(nt)]
+            interp_args = [(boundary_points, x, y, self.sigma.layers_z, 
+                    coarse, coarse_name, self._debug, t) for t in np.arange(nt)]
             if hasattr(coarse, 'ds'):
                 coarse.ds.close()
                 delattr(coarse, 'ds')
             pool = multiprocessing.Pool()
             results = pool.map(self._brute_force_interpolator, interp_args)
 
-            # Now we have those data interpolated in space (horizontal and vertical), interpolate to match in time.
-            interp_args = [(coarse.time.time, j, self.data.time.time) for i in np.asarray(results).T for j in i]
+            # Now we have those data interpolated in space (horizontal and 
+            # vertical), interpolate to match in time.
+            interp_args = [(coarse.time.time, j, self.data.time.time) 
+                    for i in np.asarray(results).T for j in i]
             results = pool.map(self._interpolate_in_time, interp_args)
             pool.close()
 
-            # Reshape and transpose to be the correct size for writing to netCDF (time, depth, node).
-            interpolated_coarse_data = np.asarray(results).reshape(nz, nx, -1).transpose(2, 0, 1)
+            # Reshape and transpose to be the correct size for writing to 
+            # netCDF (time, depth, node).
+            interpolated_coarse_data = np.asarray(results).reshape(
+                      nz, nx, -1).transpose(2, 0, 1)
         else:
             if verbose:
                 print('Interpolating z-level data...', end=' ')
-            # Assume it's z-level data (e.g. HYCOM, CMEMS). We should use np.meshgrid here instead of all this tiling
+            # Assume it's z-level data (e.g. HYCOM, CMEMS). We should use 
+            # np.meshgrid here instead of all this tiling
             # business.
-            boundary_grid = np.array((np.tile(self.data.time.time, [nx, nz, 1]).T.ravel(),
-                                      np.tile(z.T, [nt, 1, 1]).ravel(),
-                                      np.tile(y, [nz, nt, 1]).transpose(1, 0, 2).ravel(),
-                                      np.tile(x, [nz, nt, 1]).transpose(1, 0, 2).ravel())).T
-            ft = RegularGridInterpolator((coarse.time.time, coarse.grid.depth, coarse.grid.lat, coarse.grid.lon),
-                                         np.ma.filled(getattr(coarse.data, coarse_name), np.nan), method='linear',
-                                         fill_value=np.nan)
-            # Reshape the results to match the un-ravelled boundary_grid array (time, depth, node).
+            boundary_grid = np.array((
+                    np.tile(self.data.time.time, [nx, nz, 1]).T.ravel(),
+                    np.tile(z.T, [nt, 1, 1]).ravel(),
+                    np.tile(y, [nz, nt, 1]).transpose(1, 0, 2).ravel(),
+                    np.tile(x, [nz, nt, 1]).transpose(1, 0, 2).ravel())).T
+            ft = RegularGridInterpolator((coarse.time.time, coarse.grid.depth, 
+                    coarse.grid.lat, coarse.grid.lon),
+                    np.ma.filled(getattr(coarse.data, coarse_name), np.nan), 
+                    method='linear', fill_value=np.nan)
+            # Reshape the results to match the un-ravelled boundary_grid 
+            # array (time, depth, node).
             interpolated_coarse_data = ft(boundary_grid).reshape([nt, nz, -1])
 
-        if tide_adjust and fvcom_name in ['u', 'v', 'ua', 'va']:
-            interpolated_coarse_data = interpolated_coarse_data + getattr(self.tide, fvcom_name)
+        if tide_adjust and fvcom_name in ['u', 'v', 'ua', 'va', 'zeta']:
+            if fvcom_name in ['u', 'v']:
+                tide_levels = np.tile(getattr(self.tide, fvcom_name)
+                        [:, np.newaxis, :], [1, nz, 1])
+                interpolated_coarse_data = (interpolated_coarse_data 
+                        + tide_levels)
+            else:
+                interpolated_coarse_data = interpolated_coarse_data + getattr(
+                        self.tide, fvcom_name)
 
         # Drop the interpolated data into the data object.
         setattr(self.data, fvcom_name, interpolated_coarse_data)
 
         if verbose:
             print('done.')
+
+    def avg_nest_force_vel(self):
+        """
+        Create depth-averaged velocities (`ua', `va') in the current 
+        self.data data.
+
+        """
+        layer_thickness = (self.sigma.levels_center.T[0:-1, :] 
+                - self.sigma.levels_center.T[1:, :])
+        self.data.ua = zbar(self.data.u, layer_thickness)
+        self.data.va = zbar(self.data.v, layer_thickness)
+
 
     @staticmethod
     def _brute_force_interpolator(args):
@@ -2080,15 +2505,141 @@ class OpenBoundary(object):
 
         return interpolated_data
 
-    def avg_nest_force_vel(self):
+class Nest(OpenBoundary):
+    """
+    Class to hold a set of nests levels similar to OpenBoundary objects but 
+    with depth levels and horizontal nest levels. This is a subclass of 
+    OpenBoundary and inherits all the properties of the OpenBoundary it was 
+    initialised with. An OpenBoundary needs to be present before initialising
+    Nest. Use preproc.Model.add_nests() to set up the list of Nest objects.
+    Note: Nest should be initialised with the nodes of the 
+    required nest level as ids in additon to grid, sigma and boundary. 
+    """
+
+    def __init__(self, grid, sigma, boundary, verbose=False, *args, **kwargs):
         """
-        Create depth-averaged velocities (`ua', `va') in the current self.data data.
+        Create a nested boundary object.
+
+        Parameters
+        ----------
+        grid : PyFVCOM.grid.Domain
+            The model grid within which the nest will sit.
+        sigma : PyFVCOM.model.OpenBoundary.sigma
+            The vertical sigma coordinate configuration for the current grid.
+        boundary : PyFVCOM.grid.OpenBoundary or list
+            An open boundary with which to initialise this nest.
+        ids : np.ndarray
+            Array of unstructured grid IDs representing the nodes of a nest 
+            level.
+        mode : str, optional
+            Specify whether the IDs given are node ('nodes') or element-centre 
+            ('elements') IDs. Defaults to 'nodes'.
+        verbose : bool, optional
+            Set to True to enable verbose output. Defaults to False.
 
         """
-        layer_thickness = self.sigma.levels_center.T[0:-1, :] - self.sigma.levels_center.T[1:, :]
-        self.data.ua = zbar(self.data.u, layer_thickness)
-        self.data.va = zbar(self.data.v, layer_thickness)
 
+        # Inherit everything from PyFVCOM.grid.OpenBoundary, but extend it for 
+        # our purposes. This doesn't work with Python 2.
+        super().__init__(*args, **kwargs)
+
+        self._debug = False
+        self._noisy = verbose
+
+        self.all_grid = copy.copy(grid)
+        self.all_sigma = copy.copy(sigma)
+        self.grid = copy.copy(grid)
+        self.sigma = copy.copy(sigma)
+        for attribute in self.grid:
+            setattr(self.grid, attribute, None)
+        for attribute in self.sigma:
+            setattr(self.sigma, attribute, None)
+
+        # This gets circular so we can access attributes of the parent
+        # OpenBoundary instance 
+        # i.e open_boundary = open_boundaries.nest.super_boundaries
+        # This means we can let Nest iterate over instances of 
+        # itself to keep the nest functions in Nest instead of OpenBoundary
+        if isinstance(boundary, list):
+            self.super_boundaries = boundary
+        elif isinstance(boundary, OpenBoundary):
+            self.super_boundaries = [boundary]
+        else:
+            raise ValueError("Unsupported boundary type {}. Supply "
+                + "PyFVCOM.grid.OpenBoundary or `list'.".format(type(boundary)))
+        # Add the sigma and grid structure attributes. This is a bit 
+        # inefficient as we end up doing it for every boundary each time we 
+        # add a new nest.
+        self._update_nest()
+
+    def __iter__(self):
+        return (a for a in dir(self) if not a.startswith('_'))
+
+    def _update_nest(self):
+        """
+        Call this when we've done something which affects the nest objects 
+        and we need to update their properties.
+
+        For example, this updates sigma information if we've added the sigma 
+        distribution to the Model object.
+        
+        This samples self.all_grid and self.all_sigma with the nest nodes and 
+        elements and give the values for each nest location to self.grid
+        and self.sigma.
+        """
+
+        for attribute in self.all_grid:
+            if self._debug:
+                print('\t{}'.format(attribute))
+            try:
+                if ('center' not in attribute and attribute 
+                        not in ['lonc', 'latc', 'xc', 'yc']):
+                    setattr(self.grid, attribute, getattr(self.all_grid, 
+                            attribute)[self.nodes, ...])
+                    if self._debug:
+                        print(f'\tUpdating grid node attribute: '
+                                + '{attribute}')
+                else:
+                    if np.any(self.elements):
+                        setattr(self.grid, attribute, getattr(
+                                self.all_grid, attribute)[self.elements, ...])
+                        if self._debug:
+                            print(f'\tUpdating grid element attribute: '
+                                    + '{attribute}')
+            except (IndexError, TypeError):
+                setattr(self.grid, attribute, getattr(self.all_grid, attribute))
+                if self._debug:
+                    print(f'\tTransferring grid attribute: {attribute}')
+            except AttributeError as e:
+                if self._debug:
+                    print(e)
+                pass
+
+        for attribute in self.sigma:
+            if self._debug:
+                print('\t{}'.format(attribute))
+            try:
+                if 'center' not in attribute:
+                    setattr(self.sigma, attribute, getattr(self.all_sigma, 
+                            attribute)[self.nodes, ...])
+                    if self._debug:
+                        print(f'\tUpdating sigma node attribute: '
+                                + '{attribute}')
+                else:
+                    if np.any(self.elements):
+                        setattr(self.sigma, attribute, getattr(
+                            self.all_sigma, attribute)[self.elements, ...])
+                        if self._debug:
+                            print(f'\tUpdating sigma element attribute: '
+                                    + '{attribute}')
+            except (IndexError, TypeError):
+                setattr(self.sigma, attribute, getattr(
+                        self.all_sigma, attribute))
+                if self._debug:
+                    print(f'\tTransferring sigma attribute: {attribute}')
+            except AttributeError as e:
+                if self._debug:
+                    print(e)
 
 def read_sms_mesh(mesh, nodestrings=False):
     """
@@ -4197,7 +4748,7 @@ def rotate_points(x, y, origin, angle):
     return xr, yr
 
 
-def get_boundary_polygons(triangle, noisy=False, nodes=None):
+def get_boundary_polygons(triangle, noisy=False, nodes=None, double_start_end=False):
     """
     Gets a list of the grid boundary nodes ordered correctly.
 
@@ -4209,11 +4760,12 @@ def get_boundary_polygons(triangle, noisy=False, nodes=None):
     triangle : np.ndarray
         The triangle connectivity matrix as produced by the read_fvcom_mesh
         function.
-
     nodes : optional, np.ndarray
         Optionally a Nx2 array of coordinates for nodes in the grid, if passed the function will
         additionally return a boolean of whether the polygons are boundaries (domain on interior)
         or islands (domain on the exterior)
+    double_start_end : optional, boolean
+        Optionally add the start point to the end of each boundary polygon; useful for plotting
 
     Returns
     -------
@@ -4259,6 +4811,11 @@ def get_boundary_polygons(triangle, noisy=False, nodes=None):
 
         boundary_polygon_list.append(np.asarray(boundary_node_list))
         nodes_lt_4 = np.asarray(list(set(nodes_lt_4) - set(boundary_node_list)), dtype=int)
+    if double_start_end:
+        new_bp_list = []
+        for this_poly in boundary_polygon_list:
+            new_bp_list.append(np.append(this_poly, this_poly[0]))
+        boundary_polygon_list = new_bp_list
 
     if nodes is None:
         return boundary_polygon_list

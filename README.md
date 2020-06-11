@@ -105,8 +105,14 @@ Provides
     - `mp_interp_func`
     - `OpenBoundary` - class to handle model open boundaries.
     - `OpenBoundary.add_sponge_layer`
+    - `OpenBoundary.add_type`
     - `OpenBoundary.add_tpxo_tides`
+    - `OpenBoundary.add_fvcom_tides`
+    - `OpenBoundary.add_nest_level`
+    - `OpenBoundary.add_nest_weights`
     - `OpenBoundary.add_nested_forcing`
+    - `OpenBoundary.avg_nest_force_vel`
+    - `Nest` - subclass of OpenBoundary to hold model nested level stripes. Used by the OpenBoundary methods.
     - `read_sms_mesh`
     - `read_fvcom_mesh`
     - `read_smesh_mesh`
@@ -278,13 +284,6 @@ Provides
     - `NameList.update_ramp`
     - `NameList.write_model_namelist`
     - `write_model_namelist`
-    - `Nest` - class for holding nested OpenBoudnary objects
-    - `Nest.add_level`
-    - `Nest.add_weights`
-    - `Nest.add_tpxo_tides`
-    - `Nest.add_nested_forcing`
-    - `Nest.add_fvcom_tides`
-    - `Nest.avg_nest_force_vel`
     - `WriteForcing` - actually a fairly generic class to write netCDFs with a concise syntax
     - `WriteForcing.add_variable`
     - `WriteForcing.write_fvcom_time`
