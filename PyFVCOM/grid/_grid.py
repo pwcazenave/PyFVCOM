@@ -6281,3 +6281,61 @@ def interpolate_node_barycentric(positions, data, x, y, triangles):
         interped_data.append(_interpolate_within_element(data[this_nodes], this_phi))
 
     return np.asarray(interped_data)
+
+
+def generalised_barycentric(x, y,x_poly, y_poly):
+    """ Get barycentric coordinates.
+    
+    Compute and return barycentric coordinates for the point (x,y) within the
+    triangle defined by x/y coordinates stored in the arrays x_tri and y_tri.
+     
+    From Generalized Barycentric Coordinates on Irregular Polygons, Meyer et al, Journal of Graphic tools 2012
+
+    Parameters:
+    -----------
+    x : float  
+        x-position.
+    
+    y : float
+        y-position.
+    
+    x_poly : C array, float
+        Triangle x coordinates.
+        
+    y_poly : C array, float
+        Triangle y coordinates.
+    
+    epsilon : optional, float
+        Epsilon for determining if on a line
+
+    Returns:
+    """
+
+    if not on_line:
+        weightSum = 0
+        wj = []
+        for ind_qj, qj in enumerate(zip(x_poly, y_poly)):
+            prev_ind = np.mod(ind_qj-1,len(x_poly)) 
+            next_ind = np.mod(ind_qj+1,len(x_poly))
+
+            qprev = np.asarray([x_poly[prev_ind], y_poly[prev_ind]])
+            qnext = np.asarray([x_poly[next_ind], y_poly[next_ind]])
+
+        wj.append((_cotangent(p,qj,qprev) + _cotangent(p,qj,qnext))/ ((p[0]-qj[0]**2) + (p[1]-qj[1]**2)))
+        weightSum += wj[-1]
+
+        # Normalize the weights
+        wj = np.asarray(wj)/weightSum
+
+    return wj
+
+def _cotangent(p,q1,q2):
+    vec_1 = np.asarray([q1[0] - p[0], q1[1] - p[1]])
+    vec_2 = np.asarray([q1[0] - q1[0], p[1] - q2[1]])
+    
+    return np.dot(vec_1, vec_2)/np.cross(vec_1,vec_2)
+
+def check_on_line(x,y,x_line,y_line,epsilon=0.001):
+    on_line = True    
+
+    return on_line
