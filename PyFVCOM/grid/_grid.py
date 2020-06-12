@@ -994,7 +994,7 @@ class Domain(object):
 
         return isintriangle(tri_x, tri_y, x, y)
 
-    def in_domain(self, x, y, z=None, z_meth='barycentric', cartesian=False):
+    def in_domain(self, x, y, z=None, z_meth='barycentric', cartesian=False, zeta_timestep=None):
         """
         Identify if point or array of points (x,y) is within the domain
 
@@ -1028,7 +1028,12 @@ class Domain(object):
         finder = tri.get_trifinder()
         in_domain_xy = finder(x,y) != -1
 
-        if z is not None:        
+        if z is not None:
+            if zeta_timestep == None:
+                grid_h = self.grid.h
+            else:
+                grid_h = self.grid.h + self.data.zeta[zeta_timestep, :]
+ 
             if z_meth == 'nearest_neighbour':
                  
                 node_dist = self.closest_node(np.asarray([x,y]), cartesian=cartesian, return_dists=True)
@@ -1041,7 +1046,7 @@ class Domain(object):
                 
             elif z_meth == 'barycentric':
                 xy_red = np.asarray([x,y]).T[in_domain_xy]
-                interped_h = interpolate_node_barycentric(xy_red, self.grid.h, grid_x, grid_y, self.grid.triangles)
+                interped_h = interpolate_node_barycentric(xy_red, grid_h, grid_x, grid_y, self.grid.triangles)
                 in_depth = z[in_domain_xy] <= interped_h
                 in_domain_xy[in_domain_xy==True] = in_depth
 
@@ -3544,6 +3549,14 @@ def write_fvcom_mesh(triangles, nodes, x, y, z, mesh, extra_depth=None):
             f.write('Node Number = {:d}\n'.format(len(x)))
             for node in zip(x, y, z):
                 f.write('{:.6f} {:.6f} {:.6f}\n'.format(*node))
+
+def write_obc_file(obc_nodes, obc_types, obc_file):
+    number_of_nodes = len(obc_nodes)   
+ 
+    with open(str(obc_file), 'w') as f:
+        f.write('OBC Node Number = {:d}\n'.format(number_of_nodes))
+        for count, node, obc_type in zip(np.arange(number_of_nodes) + 1, obc_nodes, obc_types):
+            f.write('{} {:d} {:d}\n'.format(count, int(node) + 1, int(obc_type)))
 
 
 def write_sms_cst(obc, file, sort=False):
