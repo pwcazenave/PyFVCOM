@@ -445,17 +445,23 @@ class ValidationComparison():
             self.time_match = time_match
 
         self.ignore_deep = ignore_deep
+        self._match_mod_obs()
 
     def find_matching_obs(self):
-        obs_in_mod_xy = np.asarray([self.fvcom_data.in_domain(this_lon, this_lat) for this_lon, this_lat in zip(self.obs_data.grid.lon, self.obs_data.grid.lat)])
+        print('Finding observations within model time/space')
         obs_in_mod_t = np.logical_and(self.obs_data.time.datetime <= np.max(self.fvcom_data.time.datetime),
                             self.obs_data.time.datetime >= np.min(self.fvcom_data.time.datetime))
-       
-        self.chosen_obs = np.logical_and(obs_in_mod_xy, obs_in_mod_t)
+
+        obs_in_mod_xy = self.fvcom_data.in_domain(self.obs_data.grid.lon[obs_in_mod_t], self.obs_data.grid.lat[obs_in_mod_t])
+    
+        obs_in_mod_t[obs_in_mod_t] = obs_in_mod_xy       
+
+        self.chosen_obs = obs_in_mod_t
         self.chosen_obs_ll = np.asarray([self.obs_data.grid.lon[self.chosen_obs], self.obs_data.grid.lat[self.chosen_obs]]).T
         self.chosen_obs_dep = self.obs_data.grid.depth[self.chosen_obs]
 
     def find_model_horizontal(self):
+        print('Matching model horizontal')
         if self.mode == 'nodes':
             if self.horizontal_match == 'nearest':
                 self.chosen_mod_nodes = np.squeeze(np.asarray([self.fvcom_data.closest_node(this_ll) for this_ll in self.chosen_obs_ll]))[:, np.newaxis]
@@ -489,6 +495,7 @@ class ValidationComparison():
                 # fill in using grid.nbe, trickier cos of boundary elements (-1s)
 
     def find_model_time(self):
+        print('Matching model time')
         if self.time_match == 'nearest':
             self.chosen_mod_times = np.asarray([self.fvcom_data.closest_time(this_t) for this_t in self.obs_data.time.datetime[self.chosen_obs]])[:, np.newaxis]
             self.chosen_mod_times_weights = np.ones(len(self.chosen_mod_times))[:, np.newaxis]
@@ -515,6 +522,7 @@ class ValidationComparison():
             self.chosen_mod_times_weights = np.asarray(chosen_mod_times_weights)
 
     def find_model_vertical(self):
+        print('Finding model vertical match')
         if not hasattr(self.fvcom_data.grid, 'depth'):
             self.fvcom_data._get_cv_volumes()
 
@@ -559,10 +567,21 @@ class ValidationComparison():
             self.chosen_mod_times = self.chosen_mod_times[adjust_chosen,:]
             self.chosen_mod_times_weights = self.chosen_mod_times_weights[adjust_chosen,:]
  
+    def _match_mod_obs(self):
+        self.find_matching_obs()
+        self.find_model_horizontal()
+        self.find_model_time()
+        self.find_model_vertical()
+
     def get_matching_mod(self, varlist, return_time_ll_depth=False):
         match_dict = {}
+        
         for this_var in varlist:
-            self.fvcom_data.load_data([this_var])
+            if not hasattr(self.fvcom_data.data, this_var):
+                self.fvcom_data.load_data([this_var])
+                delete_var = True
+            else:
+                delete_var = False
             raw_data = getattr(self.fvcom_data.data, this_var)
  
             # Do horizontal weighting first as largest dimension
@@ -577,7 +596,8 @@ class ValidationComparison():
             chosen = chosen_depth.diagonal().diagonal()
  
             obs_data = getattr(self.obs_data.data, this_var)[self.chosen_obs]
-            delattr(self.fvcom_data.data, this_var)
+            if delete_var:
+                delattr(self.fvcom_data.data, this_var)
             match_dict[this_var] = [chosen, obs_data]
 
         if return_time_ll_depth:
