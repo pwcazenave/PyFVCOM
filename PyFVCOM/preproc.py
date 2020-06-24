@@ -1680,6 +1680,9 @@ class Model(Domain):
                     if field not in ['time']:
                         setattr(self.river, field, np.delete(getattr(self.river, field), flatten_list(boundary_river_indices), axis=-1))
 
+                self.river.names = self.river.names.tolist()
+                self.river.node = self.river.node.tolist()
+
         # Update the dimension
         self.dims.river = len(self.river.node)
 
@@ -1751,7 +1754,13 @@ class Model(Domain):
         start_nodes = np.asarray([start_node])
         nodes_checked = start_nodes
 
+        count = 0
         while len(possible_nodes) == 0:
+            count = count + 1
+            if count > 20:
+                warn('Warning having difficulty find available node for river '
+                      + 'lon: {:.2f} lat: {:.2f}'.format(
+                      self.grid.lon[start_node], self.grid.lat[start_node]))
             start_next = []
             for this_node in start_nodes:
                 attached_nodes = self.grid.coastline[np.isin(self.grid.coastline,
