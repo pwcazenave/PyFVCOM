@@ -1,6 +1,6 @@
 import numpy as np
 import scipy.interpolate as si
-
+import shapely.geometry as sg
 
 def read_smesh_polygons(boundary_file='boundary_poly.txt', islands_file='island_polys.txt'):
     boundary_polygon = []

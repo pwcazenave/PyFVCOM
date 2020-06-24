@@ -1310,6 +1310,8 @@ def cfl(fvcom, timestep, depth_averaged=False, verbose=False, **kwargs):
     u = getattr(fvcom.data, uname)
     v = getattr(fvcom.data, vname)
     z = getattr(fvcom.data, 'zeta')
+    
+    spd = np.sqrt(u**2 + v**2)
 
     element_sizes = element_side_lengths(fvcom.grid.triangles, fvcom.grid.x, fvcom.grid.y)
     minimum_element_size = np.min(element_sizes, axis=1)
@@ -1323,8 +1325,9 @@ def cfl(fvcom, timestep, depth_averaged=False, verbose=False, **kwargs):
 
     # This is based on equation 6.1 on pg 33 of the MIKE hydrodynamic module manual (modified for using a single
     # characteristic length rather than deltaX/deltaY)
-    cfl = (2 * np.sqrt(g * element_water_depth) + u + v) * (timestep / minimum_element_size)
-
+    cfl = (2 * np.sqrt(g * element_water_depth) + np.abs(u) + np.abs(v)) * (timestep / minimum_element_size)
+    cfl_2 = (2 * np.sqrt(g * element_water_depth) + spd) * (timestep / minimum_element_size)
+    cfl_3 = spd * (timestep / minimum_element_size)
     if verbose:
         val = np.nanmax(cfl)
         ind = np.unravel_index(np.nanargmax(cfl), cfl.shape)
@@ -1344,7 +1347,7 @@ def cfl(fvcom, timestep, depth_averaged=False, verbose=False, **kwargs):
                                  fvcom.grid.lonc[element_ind], fvcom.grid.latc[element_ind],
                                  layer_ind, fvcom.time.datetime[time_ind].strftime('%Y-%m-%d %H:%M:%S')))
 
-    return cfl
+    return cfl, cfl_2, cfl_3
 
 
 def turbulent_kinetic_energy(u, v, w, debug=False):

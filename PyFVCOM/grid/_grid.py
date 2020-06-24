@@ -994,7 +994,7 @@ class Domain(object):
 
         return isintriangle(tri_x, tri_y, x, y)
 
-    def in_domain(self, x, y, z=None, z_meth='nearest_neighbour', cartesian=False):
+    def in_domain(self, x, y, z=None, z_meth='barycentric', cartesian=False, zeta_timestep=None):
         """
         Identify if point or array of points (x,y) is within the domain
 
@@ -1028,7 +1028,12 @@ class Domain(object):
         finder = tri.get_trifinder()
         in_domain_xy = finder(x,y) != -1
 
-        if z is not None:        
+        if z is not None:
+            if zeta_timestep == None:
+                grid_h = self.grid.h
+            else:
+                grid_h = self.grid.h + self.data.zeta[zeta_timestep, :]
+ 
             if z_meth == 'nearest_neighbour':
                  
                 node_dist = self.closest_node(np.asarray([x,y]), cartesian=cartesian, return_dists=True)
@@ -1039,6 +1044,12 @@ class Domain(object):
                 in_domain_xy[node_check] = z[node_check] <= self.grid.h[node_dist[0][node_check]]
                 in_domain_xy[ele_check] = z[ele_check] <= self.grid.h_center[ele_dist[0][ele_check]]
                 
+            elif z_meth == 'barycentric':
+                xy_red = np.asarray([x,y]).T[in_domain_xy]
+                interped_h = interpolate_node_barycentric(xy_red, grid_h, grid_x, grid_y, self.grid.triangles)
+                in_depth = z[in_domain_xy] <= interped_h
+                in_domain_xy[in_domain_xy==True] = in_depth
+
             else:
                 print('Other interpolation methods not implemented yet')
                 return None
@@ -3538,6 +3549,14 @@ def write_fvcom_mesh(triangles, nodes, x, y, z, mesh, extra_depth=None):
             f.write('Node Number = {:d}\n'.format(len(x)))
             for node in zip(x, y, z):
                 f.write('{:.6f} {:.6f} {:.6f}\n'.format(*node))
+
+def write_obc_file(obc_nodes, obc_types, obc_file):
+    number_of_nodes = len(obc_nodes)   
+ 
+    with open(str(obc_file), 'w') as f:
+        f.write('OBC Node Number = {:d}\n'.format(number_of_nodes))
+        for count, node, obc_type in zip(np.arange(number_of_nodes) + 1, obc_nodes, obc_types):
+            f.write('{} {:d} {:d}\n'.format(count, int(node) + 1, int(obc_type)))
 
 
 def write_sms_cst(obc, file, sort=False):
@@ -6190,3 +6209,133 @@ class GraphFVCOMdepth(Graph):
 
         return np.asarray(self.node_index[np.asarray(red_node_list)])
 
+
+
+def get_barycentric_coords(x, y,x_tri, y_tri):
+    """ Get barycentric coordinates.
+    
+    Compute and return barycentric coordinates for the point (x,y) within the
+    triangle defined by x/y coordinates stored in the arrays x_tri and y_tri.
+     
+    Code by James Clark from PyLAG
+
+    Parameters:
+    -----------
+    x : float  
+        x-position.
+    
+    y : float
+        y-position.
+    
+    x_tri : C array, float
+        Triangle x coordinates.
+        
+    y_tri : C array, float
+        Triangle y coordinates.
+    
+    Returns:
+    --------
+
+    phi : C array, float
+        Barycentric coordinates.
+    """
+
+    a1 = x_tri[1] - x_tri[0]
+    a2 = y_tri[2] - y_tri[0]
+    a3 = y_tri[1] - y_tri[0]
+    a4 = x_tri[2] - x_tri[0]
+
+    # Determinant
+    det = a1 * a2 - a3 * a4
+
+    phi = [0,0,0]
+    # Transformation to barycentric coordinates
+    phi[2] = (a1*(y - y_tri[0]) - a3*(x - x_tri[0]))/det
+    phi[1] = (a2*(x - x_tri[2]) - a4*(y - y_tri[2]))/det
+    phi[0] = 1.0 - phi[1] - phi[2]
+
+    return phi
+
+def _get_ele_nodes(positions, x, y, triangles):
+    tri = Triangulation(x, y, triangles)
+    finder = tri.get_trifinder()
+    eles = finder(positions[:,0], positions[:,1])
+    return triangles[eles,:]                
+
+
+def _interpolate_within_element(var, phi):
+    return var[0] * phi[0] +  var[1] * phi[1] + var[2] * phi[2]
+
+
+def interpolate_node_barycentric(positions, data, x, y, triangles):
+    """
+    Interpolate linearly from node values to positions using barycentric coordinates.
+    This is to mimic the functions in PyLAG
+
+    """
+    position_ele_nodes = _get_ele_nodes(positions, x, y, triangles)
+
+    interped_data = []
+    for this_pos, this_nodes in zip(positions, position_ele_nodes):
+        this_phi = get_barycentric_coords(this_pos[0], this_pos[1], x[this_nodes], y[this_nodes])
+        interped_data.append(_interpolate_within_element(data[this_nodes], this_phi))
+
+    return np.asarray(interped_data)
+
+
+def generalised_barycentric(x, y,x_poly, y_poly):
+    """ Get barycentric coordinates.
+    
+    Compute and return barycentric coordinates for the point (x,y) within the
+    triangle defined by x/y coordinates stored in the arrays x_tri and y_tri.
+     
+    From Generalized Barycentric Coordinates on Irregular Polygons, Meyer et al, Journal of Graphic tools 2012
+
+    Parameters:
+    -----------
+    x : float  
+        x-position.
+    
+    y : float
+        y-position.
+    
+    x_poly : C array, float
+        Triangle x coordinates.
+        
+    y_poly : C array, float
+        Triangle y coordinates.
+    
+    epsilon : optional, float
+        Epsilon for determining if on a line
+
+    Returns:
+    """
+
+    if not on_line:
+        weightSum = 0
+        wj = []
+        for ind_qj, qj in enumerate(zip(x_poly, y_poly)):
+            prev_ind = np.mod(ind_qj-1,len(x_poly)) 
+            next_ind = np.mod(ind_qj+1,len(x_poly))
+
+            qprev = np.asarray([x_poly[prev_ind], y_poly[prev_ind]])
+            qnext = np.asarray([x_poly[next_ind], y_poly[next_ind]])
+
+        wj.append((_cotangent(p,qj,qprev) + _cotangent(p,qj,qnext))/ ((p[0]-qj[0]**2) + (p[1]-qj[1]**2)))
+        weightSum += wj[-1]
+
+        # Normalize the weights
+        wj = np.asarray(wj)/weightSum
+
+    return wj
+
+def _cotangent(p,q1,q2):
+    vec_1 = np.asarray([q1[0] - p[0], q1[1] - p[1]])
+    vec_2 = np.asarray([q1[0] - q1[0], p[1] - q2[1]])
+    
+    return np.dot(vec_1, vec_2)/np.cross(vec_1,vec_2)
+
+def check_on_line(x,y,x_line,y_line,epsilon=0.001):
+    on_line = True    
+
+    return on_line
