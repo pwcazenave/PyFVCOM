@@ -463,7 +463,7 @@ class Plotter(object):
 
     def __init__(self, dataset, figure=None, axes=None, stations=None, extents=None, vmin=None, vmax=None, mask=None,
                  res='c', fs=10, title=None, cmap='viridis', figsize=(10., 10.), axis_position=None, tick_inc=None,
-                 cb_label=None, extend='neither', norm=None, m=None, cartesian=False, mapper='basemap', **bmargs):
+                 cb_label=None, extend='neither', norm=None, m=None, cartesian=False, mapper='basemap', coast=True, **bmargs):
         """
         Parameters
         ----------
@@ -516,6 +516,8 @@ class Plotter(object):
             (geographical coordinates).
         mapper : string, optional
             Set to 'basemap' to use Basemap for plotting or 'cartopy' for cartopy.
+        coast : bool, optional
+            Set to True to plot coastline. Default to True.
         bmargs : dict, optional
             Additional arguments to pass to Basemap.
 
@@ -551,6 +553,7 @@ class Plotter(object):
         self.cartesian = cartesian
         self.bmargs = bmargs
         self.mapper = mapper
+        self.coast = coast
 
         # Plot instances to hold the plot objects.
         self.quiver_plot = None
@@ -683,11 +686,12 @@ class Plotter(object):
 
         if self.mapper == 'cartopy':
             self.axes.set_extent(self.extents, crs=ccrs.PlateCarree())
-            self.axes.add_feature(land, zorder=1000)
+            if self.coast:
+                self.axes.add_feature(land, zorder=1000)
             # *Must* call show and draw in order to get the axis boundary used to add ticks:
             self.figure.show()
             self.figure.canvas.draw()
-        elif self.mapper == 'basemap' and not self.cartesian:
+        elif self.mapper == 'basemap' and not self.cartesian and self.coast:
             self.m.drawmapboundary()
             self.m.drawcoastlines(zorder=1000)
             self.m.fillcontinents(color='0.6', zorder=1000)
