@@ -170,8 +170,8 @@ def date_range(start_date, end_date, inc=1):
 
     """
 
-    start_seconds = int(start_date.replace(tzinfo=pytz.UTC).strftime('%s'))
-    end_seconds = int(end_date.replace(tzinfo=pytz.UTC).strftime('%s'))
+    start_seconds = int(start_date.replace(tzinfo=pytz.UTC).timestamp())
+    end_seconds = int(end_date.replace(tzinfo=pytz.UTC).timestamp())
 
     inc *= 86400  # seconds
     dates = np.arange(start_seconds, end_seconds, inc)
