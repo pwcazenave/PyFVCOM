@@ -2033,6 +2033,12 @@ class FileReaderFromDict(FileReader):
             elif obj in ('time', 'Itime', 'Itime2', 'datetime'):
                 self.dims.time = getattr(self.time, obj).shape
 
+class TimelessFileReader(FileReader):
+    def _load_time(self):
+        self.time = PassiveStore()
+        self.time._dims = [] 
+        self.time.time = 1
+
 
 class SubDomainReader(FileReader):
     """
