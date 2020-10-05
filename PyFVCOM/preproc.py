@@ -4923,6 +4923,12 @@ class RegularReader(FileReader):
                                   'depth': 'depth', 'Longitude': 'Longitude', 'Latitude': 'Latitude'}
                 self.dims.lon = self.dims.longitude
                 self.dims.lat = self.dims.latitude
+
+            elif 'lon_rho' in self.ds.variables:
+                grid_variables = {'lon': 'lon_rho', 'lat': 'lat_rho', 'x': 'x', 'y': 'y',
+                                  'depth': 'Zm', 'Longitude': 'Longitude', 'Latitude': 'Latitude'}
+                self.dims.lon = self.dims.eta_rho
+                self.dims.lat = self.dims.xi_rho
             else:
                 grid_variables = {'lon': 'lon', 'lat': 'lat', 'x': 'x', 'y': 'y',
                                   'depth': 'depth', 'Longitude': 'Longitude', 'Latitude': 'Latitude'}
@@ -5074,6 +5080,10 @@ class RegularReader(FileReader):
                 xname = 'longitude'
                 xvar = 'lon'
                 xdim = self.dims.lon
+            elif hasattr(self.dims, 'eta_rho'):
+                xname = 'eta_rho'
+                xvar = 'lon'
+                xdim = self.dims.lon
             elif hasattr(self.dims, 'lon'):
                 xname = 'lon'
                 xvar = 'lon'
@@ -5087,6 +5097,10 @@ class RegularReader(FileReader):
 
             if hasattr(self.dims, 'latitude'):
                 yname = 'latitude'
+                yvar = 'lat'
+                ydim = self.dims.last
+            elif hasattr(self.dims, 'xi_rho'):
+                yname = 'xi_rho'
                 yvar = 'lat'
                 ydim = self.dims.lat
             elif hasattr(self.dims, 'lat'):
@@ -5102,7 +5116,10 @@ class RegularReader(FileReader):
 
             depthname, depthvar, depthdim, depth_compare = self._get_depth_dim()
 
-            if hasattr(self.dims, 'time'):
+            if hasattr(self.dims, 'ocean_time'):
+                timename = 'ocean_time'
+                timedim = self.dims.time
+            elif hasattr(self.dims, 'time'):
                 timename = 'time'
                 timedim = self.dims.time
             elif hasattr(self.dims, 'time_counter'):
@@ -5783,6 +5800,8 @@ class _TimeReaderReg(_TimeReader):
             time_var = 'time'
         elif 'time_counter' in dataset.variables:
             time_var = 'time_counter'
+        elif 'ocean_time' in dataset.variables:
+            time_var = 'ocean_time'
         else:
             raise ValueError('Missing a known time variable.')
         time = dataset.variables[time_var][:]
@@ -5817,7 +5836,7 @@ class NemoRestartRegularReader(RegularReader):
 
     nemo_data = '/data/euryale2/to_archive/momm-AMM7-HINDCAST-v0/2007/03/restart_trc.nc''
     nemo_mask = '/data/euryale4/to_archive/momm-AMM7-INPUTS/GRID/mesh_mask.nc'
-
+    
     tmask = nc.Dataset(nemo_mask_file).variables['tmask'][:] == 0
 
     nemo_data_reader = pf.preproc.NemoRestartRegularReader(nemo_data_file)
@@ -6212,7 +6231,6 @@ class HYCOMReader(RegularReader):
 
             data = self.ds.variables[v][variable_indices]  # data are automatically masked
             setattr(self.data, v, data)
-
 
 def read_hycom(regular, variables, noisy=False, **kwargs):
     """
