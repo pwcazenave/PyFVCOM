@@ -29,7 +29,7 @@ from matplotlib.dates import date2num as mtime
 from matplotlib.tri import CubicTriInterpolator
 from matplotlib.tri.triangulation import Triangulation
 from netCDF4 import Dataset, date2num
-from scipy.interpolate import RegularGridInterpolator, LinearNDInterpolator
+from scipy.interpolate import RegularGridInterpolator, LinearNDInterpolator, interp1d, Rbf
 from scipy.spatial.qhull import QhullError
 from utide import reconstruct, ut_constants
 from utide.utilities import Bunch
@@ -2509,6 +2509,225 @@ class OpenBoundary(object):
         interpolated_data = ft(points)
 
         return interpolated_data
+
+    def add_nested_forcing_curvilinear(self, fvcom_name, coarse_name, coarse, interval=1,
+                            constrain_coordinates=False,
+                            mode='nodes', tide_adjust=False, cartesian=False, verbose=False):
+        """
+        Interpolate the given data onto the open boundary nodes for the period 
+        from 'self.time.start' to 'self.time.end'.
+
+        Parameters
+        ----------
+        fvcom_name : str
+            The data field name to add to the nest object which will be 
+            written to netCDF for FVCOM.
+        coarse_name : str
+            The data field name to use from the coarse object.
+        coarse : RegularReader
+            The regularly gridded data to interpolate onto the open boundary 
+            nodes. This must include time, lon, lat and depth data as well as 
+            the time series to interpolate (4D volume [time, depth, lat, lon]).
+        interval : float, optional
+            Time sampling interval in days. Defaults to 1 day.
+        constrain_coordinates : bool, optional
+            Set to True to constrain the open boundary coordinates (lon, lat, 
+            depth) to the supplied coarse data. This essentially squashes the 
+            open boundary to fit inside the coarse data and is, therefore, a 
+            bit of a fudge! Defaults to False.
+        mode : bool, optional
+            Set to 'nodes' to interpolate onto the open boundary node 
+            positions or 'elements' for the elements. 'nodes and 'elements' 
+            are for input data on z-levels. For 2D data, set to 'surface' 
+            (interpolates to the node positions ignoring depth coordinates). 
+            Also supported are 'sigma_nodes' and 'sigma_elements' which means 
+            we have spatially (and optionally temporally) varying water depths 
+            (i.e. sigma layers rather than z-levels). Defaults to 'nodes'.
+        tide_adjust : bool, optional
+            Some nested forcing doesn't include tidal components and these 
+            have to be added from predictions using harmonics. With this set 
+            to true the interpolated forcing has the tidal component (required 
+            to already exist in self.tide) added to the final data.
+        cartesian : bool, optional
+            Use utm coordinates rather than lon/lat. Defaults to False.
+        verbose : bool, optional
+            Set to True to enable verbose output. Defaults to False 
+            (no verbose output).
+        """
+        # Check we have what we need.
+        raise_error = False
+        if mode == 'nodes':
+            if not np.any(self.nodes):
+                if verbose:
+                    print(f'No {mode} on which to interpolate on this boundary')
+                return
+            if not hasattr(self.sigma, 'layers'):
+                raise_error = True
+        elif mode == 'elements':
+            if not hasattr(self.sigma, 'layers_center'):
+                raise_error = True
+            if not np.any(self.elements):
+                if verbose:
+                    print(f'No {mode} on which to interpolate on this boundary')
+                return
+
+        if raise_error:
+            raise AttributeError('Add vertical sigma coordinates in order to '
+                    + 'interpolate forcing along this boundary.')
+
+        # Populate the time data. Why did I put the time data in here rather 
+        # than self.time? This is annoying.
+        self.data.time = PassiveStore()
+        self.data.time.interval = interval
+        self.data.time.datetime = date_range(self.time.start, self.time.end,
+                inc=interval)
+        self.data.time.time = date2num(getattr(self.data.time, 'datetime'),
+                units='days since 1858-11-17 00:00:00')
+        self.data.time.Itime = np.floor(getattr(self.data.time, 'time'))
+        # integer Modified Julian Days
+        self.data.time.Itime2 = (getattr(self.data.time, 'time')
+                - getattr(self.data.time, 'Itime')) * 24 * 60 * 60 * 1000
+                # milliseconds since midnight
+        self.data.time.Times = [t.strftime('%Y-%m-%dT%H:%M:%S.%f')
+                for t in getattr(self.data.time, 'datetime')]
+
+        if 'elements' in mode:
+            boundary_points = self.elements
+            if cartesian:
+                x = self.grid.xc
+                y = self.grid.yc
+            else:
+                x = self.grid.lonc
+                y = self.grid.latc
+            # Keep positive down depths.
+            z = -self.sigma.layers_center_z
+        else:
+            boundary_points = self.nodes
+            if cartesian:
+                x = self.grid.x
+                y = self.grid.y
+            else:
+                x = self.grid.lon
+                y = self.grid.lat
+            # Keep positive down depths.
+            z = -self.sigma.layers_z
+
+        if cartesian:
+            x_coarse = coarse.grid.x
+            y_coarse = coarse.grid.y
+        else:
+            x_coarse = coarse.grid.lon
+            y_coarse = coarse.grid.lat
+
+        if constrain_coordinates:
+            raise AttributeError('Constrain coordinates not implemented for curvilinear data yet')
+
+        nt = len(self.data.time.time)
+        nx = len(boundary_points)
+        nz = z.shape[-1]
+
+        t_ind_min = np.min(np.where(coarse.time.datetime >= np.min(self.data.time.datetime)))
+        t_ind_max = np.max(np.where(coarse.time.datetime <= np.max(self.data.time.datetime)))
+
+        t_inds = np.arange(t_ind_min-1,t_ind_max+2) 
+
+        if verbose:
+            print('Interpolating {} times, {} '.format(nt, nz)
+                    + 'vertical layers and {} points'.format(nx))
+
+        # For curvilinear grids use scipy radial basis function interpolation
+        # since regular grid interpolations require monotonic coordinates. This works best
+        # doing each horizontal layer then seperately interpolating in time and vertical
+
+        if mode == 'surface':
+            if verbose:
+                print('Interpolating surface data...', end=' ')
+
+            interped_data_2d = []
+            for this_t in ts:
+                interped_data_2d.append(_rbf_interpolator_2d(getattr(coarse.data, coarse_name)[this_t,:],
+                                                x_coarse,y_coarse,x,y))
+            interped_data_2d = np.asarray(interped_data_2d)
+
+            interped_coarse_data = []
+            
+            for this_pt in np.arange(interped_2d.shape[1]):
+                interpolated_coarse_data.append(_linear_interpolator_1d(interped_data_2d[:,this_pt], coarse.time.time, self.data.time.time))
+
+        else:
+            if verbose:
+                print('Interpolating z-level data...', end=' ')
+            
+            interped_3d_data = []    
+
+            z_coarse = []
+            for this_layer in np.arange(0, coarse.grid.depth.shape[0]):
+                z_coarse.append(self._rbf_interpolator_2d(coarse.grid.depth[this_layer,:,:],x_coarse,y_coarse,x,y))
+            z_coarse = np.asarray(z_coarse)
+
+            for this_t in t_inds:
+                interped_2d_data = []
+
+                for this_layer in np.arange(0, coarse.grid.depth.shape[0]):
+                    interped_2d_data.append(self._rbf_interpolator_2d(getattr(coarse.data, coarse_name)[this_t,this_layer,:],
+                                                x_coarse,y_coarse,x,y))
+
+                interped_2d_data = np.asarray(interped_2d_data)
+
+                temp_array = []
+                for this_pt in np.arange(0, interped_2d_data.shape[1]):
+                    mod_lays = self.sigma.layers_z[this_pt,:]
+                    mod_lays[mod_lays > np.max(z_coarse[:,this_pt])] = np.max(z_coarse[:,this_pt])
+                    mod_lays[mod_lays < np.min(z_coarse[:,this_pt])] = np.min(z_coarse[:,this_pt])
+
+                    temp_array.append(self._linear_interpolator_1d(interped_2d_data[:,this_pt], z_coarse[:,this_pt], self.sigma.layers_z[this_pt,:]))
+                interped_3d_data.append(np.asarray(temp_array))
+
+            interped_3d_data = np.asarray(interped_3d_data)
+
+            interpolated_coarse_data = []
+            for this_layer in np.arange(0, nz):
+                this_2d = []
+                for this_pt in np.arange(0, nx):
+                    this_2d.append(self._linear_interpolator_1d(interped_3d_data[:,this_pt, this_layer], coarse.time.time[t_inds], self.data.time.time))
+                interpolated_coarse_data.append(np.asarray(this_2d))    
+
+        interpolated_coarse_data = np.asarray(interpolated_coarse_data)
+
+        if tide_adjust and fvcom_name in ['u', 'v', 'ua', 'va', 'zeta']:
+            if fvcom_name in ['u', 'v']:
+                tide_levels = np.tile(getattr(self.tide, fvcom_name)
+                        [:, np.newaxis, :], [1, nz, 1])
+                interpolated_coarse_data = (interpolated_coarse_data
+                        + tide_levels)
+            else:
+                interpolated_coarse_data = interpolated_coarse_data + getattr(
+                        self.tide, fvcom_name)
+
+        # Drop the interpolated data into the data object.
+        setattr(self.data, fvcom_name, interpolated_coarse_data)
+
+        if verbose:
+            print('done.')
+
+    @staticmethod
+    def _rbf_interpolator_2d(data, x, y, interp_x, interp_y, remove_mask=True):
+        if remove_mask:
+            data_mask = data.mask
+            x = x[~data_mask]
+            y = y[~data_mask]
+            data = data[~data_mask]
+
+        interpolater = Rbf(x, y, data, function='cubic', smooth=0)
+        interped = interpolater(interp_x, interp_y)
+        return interped
+
+    @staticmethod
+    def _linear_interpolator_1d(data, x, interp_x):
+        interpolater = interp1d(x,data)
+        interped = interpolater(interp_x)
+        return interped
+
 
 class Nest(OpenBoundary):
     """
