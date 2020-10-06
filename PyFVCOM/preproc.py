@@ -4917,6 +4917,7 @@ class RegularReader(FileReader):
             If given, these are the grid variable names. If omitted, defaults to CMEMS standard names.
 
         """
+        flip_depth = False
         if grid_variables is None:
             if 'longitude' in self.ds.variables:
                 grid_variables = {'lon': 'longitude', 'lat': 'latitude', 'x': 'x', 'y': 'y',
@@ -4929,6 +4930,7 @@ class RegularReader(FileReader):
                                   'depth': 'Zm', 'Longitude': 'Longitude', 'Latitude': 'Latitude'}
                 self.dims.lon = self.dims.eta_rho
                 self.dims.lat = self.dims.xi_rho
+                flip_depth = True
             else:
                 grid_variables = {'lon': 'lon', 'lat': 'lat', 'x': 'x', 'y': 'y',
                                   'depth': 'depth', 'Longitude': 'Longitude', 'Latitude': 'Latitude'}
@@ -4954,6 +4956,9 @@ class RegularReader(FileReader):
                 warn('Variable {} has a problem with the data. Setting value as all zeros.'.format(grid))
                 print(value_error_message)
                 setattr(self.grid, grid, np.zeros(self.ds.variables[nc_grid].shape))
+
+        if flip_depth:
+            self.grid.depth = -np.flip(self.grid.depth, axis=0)
 
         # Update dimensions to match those we've been given, if any. Omit time here as we shouldn't be touching that
         # dimension for any variable in use in here.
@@ -5051,6 +5056,7 @@ class RegularReader(FileReader):
             List of variables to load.
 
         """
+        flipud = False
 
         # Check if we've got iterable variables and make one if not.
         try:
@@ -5084,6 +5090,7 @@ class RegularReader(FileReader):
                 xname = 'eta_rho'
                 xvar = 'lon'
                 xdim = self.dims.lon
+                flipud = True
             elif hasattr(self.dims, 'lon'):
                 xname = 'lon'
                 xvar = 'lon'
@@ -5167,6 +5174,9 @@ class RegularReader(FileReader):
             setattr(self.atts, v, attributes)
 
             data = self.ds.variables[v][variable_indices]  # data are automatically masked
+            if flipud:
+                data = np.flip(data, axis=1)        
+    
             setattr(self.data, v, data)
 
     def _get_depth_dim(self):
