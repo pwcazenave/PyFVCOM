@@ -5160,7 +5160,7 @@ class RegularReader(FileReader):
             if hasattr(self.dims, 'latitude'):
                 yname = 'latitude'
                 yvar = 'lat'
-                ydim = self.dims.last
+                ydim = self.dims.lat
             elif hasattr(self.dims, 'xi_rho'):
                 yname = 'xi_rho'
                 yvar = 'lat'

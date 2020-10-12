@@ -1636,9 +1636,8 @@ class OpenBoundary(object):
                 const = ([''.join(i).upper().strip() for i in tides.variables[
                         names['constituent_name']][:].astype(str)])
             else:
-                const = ([''.join(tides.variables[
-                        names['constituent_name']][:].astype(str)
-                        ).upper().strip()])
+                const = ([b''.join(i).decode('utf-8').upper().strip() for 
+                        i in tides.variables[names['constituent_name']][:]])
             # If we've been given constituents that aren't in the harmonics 
             # data, just find the indices we do have.
             cidx = [constituents.index(i) for i in constituents if i in const]
@@ -2129,9 +2128,9 @@ class OpenBoundary(object):
             # move it to the nearest in grid point if so.
             if not mode == 'surface':
                 land_mask = getattr(coarse.data, coarse_name
-                        )[0, ...].mask[0, :, :]
+                        ).mask[0,0,:,:]
             else:
-                land_mask = getattr(coarse.data, coarse_name)[0, ...].mask
+                land_mask = getattr(coarse.data, coarse_name).mask[0,:,:]
 
             sea_points = np.ones(land_mask.shape)
             sea_points[land_mask] = np.nan
