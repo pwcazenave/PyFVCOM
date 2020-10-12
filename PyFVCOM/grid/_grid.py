@@ -1507,8 +1507,8 @@ class OpenBoundary(object):
             lon_name, lat_name = 'lonc', 'latc'
             x, y = copy.copy(self.grid.lonc), self.grid.latc
 
-        names = {'amplitude_name': amplitude_name,
-                 'phase_name': phase_name,
+        names = {'part1_name': amplitude_name,
+                 'part2_name': phase_name,
                  'lon_name': lon_name,
                  'lat_name': lat_name,
                  'constituent_name': constituent_name}
