@@ -1494,10 +1494,8 @@ class OpenBoundary(object):
             Set to True to enable verbose output. Defaults to False 
             (no verbose output).
         """
-        # Populate the time object
-        self.add_times(interval)
-        
-        interp_data = interpolate_data_regular(self, fvcom_name, coarse_name, coarse,
+        self._add_times(interval)
+        interp_data = interpolate_regular(self, fvcom_name, coarse_name, coarse,
                         interval=interval, constrain_coordinates=constrain_coordinates,
                         mode=mode, tide_adjust=tide_adjust, verbose=verbose)
 
@@ -1549,27 +1547,25 @@ class OpenBoundary(object):
             (no verbose output).
         """
         self._add_times(interval)
-        interp_data = interpolate_data_curvilinear(fvcom_obj, fvcom_name, coarse_name, 
+        interp_data = interpolate_curvilinear(self, fvcom_name, coarse_name, 
                         coarse, interval=interval, constrain_coordinates=constrain_coordinates,
                         mode=mode, tide_adjust=tide_adjust, cartesian=cartesian, 
                         verbose=verbose)
         setattr(self.data, fvcom_name, interp_data)
 
-    def _add_times(self, interval)
-
-        self.time = PassiveStore()
+    def _add_times(self, interval):
         self.time.interval = interval
         self.time.datetime = date_range(self.time.start, self.time.end,
                 inc=interval)
-        self.time.time = date2num(getattr(self.data.time, 'datetime'),
+        self.time.time = date2num(getattr(self.time, 'datetime'),
                 units='days since 1858-11-17 00:00:00')
-        self.time.Itime = np.floor(getattr(self.data.time, 'time'))
+        self.time.Itime = np.floor(getattr(self.time, 'time'))
         # integer Modified Julian Days
-        self.time.Itime2 = (getattr(self.data.time, 'time')
-                - getattr(self.data.time, 'Itime')) * 24 * 60 * 60 * 1000
+        self.time.Itime2 = (getattr(self.time, 'time')
+                - getattr(self.time, 'Itime')) * 24 * 60 * 60 * 1000
                 # milliseconds since midnight
         self.time.Times = [t.strftime('%Y-%m-%dT%H:%M:%S.%f')
-                for t in getattr(self.data.time, 'datetime')]
+                for t in getattr(self.time, 'datetime')]
 
 class Nest(OpenBoundary):
     """
@@ -6182,13 +6178,13 @@ def interpolate_regular(fvcom_obj, fvcom_name, coarse_name, coarse, interval=1,
             coarse.ds.close()
             delattr(coarse, 'ds')
         pool = multiprocessing.Pool()
-        results = pool.map(fvcom_obj._brute_force_interpolator, interp_args)
+        results = pool.map(_brute_force_interpolator, interp_args)
 
         # Now we have those data interpolated in space (horizontal and 
         # vertical), interpolate to match in time.
         interp_args = [(coarse.time.time, j, fvcom_obj.time.time)
                 for i in np.asarray(results).T for j in i]
-        results = pool.map(fvcom_obj._interpolate_in_time, interp_args)
+        results = pool.map(_interpolate_in_time, interp_args)
         pool.close()
         # Reshape and transpose to be the correct size for writing to 
         # netCDF (time, depth, node).
@@ -6561,14 +6557,14 @@ def interpolate_curvilinear(fvcom_obj, fvcom_name, coarse_name, coarse, interval
 
         z_coarse = []
         for this_layer in np.arange(0, coarse.grid.depth.shape[0]):
-            z_coarse.append(fvcom_obj._rbf_interpolator_2d(coarse.grid.depth[this_layer,:,:],x_coarse,y_coarse,x,y))
+            z_coarse.append(_rbf_interpolator_2d(coarse.grid.depth[this_layer,:,:],x_coarse,y_coarse,x,y))
         z_coarse = np.asarray(z_coarse)
 
         for this_t in t_inds:
             interped_2d_data = []
 
             for this_layer in np.arange(0, coarse.grid.depth.shape[0]):
-                interped_2d_data.append(fvcom_obj._rbf_interpolator_2d(getattr(coarse.data, coarse_name)[this_t,this_layer,:],
+                interped_2d_data.append(_rbf_interpolator_2d(getattr(coarse.data, coarse_name)[this_t,this_layer,:],
                                             x_coarse,y_coarse,x,y))
 
             interped_2d_data = np.asarray(interped_2d_data)
@@ -6579,7 +6575,7 @@ def interpolate_curvilinear(fvcom_obj, fvcom_name, coarse_name, coarse, interval
                 mod_lays[mod_lays > np.max(z_coarse[:,this_pt])] = np.max(z_coarse[:,this_pt])
                 mod_lays[mod_lays < np.min(z_coarse[:,this_pt])] = np.min(z_coarse[:,this_pt])
 
-                temp_array.append(fvcom_obj._linear_interpolator_1d(interped_2d_data[:,this_pt], z_coarse[:,this_pt], fvcom_obj.sigma.layers_z[this_pt,:]))
+                temp_array.append(_linear_interpolator_1d(interped_2d_data[:,this_pt], z_coarse[:,this_pt], fvcom_obj.sigma.layers_z[this_pt,:]))
             interped_3d_data.append(np.asarray(temp_array))
 
         interped_3d_data = np.asarray(interped_3d_data)
@@ -6588,7 +6584,7 @@ def interpolate_curvilinear(fvcom_obj, fvcom_name, coarse_name, coarse, interval
         for this_layer in np.arange(0, nz):
             this_2d = []
             for this_pt in np.arange(0, nx):
-                this_2d.append(fvcom_obj._linear_interpolator_1d(interped_3d_data[:,this_pt, this_layer], coarse.time.time[t_inds], fvcom_obj.time.time))
+                this_2d.append(_linear_interpolator_1d(interped_3d_data[:,this_pt, this_layer], coarse.time.time[t_inds], fvcom_obj.time.time))
             interpolated_coarse_data.append(np.asarray(this_2d))
 
     interpolated_coarse_data = np.asarray(interpolated_coarse_data)

@@ -26,7 +26,7 @@ from PyFVCOM.grid import Domain, grid_metrics, read_fvcom_obc, nodes2elems
 from PyFVCOM.grid import find_connected_elements, mp_interp_func
 from PyFVCOM.grid import find_bad_node, element_side_lengths, reduce_triangulation
 from PyFVCOM.grid import write_fvcom_mesh, write_obc_file, connectivity, haversine_distance, subset_domain
-from PyFVCOM.grid import expand_connected_nodes
+from PyFVCOM.grid import expand_connected_nodes, OpenBoundary, Nest
 from PyFVCOM.grid import interpolate_node_barycentric
 from PyFVCOM.read import FileReader, _TimeReader, control_volumes
 from PyFVCOM.utilities.general import flatten_list, PassiveStore, warn
