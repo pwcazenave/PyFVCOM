@@ -6467,27 +6467,6 @@ def interpolate_curvilinear(fvcom_obj, fvcom_name, coarse_name, coarse, interval
         Set to True to enable verbose output. Defaults to False 
         (no verbose output).
     """
-    # Check we have what we need.
-    raise_error = False
-    if mode == 'nodes':
-        if not np.any(fvcom_obj.nodes):
-            if verbose:
-                print(f'No {mode} on which to interpolate on this boundary')
-            return
-        if not hasattr(fvcom_obj.sigma, 'layers'):
-            raise_error = True
-    elif mode == 'elements':
-        if not hasattr(fvcom_obj.sigma, 'layers_center'):
-            raise_error = True
-        if not np.any(fvcom_obj.elements):
-            if verbose:
-                print(f'No {mode} on which to interpolate on this boundary')
-            return
-
-    if raise_error:
-        raise AttributeError('Add vertical sigma coordinates in order to '
-                + 'interpolate forcing along this boundary.')
-    
     if 'elements' in mode:
         if cartesian:
             x = fvcom_obj.grid.xc
@@ -6598,7 +6577,7 @@ def interpolate_curvilinear(fvcom_obj, fvcom_name, coarse_name, coarse, interval
             interpolated_coarse_data = interpolated_coarse_data + getattr(
                     fvcom_obj.tide, fvcom_name)
 
-    return interpolated_coarse_data
+    return np.moveaxis(interpolated_coarse_data,2,0)
 
 def _rbf_interpolator_2d(data, x, y, interp_x, interp_y, remove_mask=True):
     if remove_mask:
