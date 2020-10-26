@@ -6344,6 +6344,19 @@ class Restart(FileReader):
         # Store which variables have been replaced so we can do the right thing when writing to netCDF (i.e. use the
         # replaced data rather than what's in the input restart file).
         self.replaced = []
+        self.sigma = PassiveStore()
+
+        self.sigma.layers = self.grid.siglay
+        self.sigma.levels = self.grid.siglev
+        # Transpose on the way in and out so the slicing within nodes2elems works properly.
+        self.sigma.layers_center = self.grid.siglay_center
+        self.sigma.levels_center = self.grid.siglev_center
+
+        # Make some depth-resolved sigma distributions.
+        self.sigma.layers_z = self.grid.siglay_z.T
+        self.sigma.layers_center_z = self.grid.siglay_center_z.T
+        self.sigma.levels_z = self.grid.siglev_z.T
+        self.sigma.levels_center_z = self.grid.siglev_center_z.T
 
     def replace_variable(self, variable, data):
         """
