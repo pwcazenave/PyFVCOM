@@ -28,6 +28,7 @@ from PyFVCOM.grid import find_bad_node, element_side_lengths, reduce_triangulati
 from PyFVCOM.grid import write_fvcom_mesh, write_obc_file, connectivity, haversine_distance, subset_domain
 from PyFVCOM.grid import expand_connected_nodes, OpenBoundary, Nest
 from PyFVCOM.grid import interpolate_node_barycentric
+from PyFVCOM.grid import interpolate_regular, interpolate_curvilinear, interpolate_fvcom
 from PyFVCOM.read import FileReader, _TimeReader, control_volumes
 from PyFVCOM.utilities.general import flatten_list, PassiveStore, warn
 from PyFVCOM.utilities.time import date_range
@@ -6387,7 +6388,9 @@ class Restart(FileReader):
 
         """
         
-        self.replace_variable(variable, interpolated_coarse_data)
+        interped_data = interpolate_regular(self, variable, coarse_name, coarse, 
+                constrain_coordinates=constrain_coordinates, mode=mode)
+        self.replace_variable(variable, interped_data)
 
     def replace_variable_with_fvcom(self, var, coarse_fvcom, constrain_coordinates=False):
         """
@@ -6409,9 +6412,28 @@ class Restart(FileReader):
         self.load_data(['siglay'])
         self.data.siglay_center = nodes2elems(self.data.siglay, self.grid.triangles)
         
-        interped_data = interp_variable_from_fvcom(self, var, coarse_fvcom, constrain_coordinates)
+        interped_data = interpolate_fvcom(self, var, coarse_fvcom, constrain_coordinates)
         self.replace_variable(var, interped_data)
 
+    def replace_variable_with_curvilinear(self, var, coarse_name, coarse, constrain_coordinates=False, mode='nodes', cartesian=False):
+        """
+        Interpolate the given regularly gridded data onto the grid nodes.
+
+        Parameters
+        ----------
+        coarse : PyFVCOM.preproc.RegularReader
+            The regularly gridded data to interpolate onto the grid nodes. This must include time (coarse.time), lon,
+            lat and depth data (in coarse.grid) as well as the time series to interpolate (4D volume [time, depth,
+            lat, lon]) in coarse.data.
+        constrain_coordinates : bool, optional
+            Set to True to constrain the grid coordinates (lon, lat, depth) to the supplied coarse data.
+            This essentially squashes the ogrid to fit inside the coarse data and is, therefore, a bit of a
+            fudge! Defaults to False.
+        """
+
+        interped_data = interpolate_curvilinear(self, var, coarse_name, coarse,
+                    constrain_coordinates=constrain_coordinates, mode=mode, cartesian=cartesian)
+        self.replace_variable(var, interped_data)
 
     def write_restart(self, restart_file, global_atts=None, **ncopts):
         """
