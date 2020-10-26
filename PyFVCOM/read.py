@@ -326,7 +326,7 @@ class _AttributeReader(object):
         self._ds.close()
         delattr(self, '_ds')
 
-    def get_attribute(self, variable):
+    def get_attribute(self, variable, rename_var=None):
         """
         Get the attributes for the given variable and add them to the relevant object.
 
@@ -336,24 +336,26 @@ class _AttributeReader(object):
             The variable from which to extract the attributes.
 
         """
-
         # We need to reopen the Dataset to support pickling FileReader objects.
         close_on_finish = False
         if not hasattr(self, '_ds'):
             close_on_finish = True
             self._ds = Dataset(self._filename, 'r')
+    
+        if rename_var is None:
+            rename_var = variable
 
-        if not hasattr(self, variable):
+        if not hasattr(self, rename_var):
             # Hmmm, don't like using PassiveStore here...
-            setattr(self, variable, PassiveStore())
+            setattr(self, rename_var, PassiveStore())
 
         for attribute in self._ds.variables[variable].ncattrs():
-            setattr(getattr(self, variable), attribute, getattr(self._ds.variables[variable], attribute))
+            setattr(getattr(self, rename_var), attribute, getattr(self._ds.variables[variable], attribute))
 
         if close_on_finish:
             self._ds.close()
             delattr(self, '_ds')
-
+    
     def __iter__(self):
         return (a for a in self.__dict__.keys() if not a.startswith('_'))
 
