@@ -326,7 +326,7 @@ class _AttributeReader(object):
         self._ds.close()
         delattr(self, '_ds')
 
-    def get_attribute(self, variable, rename_var=None):
+    def get_attribute(self, variable, rename_var=None, return_dict=False):
         """
         Get the attributes for the given variable and add them to the relevant object.
 
@@ -345,16 +345,24 @@ class _AttributeReader(object):
         if rename_var is None:
             rename_var = variable
 
+        if return_dict:
+            out_dict = {}
+
         if not hasattr(self, rename_var):
             # Hmmm, don't like using PassiveStore here...
             setattr(self, rename_var, PassiveStore())
 
         for attribute in self._ds.variables[variable].ncattrs():
             setattr(getattr(self, rename_var), attribute, getattr(self._ds.variables[variable], attribute))
+            if return_dict:
+                out_dict[attribute] = getattr(self._ds.variables[variable], attribute)
 
         if close_on_finish:
             self._ds.close()
             delattr(self, '_ds')
+
+        if return_dict:
+            return out_dict
     
     def __iter__(self):
         return (a for a in self.__dict__.keys() if not a.startswith('_'))
