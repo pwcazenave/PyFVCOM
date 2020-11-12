@@ -16,6 +16,6 @@ setup(
     license='MIT',
     platforms='any',
     install_requires=['jdcal', 'lxml', 'matplotlib', 'netCDF4', 'networkx', 'numpy>=1.13.0', 'pandas', 'xlsxwriter',
-                      'pyproj', 'pytz', 'scipy', 'pyshp', 'UTide', 'shapely', 'descartes'],
+                      'pyproj', 'pytz', 'scipy', 'pyshp', 'UTide', 'shapely', 'descartes', 'cartopy'],
     classifiers=[]
 )
