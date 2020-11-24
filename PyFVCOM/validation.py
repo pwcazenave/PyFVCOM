@@ -556,8 +556,13 @@ class ValidationComparison():
         if self.ignore_deep:
             self.max_mod_dep = np.max(self.mod_depths, axis=1)[self.chosen_mod_times, self.chosen_mod_nodes].diagonal()
             adjust_chosen =  self.obs_data.grid.depth[self.chosen_obs] <= self.max_mod_dep
-            
-            self.chosen_obs[self.chosen_obs == True][~adjust_chosen] = False
+
+            chosen_obs_ind = np.where(self.chosen_obs)[0]
+            chosen_obs_ind = chosen_obs_ind[adjust_chosen]          
+            new_chosen_obs = np.zeros(len(self.chosen_obs), dtype=bool)
+            new_chosen_obs[chosen_obs_ind] = True 
+
+            self.chosen_obs = new_chosen_obs
             self.chosen_obs_dep = self.chosen_obs_dep[adjust_chosen]
             self.chosen_obs_ll = self.chosen_obs_ll[adjust_chosen,:]
             self.chosen_mod_depths = self.chosen_mod_depths[adjust_chosen,:]
@@ -1238,7 +1243,7 @@ class CompareICES(object):
     reproduce.
 
     Default ICES variables: 'TEMP', 'PSAL', 'DOXY(umol/l)', 'PHOS(umol/l)', 'SLCA(umol/l)', 'NTRA(umol/l)',
-	                        'AMON(umol/l)', 'PHPH', 'ALKY(mmol/l)', 'CPHL(mg/m^3)'
+                            'AMON(umol/l)', 'PHPH', 'ALKY(mmol/l)', 'CPHL(mg/m^3)'
 
     Example
     -------
