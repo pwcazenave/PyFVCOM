@@ -656,9 +656,9 @@ class Plotter(object):
                 else:
                     raise RuntimeError('mpl_toolkits is not available in this Python.')
             elif self.mapper == 'cartopy':
-                self.projection = ccrs.LambertConformal(central_longitude=np.mean(self.extents[:2]),
-                                                        central_latitude=np.mean(self.extents[2:]),
-                                                        false_easting=400000, false_northing=400000)
+                self.projection = ccrs.PlateCarree() #ccrs.LambertConformal(central_longitude=np.mean(self.extents[:2]),
+                                                     #   central_latitude=np.mean(self.extents[2:]),
+                                                     #   false_easting=400000, false_northing=400000)
 
                 # Make a coastline depending on whether we've got a GSHHS resolution or a Natural Earth one.
                 if self.res in ('c', 'l', 'i', 'h', 'f'):
