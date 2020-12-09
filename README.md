@@ -28,6 +28,8 @@ pip install PyFVCOM
 If you want to install the development version, checkout the `dev' branch and then from within the top-level directory:
 
 ```bash
+git clone git@gitlab.ecosystem-modelling.pml.ac.uk:fvcom/pyfvcom.git ./PyFVCOM
+cd PyFVCOM
 pip install --user -e .
 ```
 
