@@ -35,6 +35,22 @@ We are targeting Python 3.6+. PyFVCOM no longer supports Python 2.
 
 We recommend Jupyter (formerly iPython) for interactive use of PyFVCOM (and python generally).
 
+If you want to install PyFVCOM within a conda environment the suggested approach is [other than wait until the package is ported to Conda]:
+```bash
+conda create -n pyfvcom 
+conda activate pyfvcom 
+conda install pip
+# in my case I had to manually install the requirements in conda before using pip to install PyFVCOM
+conda install numpy
+conda install scipy
+conda install shapely
+conda install cartopy
+cd ~/myinstallationdirectory/pyfvcom 
+pip install -e .
+
+```
+
+
 Provides
 --------
 
