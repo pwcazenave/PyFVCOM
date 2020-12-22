@@ -593,12 +593,14 @@ class ValidationComparison():
             chosen_horiz = np.sum(raw_data[:,:,self.chosen_mod_nodes] * self.chosen_mod_nodes_weights[np.newaxis, np.newaxis, :], axis=-1)
 
             # Then by time
-            chosen_time = np.sum(chosen_horiz[self.chosen_mod_times,:] * self.chosen_mod_times_weights[:, np.newaxis, np.newaxis], axis=1)
+            chosen_time = np.sum(np.asarray([chosen_horiz[self.chosen_mod_times[i,:], :, i] for i in np.arange(0,chosen_horiz.shape[-1])]),axis=1)
+            del chosen_horiz
 
             # Then by depth
-            chosen_depth = np.sum(chosen_time[:, self.chosen_mod_depths, :] * self.chosen_mod_depths_weights[np.newaxis,:,np.newaxis], axis=2)
-            
-            chosen = chosen_depth.diagonal().diagonal()
+            chosen_depth = np.sum(np.asarray([chosen_time[i, self.chosen_mod_depths[i,:]] for i in np.arange(0,chosen_time.shape[0])]),axis=1)
+            del chosen_time            
+
+            chosen = chosen_depth
  
             obs_data = getattr(self.obs_data.data, this_var)[self.chosen_obs]
             if delete_var:
