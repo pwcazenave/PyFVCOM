@@ -2465,7 +2465,16 @@ def read_fvcom_mesh(mesh):
     Parameters
     ----------
     mesh : str
-        Full path to the FVCOM unstructured grid file (.dat usually).
+        Full path to the FVCOM unstructured grid file (.dat usually). The file
+        name should also contain '_grd' in the name e.g. 'my_file_grd.dat'.
+        The file contains information about the triangle indicies and the 
+        x, y, z coodinates of the grid nodes. 
+        The file header should be two lines:
+            Node Number = nnn
+            Cell Number = eee
+        Followed by 'element_index, tri1, tri2, tri3' for eee cells
+        Followed by 'node_index, x, y, z' for nnn nodes
+          
 
     Returns
     -------
@@ -2481,9 +2490,16 @@ def read_fvcom_mesh(mesh):
     """
 
     fileRead = open(mesh, 'r')
-    # Skip the file header (two lines)
-    lines = fileRead.readlines()[2:]
+
+    # Read the file and header (two lines)
+    lines = fileRead.readlines()
     fileRead.close()
+
+    header = lines[:2] # two lines of header
+    lines = lines[2:]
+
+    node_number = 0
+    cell_number = 0
 
     triangles = []
     nodes = []
@@ -2491,14 +2507,54 @@ def read_fvcom_mesh(mesh):
     y = []
     z = []
 
-    for line in lines:
-        ttt = line.strip().split()
-        if len(ttt) == 5:
+    if 'Node' in header[0]:
+        node_number = int(header[0].split('=')[1])
+        cell_number = int(header[1].split('=')[1])
+    elif 'Cell' in header[0]:
+        node_number = int(header[1].split('=')[1])
+        cell_number = int(header[0].split('=')[1])
+
+    if ((node_number == 0) | (cell_number == 0)):
+        # if header info not present get grid using column numbers
+        for line in lines:
+            ttt = line.strip().split()
+            if len(ttt) == 5:
+                t1 = int(ttt[1]) - 1
+                t2 = int(ttt[2]) - 1
+                t3 = int(ttt[3]) - 1
+                triangles.append([t1, t2, t3])
+            elif len(ttt) == 4:
+                x.append(float(ttt[1]))
+                y.append(float(ttt[2]))
+                z.append(float(ttt[3]))
+                nodes.append(int(ttt[0]))
+
+    else:
+        # Check if triangles or xyz comes first
+        tri_first = node_number == int(lines[-1].strip().split()[0])
+
+        # Get index ranges of the two sections
+        if tri_first:
+            tri_st = 0
+            tri_en = cell_number
+            xyz_st = cell_number
+            xyz_en = cell_number + node_number
+        else:
+            xyz_st = 0
+            xyz_en = node_number
+            tri_st = node_number
+            tri_en = node_number + cell_number
+
+        # Extract data from the two sections
+        for l in range(tri_st, tri_en):
+            ttt = lines[l].strip().split()
             t1 = int(ttt[1]) - 1
             t2 = int(ttt[2]) - 1
             t3 = int(ttt[3]) - 1
             triangles.append([t1, t2, t3])
-        elif len(ttt) == 4:
+
+        for l in range(xyz_st, xyz_en):
+            ttt = lines[l].strip().split()
             x.append(float(ttt[1]))
             y.append(float(ttt[2]))
             z.append(float(ttt[3]))
