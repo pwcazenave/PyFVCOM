@@ -1559,7 +1559,8 @@ class FileReader(Domain):
             self.river.river_nodes
             self.river.river_lat
             self.river.river_lon
-            self.river.river_flux
+            self.river.river_fluxes
+            self.river.total_flux
             self.river.river_temp
             self.river.river_salt
 
