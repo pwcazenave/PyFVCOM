@@ -10,12 +10,14 @@ import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 
+from shapely.geometry import Polygon, Point
+
 import matplotlib.path as mpath
 import numpy as np
 import pandas as pd
 from netCDF4 import Dataset, MFDataset, num2date, date2num
 
-from PyFVCOM.grid import Domain, control_volumes, get_area_heron
+from PyFVCOM.grid import Domain, control_volumes, get_area_heron,get_boundary_polygons
 from PyFVCOM.grid import unstructured_grid_volume, elems2nodes, GridReaderNetCDF
 from PyFVCOM.utilities.general import PassiveStore, flatten_list, warn
 
@@ -1824,7 +1826,7 @@ class FileReader(Domain):
 
 def read_nesting_nodes(fvcom, nestpath):
     """
-    Function to read the indices of the nodes and elements in the nesting region.
+    Function to read the indices of the nodes and elements in the nesting region. It uses spherical coordinates only
 
     Parameters
     ----------
@@ -1832,6 +1834,8 @@ def read_nesting_nodes(fvcom, nestpath):
         FVCOM FileReader object with grid information.
     nestpath : str
         Full path to one nesting netCDF file for the domain.
+    threshold : np.array
+        distance threshold to mask only exact matches or near enough
 
     Returns
     -------
@@ -1846,13 +1850,32 @@ def read_nesting_nodes(fvcom, nestpath):
         lat = nest.variables['lat'][:]
         latc = nest.variables['latc'][:]
 
-    # Find the closest node to nesting node positions
-    nest_indices_n = fvcom.closest_node((lon, lat))
-    nest_indices_e = fvcom.closest_element((lonc, latc))
+    # create polygon of domain with coastline
+    poly_id = get_boundary_polygons(fvcom.grid.triangles)
+    # assuming coastline
+    polyshp = [Polygon(np.array((fvcom.grid.lon[i],fvcom.grid.lat[i])).T) for i in poly_id ]
+    polyarea = [i.area for i in polyshp]
+    domain = polyshp[polyarea.index(max(polyarea))]
+    indomain = []
+    for i in zip(lon,lat):
+        if domain.contains(Point(i)) or domain.intersects(Point(i)):
+            indomain.append(True)
+        else:
+            indomain.append(False)
+    indomainc=[]
+    for i in zip(lonc,latc):
+        if domain.contains(Point(i)) or domain.intersects(Point(i)):
+            indomainc.append(True)
+        else:
+            indomainc.append(False)
     mask_n = np.full(fvcom.dims.node, False)
     mask_e = np.full(fvcom.dims.nele, False)
-    mask_n[nest_indices_n] = True
-    mask_e[nest_indices_e] = True
+
+    if np.any(indomain):
+        nest_indices_n = fvcom.closest_node((lon[indomain], lat[indomain]))
+        nest_indices_e = fvcom.closest_element((lonc[indomainc], latc[indomainc]))
+        mask_n[nest_indices_n] = True
+        mask_e[nest_indices_e] = True
 
     return mask_n, mask_e
 
@@ -1881,8 +1904,8 @@ def apply_mask(fvcom, vars=[], mask_nodes=[], mask_elements=[], noisy=False):
 
     """
 
-    if not np.any(mask_nodes) and not np.any(mask_elements):
-        raise ValueError('Masks for nodes or elements not supplied')
+    # if not np.any(mask_nodes) and not np.any(mask_elements):
+    #     raise ValueError('Masks for nodes or elements not supplied')
     # Determine if we have been given a list of variables
     if not vars:
         vars = list(fvcom.data)

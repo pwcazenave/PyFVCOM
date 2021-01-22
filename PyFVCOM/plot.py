@@ -5,6 +5,7 @@ from __future__ import print_function
 import copy
 from datetime import datetime
 from pathlib import Path
+from warnings import warn
 
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
@@ -1418,9 +1419,9 @@ class CrossPlotter(Plotter):
     #  - Error handling for no wet/dry, no land
     #  - Plus a lot of other stuff. And tidy it up.
 
-    def __init__(self, filereader, **kwargs):
+    def __init__(self):
 
-        super().__init__(filereader, **kwargs)
+        super(Plotter, self).__init__()
 
         self.cross_plot_x = None
         self.cross_plot_y = None

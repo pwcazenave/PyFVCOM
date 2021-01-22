@@ -487,8 +487,11 @@ class ValidationComparison():
 
         elif self.mode == 'elements':
             if self.horizontal_match == 'nearest':
-                self.chosen_mod_nodes = self.fvcom_data.closest_element(self.chosen_obs_ll)
-                self.chosen_mod_nodes_weights = np.ones(len(self.chosen_mod_nodes))
+                self.chosen_mod_nodes = np.squeeze(np.asarray([self.fvcom_data.closest_element(this_ll) for this_ll in self.chosen_obs_ll]))[:, np.newaxis]
+                self.chosen_mod_nodes_weights = np.ones(len(self.chosen_mod_nodes))[:, np.newaxis]
+ 
+#                self.chosen_mod_nodes = self.fvcom_data.closest_element(self.chosen_obs_ll)
+#                self.chosen_mod_nodes_weights = np.ones(len(self.chosen_mod_nodes))
             elif self.horizontal_match == 'interp':
                 chosen_mod_nodes = []
                 chosen_mod_nodes_weights = [] 
