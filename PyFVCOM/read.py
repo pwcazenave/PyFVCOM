@@ -1540,7 +1540,34 @@ class FileReader(Domain):
 
     def add_river_flow(self, river_nc_file, river_nml_file):
         """
-        TODO: docstring.
+        Read in the river forcing data.
+        The river forcing is in two files the netcdf with time varying flux,
+        temperature, salinity for each river node.
+        The nml text file contains information about which node the river is 
+        attached to.
+
+        Parameters
+        ----------
+        river_nc_file : str 
+            Path to the netcdf file.
+        river_nml_file : str
+            Path to the text nml file.
+
+        Returns
+        -------
+        Populates: 
+            self.river.time_dt
+            self.river.river_time_sec
+            self.river.river_nodes
+            self.river.river_lat
+            self.river.river_lon
+            self.river.river_fluxes
+            self.river.total_flux
+            self.river.river_temp
+            self.river.river_salt
+            self.river.raw_fluxes
+            self.river.raw_temp
+            self.river.raw_salt
 
         """
 
@@ -1549,7 +1576,12 @@ class FileReader(Domain):
 
         river_nc = Dataset(river_nc_file, 'r')
         time_raw = river_nc.variables['Times'][:]
-        self.river.time_dt = [datetime.strptime(b''.join(this_time).decode('utf-8').rstrip(), '%Y/%m/%d %H:%M:%S') for this_time in time_raw]
+        
+        try:
+            self.river.time_dt = [datetime.strptime(b''.join(this_time).decode('utf-8').rstrip().replace('/', '').replace('-', '').replace('T', '').replace(' ', '').replace(':', '').replace('.', ''), '%Y%m%d%H%M%S%f') for this_time in time_raw]
+        except:
+            self.river.time_dt = [datetime.strptime(b''.join(this_time).decode('utf-8').rstrip().replace('/', '').replace('-', '').replace('T', '').replace(' ', '').replace(':', '').replace('.', ''), '%Y%m%d%H%M%S') for this_time in time_raw]
+
 
         ref_date = datetime(1900, 1, 1)
         mod_time_sec = [(this_dt - ref_date).total_seconds() for this_dt in self.time.datetime]
@@ -1565,12 +1597,18 @@ class FileReader(Domain):
         river_flux_raw = river_nc.variables['river_flux'][:, rivers_in_grid]
         self.river.river_fluxes = np.asarray([np.interp(mod_time_sec, self.river.river_time_sec, this_col) for this_col in river_flux_raw.T]).T
         self.river.total_flux = np.sum(self.river.river_fluxes, axis=1)
+        self.river.raw_fluxes = river_flux_raw
 
         river_temp_raw = river_nc.variables['river_temp'][:, rivers_in_grid]
         self.river.river_temp = np.asarray([np.interp(mod_time_sec, self.river.river_time_sec, this_col) for this_col in river_temp_raw.T]).T
+        self.river.raw_temp = river_temp_raw
 
         river_salt_raw = river_nc.variables['river_salt'][:, rivers_in_grid]
         self.river.river_salt = np.asarray([np.interp(mod_time_sec, self.river.river_time_sec, this_col) for this_col in river_salt_raw.T]).T
+        self.river.raw_sal = river_salt_raw
+
+        self.river.river_lat = self.grid.lat[self.river.river_nodes]
+        self.river.river_lon = self.grid.lon[self.river.river_nodes]
 
         river_nc.close()
 

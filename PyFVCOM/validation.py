@@ -21,7 +21,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from pandas import read_hdf
 
-from PyFVCOM.grid import get_boundary_polygons, vincenty_distance
+from PyFVCOM.grid import get_boundary_polygons, vincenty_distance, node_to_centre
 from PyFVCOM.plot import Time, Plotter
 from PyFVCOM.read import FileReader
 from PyFVCOM.stats import calculate_coefficient, rmse
@@ -489,9 +489,6 @@ class ValidationComparison():
             if self.horizontal_match == 'nearest':
                 self.chosen_mod_nodes = np.squeeze(np.asarray([self.fvcom_data.closest_element(this_ll) for this_ll in self.chosen_obs_ll]))[:, np.newaxis]
                 self.chosen_mod_nodes_weights = np.ones(len(self.chosen_mod_nodes))[:, np.newaxis]
- 
-#                self.chosen_mod_nodes = self.fvcom_data.closest_element(self.chosen_obs_ll)
-#                self.chosen_mod_nodes_weights = np.ones(len(self.chosen_mod_nodes))
             elif self.horizontal_match == 'interp':
                 chosen_mod_nodes = []
                 chosen_mod_nodes_weights = [] 
@@ -541,12 +538,11 @@ class ValidationComparison():
             self.mod_depths = -self.mod_h[:,np.newaxis, :]*self.fvcom_data.grid.siglay[np.newaxis, :,:]
         
         elif self.mode == 'elements':
-            setattr(self.fvcom_data.data, 'zeta_centre', pf.grid.node_to_centre(self.fvcom_data.zeta, self.fvcom_data))
-            self.mod_h = self.fvcom_data.data.zeta_centre + self.grid.h_center
+            setattr(self.fvcom_data.data, 'zeta_centre', node_to_centre(self.fvcom_data.data.zeta, self.fvcom_data))
+            self.mod_h = self.fvcom_data.data.zeta_centre + self.fvcom_data.grid.h_center
             self.mod_depths = self.mod_h[:,np.newaxis, :]*self.fvcom_data.grid.siglay_center[np.newaxis, :,:]
 
-        self.mod_obs_depths_all_t = np.sum(self.mod_depths[:,:,self.chosen_mod_nodes]*self.chosen_mod_nodes_weights[np.newaxis, np.newaxis,:], axis=-1)
-        self.mod_obs_depths = np.diagonal(np.squeeze(self.mod_obs_depths_all_t[self.chosen_mod_times,:]))
+        self.mod_obs_depths = np.asarray([np.sum(np.sum(self.mod_depths[:,:,self.chosen_mod_nodes[i,...]]*self.chosen_mod_nodes_weights[i,...], axis=-1)[self.chosen_mod_times[i,...],:]*self.chosen_mod_times_weights[i,...],axis=0) for i in np.arange(0,len(self.chosen_mod_times))])
         
         if self.vertical_match == 'nearest':
             self.chosen_mod_depths = np.asarray([np.argmin(np.abs(this_mod_obs_dep - this_dep)) for this_mod_obs_dep, this_dep in zip(self.mod_obs_depths, self.obs_data.grid.depth[self.chosen_obs])])[:,np.newaxis]
