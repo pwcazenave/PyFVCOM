@@ -28,7 +28,7 @@ from PyFVCOM.grid import find_bad_node, element_side_lengths, reduce_triangulati
 from PyFVCOM.grid import write_fvcom_mesh, write_obc_file, connectivity, haversine_distance, subset_domain
 from PyFVCOM.grid import expand_connected_nodes, OpenBoundary, Nest
 from PyFVCOM.grid import interpolate_node_barycentric
-from PyFVCOM.grid import interpolate_regular, interpolate_curvilinear, interpolate_fvcom
+from PyFVCOM.grid import interpolate_regular, interpolate_curvilinear, interpolate_fvcom, avg_nest_force_vel
 from PyFVCOM.read import FileReader, _TimeReader, control_volumes
 from PyFVCOM.utilities.general import flatten_list, PassiveStore, warn
 from PyFVCOM.utilities.time import date_range
@@ -2694,7 +2694,7 @@ class Model(Domain):
                                 ii + 1, len(this_boundary.nest))
                                 + ' no elements defined')
                     continue
-                this_nest.avg_nest_force_vel()
+                avg_nest_force_vel(this_nest)
 
     def load_nested_forcing(self, existing_nest, variables=None, 
                 filter_times=False, filter_points=False, verbose=False):

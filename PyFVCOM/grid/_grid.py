@@ -559,10 +559,7 @@ class OpenBoundary(object):
 
     This is called by Model._initialise_open_boundaries() and Model.add_nests()
     
-
-    Not sure this is the right place for this. Might be better placed in PyFVCOM.preproc. Also, this should probably
-    be a superclass of Nest as an open boundary is just a special case of a PyFVCOM.preproc.Nest (one with 0 levels,
-    essentially).
+    This is a superclass of Nest as an open boundary is just a special case of a Nest (one with 0 levels and no elements only nodes, essentially).
 
     """
 
@@ -1064,8 +1061,9 @@ class OpenBoundary(object):
                 const = ([''.join(i).upper().strip() for i in tides.variables[
                         names['constituent_name']][:].astype(str)])
             else:
-                const = ([b''.join(i).decode('utf-8').upper().strip() for
+                const = ''.join([''.join(i.decode('utf-8')).upper().strip() for
                         i in tides.variables[names['constituent_name']][:]])
+
             # If we've been given constituents that aren't in the harmonics 
             # data, just find the indices we do have.
             cidx = [constituents.index(i) for i in constituents if i in const]
@@ -1676,6 +1674,9 @@ class Nest(OpenBoundary):
                 if self._debug:
                     print(e)
                 pass
+
+        self.grid.nodes = self.nodes
+        self.grid.elements = self.elements
 
         for attribute in self.sigma:
             if self._debug:
@@ -6067,16 +6068,16 @@ def interpolate_regular(fvcom_obj, fvcom_name, coarse_name, coarse, interval=1,
     # Check we have what we need.
     raise_error = False
     if mode == 'nodes':
-        if not np.any(fvcom_obj.grid.nodes):
+        if not np.any(fvcom_obj.grid.lon):
             if verbose:
                 print(f'No {mode} on which to interpolate on this boundary')
             return
-        if not hasattr(fvcom_obj.grid.sigma, 'layers'):
+        if not hasattr(fvcom_obj.sigma, 'layers'):
             raise_error = True
     elif mode == 'elements':
-        if not hasattr(fvcom_obj.grid.sigma, 'layers_center'):
+        if not hasattr(fvcom_obj.sigma, 'layers_center'):
             raise_error = True
-        if not np.any(fvcom_obj.grid.elements):
+        if not np.any(fvcom_obj.grid.lonc):
             if verbose:
                 print(f'No {mode} on which to interpolate on this boundary')
             return
@@ -6281,6 +6282,8 @@ def avg_nest_force_vel(fvcom_obj):
     """
     Create depth-averaged velocities (`ua', `va') in the current 
     fvcom_obj.data data.
+    Used by preproc.Model.avg_nest_force_vel() to gives Nests depth 
+    averaged velocity.
 
     """
     layer_thickness = (fvcom_obj.sigma.levels_center.T[0:-1, :]
