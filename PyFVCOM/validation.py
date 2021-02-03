@@ -21,7 +21,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from pandas import read_hdf
 
-from PyFVCOM.grid import get_boundary_polygons, vincenty_distance, node_to_centre
+from PyFVCOM.grid import get_boundary_polygons, vincenty_distance, node_to_centre, haversine_distance
 from PyFVCOM.plot import Time, Plotter
 from PyFVCOM.read import FileReader
 from PyFVCOM.stats import calculate_coefficient, rmse
@@ -475,7 +475,7 @@ class ValidationComparison():
                     this_nodes = np.squeeze(self.fvcom_data.grid.triangles[this_ele,:])
                     this_nodes_lon = self.fvcom_data.grid.lon[this_nodes]
                     this_nodes_lat = self.fvcom_data.grid.lat[this_nodes]
-                    this_nodes_dists = pf.grid.haversine_distance([this_nodes_lon, this_nodes_lat], this_obs_ll)
+                    this_nodes_dists = haversine_distance([this_nodes_lon, this_nodes_lat], this_obs_ll)
                     this_tot_dist = np.sum(this_nodes_dists)
                     this_wgts = this_nodes_dists/this_tot_dist
             
