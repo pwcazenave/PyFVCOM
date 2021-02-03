@@ -414,7 +414,7 @@ class ValidationReader():
 
 
 class ValidationComparison(): 
-    def __init__(self, filereader, validationreader, varlist, mode='nodes', horizontal_match='nearest', vertical_match='interp', time_match='nearest', ignore_deep=True):
+    def __init__(self, filereader, validationreader, varlist, mode='nodes', horizontal_match='nearest', vertical_match='interp', time_match='nearest', ignore_deep=True, debug=False):
         """ 
         filereader : pyfvcom FileReader object
             The model data to validate *without* the variable data loaded
@@ -445,7 +445,8 @@ class ValidationComparison():
             self.time_match = time_match
 
         self.ignore_deep = ignore_deep
-        self._match_mod_obs()
+        if not debug:
+            self._match_mod_obs()
 
     def find_matching_obs(self):
         print('Finding observations within model time/space')
