@@ -596,30 +596,28 @@ class ValidationComparison():
             else:
                 delete_var = False
             raw_data = getattr(self.fvcom_data.data, this_var)
- 
+
             # Do horizontal weighting first as largest dimension
             chosen_horiz = np.sum(raw_data[:,:,self.chosen_mod_nodes] * self.chosen_mod_nodes_weights[np.newaxis, np.newaxis, :], axis=-1)
 
             # Then by time
-            chosen_time = np.sum(np.asarray([chosen_horiz[self.chosen_mod_times[i,:], :, i] for i in np.arange(0,chosen_horiz.shape[-1])]),axis=1)
+            chosen_time = np.asarray([np.sum(chosen_horiz[self.chosen_mod_times[i,:],:,i] * np.tile(self.chosen_mod_times_weights[i,:][:,np.newaxis], [1,chosen_horiz.shape[1]]), axis=0) for i in np.arange(0, len(self.chosen_mod_times))])
             del chosen_horiz
 
             # Then by depth
-            chosen_depth = np.sum(np.asarray([chosen_time[i, self.chosen_mod_depths[i,:]] for i in np.arange(0,chosen_time.shape[0])]),axis=1)
-            del chosen_time            
+            chosen_depth = np.asarray([np.sum(chosen_time[i,self.chosen_mod_depths[i,:]] * self.chosen_mod_depths_weights[i,:] , axis=0) for i in np.arange(0, len(self.chosen_mod_times))])
+            del chosen_time
 
-            chosen = chosen_depth
- 
             obs_data = getattr(self.obs_data.data, this_var)[self.chosen_obs]
             if delete_var:
                 delattr(self.fvcom_data.data, this_var)
-            match_dict[this_var] = [chosen, obs_data]
+            match_dict[this_var] = [chosen_depth, obs_data]
 
         if return_time_ll_depth:
             tld = [self.obs_data.time.datetime[self.chosen_obs], self.chosen_obs_ll, self.chosen_obs_dep]
             match_dict = (match_dict, tld)
 
-        return match_dict
+        return match_dict 
     
 class CtdDB(ValidationDB):
     """      """
