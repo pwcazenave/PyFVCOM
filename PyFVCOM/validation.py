@@ -506,13 +506,17 @@ class ValidationComparison():
             chosen_mod_times = []
             chosen_mod_times_weights = []
             for this_time, this_ind in zip(self.obs_data.time.datetime[self.chosen_obs], temp_closest_times):
-                if this_time >= self.fvcom_data.time.datetime[this_ind]:
+                if this_ind == 0:
+                    time_inds = [0,1]
+                elif this_ind == len(self.fvcom_data.time.datetime) -1:
+                    time_inds = [this_ind -1, this_ind]
+                elif this_time >= self.fvcom_data.time.datetime[this_ind]:
                     time_inds = [this_ind, this_ind + 1]
                 else:
                     time_inds = [this_ind -1, this_ind]
     
-                diff_1 = (this_time - self.fvcom_data.time.datetime[time_inds[0]]).seconds
-                diff_2 = (self.fvcom_data.time.datetime[time_inds[1]] - this_time).seconds
+                diff_1 = (this_time - self.fvcom_data.time.datetime[time_inds[0]]).total_seconds()
+                diff_2 = (self.fvcom_data.time.datetime[time_inds[1]] - this_time).total_seconds()
 
                 wgts = [1-(diff_1/(diff_1 + diff_2)), 1-(diff_2/(diff_1 + diff_2))]
 
@@ -543,8 +547,12 @@ class ValidationComparison():
             self.mod_h = self.fvcom_data.data.zeta_centre + self.fvcom_data.grid.h_center
             self.mod_depths = self.mod_h[:,np.newaxis, :]*self.fvcom_data.grid.siglay_center[np.newaxis, :,:]
 
-        self.mod_obs_depths = np.asarray([np.sum(np.sum(self.mod_depths[:,:,self.chosen_mod_nodes[i,...]]*self.chosen_mod_nodes_weights[i,...], axis=-1)[self.chosen_mod_times[i,...],:]*self.chosen_mod_times_weights[i,...],axis=0) for i in np.arange(0,len(self.chosen_mod_times))])
-        
+        interp_deps = []
+        for i in np.arange(0,len(self.chosen_mod_times)):
+            unweight = np.sum(self.mod_depths[:,:,self.chosen_mod_nodes[i,...]]*self.chosen_mod_nodes_weights[i,...], axis=-1)[self.chosen_mod_times[i,...],:]
+            interp_deps.append(np.sum(unweight*np.tile(self.chosen_mod_times_weights[i,:,np.newaxis],[1,unweight.shape[1]]), axis=0))
+        self.mod_obs_depths = np.asarray(interp_deps)
+
         if self.vertical_match == 'nearest':
             self.chosen_mod_depths = np.asarray([np.argmin(np.abs(this_mod_obs_dep - this_dep)) for this_mod_obs_dep, this_dep in zip(self.mod_obs_depths, self.obs_data.grid.depth[self.chosen_obs])])[:,np.newaxis]
             self.chosen_mod_depths_weights = np.ones(self.chosen_mod_depths.shape)
