@@ -2696,6 +2696,38 @@ class Model(Domain):
                     continue
                 avg_nest_force_vel(this_nest)
 
+    def apply_ramp(self, ramp_length, initial_ts=None):
+        """
+        Applies a ramp to the nesting values. In the case of velocities and zeta this is 
+
+
+        Parameters
+        ----------
+        ramp_length : int
+            Length of time to ramp over (in seconds)
+        intial_ts : list
+            Initial values for temp and salinity; if not provided then ramp only applied
+            to u,v,zeta and if present ua and va
+
+        """
+
+        nest_timesteps_sec = np.asarray([(this_t - self.time.datetime[0]).total_seconds() for this_t in self.time.datetime])
+        ramp = np.tanh(nest_timesteps_sec/ramp_length) 
+
+        for i, this_boundary in enumerate(self.open_boundaries):
+            for ii, this_nest in enumerate(this_boundary.nest):
+                if np.any(this_nest.elements):
+                    if hasattr(this_nest.data, 'ua'):
+                        ramp_vars = ['u', 'v', 'ua', 'va']
+                    else:
+                        ramp_vars = ['u', 'v']
+                    this_nest.apply_ramp(ramp_vars, ramp, np.zeros(len(ramp_vars)))
+                
+                this_nest.apply_ramp(['zeta'], ramp, [0])
+
+                if initial_ts is not None:
+                    this_nest.apply_ramp(['temp', 'salinity'], ramp, initial_ts)
+
     def load_nested_forcing(self, existing_nest, variables=None, 
                 filter_times=False, filter_points=False, verbose=False):
         """

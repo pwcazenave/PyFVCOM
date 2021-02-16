@@ -1565,6 +1565,46 @@ class OpenBoundary(object):
         self.time.Times = [t.strftime('%Y-%m-%dT%H:%M:%S.%f')
                 for t in getattr(self.time, 'datetime')]
 
+    def avg_nest_force_vel(self):
+        """
+        Create depth-averaged velocities (`ua', `va') in the current 
+        self.data data.
+
+        """
+        layer_thickness = (self.sigma.levels_center.T[0:-1, :]
+                                - self.sigma.levels_center.T[1:, :])
+        self.data.ua = zbar(self.data.u, layer_thickness)
+        self.data.va = zbar(self.data.v, layer_thickness)
+
+    def apply_ramp(self, var_list, ramp, initial_vals):
+        """
+        Apply the given ramp (proportions) to scale between the inital values and the nest values
+
+        Parameters
+        ----------
+        var_list : list
+            List of variables to apply the ramp to
+        ramp : array
+            Array with length of number of timesteps in the nest
+        initial_vals : list
+            List array with length same as var_list with an initial value for each variable
+        """ 
+        for this_var, this_init in zip(var_list, initial_vals):
+            data = getattr(self.data, this_var)
+            if len(data.shape) == 2:
+                data_mod = np.tile(this_init * (1-ramp)[:,np.newaxis], [1, data.shape[1]]) + data * np.tile(ramp[:,np.newaxis], [1, data.shape[1]])
+            else:
+                data_mod = np.tile(this_init * (1-ramp)[:,np.newaxis,np.newaxis], [1, data.shape[1], data.shape[2]]) + data * np.tile(ramp[:,np.newaxis,np.newaxis], [1, data.shape[1], data.shape[2]])
+            setattr(self.data, this_var, data_mod)
+            
+            if hasattr(self.tide, this_var):
+                data = getattr(self.tide, this_var)
+                if len(data.shape) == 2:
+                    data_mod = np.tile(this_init * (1-ramp)[:,np.newaxis], [1, data.shape[1]]) + data * np.tile(ramp[:,np.newaxis], [1, data.shape[1]])
+                else:
+                    data_mod = np.tile(this_init * (1-ramp)[:,np.newaxis,np.newaxis], [1, data.shape[1], data.shape[2]]) + data * np.tile(ramp[:,np.newaxis,np.newaxis], [1, data.shape[1], data.shape[2]])
+                setattr(self.tide, this_var, data_mod)
+
 class Nest(OpenBoundary):
     """
     Class to hold a set of nests levels similar to OpenBoundary objects but 
