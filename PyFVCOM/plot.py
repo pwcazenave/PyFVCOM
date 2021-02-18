@@ -1419,10 +1419,11 @@ class CrossPlotter(Plotter):
     #  - Error handling for no wet/dry, no land
     #  - Plus a lot of other stuff. And tidy it up.
 
-    def __init__(self):
+    def _init_figure(self):
+        """
+        Initialise a cross-sectional plot object.
 
-        super(Plotter, self).__init__()
-
+        """
         self.cross_plot_x = None
         self.cross_plot_y = None
         self.cross_plot_x_pcolor = None
@@ -1438,12 +1439,6 @@ class CrossPlotter(Plotter):
         self.sel_points = None
         self.xlim_vals = None
         self.ylim_vals = None
-
-    def _init_figure(self):
-        """
-        Initialise a cross-sectional plot object.
-
-        """
 
         if self._FileReader:
             self.nv = self.ds.grid.nv
