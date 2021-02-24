@@ -1572,7 +1572,7 @@ class FileReader(Domain):
         """
 
         nml_dict = get_river_config(river_nml_file)
-        river_node_raw = np.asarray(nml_dict['RIVER_GRID_LOCATION'], dtype=int) - 1
+        river_node_raw = np.asarray(nml_dict['RIVER_GRID_LOCATION'], dtype=int)
 
         river_nc = Dataset(river_nc_file, 'r')
         time_raw = river_nc.variables['Times'][:]
@@ -2260,7 +2260,7 @@ class SubDomainReader(FileReader):
 
         """
         nml_dict = get_river_config(river_nml_file)
-        river_node_raw = np.asarray(nml_dict['RIVER_GRID_LOCATION'], dtype=int) - 1
+        river_node_raw = np.asarray(nml_dict['RIVER_GRID_LOCATION'], dtype=int)
 
         # Get only rivers which feature in the subdomain
         rivers_in_grid = np.isin(river_node_raw, self._dims['node'])
