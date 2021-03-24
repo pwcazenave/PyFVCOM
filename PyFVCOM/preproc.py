@@ -33,7 +33,8 @@ from PyFVCOM.read import FileReader, _TimeReader, control_volumes
 from PyFVCOM.utilities.general import flatten_list, PassiveStore, warn
 from PyFVCOM.utilities.time import date_range
 from dateutil.relativedelta import relativedelta
-from netCDF4 import Dataset, date2num, num2date, stringtochar
+#from matplotlib.dates import num2date, date2num
+from netCDF4 import Dataset, stringtochar, num2date, date2num
 from scipy.interpolate import RegularGridInterpolator
 from scipy.spatial import Delaunay
 from shapely.geometry import Polygon

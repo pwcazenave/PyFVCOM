@@ -7,12 +7,12 @@ from datetime import datetime
 from pathlib import Path
 from warnings import warn
 
-import cartopy.crs as ccrs
-import cartopy.feature as cfeature
+#import cartopy.crs as ccrs
+#import cartopy.feature as cfeature
 import matplotlib.widgets
 import mpl_toolkits.axes_grid1
 import numpy as np
-from cartopy.mpl.gridliner import LONGITUDE_FORMATTER, LATITUDE_FORMATTER
+#from cartopy.mpl.gridliner import LONGITUDE_FORMATTER, LATITUDE_FORMATTER
 from descartes import PolygonPatch
 from matplotlib import pyplot as plt
 from matplotlib import rcParams

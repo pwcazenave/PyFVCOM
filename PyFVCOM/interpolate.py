@@ -363,3 +363,8 @@ class MPIUnstructuredInterpolateWorker():
             interped_data[:] = np.nan
         return interped_data
 
+
+
+class KDTreeInterpolate():
+	def __init__(self):
+		pass
