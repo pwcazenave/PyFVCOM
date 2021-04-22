@@ -1379,7 +1379,7 @@ class Model(Domain):
         zeta = np.full((len(time), self.dims.open_boundary_nodes), np.nan)
         start_index = 0
         for boundary in self.open_boundaries:
-            end_index = start_index + len(boundary.nodes)
+            end_index = start_index + len(boundary.nodes) +1
             zeta[:, start_index:end_index] = boundary.tide.zeta
             start_index = end_index
 
