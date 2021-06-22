@@ -5429,7 +5429,7 @@ def getcrossectiontriangles(cross_section_pnts, trinodes, X, Y, dist_res):
 
 
     # then subsample the line at a given resolution and find which triangle each sample falls in (if at all)
-    sub_samp = np.asarray([np.linspace(cross_section_x[0], cross_section_x[1], res), np.linspace(cross_section_y[0], cross_section_y[1], res)]).T
+    sub_samp = np.asarray([np.linspace(cross_section_x[0], cross_section_x[1], int(res)), np.linspace(cross_section_y[0], cross_section_y[1], int(res))]).T
     red_tri_list_ind = np.arange(0, len(trinodes))[tri_cross_log]
     sample_cells = np.zeros(len(sub_samp))
 
