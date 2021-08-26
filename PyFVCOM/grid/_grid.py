@@ -26,7 +26,7 @@ import shapefile
 import shapely.geometry
 from dateutil.relativedelta import relativedelta
 from matplotlib.dates import date2num as mtime
-from matplotlib.tri import CubicTriInterpolator
+from matplotlib.tri import LinearTriInterpolator
 from matplotlib.tri.triangulation import Triangulation
 from netCDF4 import Dataset, date2num
 from scipy.interpolate import RegularGridInterpolator, LinearNDInterpolator, interp1d, Rbf
@@ -941,7 +941,7 @@ class OpenBoundary(object):
                 phases, available_constituents) = self._load_harmonics(
                 fvcom_harmonics,
                 constituents,
-                names, complex=False)
+                names,complex=False)
         if predict in ['zeta', 'ua', 'va']:
             amplitudes = amplitudes[:, np.newaxis, :]
             phases = phases[:, np.newaxis, :]
@@ -1061,7 +1061,7 @@ class OpenBoundary(object):
                 const = ([''.join(i).upper().strip() for i in tides.variables[
                         names['constituent_name']][:].astype(str)])
             else:
-                const = ''.join([''.join(i.decode('utf-8')).upper().strip() for
+                const = list([b''.join(i).decode('utf-8').upper().strip() for
                         i in tides.variables[names['constituent_name']][:]])
 
             # If we've been given constituents that aren't in the harmonics 
@@ -1493,11 +1493,15 @@ class OpenBoundary(object):
             (no verbose output).
         """
         self._add_times(interval)
-        interp_data = interpolate_regular(self, fvcom_name, coarse_name, coarse,
+        if (mode == 'nodes' and np.any(self.sigma.layers_z)) or (mode == 'elements' 
+                and np.any(self.sigma.layers_center_z)) or mode == 'surface':
+            interp_data = interpolate_regular(self, fvcom_name, coarse_name, coarse,
                         interval=interval, constrain_coordinates=constrain_coordinates,
                         mode=mode, tide_adjust=tide_adjust, verbose=verbose)
 
-        setattr(self.data, fvcom_name, interp_data)
+            setattr(self.data, fvcom_name, interp_data)
+        else:
+            print('Not interpolating {}, no sigma data for {}'.format(fvcom_name, mode))
 
     def add_nested_forcing_curvilinear(self, fvcom_name, coarse_name, coarse, interval=1,
                             constrain_coordinates=False,
@@ -4440,7 +4444,7 @@ def trigradient(x, y, z, t=None):
     else:
         tt = Triangulation(x.ravel(), y.ravel())
 
-    tci = CubicTriInterpolator(tt, z.ravel())
+    tci = LinearTriInterpolator(tt, z.ravel())
     # Gradient requested here at the mesh nodes but could be anywhere else:
     dx, dy = tci.gradient(tt.x, tt.y)
 
@@ -5390,7 +5394,7 @@ def getcrossectiontriangles(cross_section_pnts, trinodes, X, Y, dist_res):
     cross_section_y = [cross_section_pnts[0][1], cross_section_pnts[1][1]]
 
     cross_section_dist = np.sqrt((cross_section_x[1] - cross_section_x[0])**2 + (cross_section_y[1] - cross_section_y[0])**2)
-    res = np.ceil(cross_section_dist/dist_res)
+    res = np.int(np.ceil(cross_section_dist/dist_res))
 
     # first reduce the number of points to consider by only including triangles which cross the line through the two points
     tri_X = X[trinodes]
@@ -5682,7 +5686,7 @@ def node_to_centre(field, filereader):
         field = field[np.newaxis, :]
 
     for this_t in field:
-        ct = CubicTriInterpolator(tt, this_t)
+        ct = LinearTriInterpolator(tt, this_t)
         interped_out.append(ct(filereader.grid.xc, filereader.grid.yc))
 
     return np.asarray(interped_out)
@@ -6566,6 +6570,26 @@ def interpolate_curvilinear(fvcom_obj, fvcom_name, coarse_name, coarse, interval
         Set to True to enable verbose output. Defaults to False 
         (no verbose output).
     """
+    if mode == 'nodes':
+        if not np.any(fvcom_obj.grid.lon):
+            if verbose:
+                print(f'No {mode} on which to interpolate on this boundary')
+            return
+        if not hasattr(fvcom_obj.sigma, 'layers'):
+            if verbose:
+                print(f'No sigma on which to interpolate on this boundary')
+            return
+
+    elif mode == 'elements':
+        if not hasattr(fvcom_obj.sigma, 'layers_center'):
+            if verbose:
+                print(f'No sigma on which to interpolate on this boundary')
+            return
+        if not np.any(fvcom_obj.grid.lonc):
+            if verbose:
+                print(f'No {mode} on which to interpolate on this boundary')
+            return
+
     if 'elements' in mode:
         if cartesian:
             x = fvcom_obj.grid.xc
@@ -6617,15 +6641,15 @@ def interpolate_curvilinear(fvcom_obj, fvcom_name, coarse_name, coarse, interval
             print('Interpolating surface data...', end=' ')
 
         interped_data_2d = []
-        for this_t in ts:
+        for this_t in t_inds:
             interped_data_2d.append(_rbf_interpolator_2d(getattr(coarse.data, coarse_name)[this_t,:],
                                             x_coarse,y_coarse,x,y))
         interped_data_2d = np.asarray(interped_data_2d)
 
-        interped_coarse_data = []
+        interpolated_coarse_data = []
 
-        for this_pt in np.arange(interped_2d.shape[1]):
-            interpolated_coarse_data.append(_linear_interpolator_1d(interped_data_2d[:,this_pt], coarse.time.time, fvcom_obj.time.time))
+        for this_pt in np.arange(interped_data_2d.shape[1]):
+            interpolated_coarse_data.append(_linear_interpolator_1d(interped_data_2d[:,this_pt], coarse.time.time[t_inds], fvcom_obj.time.time))
 
     else:
         if verbose:
@@ -6649,11 +6673,11 @@ def interpolate_curvilinear(fvcom_obj, fvcom_name, coarse_name, coarse, interval
 
             temp_array = []
             for this_pt in np.arange(0, interped_2d_data.shape[1]):
-                mod_lays = fvcom_obj.sigma.layers_z[this_pt,:]
+                mod_lays = z[this_pt,:]
                 mod_lays[mod_lays > np.max(z_coarse[:,this_pt])] = np.max(z_coarse[:,this_pt])
                 mod_lays[mod_lays < np.min(z_coarse[:,this_pt])] = np.min(z_coarse[:,this_pt])
 
-                temp_array.append(_linear_interpolator_1d(interped_2d_data[:,this_pt], z_coarse[:,this_pt], fvcom_obj.sigma.layers_z[this_pt,:]))
+                temp_array.append(_linear_interpolator_1d(interped_2d_data[:,this_pt], z_coarse[:,this_pt], z[this_pt,:]))
             interped_3d_data.append(np.asarray(temp_array))
 
         interped_3d_data = np.asarray(interped_3d_data)
@@ -6676,7 +6700,10 @@ def interpolate_curvilinear(fvcom_obj, fvcom_name, coarse_name, coarse, interval
             interpolated_coarse_data = interpolated_coarse_data + getattr(
                     fvcom_obj.tide, fvcom_name)
 
-    return np.moveaxis(interpolated_coarse_data,2,0)
+    if mode == 'surface':
+        return np.moveaxis(interpolated_coarse_data,1,0)
+    else:
+        return np.moveaxis(interpolated_coarse_data,2,0)
 
 def _rbf_interpolator_2d(data, x, y, interp_x, interp_y, remove_mask=True):
     if remove_mask:
@@ -6805,4 +6832,3 @@ def interpolate_fvcom(fvcom_obj, var, coarse_fvcom, constrain_coordinates=False)
         interpolated_coarse_data = _interp_to_fvcom_depth(np.asarray(interped_coarse_z), np.asarray(first_interp_coarse_data), z)
     
     return interpolated_coarse_data[np.newaxis,:,:]
-
