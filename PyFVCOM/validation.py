@@ -436,7 +436,7 @@ class ValidationComparison():
         self.mode = mode
         self.obs_data = validationreader
 
-        if horizontal_match not in ['interp', 'nearest'] or vertical_match not in ['interp', 'nearest'] or time_match not in ['interp', 'nearest']:
+        if horizontal_match not in ['interp', 'nearest'] or vertical_match not in ['interp', 'nearest', '2d'] or time_match not in ['interp', 'nearest']:
             print('Unknown matching scheme')
             return
         else:
@@ -561,7 +561,7 @@ class ValidationComparison():
             self.chosen_mod_depths = a
             self.chosen_mod_weights = b 
 
-        if self.ignore_deep:
+        if self.ignore_deep and self.vertical_match not in ['2d']:
             self.max_mod_dep = np.max(self.mod_depths, axis=1)[self.chosen_mod_times, self.chosen_mod_nodes].diagonal()
             adjust_chosen =  self.obs_data.grid.depth[self.chosen_obs] <= self.max_mod_dep
 
@@ -588,7 +588,7 @@ class ValidationComparison():
 
     def get_matching_mod(self, varlist, return_time_ll_depth=False):
         match_dict = {}
-        
+
         for this_var in varlist:
             if not hasattr(self.fvcom_data.data, this_var):
                 self.fvcom_data.load_data([this_var])
@@ -598,15 +598,20 @@ class ValidationComparison():
             raw_data = getattr(self.fvcom_data.data, this_var)
 
             # Do horizontal weighting first as largest dimension
-            chosen_horiz = np.sum(raw_data[:,:,self.chosen_mod_nodes] * self.chosen_mod_nodes_weights[np.newaxis, np.newaxis, :], axis=-1)
+            if self.vertical_match == '2d':
+                chosen_horiz = np.sum(raw_data[:,self.chosen_mod_nodes] * self.chosen_mod_nodes_weights[np.newaxis, :], axis=-1)
+                chosen_depth = np.asarray([np.sum(chosen_horiz[self.chosen_mod_times[i,:],i] * np.tile(self.chosen_mod_times_weights[i,:], [1,chosen_horiz.shape[1]]), axis=0) for i in np.arange(0, len(self.chosen_mod_times))])
+                del chosen_horiz
+            else:
+                chosen_horiz = np.sum(raw_data[:,:,self.chosen_mod_nodes] * self.chosen_mod_nodes_weights[np.newaxis, np.newaxis, :], axis=-1)
 
-            # Then by time
-            chosen_time = np.asarray([np.sum(chosen_horiz[self.chosen_mod_times[i,:],:,i] * np.tile(self.chosen_mod_times_weights[i,:][:,np.newaxis], [1,chosen_horiz.shape[1]]), axis=0) for i in np.arange(0, len(self.chosen_mod_times))])
-            del chosen_horiz
+                # Then by time
+                chosen_time = np.asarray([np.sum(chosen_horiz[self.chosen_mod_times[i,:],:,i] * np.tile(self.chosen_mod_times_weights[i,:][:,np.newaxis], [1,chosen_horiz.shape[1]]), axis=0) for i in np.arange(0, len(self.chosen_mod_times))])
+                del chosen_horiz
 
-            # Then by depth
-            chosen_depth = np.asarray([np.sum(chosen_time[i,self.chosen_mod_depths[i,:]] * self.chosen_mod_depths_weights[i,:] , axis=0) for i in np.arange(0, len(self.chosen_mod_times))])
-            del chosen_time
+                # Then by depth
+                chosen_depth = np.asarray([np.sum(chosen_time[i,self.chosen_mod_depths[i,:]] * self.chosen_mod_depths_weights[i,:] , axis=0) for i in np.arange(0, len(self.chosen_mod_times))])
+                del chosen_time
 
             obs_data = getattr(self.obs_data.data, this_var)[self.chosen_obs]
             if delete_var:
