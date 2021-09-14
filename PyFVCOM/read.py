@@ -541,11 +541,9 @@ class FileReader(Domain):
 
         # Update the time dimension number we've read in the time data (in case we did so with a specified dimension
         # range).
-        try:
-            self.dims.time = len(self.time.time)
-        except TypeError:
-            self.dims.time = 1
+        self._update_time()
 
+        # Load the grid
         self._load_grid(fvcom)
 
         # Load the attributes of anything we've been asked to load.
@@ -1169,6 +1167,13 @@ class FileReader(Domain):
                 else:
                     print('{} dimension size unchanged ({}).'.format(dim, getattr(self.dims, dim)))
             setattr(self.dims, dim, unique_dims[dim])
+
+    def _update_time(self):
+        # Update the dimension of the time based on the loaded values
+        try:
+            self.dims.time = len(self.time.time)
+        except TypeError:
+            self.dims.time = 1
 
     def load_data(self, var, dims=None):
         """

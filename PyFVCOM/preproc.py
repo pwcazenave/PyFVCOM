@@ -4953,7 +4953,8 @@ class RegularReader(FileReader):
                     print('Concatenating {} in time'.format(var))
                 setattr(idem.data, var, np.ma.concatenate((getattr(other.data, var), getattr(idem.data, var))))
         for time in idem.time:
-            setattr(idem.time, time, np.concatenate((getattr(other.time, time), getattr(idem.time, time))))
+            if time != 'time_var':
+                setattr(idem.time, time, np.concatenate((getattr(other.time, time), getattr(idem.time, time))))
 
         # Remove duplicate times.
         time_indices = np.arange(len(idem.time.time))
@@ -4968,13 +4969,14 @@ class RegularReader(FileReader):
                 setattr(idem.data, var, getattr(idem.data, var)[time_mask, ...])  # assume time is first
                 # setattr(idem.data, var, np.delete(getattr(idem.data, var), dupe_indices, axis=time_axis))
         for time in idem.time:
-            try:
-                time_axis = idem.ds.variables[time].dimensions.index('time')
-                setattr(idem.time, time, np.delete(getattr(idem.time, time), dupe_indices, axis=time_axis))
-            except KeyError:
-                # This is hopefully one of the additional time variables which doesn't exist in the netCDF dataset.
-                # Just delete the relevant indices by assuming that time is the first axis.
-                setattr(idem.time, time, np.delete(getattr(idem.time, time), dupe_indices, axis=0))
+            if time != 'time_var':
+                try:
+                    time_axis = idem.ds.variables[time].dimensions.index('time')
+                    setattr(idem.time, time, np.delete(getattr(idem.time, time), dupe_indices, axis=time_axis))
+                except KeyError:
+                    # This is hopefully one of the additional time variables which doesn't exist in the netCDF dataset.
+                    # Just delete the relevant indices by assuming that time is the first axis.
+                    setattr(idem.time, time, np.delete(getattr(idem.time, time), dupe_indices, axis=0))
 
         # Update dimensions accordingly.
         idem.dims.time = len(idem.time.time)
@@ -4988,6 +4990,14 @@ class RegularReader(FileReader):
         """
 
         self.time = _TimeReaderReg(self.ds, dims=self._dims)
+
+    def _update_time(self):
+        # Update the dimension of the time based on the loaded values
+        time_dim = getattr(self.dims, self.time.time_var)
+        try:
+            time_dim = len(self.time.time)
+        except TypeError:
+            time_dim = 1
 
     def _load_grid(self, netcdf_filestr, grid_variables=None):
         """
@@ -5235,7 +5245,7 @@ class RegularReader(FileReader):
             if depthname in self._dims:
                 depth_compare = len(self.ds.variables[depthvar][self._dims[depthname]]) == depthdim
             if timename in self._dims:
-                time_compare = len(self.ds.variables['time'][self._dims[timename]]) == timedim
+                time_compare = len(self.ds.variables[timename][self._dims[timename]]) == timedim
 
             if not lon_compare:
                 raise ValueError('Longitude data are incompatible. You may be trying to load data after having already '
@@ -5466,7 +5476,8 @@ class NEMOReader(RegularReader):
                     print('Concatenating {} in time'.format(var))
                 setattr(idem.data, var, np.ma.concatenate((getattr(other.data, var), getattr(idem.data, var))))
         for time in idem.time:
-            setattr(idem.time, time, np.concatenate((getattr(other.time, time), getattr(idem.time, time))))
+            if time != 'time_var':
+                setattr(idem.time, time, np.concatenate((getattr(other.time, time), getattr(idem.time, time))))
 
         # Remove duplicate times.
         time_indices = np.arange(len(idem.time.time))
@@ -5481,13 +5492,14 @@ class NEMOReader(RegularReader):
                 setattr(idem.data, var, getattr(idem.data, var)[time_mask, ...])  # assume time is first
                 # setattr(idem.data, var, np.delete(getattr(idem.data, var), dupe_indices, axis=time_axis))
         for time in idem.time:
-            try:
-                time_axis = idem.ds.variables[time].dimensions.index('time')
-                setattr(idem.time, time, np.delete(getattr(idem.time, time), dupe_indices, axis=time_axis))
-            except KeyError:
-                # This is hopefully one of the additional time variables which doesn't exist in the netCDF dataset.
-                # Just delete the relevant indices by assuming that time is the first axis.
-                setattr(idem.time, time, np.delete(getattr(idem.time, time), dupe_indices, axis=0))
+            if time != 'time_var':
+                try:
+                    time_axis = idem.ds.variables[time].dimensions.index('time')
+                    setattr(idem.time, time, np.delete(getattr(idem.time, time), dupe_indices, axis=time_axis))
+                except KeyError:
+                    # This is hopefully one of the additional time variables which doesn't exist in the netCDF dataset.
+                    # Just delete the relevant indices by assuming that time is the first axis.
+                    setattr(idem.time, time, np.delete(getattr(idem.time, time), dupe_indices, axis=0))
 
         # Update dimensions accordingly.
         idem.dims.time = len(idem.time.time)
@@ -5906,6 +5918,12 @@ class _TimeReaderReg(_TimeReader):
             raise ValueError('Missing a known time variable.')
         time = dataset.variables[time_var][:]
 
+        try:
+            time = dataset.variables[time_var][dims['time']]
+            self._dims[time_var] = dims['time']
+        except:
+            time = dataset.variables[time_var][:]
+
         # Make other time representations.
         self.datetime = num2date(time, units=getattr(dataset.variables[time_var], 'units'))
         if isinstance(self.datetime, (list, tuple, np.ndarray)):
@@ -5918,7 +5936,7 @@ class _TimeReaderReg(_TimeReader):
         self.Itime2 = (self.time - np.floor(self.time)) * 1000 * 60 * 60  # microseconds since midnight
         self.datetime = self.datetime
         self.matlabtime = self.time + 678942.0
-
+        self.time_var = time_var
 
 class Regular2DReader(RegularReader):
     """
