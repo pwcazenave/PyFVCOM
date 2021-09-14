@@ -5509,7 +5509,11 @@ class NEMOReader(RegularReader):
 
         """
         if grid_variables is None:
-            grid_variables = {'lon': 'nav_lon', 'nav_lat': 'lat', 'x': 'x', 'y': 'y', 'depth': 'depth',
+            if 'deptht' in self.ds.dimensions:
+                grid_variables = {'lon': 'nav_lon', 'nav_lat': 'lat', 'x': 'x', 'y': 'y', 'depth': 'deptht',
+                              'Longitude': 'Longitude', 'Latitude': 'Latitude'}
+            else:
+                grid_variables = {'lon': 'nav_lon', 'nav_lat': 'lat', 'x': 'x', 'y': 'y', 'depth': 'depth',
                               'Longitude': 'Longitude', 'Latitude': 'Latitude'}
 
         self.grid = PassiveStore()
