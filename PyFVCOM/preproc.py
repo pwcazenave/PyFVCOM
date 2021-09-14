@@ -5121,7 +5121,7 @@ class RegularReader(FileReader):
                     self.grid.lon, self.grid.lat = lonlat_from_utm(self.grid.x, self.grid.y, zone=self._zone)
                     self.grid.lon_range = np.ptp(self.grid.lon)
                     self.grid.lat_range = np.ptp(self.grid.lat)
-                if self.grid.lon_range == 0 and self.grid.lat_range == 0:
+                if self.grid.x_range == 0 and self.grid.y_range == 0:
                     self.grid.x, self.grid.y, _ = utm_from_lonlat(self.grid.lon.ravel(), self.grid.lat.ravel())
                     self.grid.x = np.reshape(self.grid.x, self.grid.lon.shape)
                     self.grid.y = np.reshape(self.grid.y, self.grid.lat.shape)
