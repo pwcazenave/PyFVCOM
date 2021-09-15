@@ -6184,6 +6184,7 @@ def interpolate_regular(fvcom_obj, fvcom_name, coarse_name, coarse, interval=1,
         if mode != 'surface':
             coarse_depths = np.tile(coarse.grid.depth, [coarse.dims.lat,
                     coarse.dims.lon, 1]).transpose(2, 0, 1)
+
             coarse_depths = np.ma.masked_array(coarse_depths,
                     mask=getattr(coarse.data, coarse_name)[0, ...].mask)
             coarse_depths = np.max(coarse_depths, axis=0)
@@ -6219,7 +6220,7 @@ def interpolate_regular(fvcom_obj, fvcom_name, coarse_name, coarse, interval=1,
                     nearest_lon_ind = [nearest_lon_ind, nearest_lon_ind + 1,
                             nearest_lon_ind, nearest_lon_ind + 1]
 
-                if node[1] < coarse.grid.lat[nearest_lat_ind]:
+                if node[1] <= coarse.grid.lat[nearest_lat_ind]:
                     nearest_lat_ind = [nearest_lat_ind -1, nearest_lat_ind
                             -1, nearest_lat_ind, nearest_lat_ind]
                 else:
