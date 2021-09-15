@@ -13,7 +13,7 @@ import matplotlib.widgets
 import mpl_toolkits.axes_grid1
 import numpy as np
 from cartopy.mpl.gridliner import LONGITUDE_FORMATTER, LATITUDE_FORMATTER
-from descartes import PolygonPatch
+#from descartes import PolygonPatch
 from matplotlib import pyplot as plt
 from matplotlib import rcParams
 from matplotlib.animation import FuncAnimation
@@ -30,6 +30,7 @@ from PyFVCOM.read import FileReader
 from PyFVCOM.utilities.general import PassiveStore, warn
 
 have_basemap = True
+
 try:
     from mpl_toolkits.basemap import Basemap
 except ImportError:

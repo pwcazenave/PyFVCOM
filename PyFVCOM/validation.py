@@ -9,6 +9,8 @@ General theory:
 
 """
 
+import numpy as np
+#import sqlite3 as sq
 import datetime as dt
 import glob as gb
 import os

@@ -996,7 +996,7 @@ class OpenBoundary(object):
         coef['aux'] = Bunch(reftime=729572.47916666674, lind=const_idx, frq=frq)
         coef['aux']['opt'] = Bunch(twodim=False, nodsatlint=False,
                 nodsatnone=False, gwchlint=False, gwchnone=False,
-                notrend=True, prefilt=[])
+                notrend=True, prefilt=[], nodiagn=True)
 
         # Prepare the time data for predicting the time series. 
         # UTide needs MATLAB times.
