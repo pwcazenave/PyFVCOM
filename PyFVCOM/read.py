@@ -526,6 +526,7 @@ class FileReader(Domain):
         for dim in self._dims:
             # Skip the special 'wesn' key.
             if dim == 'wesn':
+                self._bounding_box = True
                 continue
             dim_is_iterable = hasattr(self._dims[dim], '__iter__')
             dim_is_string = isinstance(self._dims[dim], str)  # for date ranges
