@@ -5903,7 +5903,11 @@ class _TimeReaderReg(_TimeReader):
         time = dataset.variables[time_var][:]
 
         # Make other time representations.
-        self.datetime = num2date(time, units=getattr(dataset.variables[time_var], 'units'))
+        cf_times = num2date(time, units=getattr(dataset.variables[time_var], 'units'))
+
+        # convert from cftime to datetime
+        self.datetime = np.asarray([datetime(cf.year, cf.month, cf.day, cf.hour, cf.minute, cf.second) for cf in cf_times])
+
         if isinstance(self.datetime, (list, tuple, np.ndarray)):
             setattr(self, 'Times', np.array([datetime.strftime(d, '%Y-%m-%dT%H:%M:%S.%f') for d in self.datetime]))
         else:
