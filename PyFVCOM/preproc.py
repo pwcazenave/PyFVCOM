@@ -5068,36 +5068,52 @@ class RegularReader(FileReader):
             # We need to use the original Dataset lon and lat values here as they have the right shape for the
             # subsetting.
             if not isinstance(self._dims['wesn'], Polygon):
-                self._dims['lon'] = np.argwhere((self.grid.lon > self._dims['wesn'][0]) &
-                                                (self.grid.lon < self._dims['wesn'][1]))
-                self._dims['lat'] = np.argwhere((self.grid.lat > self._dims['wesn'][2]) &
-                                                (self.grid.lat < self._dims['wesn'][3]))
+                self._dims['lon'] = np.squeeze(np.argwhere((self.grid.lon > self._dims['wesn'][0]) &
+                                                (self.grid.lon < self._dims['wesn'][1])))
+                self._dims['lat'] = np.squeeze(np.argwhere((self.grid.lat > self._dims['wesn'][2]) &
+                                                (self.grid.lat < self._dims['wesn'][3])))
 
-        related_variables = {'lon': ('x', 'lon'), 'lat': ('y', 'lat')}
-        for spatial_dimension in 'lon', 'lat':
-            if spatial_dimension in self._dims:
-                setattr(self.dims, spatial_dimension, len(self._dims[spatial_dimension]))
-                for var in related_variables[spatial_dimension]:
-                    try:
-                        spatial_index = self.ds.variables[var].dimensions.index(spatial_dimension)
-                        var_shape = [i for i in np.shape(self.ds.variables[var])]
-                        var_shape[spatial_index] = getattr(self.dims, spatial_dimension)
-                        if 'depth' in (self._dims, self.ds.variables[var].dimensions):
-                            var_shape[self.ds.variables[var].dimensions.index('depth')] = self.dims.siglay
-                        _temp = np.empty(var_shape) * np.nan
-                        if 'depth' in self.ds.variables[var].dimensions:
-                            if 'depth' in self._dims:
-                                _temp = self.ds.variables[var][self._dims['depth'], self._dims[spatial_dimension]]
-                            else:
-                                _temp = self.ds.variables[var][:, self._dims[spatial_dimension]]
-                        else:
-                            _temp = self.ds.variables[var][self._dims[spatial_dimension]]
-                    except KeyError:
-                        if 'depth' in var:
-                            _temp = np.empty((self.dims.depth, getattr(self.dims, spatial_dimension)))
-                        else:
-                            _temp = np.empty(getattr(self.dims, spatial_dimension))
-                    setattr(self.grid, var, _temp)
+        # Apply the subset to lon, lat and related variables
+        related_1d = {'lon': ('lon', 'longitude', 'eta_rho'), 
+                      'lat': ('lat', 'latitude', 'xi_rho')}
+        related_2d = ['Longitude', 'Latitude', 'x', 'y']
+
+        if 'lon' in self._dims:
+            for this_var in related_1d['lon']:
+                if this_var in self.dims:
+                    setattr(self.dims,this_var,len(self._dims['lon']))
+                try:
+                    setattr(self.grid, this_var, getattr(self.grid,this_var)[self._dims['lon']])
+                except AttributeError:
+                    pass
+
+            for this_var in related_2d:
+                if this_var in self.dims:
+                    new_dim = getattr(self.dims,this_var)
+                    setattr(self.dims, this_var, [len(self._dims['lon']),new_dim[1]])
+                try:
+                    setattr(self.grid, this_var, getattr(self.grid,this_var)[self._dims['lon'],:])
+                except AttributeError:
+                    pass
+
+        if 'lat' in self._dims:
+            for this_var in related_1d['lat']:
+                if this_var in self.dims:
+                    setattr(self.dims,this_var,len(self._dims['lat']))
+                try:
+                    setattr(self.grid, this_var, getattr(self.grid,this_var)[self._dims['lat']])
+                except AttributeError:
+                    pass
+
+            for this_var in related_2d:
+                if this_var in self.dims:
+                    new_dim = getattr(self.dims,this_var)
+                    setattr(self.dims, this_var, [new_dim[0],len(self._dims['lat'])])
+
+                try:
+                    setattr(self.grid, this_var, getattr(self.grid,this_var)[:,self._dims['lat']])
+                except AttributeError:
+                    pass
 
         # Check if we've been given vertical dimensions to subset in too, and if so, do that. Check we haven't
         # already done this in the 'node' and 'nele' sections above first.
@@ -5132,9 +5148,15 @@ class RegularReader(FileReader):
                     self.grid.lon_range = np.ptp(self.grid.lon)
                     self.grid.lat_range = np.ptp(self.grid.lat)
                 if self.grid.x_range == 0 and self.grid.y_range == 0:
-                    self.grid.x, self.grid.y, _ = utm_from_lonlat(self.grid.lon.ravel(), self.grid.lat.ravel())
-                    self.grid.x = np.reshape(self.grid.x, self.grid.lon.shape)
-                    self.grid.y = np.reshape(self.grid.y, self.grid.lat.shape)
+                    if len(self.grid.lon.shape) == 2:
+                        grid_lon = self.grid.lon.ravel()
+                        grid_lat = self.grid.lat.ravel()
+                    else:
+                        grid_lon, grid_lat = np.meshgrid(self.grid.lon, self.grid.lat)                       
+                    self.grid.x, self.grid.y, _ = utm_from_lonlat(grid_lon.ravel(), grid_lat.ravel())
+                    self.grid.x = np.reshape(self.grid.x, grid_lon.shape)
+                    self.grid.y = np.reshape(self.grid.y, grid_lat.shape)
+
                     self.grid.x_range = np.ptp(self.grid.x)
                     self.grid.y_range = np.ptp(self.grid.y)
 
@@ -5238,10 +5260,10 @@ class RegularReader(FileReader):
             lat_compare = self.ds.dimensions[yname].size == ydim
             time_compare = self.ds.dimensions[timename].size == timedim
             # Check again if we've been asked to subset in any dimension.
-            if xname in self._dims:
-                lon_compare = len(self.ds.variables[xvar][self._dims[xname]]) == xdim
-            if yname in self._dims:
-                lat_compare = len(self.ds.variables[yvar][self._dims[yname]]) == ydim
+            if xvar in self._dims:
+                lon_compare = len(self.ds.variables[xname][self._dims[xvar]]) == xdim
+            if yvar in self._dims:
+                lat_compare = len(self.ds.variables[yname][self._dims[yvar]]) == ydim
             if depthname in self._dims:
                 depth_compare = len(self.ds.variables[depthvar][self._dims[depthname]]) == depthdim
             if timename in self._dims:
@@ -5272,7 +5294,22 @@ class RegularReader(FileReader):
             data = self.ds.variables[v][variable_indices]  # data are automatically masked
             if flipud:
                 data = np.flip(data, axis=1)        
-    
+
+            for i, dim_name in enumerate(var_dim):
+                if dim_name == xname:
+                    sub_var = xvar
+                elif dim_name == yname:
+                    sub_var = yvar
+                else:
+                    sub_var = dim_name
+                
+                if sub_var in self._dims:
+                    all_slice = []
+                    for j in np.arange(0, len(var_dim)):
+                        all_slice.append(np.s_[:])
+                    all_slice[i] = np.s_[self._dims[sub_var]]
+                    data = data[all_slice]
+
             setattr(self.data, v, data)
 
     def _get_depth_dim(self):
