@@ -31,8 +31,8 @@ from matplotlib.tri.triangulation import Triangulation
 from netCDF4 import Dataset, date2num
 from scipy.interpolate import RegularGridInterpolator, LinearNDInterpolator, interp1d, Rbf
 from scipy.spatial.qhull import QhullError
-#from utide import reconstruct, ut_constants
-#from utide.utilities import Bunch
+from utide import reconstruct, ut_constants
+from utide.utilities import Bunch
 
 from PyFVCOM.coordinate import utm_from_lonlat, lonlat_from_utm
 from PyFVCOM.ocean import zbar
