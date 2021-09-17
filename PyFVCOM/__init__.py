@@ -13,6 +13,9 @@ __email__ = 'pica@pml.ac.uk'
 import sys
 
 # Import everything! Eventually, we're going to hit a circular dependency here...
+import matplotlib as plt
+plt.use('Agg')
+
 from PyFVCOM import buoy
 from PyFVCOM import ctd
 from PyFVCOM import current
