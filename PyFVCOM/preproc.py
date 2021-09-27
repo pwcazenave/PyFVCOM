@@ -33,7 +33,8 @@ from PyFVCOM.read import FileReader, _TimeReader, control_volumes
 from PyFVCOM.utilities.general import flatten_list, PassiveStore, warn
 from PyFVCOM.utilities.time import date_range
 from dateutil.relativedelta import relativedelta
-from netCDF4 import Dataset, date2num, num2date, stringtochar
+#from matplotlib.dates import num2date, date2num
+from netCDF4 import Dataset, stringtochar, num2date, date2num
 from scipy.interpolate import RegularGridInterpolator
 from scipy.spatial import Delaunay
 from shapely.geometry import Polygon
@@ -5966,7 +5967,11 @@ class _TimeReaderReg(_TimeReader):
             time = dataset.variables[time_var][:]
 
         # Make other time representations.
-        self.datetime = num2date(time, units=getattr(dataset.variables[time_var], 'units'))
+        cf_times = num2date(time, units=getattr(dataset.variables[time_var], 'units'))
+
+        # convert from cftime to datetime
+        self.datetime = np.asarray([datetime(cf.year, cf.month, cf.day, cf.hour, cf.minute, cf.second) for cf in cf_times])
+
         if isinstance(self.datetime, (list, tuple, np.ndarray)):
             setattr(self, 'Times', np.array([datetime.strftime(d, '%Y-%m-%dT%H:%M:%S.%f') for d in self.datetime]))
         else:

@@ -22,8 +22,9 @@ import matplotlib.path as mplPath
 import matplotlib.pyplot as plt
 import numpy as np
 from pandas import read_hdf
+from scipy.stats import spearmanr
 
-from PyFVCOM.grid import get_boundary_polygons, vincenty_distance, node_to_centre, haversine_distance
+from PyFVCOM.grid import get_boundary_polygons, vincenty_distance
 from PyFVCOM.plot import Time, Plotter
 from PyFVCOM.read import FileReader
 from PyFVCOM.stats import calculate_coefficient, rmse
@@ -416,7 +417,7 @@ class ValidationReader():
 
 
 class ValidationComparison(): 
-    def __init__(self, filereader, validationreader, varlist, mode='nodes', horizontal_match='nearest', vertical_match='interp', time_match='nearest', ignore_deep=True, debug=False):
+    def __init__(self, filereader, validationreader, varlist, mode='nodes', horizontal_match='nearest', vertical_match='interp', time_match='nearest', ignore_deep=True):
         """ 
         filereader : pyfvcom FileReader object
             The model data to validate *without* the variable data loaded
@@ -447,8 +448,7 @@ class ValidationComparison():
             self.time_match = time_match
 
         self.ignore_deep = ignore_deep
-        if not debug:
-            self._match_mod_obs()
+        self._match_mod_obs()
 
     def find_matching_obs(self):
         print('Finding observations within model time/space')
@@ -478,7 +478,7 @@ class ValidationComparison():
                     this_nodes = np.squeeze(self.fvcom_data.grid.triangles[this_ele,:])
                     this_nodes_lon = self.fvcom_data.grid.lon[this_nodes]
                     this_nodes_lat = self.fvcom_data.grid.lat[this_nodes]
-                    this_nodes_dists = haversine_distance([this_nodes_lon, this_nodes_lat], this_obs_ll)
+                    this_nodes_dists = pf.grid.haversine_distance([this_nodes_lon, this_nodes_lat], this_obs_ll)
                     this_tot_dist = np.sum(this_nodes_dists)
                     this_wgts = this_nodes_dists/this_tot_dist
             
@@ -490,8 +490,8 @@ class ValidationComparison():
 
         elif self.mode == 'elements':
             if self.horizontal_match == 'nearest':
-                self.chosen_mod_nodes = np.squeeze(np.asarray([self.fvcom_data.closest_element(this_ll) for this_ll in self.chosen_obs_ll]))[:, np.newaxis]
-                self.chosen_mod_nodes_weights = np.ones(len(self.chosen_mod_nodes))[:, np.newaxis]
+                self.chosen_mod_nodes = self.fvcom_data.closest_element(self.chosen_obs_ll)
+                self.chosen_mod_nodes_weights = np.ones(len(self.chosen_mod_nodes))
             elif self.horizontal_match == 'interp':
                 chosen_mod_nodes = []
                 chosen_mod_nodes_weights = [] 
@@ -508,17 +508,13 @@ class ValidationComparison():
             chosen_mod_times = []
             chosen_mod_times_weights = []
             for this_time, this_ind in zip(self.obs_data.time.datetime[self.chosen_obs], temp_closest_times):
-                if this_ind == 0:
-                    time_inds = [0,1]
-                elif this_ind == len(self.fvcom_data.time.datetime) -1:
-                    time_inds = [this_ind -1, this_ind]
-                elif this_time >= self.fvcom_data.time.datetime[this_ind]:
+                if this_time >= self.fvcom_data.time.datetime[this_ind]:
                     time_inds = [this_ind, this_ind + 1]
                 else:
                     time_inds = [this_ind -1, this_ind]
     
-                diff_1 = (this_time - self.fvcom_data.time.datetime[time_inds[0]]).total_seconds()
-                diff_2 = (self.fvcom_data.time.datetime[time_inds[1]] - this_time).total_seconds()
+                diff_1 = (this_time - self.fvcom_data.time.datetime[time_inds[0]]).seconds
+                diff_2 = (self.fvcom_data.time.datetime[time_inds[1]] - this_time).seconds
 
                 wgts = [1-(diff_1/(diff_1 + diff_2)), 1-(diff_2/(diff_1 + diff_2))]
 
@@ -545,16 +541,13 @@ class ValidationComparison():
             self.mod_depths = -self.mod_h[:,np.newaxis, :]*self.fvcom_data.grid.siglay[np.newaxis, :,:]
         
         elif self.mode == 'elements':
-            setattr(self.fvcom_data.data, 'zeta_centre', node_to_centre(self.fvcom_data.data.zeta, self.fvcom_data))
-            self.mod_h = self.fvcom_data.data.zeta_centre + self.fvcom_data.grid.h_center
+            setattr(self.fvcom_data.data, 'zeta_centre', pf.grid.node_to_centre(self.fvcom_data.zeta, self.fvcom_data))
+            self.mod_h = self.fvcom_data.data.zeta_centre + self.grid.h_center
             self.mod_depths = self.mod_h[:,np.newaxis, :]*self.fvcom_data.grid.siglay_center[np.newaxis, :,:]
 
-        interp_deps = []
-        for i in np.arange(0,len(self.chosen_mod_times)):
-            unweight = np.sum(self.mod_depths[:,:,self.chosen_mod_nodes[i,...]]*self.chosen_mod_nodes_weights[i,...], axis=-1)[self.chosen_mod_times[i,...],:]
-            interp_deps.append(np.sum(unweight*np.tile(self.chosen_mod_times_weights[i,:,np.newaxis],[1,unweight.shape[1]]), axis=0))
-        self.mod_obs_depths = np.asarray(interp_deps)
-
+        self.mod_obs_depths_all_t = np.sum(self.mod_depths[:,:,self.chosen_mod_nodes]*self.chosen_mod_nodes_weights[np.newaxis, np.newaxis,:], axis=-1)
+        self.mod_obs_depths = np.diagonal(np.squeeze(self.mod_obs_depths_all_t[self.chosen_mod_times,:]))
+        
         if self.vertical_match == 'nearest':
             self.chosen_mod_depths = np.asarray([np.argmin(np.abs(this_mod_obs_dep - this_dep)) for this_mod_obs_dep, this_dep in zip(self.mod_obs_depths, self.obs_data.grid.depth[self.chosen_obs])])[:,np.newaxis]
             self.chosen_mod_depths_weights = np.ones(self.chosen_mod_depths.shape)
@@ -566,13 +559,8 @@ class ValidationComparison():
         if self.ignore_deep and self.vertical_match not in ['2d']:
             self.max_mod_dep = np.max(self.mod_depths, axis=1)[self.chosen_mod_times, self.chosen_mod_nodes].diagonal()
             adjust_chosen =  self.obs_data.grid.depth[self.chosen_obs] <= self.max_mod_dep
-
-            chosen_obs_ind = np.where(self.chosen_obs)[0]
-            chosen_obs_ind = chosen_obs_ind[adjust_chosen]          
-            new_chosen_obs = np.zeros(len(self.chosen_obs), dtype=bool)
-            new_chosen_obs[chosen_obs_ind] = True 
-
-            self.chosen_obs = new_chosen_obs
+            
+            self.chosen_obs[self.chosen_obs == True][~adjust_chosen] = False
             self.chosen_obs_dep = self.chosen_obs_dep[adjust_chosen]
             self.chosen_obs_ll = self.chosen_obs_ll[adjust_chosen,:]
             self.chosen_mod_depths = self.chosen_mod_depths[adjust_chosen,:]
@@ -598,7 +586,7 @@ class ValidationComparison():
             else:
                 delete_var = False
             raw_data = getattr(self.fvcom_data.data, this_var)
-
+ 
             # Do horizontal weighting first as largest dimension
             if self.vertical_match == '2d':
                 chosen_horiz = np.sum(raw_data[:,self.chosen_mod_nodes] * self.chosen_mod_nodes_weights[np.newaxis, :], axis=-1)
@@ -607,25 +595,74 @@ class ValidationComparison():
             else:
                 chosen_horiz = np.sum(raw_data[:,:,self.chosen_mod_nodes] * self.chosen_mod_nodes_weights[np.newaxis, np.newaxis, :], axis=-1)
 
-                # Then by time
-                chosen_time = np.asarray([np.sum(chosen_horiz[self.chosen_mod_times[i,:],:,i] * np.tile(self.chosen_mod_times_weights[i,:][:,np.newaxis], [1,chosen_horiz.shape[1]]), axis=0) for i in np.arange(0, len(self.chosen_mod_times))])
-                del chosen_horiz
+            # Then by time
+            chosen_time = np.sum(chosen_horiz[self.chosen_mod_times,:] * self.chosen_mod_times_weights[:, np.newaxis, np.newaxis], axis=1)
 
-                # Then by depth
-                chosen_depth = np.asarray([np.sum(chosen_time[i,self.chosen_mod_depths[i,:]] * self.chosen_mod_depths_weights[i,:] , axis=0) for i in np.arange(0, len(self.chosen_mod_times))])
-                del chosen_time
-
+            # Then by depth
+            chosen_depth = np.sum(chosen_time[:, self.chosen_mod_depths, :] * self.chosen_mod_depths_weights[np.newaxis,:,np.newaxis], axis=2)
+            
+            chosen = chosen_depth.diagonal().diagonal()
+ 
             obs_data = getattr(self.obs_data.data, this_var)[self.chosen_obs]
             if delete_var:
                 delattr(self.fvcom_data.data, this_var)
-            match_dict[this_var] = [chosen_depth, obs_data]
+            match_dict[this_var] = [chosen, obs_data]
 
         if return_time_ll_depth:
             tld = [self.obs_data.time.datetime[self.chosen_obs], self.chosen_obs_ll, self.chosen_obs_dep]
             match_dict = (match_dict, tld)
 
-        return match_dict 
+        return match_dict
+ 
+
+def plot_ctd(model_data, ctd_data, plot_vmin, plot_vmax, variable_surface=False, ctd_cast_time=None, fig=None, ax=None):
+    """
+    Plot model and ctd cast data
+
+    Parameters
+    ----------
+    model_data : list
+        Model data as a 
+    ctd_data : dict
+        Database name to interrogate.
+
+
+    Returns
+    -------
+    fig, ax : matplotlib objects
+
+
+    """
+    model_val = model_data[0]
+    model_dep = model_data[1]
+    model_dt = model_data[2]
+
+    if fig is None:
+        fig, ax = plt.subplots()
+
+    if ctd_cast_time is None:
+        ctd_cast_time = dt.timedelta(seconds=3600)
+
+    im = ax.pcolormesh(model_dt, np.mean(model_dep, axis=0), model_sal.T, vmin=plot_vmin, vmax=plot_vmax)
+    fig.colorbar(im, ax=ax)
+    fig.tight_layout()
+
+
+    for this_dt in ctd_data.keys():
+        choose_obs = ctd_data[this_dt][0]
+        choose_dep = ctd_data[this_dt][1]
+        
+        y1 = this_dt
+        y2 = this_dt + ctd_cast_time
+
+        x1 = np.min(-choose_dep)
+        x2 = np.max(-choose_dep)
+
+        ax.pcolormesh([y1,y2], -choose_dep, np.tile(choose_obs,[2,1]).T, vmin=plot_vmin, vmax=plot_vmax)
+        ax.plot([y1,y2,y2,y1,y1], [x1, x1,x2,x2,x1], c='k', linewidth=0.2, alpha=0.5)
     
+    return fig, ax
+ 
 class CtdDB(ValidationDB):
     """      """
 
@@ -869,6 +906,15 @@ class TideDB(ValidationDB):
                        'sites': ['site_id integer NOT NULL', 'site_tla text NOT NULL', 'site_name text', 'lon real', 'lat real',
                                  'other_stuff text', 'PRIMARY KEY (site_id)'],
                        'error_flags': ['flag_id integer NOT NULL', 'flag_code text', 'flag_description text']}
+
+# Stats functions
+
+def comparison_stats(obs_series, mod_series):
+    corr, p = spearmanr(obs_series, mod_series)
+
+    return corr,p
+
+
 
 
 class BODCAnnualTideFile(object):

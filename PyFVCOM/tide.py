@@ -1462,9 +1462,6 @@ def _analyse_harmonics(comm, times, elevations, domain_lats, constit, predict=Fa
     size = comm.Get_size()
     rank = comm.Get_rank()
 
-    size = comm.Get_size()
-    rank = comm.Get_rank()
-
     if 'values' in debug:
         for elev in elevations:
             print('rank {}: analyse: elev: {}'.format(rank, elev.tolist()), flush=True)
