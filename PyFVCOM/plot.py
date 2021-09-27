@@ -7,13 +7,13 @@ from datetime import datetime
 from pathlib import Path
 from warnings import warn
 
-import cartopy.crs as ccrs
-import cartopy.feature as cfeature
+#import cartopy.crs as ccrs
+#import cartopy.feature as cfeature
 import matplotlib.widgets
 import mpl_toolkits.axes_grid1
 import numpy as np
-from cartopy.mpl.gridliner import LONGITUDE_FORMATTER, LATITUDE_FORMATTER
-#from descartes import PolygonPatch
+#from cartopy.mpl.gridliner import LONGITUDE_FORMATTER, LATITUDE_FORMATTER
+from descartes import PolygonPatch
 from matplotlib import pyplot as plt
 from matplotlib import rcParams
 from matplotlib.animation import FuncAnimation
@@ -695,8 +695,8 @@ class Plotter(object):
             self.figure.canvas.draw()
         elif self.mapper == 'basemap' and not self.cartesian and self.coast:
             self.m.drawmapboundary()
-            self.m.drawcoastlines(zorder=1000)
-            self.m.fillcontinents(color='0.6', zorder=1000)
+            #self.m.drawcoastlines(zorder=1000)
+            #self.m.fillcontinents(color='0.6', zorder=1000)
 
         if self.title:
             self.axes.set_title(self.title)

@@ -1340,7 +1340,7 @@ class OpenBoundary(object):
         existing nested nodes and elements. This function is used by 
         preproc.Model.add_nests() and add Nest objects to the list after the 
         first Nest object is initialised.
-        This fucntion adds the new elements attached to nodes of the previous
+        This function adds the new elements attached to nodes of the previous
         nest level to the previous nest level and then finds the nodes attached
         to those elements and appends them to a new Nest object at the new nest
         level.
