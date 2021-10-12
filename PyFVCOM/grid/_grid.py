@@ -1061,8 +1061,13 @@ class OpenBoundary(object):
                 const = ([''.join(i).upper().strip() for i in tides.variables[
                         names['constituent_name']][:].astype(str)])
             else:
-                const = list([b''.join(i).decode('utf-8').upper().strip() for
-                        i in tides.variables[names['constituent_name']][:]])
+                try:
+                    const = list([b''.join(i).decode('utf-8').upper().strip()
+                            for i in tides.variables[
+                            names['constituent_name']][:]])
+                except:
+                    const = harmonics.split('/')[-1].split(
+                            '_')[0].split('.')[-1].upper().strip()
 
             # If we've been given constituents that aren't in the harmonics 
             # data, just find the indices we do have.
