@@ -1066,6 +1066,7 @@ class OpenBoundary(object):
                             for i in tides.variables[
                             names['constituent_name']][:]])
                 except:
+                    # TPXO8-Atlas files have unpopulated con variable
                     const = harmonics.split('/')[-1].split(
                             '_')[0].split('.')[-1].upper().strip()
 
