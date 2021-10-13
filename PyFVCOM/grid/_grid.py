@@ -1096,7 +1096,7 @@ class OpenBoundary(object):
                     imag = tides.variables[names['part2_name']][:]
 
                 amplitudes = np.abs(real + 1j * imag)
-                phases = np.arctan2(-imag, real) / (np.pi * 180)
+                phases = (np.arctan2(-imag, real) / np.pi) * 180
 
             else:
                 if part1_shape[0] == len(const):
