@@ -5429,6 +5429,8 @@ class NEMOReader(RegularReader):
         # Make sure we set the tmask value for self.load_data to know it exists before we call super().
         self.tmask = tmask
 
+        self._conversion_vars = {}
+
         super().__init__(*args, **kwargs)
 
         # If we've been given a tmask value, use it to mask off crappy values. Really, this is pretty much essential
@@ -5564,11 +5566,14 @@ class NEMOReader(RegularReader):
         """
         if grid_variables is None:
             if 'deptht' in self.ds.dimensions:
-                grid_variables = {'lon': 'nav_lon', 'nav_lat': 'lat', 'x': 'x', 'y': 'y', 'depth': 'deptht',
+                grid_variables = {'lon': 'nav_lon', 'lat': 'nav_lat', 'x': 'x', 'y': 'y', 'depth': 'deptht',
                               'Longitude': 'Longitude', 'Latitude': 'Latitude'}
             else:
-                grid_variables = {'lon': 'nav_lon', 'nav_lat': 'lat', 'x': 'x', 'y': 'y', 'depth': 'depth',
+                grid_variables = {'lon': 'nav_lon', 'lat': 'nav_lat', 'x': 'x', 'y': 'y', 'depth': 'depth',
                               'Longitude': 'Longitude', 'Latitude': 'Latitude'}
+                
+        for this_key, this_item in grid_variables.items():
+            self._conversion_vars[this_item] = this_key
 
         self.grid = PassiveStore()
         # Get the grid data.
@@ -5607,32 +5612,40 @@ class NEMOReader(RegularReader):
                 # TODO Add support for slices here.
                 setattr(self.dims, dim, len(self._dims[dim]))
 
-        # Convert the given W/E/S/N coordinates into node and element IDs to subset.
-        if self._bounding_box:
-            # We need to use the original Dataset lon and lat values here as they have the right shape for the
-            # subsetting.
-            self._dims['lon'] = np.argwhere((self.grid.lon > self._dims['wesn'][0]) &
-                                            (self.grid.lon < self._dims['wesn'][1]))
-            self._dims['lat'] = np.argwhere((self.grid.lat > self._dims['wesn'][2]) &
-                                            (self.grid.lat < self._dims['wesn'][3]))
-
-        # Slicing with 2D arrays needs a meshgrid. Make the missing dimension arrays and then meshgrid those.
-        xdim = np.arange(self.ds.variables['nav_lon'].shape[1])
-        ydim = np.arange(self.ds.variables['nav_lat'].shape[0])
-        if 'x' in self._dims:
-            xdim = self._dims['x']
-        if 'y' in self._dims:
-            ydim = self._dims['y']
-        yy, xx = np.meshgrid(ydim, xdim)
-
         for var in 'nav_lon', 'nav_lat':
-            _tmp = self.ds.variables[var][:]
-            setattr(self.grid, var, _tmp[yy, xx])
-            del _tmp
+            setattr(self.grid, var, self.ds.variables[var][:].T)
 
         # Make 1D arrays of the positions since that's the case for CMEMS data.
         self.grid.lon = np.unique(self.grid.nav_lon)
         self.grid.lat = np.unique(self.grid.nav_lat)
+        self.grid.x = self.grid.lon
+        self.grid.y = self.grid.lat
+
+        # Convert the given W/E/S/N coordinates into node and element IDs to subset.
+        if self._bounding_box:
+            # We need to use the original Dataset lon and lat values here as they have the right shape for the
+            # subsetting.
+            self._dims['lon'] = np.squeeze(np.argwhere((np.unique(self.grid.lon) > self._dims['wesn'][0]) &
+                                            (np.unique(self.grid.lon) < self._dims['wesn'][1])))
+            self._dims['lat'] = np.squeeze(np.argwhere((np.unique(self.grid.lat) > self._dims['wesn'][2]) &
+                                            (np.unique(self.grid.lat) < self._dims['wesn'][3])))
+
+            self._dims['x'] = self._dims['lon']
+            self._dims['y'] = self._dims['lat']
+        # Slicing with 2D arrays needs a meshgrid. Make the missing dimension arrays and then meshgrid those.
+        if 'x' in self._dims:
+            for grid_var in ['lon', 'x']:
+                setattr(self.grid, grid_var, getattr(self.grid, grid_var)[self._dims['x']])
+            for grid_var in ['nav_lon', 'nav_lat', 'Longitude', 'Latitude']:
+                setattr(self.grid, grid_var, getattr(self.grid, grid_var)[self._dims['x'],:])
+            self.dims.x = len(self._dims['x'])
+ 
+        if 'y' in self._dims:
+            for grid_var in ['lat', 'y']:
+                setattr(self.grid, grid_var, getattr(self.grid, grid_var)[self._dims['y']])
+            for grid_var in ['nav_lon', 'nav_lat', 'Longitude', 'Latitude']:
+                setattr(self.grid, grid_var, getattr(self.grid, grid_var)[:,self._dims['y']])
+            self.dims.y = len(self._dims['y'])
 
         # Check if we've been given vertical dimensions to subset in too, and if so, do that. Check we haven't
         # already done this if the 'node' and 'nele' sections above first.
@@ -5840,8 +5853,15 @@ class NEMOReader(RegularReader):
             variable_shape = self.ds.variables[v].shape
             variable_indices = [np.arange(i) for i in variable_shape]
             for dimension in var_dim:
-                if dimension in self._dims:
+                print(dimension)
+                try:
+                    obj_dim = self._conversion_vars[dimension]
+                except KeyError:
+                    obj_dim = dimension
+
+                if obj_dim in self._dims:
                     # Replace their size with anything we've been given in dims.
+                    print('Replacing {}'.format(dimension))
                     variable_index = var_dim.index(dimension)
                     variable_indices[variable_index] = self._dims[dimension]
 
