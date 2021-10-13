@@ -1062,9 +1062,17 @@ class OpenBoundary(object):
                         names['constituent_name']][:].astype(str)])
             else:
                 try:
-                    const = list([b''.join(i).decode('utf-8').upper().strip()
+                    if isinstance(tides.variables[names['constituent_name']][:],
+                            (bytes, bytearray)):
+                        const = list([b''.join(i).decode(
+                            'utf-8').upper().strip()
                             for i in tides.variables[
                             names['constituent_name']][:]])
+                    else:
+                        # For TPXO9-Atlas
+                        const = ([''.join(tides.variables[
+                                names['constituent_name']][:].astype(str)
+                                ).upper().strip()])
                 except:
                     # TPXO8-Atlas files have unpopulated con variable
                     const = harmonics.split('/')[-1].split(
