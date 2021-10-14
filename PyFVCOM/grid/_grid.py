@@ -1516,6 +1516,7 @@ class OpenBoundary(object):
             setattr(self.data, fvcom_name, interp_data)
         else:
             print('Not interpolating {}, no sigma data for {}'.format(fvcom_name, mode))
+            print('This would be intentional for a most inner nest\'s elements.')
 
     def add_nested_forcing_curvilinear(self, fvcom_name, coarse_name, coarse, interval=1,
                             constrain_coordinates=False,
