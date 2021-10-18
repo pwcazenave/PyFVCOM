@@ -1062,9 +1062,17 @@ class OpenBoundary(object):
                         names['constituent_name']][:].astype(str)])
             else:
                 try:
-                    const = list([b''.join(i).decode('utf-8').upper().strip()
+                    if isinstance(tides.variables[names['constituent_name']][:],
+                            (bytes, bytearray)):
+                        const = list([b''.join(i).decode(
+                            'utf-8').upper().strip()
                             for i in tides.variables[
                             names['constituent_name']][:]])
+                    else:
+                        # For TPXO9-Atlas
+                        const = ([''.join(tides.variables[
+                                names['constituent_name']][:].astype(str)
+                                ).upper().strip()])
                 except:
                     # TPXO8-Atlas files have unpopulated con variable
                     const = harmonics.split('/')[-1].split(
@@ -1096,7 +1104,7 @@ class OpenBoundary(object):
                     imag = tides.variables[names['part2_name']][:]
 
                 amplitudes = np.abs(real + 1j * imag)
-                phases = np.arctan2(-imag, real) / (np.pi * 180)
+                phases = (np.arctan2(-imag, real) / np.pi) * 180
 
             else:
                 if part1_shape[0] == len(const):
@@ -1508,6 +1516,7 @@ class OpenBoundary(object):
             setattr(self.data, fvcom_name, interp_data)
         else:
             print('Not interpolating {}, no sigma data for {}'.format(fvcom_name, mode))
+            print('This would be intentional for a most inner nest\'s elements.')
 
     def add_nested_forcing_curvilinear(self, fvcom_name, coarse_name, coarse, interval=1,
                             constrain_coordinates=False,
