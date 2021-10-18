@@ -6220,18 +6220,34 @@ def interpolate_regular(fvcom_obj, fvcom_name, coarse_name, coarse, interval=1,
                 nearest_lat_ind = np.argmin((coarse.grid.lat - node[1])**2)
 
                 if node[0] < coarse.grid.lon[nearest_lon_ind]:
-                    nearest_lon_ind = [nearest_lon_ind -1, nearest_lon_ind,
-                            nearest_lon_ind -1, nearest_lon_ind]
+                    if nearest_lon_ind == 0:
+                        nearest_lon_ind = [nearest_lon_ind, nearest_lon_ind,
+                                nearest_lon_ind, nearest_lon_ind] 
+                    else:
+                        nearest_lon_ind = [nearest_lon_ind -1, nearest_lon_ind,
+                                nearest_lon_ind -1, nearest_lon_ind]
                 else:
-                    nearest_lon_ind = [nearest_lon_ind, nearest_lon_ind + 1,
-                            nearest_lon_ind, nearest_lon_ind + 1]
+                    if nearest_lon_ind == len(coarse.grid.lon) -1:
+                        nearest_lon_ind = [nearest_lon_ind, nearest_lon_ind,
+                                nearest_lon_ind, nearest_lon_ind] 
+                    else:
+                        nearest_lon_ind = [nearest_lon_ind, nearest_lon_ind + 1,
+                                nearest_lon_ind, nearest_lon_ind + 1]
 
                 if node[1] <= coarse.grid.lat[nearest_lat_ind]:
-                    nearest_lat_ind = [nearest_lat_ind -1, nearest_lat_ind
-                            -1, nearest_lat_ind, nearest_lat_ind]
+                    if nearest_lat_ind == 0:
+                        nearest_lat_ind = [nearest_lat_ind, nearest_lat_ind,
+                                nearest_lat_ind, nearest_lat_ind]
+                    else:
+                        nearest_lat_ind = [nearest_lat_ind -1, nearest_lat_ind
+                                -1, nearest_lat_ind, nearest_lat_ind]
                 else:
-                    nearest_lat_ind = [nearest_lat_ind, nearest_lat_ind,
-                            nearest_lat_ind + 1, nearest_lat_ind + 1]
+                    if nearest_lat_ind == len(coarse.grid.lat) -1:
+                        nearest_lat_ind = [nearest_lat_ind, nearest_lat_ind,
+                                nearest_lat_ind, nearest_lat_ind]
+                    else:
+                        nearest_lat_ind = [nearest_lat_ind, nearest_lat_ind,
+                                nearest_lat_ind + 1, nearest_lat_ind + 1]
 
                 grid_depth = np.min(coarse_depths[nearest_lat_ind,
                         nearest_lon_ind])
