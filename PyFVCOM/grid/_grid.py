@@ -6148,15 +6148,15 @@ def interpolate_regular(fvcom_obj, fvcom_name, coarse_name, coarse, interval=1,
     fvcom_obj.time.interval = interval
 
     if 'elements' in mode:
-        x = fvcom_obj.grid.lonc
-        y = fvcom_obj.grid.latc
+        x = copy.deepcopy(fvcom_obj.grid.lonc)
+        y = copy.deepcopy(fvcom_obj.grid.latc)
         # Keep positive down depths.
-        z = -fvcom_obj.sigma.layers_center_z
+        z = copy.deepcopy(np.abs(fvcom_obj.sigma.layers_center_z))
     else:
-        x = fvcom_obj.grid.lon
-        y = fvcom_obj.grid.lat
+        x = copy.deepcopy(fvcom_obj.grid.lon)
+        y = copy.deepcopy(fvcom_obj.grid.lat)
         # Keep positive down depths.
-        z = -fvcom_obj.sigma.layers_z
+        z = copy.deepcopy(np.abs(fvcom_obj.sigma.layers_z))
 
     if constrain_coordinates:
         x[x < coarse.grid.lon.min()] = coarse.grid.lon.min()
