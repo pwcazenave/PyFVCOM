@@ -1063,7 +1063,7 @@ class OpenBoundary(object):
             else:
                 try:
                     if isinstance(tides.variables[names['constituent_name']][:],
-                            (bytes, bytearray)):
+                            (bytes, bytearray, np.ma.core.MaskedArray)):
                         const = list([b''.join(i).decode(
                             'utf-8').upper().strip()
                             for i in tides.variables[
