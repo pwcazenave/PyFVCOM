@@ -2565,8 +2565,7 @@ class Model(Domain):
                                 interval=self.sampling, 
                                 pool_size=pool_size)
 
-    def add_nests_regular(self, fvcom_name, coarse_name, coarse, 
-                          **kwargs):
+    def add_nests_regular(self, fvcom_name, coarse_name, coarse, subset=None, **kwargs):
         """
         Adds nested forcing to boundaries.
         Interpolate the given data onto the open boundary nodes for the 
@@ -2609,7 +2608,12 @@ class Model(Domain):
             (no verbose output).
         """
 
-        for i, this_boundary in enumerate(self.open_boundaries):
+        if subset is None:
+            proc_boundaries = self.open_boundaries
+        else:
+            proc_boundaries = self.open_boundaries[subset]
+
+        for i, this_boundary in enumerate(proc_boundaries):
             for ii, this_nest in enumerate(this_boundary.nest):
                 if this_nest._noisy:
                     print('Interpolating {} forcing for '.format(coarse_name) 
