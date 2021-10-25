@@ -6224,6 +6224,13 @@ def interpolate_regular(fvcom_obj, fvcom_name, coarse_name, coarse, interval=1,
             # deeper than the closest coarse data,
             # squash the open boundary water column into the coarse water 
             # column.
+
+            # MB: I think this next step would be more accurate by doing ft_depth=(
+            # RegularGridInterpolator((coarse.grid.lat, coarse.grid.lon),coars_depths,
+            #  method='linear', fill_value=np.nan)
+            # Then getting fvcom_depths = ft_depth(x,y) and applying z[z>fvcom_depths] = 
+            # fvcom_depths[z>fvcom_depths]
+            # However I'm wondering if theres a reason I didn't originally code it this way 
             for idx, node in enumerate(zip(x, y, z)):
                 nearest_lon_ind = np.argmin((coarse.grid.lon - node[0])**2)
                 nearest_lat_ind = np.argmin((coarse.grid.lat - node[1])**2)
