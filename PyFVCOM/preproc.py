@@ -967,7 +967,7 @@ class Model(Domain):
         if noisy:
             # Should be present in all sigma files.
             print('nlev\t{:d}\n'.format(nlev))
-            print('sigtype\t%s\n'.format(sigtype))
+            print('sigtype\t{}\n'.format(sigtype))
 
             # Only present in geometric sigma files.
             if sigtype == 'GEOMETRIC':
@@ -975,13 +975,13 @@ class Model(Domain):
 
             # Only in the generalised or uniform sigma files.
             if sigtype == 'GENERALIZED':
-                print('du\t{:d}\n'.format(du))
-                print('dl\t{:d}\n'.format(dl))
-                print('min_constant_depth\t%f\n'.format(min_constant_depth))
-                print('ku\t{:d}\n'.format(ku))
-                print('kl\t{:d}\n'.format(kl))
-                print('zku\t{:d}\n'.format(zku))
-                print('zkl\t{:d}\n'.format(zkl))
+                print('du\t{:d}\n'.format(int(du)))
+                print('dl\t{:d}\n'.format(int(dl)))
+                print('min_constant_depth\t{}\n'.format(min_constant_depth))
+                print('ku\t{:d}\n'.format(int(ku)))
+                print('kl\t{:d}\n'.format(int(kl)))
+                print('zku\t{}\n'.format(zku))
+                print('zkl\t{}\n'.format(zkl))
 
         # Update the open boundaries.
         self._update_open_boundaries()
