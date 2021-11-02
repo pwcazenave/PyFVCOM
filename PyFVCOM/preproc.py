@@ -1148,7 +1148,7 @@ class Model(Domain):
             x2 = np.tanh(dl)
             x3 = x2 + np.tanh(du)
             # k'th position starts from 1 which is right because we want the initial value to be zero for sigma levels.
-            dist[k] = ((x1 + x2) / x3 - 1) * -1
+            dist[k] = (x1 + x2) / x3 - 1
 
         return dist
 
