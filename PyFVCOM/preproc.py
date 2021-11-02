@@ -1038,12 +1038,12 @@ class Model(Domain):
 
                 # Uniform in between
                 perc_in_midlayer = (h - (dl+du)*(1-1/layers_in_boundary))/h # how much of the water column still to divvy up
-                layers_in_mid = levels - (ku + kl)
+                layers_in_mid = levels - (ku + kl) - 1 # 0 m is defined
                 perc_per_layer_mid = perc_in_midlayer/layers_in_mid
             
                 # Compile it into one set of dists
                 dist = [0]
-                for i in np.arange(1,ku):
+                for i in np.arange(1,ku + 1):
                     dist.append(dist[-1] + perc_per_layer_boundary)
                 for i in np.arange(0, layers_in_mid):
                     dist.append(dist[-1] + perc_per_layer_mid)
@@ -1057,12 +1057,12 @@ class Model(Domain):
                 # Uniform in between
                 layers_in_boundary = ku+kl
                 perc_in_midlayer = (h - (dl+du)*(1-1/layers_in_boundary))/h # how much of the water column still to divvy up
-                layers_in_mid = levels - (ku + kl)
+                layers_in_mid = levels - (ku + kl) - 1 # 0 m is defined
                 perc_per_layer_mid = perc_in_midlayer/layers_in_mid
             
                 # Compile it into one set of dists
                 dist = [0]
-                for i in np.arange(0,ku-1):
+                for i in np.arange(0,ku):
                     dist.append(dist[-1] + perc_zku[i])
                 for i in np.arange(0, layers_in_mid):
                     dist.append(dist[-1] + perc_per_layer_mid)
