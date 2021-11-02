@@ -915,7 +915,8 @@ class Model(Domain):
             sigma_levels = np.empty((self.dims.node, nlev)) * np.nan
             for i in range(self.dims.node):
                 sigma_levels[i, :] = self.sigma_generalized(
-                        nlev, dl, du, self.grid.h[i], min_constant_depth, kl, ku)
+                        nlev, dl, du, self.grid.h[i], min_constant_depth, 
+                        kl, ku, zkl=zkl, zku=zku)
         elif sigtype.lower() == 'uniform':
             sigma_levels = np.tile(self.sigma_geometric(nlev, 1), 
                     (self.dims.node, 1))
@@ -986,7 +987,8 @@ class Model(Domain):
         # Update the open boundaries.
         self._update_open_boundaries()
 
-    def sigma_generalized(self, levels, dl, du, h, hmin, kl, ku):
+    def sigma_generalized(self, levels, dl, du, h, hmin, kl, ku, 
+            zku=[], zkl=[]):
         """
         Generate a generalised sigma coordinate distribution.
 
@@ -1006,6 +1008,10 @@ class Model(Domain):
             Number of levels in upper boundary.
         kl : int
             Number of levels in lower boundary.
+        zku : array float
+            Depths of upper boundary layers. Calculated evenly if not given.
+        zkl : array float
+            Depths of lower boundary layers. Calculated evenly if not given.
 
         Returns
         -------
@@ -1025,25 +1031,45 @@ class Model(Domain):
         if h > hmin:
             # Fixed layers for the top and bottom, can assume they are the same thickness as this
             # is checked above
-            perc_in_boundary = (dl + du)/h
-            layers_in_boundary = ku+kl
-            perc_per_layer_boundary = perc_in_boundary/layers_in_boundary 
+            if (len(zkl) + len(zku)) == 0:
+                perc_in_boundary = (dl + du)/h
+                layers_in_boundary = ku+kl
+                perc_per_layer_boundary = perc_in_boundary/layers_in_boundary 
 
-            # Uniform in between
-            perc_in_midlayer = (h - (dl+du)*(1-1/layers_in_boundary))/h # how much of the water column still to divvy up
-            layers_in_mid = levels - (ku + kl)
-            perc_per_layer_mid = perc_in_midlayer/layers_in_mid
+                # Uniform in between
+                perc_in_midlayer = (h - (dl+du)*(1-1/layers_in_boundary))/h # how much of the water column still to divvy up
+                layers_in_mid = levels - (ku + kl)
+                perc_per_layer_mid = perc_in_midlayer/layers_in_mid
             
-            # Compile it into one set of dists
-            dist = [0]
-            for i in np.arange(1,ku):
-                dist.append(dist[-1] + perc_per_layer_boundary)
-            for i in np.arange(0, layers_in_mid):
-                dist.append(dist[-1] + perc_per_layer_mid)
-            for i in np.arange(0, kl):
-                dist.append(dist[-1] + perc_per_layer_boundary)
-            dist = np.asarray(dist) * -1
+                # Compile it into one set of dists
+                dist = [0]
+                for i in np.arange(1,ku):
+                    dist.append(dist[-1] + perc_per_layer_boundary)
+                for i in np.arange(0, layers_in_mid):
+                    dist.append(dist[-1] + perc_per_layer_mid)
+                for i in np.arange(0, kl):
+                    dist.append(dist[-1] + perc_per_layer_boundary)
+                dist = np.asarray(dist) * -1
+
+            else:
+                perc_zku = zku / h
+                perc_zkl = zkl / h
+                # Uniform in between
+                layers_in_boundary = ku+kl
+                perc_in_midlayer = (h - (dl+du)*(1-1/layers_in_boundary))/h # how much of the water column still to divvy up
+                layers_in_mid = levels - (ku + kl)
+                perc_per_layer_mid = perc_in_midlayer/layers_in_mid
             
+                # Compile it into one set of dists
+                dist = [0]
+                for i in np.arange(0,ku-1):
+                    dist.append(dist[-1] + perc_zku[i])
+                for i in np.arange(0, layers_in_mid):
+                    dist.append(dist[-1] + perc_per_layer_mid)
+                for i in np.arange(0, kl):
+                    dist.append(dist[-1] + perc_zkl[i])
+                dist = np.asarray(dist) * -1
+       
         else:
             # Uniform for shallow areas
             dist = self.sigma_geometric(levels, 1)
