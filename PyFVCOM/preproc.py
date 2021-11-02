@@ -1042,7 +1042,7 @@ class Model(Domain):
                 dist.append(dist[-1] + perc_per_layer_mid)
             for i in np.arange(0, kl):
                 dist.append(dist[-1] + perc_per_layer_boundary)
-            dist = np.asarray(dist)
+            dist = np.asarray(dist) * -1
             
         else:
             # Uniform for shallow areas
@@ -1122,7 +1122,7 @@ class Model(Domain):
             x2 = np.tanh(dl)
             x3 = x2 + np.tanh(du)
             # k'th position starts from 1 which is right because we want the initial value to be zero for sigma levels.
-            dist[k] = (x1 + x2) / x3 - 1
+            dist[k] = ((x1 + x2) / x3 - 1) * -1
 
         return dist
 
