@@ -1165,27 +1165,16 @@ class OpenBoundary(object):
         """
 
         with Dataset(str(harmonics), 'r') as tides:
-            if any(isinstance(i, list) for i in tides.variables[
-                    names['constituent_name']][:].astype(str)):
-                const = ([''.join(i).upper().strip() for i in tides.variables[
-                        names['constituent_name']][:].astype(str)])
+            if not np.ma.is_masked(
+                    tides.variables[names['constituent_name']][:]):
+                # For TPXO9-Atlas and TPXO8-Atlas hf
+                const = ([''.join(tides.variables[
+                         names['constituent_name']][:].astype(str)
+                         ).upper().strip()])
             else:
-                try:
-                    if isinstance(tides.variables[names['constituent_name']][:],
-                            (bytes, bytearray, np.ma.core.MaskedArray)):
-                        const = list([b''.join(i).decode(
-                            'utf-8').upper().strip()
-                            for i in tides.variables[
-                            names['constituent_name']][:]])
-                    else:
-                        # For TPXO9-Atlas
-                        const = ([''.join(tides.variables[
-                                names['constituent_name']][:].astype(str)
-                                ).upper().strip()])
-                except:
-                    # TPXO8-Atlas files have unpopulated con variable
-                    const = harmonics.split('/')[-1].split(
-                            '_')[0].split('.')[-1].upper().strip()
+                # TPXO8-Atlas uv files have unpopulated con variable
+                const = harmonics.split('/')[-1].split(
+                        '_')[0].split('.')[-1].upper().strip()
 
             # If we've been given constituents that aren't in the harmonics 
             # data, just find the indices we do have.
