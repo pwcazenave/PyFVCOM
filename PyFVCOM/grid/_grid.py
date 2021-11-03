@@ -1022,6 +1022,10 @@ class OpenBoundary(object):
         """
         Load the given variables from the given harmonics file extracted 
         from FVCOM.
+        TODO: This method can be simplified for fvcom harmonics now it is 
+        separate from the TPXO part. I don't have fvcom hamonics to test this 
+        with so will leave it to you. I'm pretty sure the complex bit can be 
+        removed and the consitutuent name bit refined.
 
         Parameters
         ----------
