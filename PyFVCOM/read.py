@@ -437,7 +437,7 @@ class FileReader(Domain):
 
     """
 
-    def __init__(self, fvcom, variables=[], dims={}, zone='30N', debug=False, verbose=False, subset_method='slice'):
+    def __init__(self, fvcom, variables=[], dims={}, zone='30', debug=False, verbose=False, subset_method='slice'):
         """
         Parameters
         ----------
