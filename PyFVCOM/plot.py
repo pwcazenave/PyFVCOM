@@ -664,7 +664,7 @@ class Plotter(object):
                 # Make a coastline depending on whether we've got a GSHHS resolution or a Natural Earth one.
                 if self.res in ('c', 'l', 'i', 'h', 'f'):
                     # Use the GSHHS data as in Basemap (a lot slower than the cartopy data).
-                    land = cfeature.GSHHSFeature(scale=self.res, edgecolor='k', facecolor=0.6)
+                    land = cfeature.GSHHSFeature(scale=self.res, edgecolor='k', facecolor=none)
                 else:
                     # Make a land object which is fairly similar to the Basemap on we use.
                     land = cfeature.NaturalEarthFeature('physical', 'land', self.res, edgecolor='k', facecolor='0.6')
@@ -688,6 +688,11 @@ class Plotter(object):
         if self.mapper == 'cartopy':
             self.axes.set_extent(self.extents, crs=ccrs.PlateCarree())
             if self.coast:
+                # shpfile = cartopy.io.shapereader.gshhs('f')
+                # shp = cartopy.io.shapereader.Reader(shpfile)
+                # self.axes.add_geometries(
+                #     shp.geometries(), ccrs.PlateCarree(), edgecolor='red', facecolor='none')
+                #
                 self.axes.add_feature(land, zorder=1000)
             # *Must* call show and draw in order to get the axis boundary used to add ticks:
             self.figure.show()

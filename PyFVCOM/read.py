@@ -2636,6 +2636,9 @@ def ncread(file, vars=None, dims=False, noisy=False, atts=False, datetimes=False
         print("File format: {}".format(rootgrp.file_format))
 
     if not vars:
+        if noisy:
+            print(vars)
+            print("Extracting all variables from dataset: {}".format(rootgrp))
         vars = iter(list(rootgrp.variables.keys()))
 
     FVCOM = {}

@@ -488,8 +488,13 @@ class ValidationComparison():
 
         elif self.mode == 'elements':
             if self.horizontal_match == 'nearest':
-                self.chosen_mod_nodes = np.squeeze(np.asarray([self.fvcom_data.closest_element(this_ll) for this_ll in self.chosen_obs_ll]))[:, np.newaxis]
+                self.chosen_mod_nodes = np.squeeze(
+                    np.asarray([self.fvcom_data.closest_element(this_ll) for this_ll in self.chosen_obs_ll]))[:,
+                                        np.newaxis]
                 self.chosen_mod_nodes_weights = np.ones(len(self.chosen_mod_nodes))[:, np.newaxis]
+
+                # self.chosen_mod_nodes = self.fvcom_data.closest_element(self.chosen_obs_ll)
+                # self.chosen_mod_nodes_weights = np.ones(len(self.chosen_mod_nodes))
             elif self.horizontal_match == 'interp':
                 chosen_mod_nodes = []
                 chosen_mod_nodes_weights = [] 
@@ -552,7 +557,6 @@ class ValidationComparison():
             unweight = np.sum(self.mod_depths[:,:,self.chosen_mod_nodes[i,...]]*self.chosen_mod_nodes_weights[i,...], axis=-1)[self.chosen_mod_times[i,...],:]
             interp_deps.append(np.sum(unweight*np.tile(self.chosen_mod_times_weights[i,:,np.newaxis],[1,unweight.shape[1]]), axis=0))
         self.mod_obs_depths = np.asarray(interp_deps)
-
         if self.vertical_match == 'nearest':
             self.chosen_mod_depths = np.asarray([np.argmin(np.abs(this_mod_obs_dep - this_dep)) for this_mod_obs_dep, this_dep in zip(self.mod_obs_depths, self.obs_data.grid.depth[self.chosen_obs])])[:,np.newaxis]
             self.chosen_mod_depths_weights = np.ones(self.chosen_mod_depths.shape)
@@ -596,7 +600,7 @@ class ValidationComparison():
             else:
                 delete_var = False
             raw_data = getattr(self.fvcom_data.data, this_var)
-
+ 
             # Do horizontal weighting first as largest dimension
             chosen_horiz = np.sum(raw_data[:,:,self.chosen_mod_nodes] * self.chosen_mod_nodes_weights[np.newaxis, np.newaxis, :], axis=-1)
 
@@ -607,7 +611,6 @@ class ValidationComparison():
             # Then by depth
             chosen_depth = np.asarray([np.sum(chosen_time[i,self.chosen_mod_depths[i,:]] * self.chosen_mod_depths_weights[i,:] , axis=0) for i in np.arange(0, len(self.chosen_mod_times))])
             del chosen_time
-
             obs_data = getattr(self.obs_data.data, this_var)[self.chosen_obs]
             if delete_var:
                 delattr(self.fvcom_data.data, this_var)
