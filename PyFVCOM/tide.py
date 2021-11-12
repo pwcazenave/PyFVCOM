@@ -1459,7 +1459,6 @@ def _analyse_harmonics(comm, times, elevations, domain_lats, constit, predict=Fa
         utide.reconstruct : take utide.solve() output and generate a new predicted time series.
 
     """
-
     size = comm.Get_size()
     rank = comm.Get_rank()
 
@@ -1546,12 +1545,8 @@ def _analyse_harmonics(comm, times, elevations, domain_lats, constit, predict=Fa
         return harmonics
 
 
-
-def fvcomOutputHarmonicsMPI(output_file, model_files, analysisvars,  dims={}, constit = ('M2', 'S2', 'N2', 'K2', 'K1', 'O1', 'P1', 'Q1', 'M4', 'MS4', 'MN4'), debug=[], report=10, dump_raw=False, predict=False, noisy=True, file_type='fvcom'):
-
+def fvcomOutputHarmonicsMPI(output_file, model_files, analysisvars,  dims={}, constit = ('M2', 'S2', 'N2', 'K2', 'K1', 'O1', 'P1', 'Q1', 'M4', 'MS4', 'MN4'), debug=[], report=10, dump_raw=False, predict=False, noisy=True, filetype='fvcom'):
     """
-
-
     Parameters
     ----------
     output_file : str
@@ -1601,7 +1596,7 @@ def fvcomOutputHarmonicsMPI(output_file, model_files, analysisvars,  dims={}, co
     latitudes = None
 
     if rank == 0:
-        fvcom = _load_multi_files(file_list, file_type, dims=dims)
+        fvcom = _load_multi_files(model_files, filetype, dims=dims)
         
         if 'memory' in debug:
             print('01 : rank {}: memory usage (loaded data): {} MB'.format(rank, pid.memory_info().rss >> 20), flush=True)
@@ -1668,15 +1663,14 @@ def fvcomOutputHarmonicsMPI(output_file, model_files, analysisvars,  dims={}, co
         else:
             nz_local = 1
 
-        for zlev in range(nz_local):
+        for zlev in np.arange(0,nz_local):
             if noisy and rank == 0:
                 print('Depth {} of {}'.format(zlev + 1, nz_local), flush=True)
 
             if rank == 0:
                 current_dims = copy.copy(dims)
                 current_dims.update({'siglay': [zlev]})  # iterable for MFileReader!
-
-                fvcom = _load_multi_files(model_files, file_type, dims=current_dims, var=var)
+                fvcom = _load_multi_files(model_files, filetype, dims=current_dims, var=[var])
 
                 # Drop the raw data into the netCDF now.
                 if dump_raw:
@@ -1834,10 +1828,10 @@ def fvcomOutputHarmonicsMPI(output_file, model_files, analysisvars,  dims={}, co
         print('Done.')
 
 
-def _load_multi_files(file_list, file_type, dims=None, var=None):
+def _load_multi_files(file_list, filetype, dims=None, var=None):
 
     if filetype == 'fvcom':
-        return MFileReader(file_list, var, dims=dims)
+        return MFileReader(file_list, variables=var, dims=dims)
 
     else:
         reader = RegularReader(file_list, dims=dims)

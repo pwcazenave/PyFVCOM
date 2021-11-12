@@ -33,7 +33,8 @@ from PyFVCOM.read import FileReader, _TimeReader, control_volumes
 from PyFVCOM.utilities.general import flatten_list, PassiveStore, warn
 from PyFVCOM.utilities.time import date_range
 from dateutil.relativedelta import relativedelta
-from netCDF4 import Dataset, date2num, num2date, stringtochar
+#from matplotlib.dates import num2date, date2num
+from netCDF4 import Dataset, stringtochar, num2date, date2num
 from scipy.interpolate import RegularGridInterpolator
 from scipy.spatial import Delaunay
 from shapely.geometry import Polygon
@@ -914,7 +915,8 @@ class Model(Domain):
             sigma_levels = np.empty((self.dims.node, nlev)) * np.nan
             for i in range(self.dims.node):
                 sigma_levels[i, :] = self.sigma_generalized(
-                        nlev, dl, du, self.grid.h[i], min_constant_depth)
+                        nlev, dl, du, self.grid.h[i], min_constant_depth, 
+                        kl, ku, zkl=zkl, zku=zku)
         elif sigtype.lower() == 'uniform':
             sigma_levels = np.tile(self.sigma_geometric(nlev, 1), 
                     (self.dims.node, 1))
@@ -966,7 +968,7 @@ class Model(Domain):
         if noisy:
             # Should be present in all sigma files.
             print('nlev\t{:d}\n'.format(nlev))
-            print('sigtype\t%s\n'.format(sigtype))
+            print('sigtype\t{}\n'.format(sigtype))
 
             # Only present in geometric sigma files.
             if sigtype == 'GEOMETRIC':
@@ -974,18 +976,19 @@ class Model(Domain):
 
             # Only in the generalised or uniform sigma files.
             if sigtype == 'GENERALIZED':
-                print('du\t{:d}\n'.format(du))
-                print('dl\t{:d}\n'.format(dl))
-                print('min_constant_depth\t%f\n'.format(min_constant_depth))
-                print('ku\t{:d}\n'.format(ku))
-                print('kl\t{:d}\n'.format(kl))
-                print('zku\t{:d}\n'.format(zku))
-                print('zkl\t{:d}\n'.format(zkl))
+                print('du\t{:d}\n'.format(int(du)))
+                print('dl\t{:d}\n'.format(int(dl)))
+                print('min_constant_depth\t{}\n'.format(min_constant_depth))
+                print('ku\t{:d}\n'.format(int(ku)))
+                print('kl\t{:d}\n'.format(int(kl)))
+                print('zku\t{}\n'.format(zku))
+                print('zkl\t{}\n'.format(zkl))
 
         # Update the open boundaries.
         self._update_open_boundaries()
 
-    def sigma_generalized(self, levels, dl, du, h, hmin):
+    def sigma_generalized(self, levels, dl, du, h, hmin, kl, ku, 
+            zku=[], zkl=[]):
         """
         Generate a generalised sigma coordinate distribution.
 
@@ -1001,6 +1004,14 @@ class Model(Domain):
             Water depth (positive down).
         hmin : float
             Minimum water depth (positive down).
+        ku : int
+            Number of levels in upper boundary.
+        kl : int
+            Number of levels in lower boundary.
+        zku : array float
+            Depths of upper boundary layers. Calculated evenly if not given.
+        zkl : array float
+            Depths of lower boundary layers. Calculated evenly if not given.
 
         Returns
         -------
@@ -1013,9 +1024,52 @@ class Model(Domain):
         h = np.abs(h)
         hmin = np.abs(hmin)
 
+        # Check that the uniform --> generalised transition makes sense
+        if not hmin/(levels-1) == dl/kl or not hmin/(levels-1) == du/ku:
+            raise ValueError ('Uniform to generalised sigma layers are not matched')
+
         if h > hmin:
-            # Hyperbolic tangent for deep areas
-            dist = self.sigma_tanh(levels, dl, du)
+            # Fixed layers for the top and bottom, can assume they are the same thickness as this
+            # is checked above
+            if (len(zkl) + len(zku)) == 0:
+                perc_in_boundary = (dl + du)/h
+                layers_in_boundary = ku+kl
+                perc_per_layer_boundary = perc_in_boundary/layers_in_boundary 
+
+                # Uniform in between
+                perc_in_midlayer = (h - (dl+du)*(1-1/layers_in_boundary))/h # how much of the water column still to divvy up
+                layers_in_mid = levels - (ku + kl) - 1 # 0 m is defined
+                perc_per_layer_mid = perc_in_midlayer/layers_in_mid
+            
+                # Compile it into one set of dists
+                dist = [0]
+                for i in np.arange(1,ku + 1):
+                    dist.append(dist[-1] + perc_per_layer_boundary)
+                for i in np.arange(0, layers_in_mid):
+                    dist.append(dist[-1] + perc_per_layer_mid)
+                for i in np.arange(0, kl):
+                    dist.append(dist[-1] + perc_per_layer_boundary)
+                dist = np.asarray(dist) * -1
+
+            else:
+                perc_zku = zku / h
+                perc_zkl = zkl / h
+                # Uniform in between
+                layers_in_boundary = ku+kl
+                perc_in_midlayer = (h - (dl+du)*(1-1/layers_in_boundary))/h # how much of the water column still to divvy up
+                layers_in_mid = levels - (ku + kl) - 1 # 0 m is defined
+                perc_per_layer_mid = perc_in_midlayer/layers_in_mid
+            
+                # Compile it into one set of dists
+                dist = [0]
+                for i in np.arange(0,ku):
+                    dist.append(dist[-1] + perc_zku[i])
+                for i in np.arange(0, layers_in_mid):
+                    dist.append(dist[-1] + perc_per_layer_mid)
+                for i in np.arange(0, kl):
+                    dist.append(dist[-1] + perc_zkl[i])
+                dist = np.asarray(dist) * -1
+       
         else:
             # Uniform for shallow areas
             dist = self.sigma_geometric(levels, 1)
@@ -1379,7 +1433,7 @@ class Model(Domain):
         zeta = np.full((len(time), self.dims.open_boundary_nodes), np.nan)
         start_index = 0
         for boundary in self.open_boundaries:
-            end_index = start_index + len(boundary.nodes)
+            end_index = start_index + len(boundary.nodes) +1
             zeta[:, start_index:end_index] = boundary.tide.zeta
             start_index = end_index
 
@@ -2433,7 +2487,7 @@ class Model(Domain):
                     self.open_boundaries[i].time)
 
             # Add all the nested levels and assign weights as necessary.
-            for _ in range(self.dims.nest_levels):
+            for j in range(self.dims.nest_levels):
                 self.open_boundaries[i].add_nest_level(
                         nest_nodes, nest_elements)
                 nest_nodes = np.append(nest_nodes, flatten_list(
@@ -2449,17 +2503,21 @@ class Model(Domain):
                 # it computes the elements to include in a nested output file 
                 # (since a nested input file for FVCOM is just defined as a 
                 # list of node IDs).
-                boundary_nodes = self.open_boundaries[i].nest[-1].nodes
-                boundary_elements = self.open_boundaries[i].nest[-2].elements
-                missing_elements = np.argwhere(np.all(np.isin(
+                # Only apply to the last iteration otherwise you risk ending up
+                # with elements in more than one nest
+
+                if j == self.dims.nest_levels -1:
+                    boundary_nodes = self.open_boundaries[i].nest[-1].nodes
+                    boundary_elements = self.open_boundaries[i].nest[-2].elements
+                    missing_elements = np.argwhere(np.all(np.isin(
                         self.grid.triangles, 
                         boundary_nodes), axis=1)).ravel()
-                if len(missing_elements) > 0:
-                    if self._noisy:
-                        print('Adding missing bounded elements for the last '
-                                + 'boundary in the nest.')
-                    self.open_boundaries[i].nest[-2].elements = np.unique(
-                            np.hstack([missing_elements, boundary_elements]))
+                    if len(missing_elements) > 0:
+                        if self._noisy:
+                            print('Adding missing bounded elements for the last '
+                                   + 'boundary in the nest.')
+                        self.open_boundaries[i].nest[-2].elements = np.unique(
+                                   np.hstack([missing_elements, boundary_elements]))
                 # Update the associated boundary information.
                 self.open_boundaries[i].nest[-2]._update_nest()
 
@@ -2560,8 +2618,7 @@ class Model(Domain):
                                 interval=self.sampling, 
                                 pool_size=pool_size)
 
-    def add_nests_regular(self, fvcom_name, coarse_name, coarse, 
-                          **kwargs):
+    def add_nests_regular(self, fvcom_name, coarse_name, coarse, subset=None, **kwargs):
         """
         Adds nested forcing to boundaries.
         Interpolate the given data onto the open boundary nodes for the 
@@ -2604,7 +2661,12 @@ class Model(Domain):
             (no verbose output).
         """
 
-        for i, this_boundary in enumerate(self.open_boundaries):
+        if subset is None:
+            proc_boundaries = self.open_boundaries
+        else:
+            proc_boundaries = self.open_boundaries[subset]
+
+        for i, this_boundary in enumerate(proc_boundaries):
             for ii, this_nest in enumerate(this_boundary.nest):
                 if this_nest._noisy:
                     print('Interpolating {} forcing for '.format(coarse_name) 
@@ -2695,6 +2757,38 @@ class Model(Domain):
                                 + ' no elements defined')
                     continue
                 avg_nest_force_vel(this_nest)
+
+    def apply_ramp(self, ramp_length, initial_ts=None):
+        """
+        Applies a ramp to the nesting values. In the case of velocities and zeta this is 
+
+
+        Parameters
+        ----------
+        ramp_length : int
+            Length of time to ramp over (in seconds)
+        intial_ts : list
+            Initial values for temp and salinity; if not provided then ramp only applied
+            to u,v,zeta and if present ua and va
+
+        """
+
+        nest_timesteps_sec = np.asarray([(this_t - self.time.datetime[0]).total_seconds() for this_t in self.time.datetime])
+        ramp = np.tanh(nest_timesteps_sec/ramp_length) 
+
+        for i, this_boundary in enumerate(self.open_boundaries):
+            for ii, this_nest in enumerate(this_boundary.nest):
+                if np.any(this_nest.elements):
+                    if hasattr(this_nest.data, 'ua'):
+                        ramp_vars = ['u', 'v', 'ua', 'va']
+                    else:
+                        ramp_vars = ['u', 'v']
+                    this_nest.apply_ramp(ramp_vars, ramp, np.zeros(len(ramp_vars)))
+                
+                this_nest.apply_ramp(['zeta'], ramp, [0])
+
+                if initial_ts is not None:
+                    this_nest.apply_ramp(['temp', 'salinity'], ramp, initial_ts)
 
     def load_nested_forcing(self, existing_nest, variables=None, 
                 filter_times=False, filter_points=False, verbose=False):
@@ -4921,7 +5015,8 @@ class RegularReader(FileReader):
                     print('Concatenating {} in time'.format(var))
                 setattr(idem.data, var, np.ma.concatenate((getattr(other.data, var), getattr(idem.data, var))))
         for time in idem.time:
-            setattr(idem.time, time, np.concatenate((getattr(other.time, time), getattr(idem.time, time))))
+            if time != 'time_var':
+                setattr(idem.time, time, np.concatenate((getattr(other.time, time), getattr(idem.time, time))))
 
         # Remove duplicate times.
         time_indices = np.arange(len(idem.time.time))
@@ -4936,13 +5031,14 @@ class RegularReader(FileReader):
                 setattr(idem.data, var, getattr(idem.data, var)[time_mask, ...])  # assume time is first
                 # setattr(idem.data, var, np.delete(getattr(idem.data, var), dupe_indices, axis=time_axis))
         for time in idem.time:
-            try:
-                time_axis = idem.ds.variables[time].dimensions.index('time')
-                setattr(idem.time, time, np.delete(getattr(idem.time, time), dupe_indices, axis=time_axis))
-            except KeyError:
-                # This is hopefully one of the additional time variables which doesn't exist in the netCDF dataset.
-                # Just delete the relevant indices by assuming that time is the first axis.
-                setattr(idem.time, time, np.delete(getattr(idem.time, time), dupe_indices, axis=0))
+            if time != 'time_var':
+                try:
+                    time_axis = idem.ds.variables[time].dimensions.index('time')
+                    setattr(idem.time, time, np.delete(getattr(idem.time, time), dupe_indices, axis=time_axis))
+                except KeyError:
+                    # This is hopefully one of the additional time variables which doesn't exist in the netCDF dataset.
+                    # Just delete the relevant indices by assuming that time is the first axis.
+                    setattr(idem.time, time, np.delete(getattr(idem.time, time), dupe_indices, axis=0))
 
         # Update dimensions accordingly.
         idem.dims.time = len(idem.time.time)
@@ -4956,6 +5052,14 @@ class RegularReader(FileReader):
         """
 
         self.time = _TimeReaderReg(self.ds, dims=self._dims)
+
+    def _update_time(self):
+        # Update the dimension of the time based on the loaded values
+        time_dim = getattr(self.dims, self.time.time_var)
+        try:
+            time_dim = len(self.time.time)
+        except TypeError:
+            time_dim = 1
 
     def _load_grid(self, netcdf_filestr, grid_variables=None):
         """
@@ -5026,36 +5130,52 @@ class RegularReader(FileReader):
             # We need to use the original Dataset lon and lat values here as they have the right shape for the
             # subsetting.
             if not isinstance(self._dims['wesn'], Polygon):
-                self._dims['lon'] = np.argwhere((self.grid.lon > self._dims['wesn'][0]) &
-                                                (self.grid.lon < self._dims['wesn'][1]))
-                self._dims['lat'] = np.argwhere((self.grid.lat > self._dims['wesn'][2]) &
-                                                (self.grid.lat < self._dims['wesn'][3]))
+                self._dims['lon'] = np.squeeze(np.argwhere((self.grid.lon > self._dims['wesn'][0]) &
+                                                (self.grid.lon < self._dims['wesn'][1])))
+                self._dims['lat'] = np.squeeze(np.argwhere((self.grid.lat > self._dims['wesn'][2]) &
+                                                (self.grid.lat < self._dims['wesn'][3])))
 
-        related_variables = {'lon': ('x', 'lon'), 'lat': ('y', 'lat')}
-        for spatial_dimension in 'lon', 'lat':
-            if spatial_dimension in self._dims:
-                setattr(self.dims, spatial_dimension, len(self._dims[spatial_dimension]))
-                for var in related_variables[spatial_dimension]:
-                    try:
-                        spatial_index = self.ds.variables[var].dimensions.index(spatial_dimension)
-                        var_shape = [i for i in np.shape(self.ds.variables[var])]
-                        var_shape[spatial_index] = getattr(self.dims, spatial_dimension)
-                        if 'depth' in (self._dims, self.ds.variables[var].dimensions):
-                            var_shape[self.ds.variables[var].dimensions.index('depth')] = self.dims.siglay
-                        _temp = np.empty(var_shape) * np.nan
-                        if 'depth' in self.ds.variables[var].dimensions:
-                            if 'depth' in self._dims:
-                                _temp = self.ds.variables[var][self._dims['depth'], self._dims[spatial_dimension]]
-                            else:
-                                _temp = self.ds.variables[var][:, self._dims[spatial_dimension]]
-                        else:
-                            _temp = self.ds.variables[var][self._dims[spatial_dimension]]
-                    except KeyError:
-                        if 'depth' in var:
-                            _temp = np.empty((self.dims.depth, getattr(self.dims, spatial_dimension)))
-                        else:
-                            _temp = np.empty(getattr(self.dims, spatial_dimension))
-                    setattr(self.grid, var, _temp)
+        # Apply the subset to lon, lat and related variables
+        related_1d = {'lon': ('lon', 'longitude', 'eta_rho'), 
+                      'lat': ('lat', 'latitude', 'xi_rho')}
+        related_2d = ['Longitude', 'Latitude', 'x', 'y']
+
+        if 'lon' in self._dims:
+            for this_var in related_1d['lon']:
+                if this_var in self.dims:
+                    setattr(self.dims,this_var,len(self._dims['lon']))
+                try:
+                    setattr(self.grid, this_var, getattr(self.grid,this_var)[self._dims['lon']])
+                except AttributeError:
+                    pass
+
+            for this_var in related_2d:
+                if this_var in self.dims:
+                    new_dim = getattr(self.dims,this_var)
+                    setattr(self.dims, this_var, [len(self._dims['lon']),new_dim[1]])
+                try:
+                    setattr(self.grid, this_var, getattr(self.grid,this_var)[self._dims['lon'],:])
+                except AttributeError:
+                    pass
+
+        if 'lat' in self._dims:
+            for this_var in related_1d['lat']:
+                if this_var in self.dims:
+                    setattr(self.dims,this_var,len(self._dims['lat']))
+                try:
+                    setattr(self.grid, this_var, getattr(self.grid,this_var)[self._dims['lat']])
+                except AttributeError:
+                    pass
+
+            for this_var in related_2d:
+                if this_var in self.dims:
+                    new_dim = getattr(self.dims,this_var)
+                    setattr(self.dims, this_var, [new_dim[0],len(self._dims['lat'])])
+
+                try:
+                    setattr(self.grid, this_var, getattr(self.grid,this_var)[:,self._dims['lat']])
+                except AttributeError:
+                    pass
 
         # Check if we've been given vertical dimensions to subset in too, and if so, do that. Check we haven't
         # already done this in the 'node' and 'nele' sections above first.
@@ -5089,10 +5209,16 @@ class RegularReader(FileReader):
                     self.grid.lon, self.grid.lat = lonlat_from_utm(self.grid.x, self.grid.y, zone=self._zone)
                     self.grid.lon_range = np.ptp(self.grid.lon)
                     self.grid.lat_range = np.ptp(self.grid.lat)
-                if self.grid.lon_range == 0 and self.grid.lat_range == 0:
-                    self.grid.x, self.grid.y, _ = utm_from_lonlat(self.grid.lon.ravel(), self.grid.lat.ravel())
-                    self.grid.x = np.reshape(self.grid.x, self.grid.lon.shape)
-                    self.grid.y = np.reshape(self.grid.y, self.grid.lat.shape)
+                if self.grid.x_range == 0 and self.grid.y_range == 0:
+                    if len(self.grid.lon.shape) == 2:
+                        grid_lon = self.grid.lon.ravel()
+                        grid_lat = self.grid.lat.ravel()
+                    else:
+                        grid_lon, grid_lat = np.meshgrid(self.grid.lon, self.grid.lat)                       
+                    self.grid.x, self.grid.y, _ = utm_from_lonlat(grid_lon.ravel(), grid_lat.ravel())
+                    self.grid.x = np.reshape(self.grid.x, grid_lon.shape)
+                    self.grid.y = np.reshape(self.grid.y, grid_lat.shape)
+
                     self.grid.x_range = np.ptp(self.grid.x)
                     self.grid.y_range = np.ptp(self.grid.y)
 
@@ -5196,14 +5322,14 @@ class RegularReader(FileReader):
             lat_compare = self.ds.dimensions[yname].size == ydim
             time_compare = self.ds.dimensions[timename].size == timedim
             # Check again if we've been asked to subset in any dimension.
-            if xname in self._dims:
-                lon_compare = len(self.ds.variables[xvar][self._dims[xname]]) == xdim
-            if yname in self._dims:
-                lat_compare = len(self.ds.variables[yvar][self._dims[yname]]) == ydim
+            if xvar in self._dims:
+                lon_compare = len(self.ds.variables[xname][self._dims[xvar]]) == xdim
+            if yvar in self._dims:
+                lat_compare = len(self.ds.variables[yname][self._dims[yvar]]) == ydim
             if depthname in self._dims:
                 depth_compare = len(self.ds.variables[depthvar][self._dims[depthname]]) == depthdim
             if timename in self._dims:
-                time_compare = len(self.ds.variables['time'][self._dims[timename]]) == timedim
+                time_compare = len(self.ds.variables[timename][self._dims[timename]]) == timedim
 
             if not lon_compare:
                 raise ValueError('Longitude data are incompatible. You may be trying to load data after having already '
@@ -5230,7 +5356,22 @@ class RegularReader(FileReader):
             data = self.ds.variables[v][variable_indices]  # data are automatically masked
             if flipud:
                 data = np.flip(data, axis=1)        
-    
+
+            for i, dim_name in enumerate(var_dim):
+                if dim_name == xname:
+                    sub_var = xvar
+                elif dim_name == yname:
+                    sub_var = yvar
+                else:
+                    sub_var = dim_name
+                
+                if sub_var in self._dims:
+                    all_slice = []
+                    for j in np.arange(0, len(var_dim)):
+                        all_slice.append(np.s_[:])
+                    all_slice[i] = np.s_[self._dims[sub_var]]
+                    data = data[all_slice]
+
             setattr(self.data, v, data)
 
     def _get_depth_dim(self):
@@ -5345,6 +5486,8 @@ class NEMOReader(RegularReader):
         # Make sure we set the tmask value for self.load_data to know it exists before we call super().
         self.tmask = tmask
 
+        self._conversion_vars = {}
+
         super().__init__(*args, **kwargs)
 
         # If we've been given a tmask value, use it to mask off crappy values. Really, this is pretty much essential
@@ -5434,7 +5577,8 @@ class NEMOReader(RegularReader):
                     print('Concatenating {} in time'.format(var))
                 setattr(idem.data, var, np.ma.concatenate((getattr(other.data, var), getattr(idem.data, var))))
         for time in idem.time:
-            setattr(idem.time, time, np.concatenate((getattr(other.time, time), getattr(idem.time, time))))
+            if time != 'time_var':
+                setattr(idem.time, time, np.concatenate((getattr(other.time, time), getattr(idem.time, time))))
 
         # Remove duplicate times.
         time_indices = np.arange(len(idem.time.time))
@@ -5449,13 +5593,14 @@ class NEMOReader(RegularReader):
                 setattr(idem.data, var, getattr(idem.data, var)[time_mask, ...])  # assume time is first
                 # setattr(idem.data, var, np.delete(getattr(idem.data, var), dupe_indices, axis=time_axis))
         for time in idem.time:
-            try:
-                time_axis = idem.ds.variables[time].dimensions.index('time')
-                setattr(idem.time, time, np.delete(getattr(idem.time, time), dupe_indices, axis=time_axis))
-            except KeyError:
-                # This is hopefully one of the additional time variables which doesn't exist in the netCDF dataset.
-                # Just delete the relevant indices by assuming that time is the first axis.
-                setattr(idem.time, time, np.delete(getattr(idem.time, time), dupe_indices, axis=0))
+            if time != 'time_var':
+                try:
+                    time_axis = idem.ds.variables[time].dimensions.index('time')
+                    setattr(idem.time, time, np.delete(getattr(idem.time, time), dupe_indices, axis=time_axis))
+                except KeyError:
+                    # This is hopefully one of the additional time variables which doesn't exist in the netCDF dataset.
+                    # Just delete the relevant indices by assuming that time is the first axis.
+                    setattr(idem.time, time, np.delete(getattr(idem.time, time), dupe_indices, axis=0))
 
         # Update dimensions accordingly.
         idem.dims.time = len(idem.time.time)
@@ -5477,8 +5622,15 @@ class NEMOReader(RegularReader):
 
         """
         if grid_variables is None:
-            grid_variables = {'lon': 'nav_lon', 'nav_lat': 'lat', 'x': 'x', 'y': 'y', 'depth': 'depth',
+            if 'deptht' in self.ds.dimensions:
+                grid_variables = {'lon': 'nav_lon', 'lat': 'nav_lat', 'x': 'x', 'y': 'y', 'depth': 'deptht',
                               'Longitude': 'Longitude', 'Latitude': 'Latitude'}
+            else:
+                grid_variables = {'lon': 'nav_lon', 'lat': 'nav_lat', 'x': 'x', 'y': 'y', 'depth': 'depth',
+                              'Longitude': 'Longitude', 'Latitude': 'Latitude'}
+                
+        for this_key, this_item in grid_variables.items():
+            self._conversion_vars[this_item] = this_key
 
         self.grid = PassiveStore()
         # Get the grid data.
@@ -5517,32 +5669,40 @@ class NEMOReader(RegularReader):
                 # TODO Add support for slices here.
                 setattr(self.dims, dim, len(self._dims[dim]))
 
-        # Convert the given W/E/S/N coordinates into node and element IDs to subset.
-        if self._bounding_box:
-            # We need to use the original Dataset lon and lat values here as they have the right shape for the
-            # subsetting.
-            self._dims['lon'] = np.argwhere((self.grid.lon > self._dims['wesn'][0]) &
-                                            (self.grid.lon < self._dims['wesn'][1]))
-            self._dims['lat'] = np.argwhere((self.grid.lat > self._dims['wesn'][2]) &
-                                            (self.grid.lat < self._dims['wesn'][3]))
-
-        # Slicing with 2D arrays needs a meshgrid. Make the missing dimension arrays and then meshgrid those.
-        xdim = np.arange(self.ds.variables['nav_lon'].shape[1])
-        ydim = np.arange(self.ds.variables['nav_lat'].shape[0])
-        if 'x' in self._dims:
-            xdim = self._dims['x']
-        if 'y' in self._dims:
-            ydim = self._dims['y']
-        yy, xx = np.meshgrid(ydim, xdim)
-
         for var in 'nav_lon', 'nav_lat':
-            _tmp = self.ds.variables[var][:]
-            setattr(self.grid, var, _tmp[yy, xx])
-            del _tmp
+            setattr(self.grid, var, self.ds.variables[var][:].T)
 
         # Make 1D arrays of the positions since that's the case for CMEMS data.
         self.grid.lon = np.unique(self.grid.nav_lon)
         self.grid.lat = np.unique(self.grid.nav_lat)
+        self.grid.x = self.grid.lon
+        self.grid.y = self.grid.lat
+
+        # Convert the given W/E/S/N coordinates into node and element IDs to subset.
+        if self._bounding_box:
+            # We need to use the original Dataset lon and lat values here as they have the right shape for the
+            # subsetting.
+            self._dims['lon'] = np.squeeze(np.argwhere((np.unique(self.grid.lon) > self._dims['wesn'][0]) &
+                                            (np.unique(self.grid.lon) < self._dims['wesn'][1])))
+            self._dims['lat'] = np.squeeze(np.argwhere((np.unique(self.grid.lat) > self._dims['wesn'][2]) &
+                                            (np.unique(self.grid.lat) < self._dims['wesn'][3])))
+
+            self._dims['x'] = self._dims['lon']
+            self._dims['y'] = self._dims['lat']
+        # Slicing with 2D arrays needs a meshgrid. Make the missing dimension arrays and then meshgrid those.
+        if 'x' in self._dims:
+            for grid_var in ['lon', 'x']:
+                setattr(self.grid, grid_var, getattr(self.grid, grid_var)[self._dims['x']])
+            for grid_var in ['nav_lon', 'nav_lat', 'Longitude', 'Latitude']:
+                setattr(self.grid, grid_var, getattr(self.grid, grid_var)[self._dims['x'],:])
+            self.dims.x = len(self._dims['x'])
+ 
+        if 'y' in self._dims:
+            for grid_var in ['lat', 'y']:
+                setattr(self.grid, grid_var, getattr(self.grid, grid_var)[self._dims['y']])
+            for grid_var in ['nav_lon', 'nav_lat', 'Longitude', 'Latitude']:
+                setattr(self.grid, grid_var, getattr(self.grid, grid_var)[:,self._dims['y']])
+            self.dims.y = len(self._dims['y'])
 
         # Check if we've been given vertical dimensions to subset in too, and if so, do that. Check we haven't
         # already done this if the 'node' and 'nele' sections above first.
@@ -5750,8 +5910,15 @@ class NEMOReader(RegularReader):
             variable_shape = self.ds.variables[v].shape
             variable_indices = [np.arange(i) for i in variable_shape]
             for dimension in var_dim:
-                if dimension in self._dims:
+                print(dimension)
+                try:
+                    obj_dim = self._conversion_vars[dimension]
+                except KeyError:
+                    obj_dim = dimension
+
+                if obj_dim in self._dims:
                     # Replace their size with anything we've been given in dims.
+                    print('Replacing {}'.format(dimension))
                     variable_index = var_dim.index(dimension)
                     variable_indices[variable_index] = self._dims[dimension]
 
@@ -5870,8 +6037,18 @@ class _TimeReaderReg(_TimeReader):
             raise ValueError('Missing a known time variable.')
         time = dataset.variables[time_var][:]
 
+        try:
+            time = dataset.variables[time_var][dims['time']]
+            self._dims[time_var] = dims['time']
+        except:
+            time = dataset.variables[time_var][:]
+
         # Make other time representations.
-        self.datetime = num2date(time, units=getattr(dataset.variables[time_var], 'units'))
+        cf_times = num2date(time, units=getattr(dataset.variables[time_var], 'units'))
+
+        # convert from cftime to datetime
+        self.datetime = np.asarray([datetime(cf.year, cf.month, cf.day, cf.hour, cf.minute, cf.second) for cf in cf_times])
+
         if isinstance(self.datetime, (list, tuple, np.ndarray)):
             setattr(self, 'Times', np.array([datetime.strftime(d, '%Y-%m-%dT%H:%M:%S.%f') for d in self.datetime]))
         else:
@@ -5882,7 +6059,7 @@ class _TimeReaderReg(_TimeReader):
         self.Itime2 = (self.time - np.floor(self.time)) * 1000 * 60 * 60  # microseconds since midnight
         self.datetime = self.datetime
         self.matlabtime = self.time + 678942.0
-
+        self.time_var = time_var
 
 class Regular2DReader(RegularReader):
     """

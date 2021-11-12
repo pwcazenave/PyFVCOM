@@ -58,7 +58,7 @@ def __convert(args):
 
     """
     a, b, zone, ellipsoid, datum, inverse = args
-    projection = pyproj.Proj("+proj=utm +zone={}, +ellps={} +datum={} +units=m +no_defs".format(zone, ellipsoid, datum))
+    projection = pyproj.Proj("+proj=utm +zone={} +ellps={} +datum={} +units=m +no_defs".format(zone, ellipsoid, datum))
     c, d = projection(a, b, inverse=inverse)
 
     return c, d

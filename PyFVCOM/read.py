@@ -14,7 +14,7 @@ from shapely.geometry import Polygon, Point
 
 import matplotlib.path as mpath
 import numpy as np
-import pandas as pd
+#import pandas as pd
 from netCDF4 import Dataset, MFDataset, num2date, date2num
 
 from PyFVCOM.grid import Domain, control_volumes, get_area_heron,get_boundary_polygons
@@ -437,7 +437,7 @@ class FileReader(Domain):
 
     """
 
-    def __init__(self, fvcom, variables=[], dims={}, zone='30N', debug=False, verbose=False, subset_method='slice'):
+    def __init__(self, fvcom, variables=[], dims={}, zone='30', debug=False, verbose=False, subset_method='slice'):
         """
         Parameters
         ----------
@@ -526,6 +526,7 @@ class FileReader(Domain):
         for dim in self._dims:
             # Skip the special 'wesn' key.
             if dim == 'wesn':
+                self._bounding_box = True
                 continue
             dim_is_iterable = hasattr(self._dims[dim], '__iter__')
             dim_is_string = isinstance(self._dims[dim], str)  # for date ranges
@@ -541,11 +542,9 @@ class FileReader(Domain):
 
         # Update the time dimension number we've read in the time data (in case we did so with a specified dimension
         # range).
-        try:
-            self.dims.time = len(self.time.time)
-        except TypeError:
-            self.dims.time = 1
+        self._update_time()
 
+        # Load the grid
         self._load_grid(fvcom)
 
         # Load the attributes of anything we've been asked to load.
@@ -1170,6 +1169,13 @@ class FileReader(Domain):
                     print('{} dimension size unchanged ({}).'.format(dim, getattr(self.dims, dim)))
             setattr(self.dims, dim, unique_dims[dim])
 
+    def _update_time(self):
+        # Update the dimension of the time based on the loaded values
+        try:
+            self.dims.time = len(self.time.time)
+        except TypeError:
+            self.dims.time = 1
+
     def load_data(self, var, dims=None):
         """
         Load a given variable(s).
@@ -1572,7 +1578,7 @@ class FileReader(Domain):
         """
 
         nml_dict = get_river_config(river_nml_file)
-        river_node_raw = np.asarray(nml_dict['RIVER_GRID_LOCATION'], dtype=int) - 1
+        river_node_raw = np.asarray(nml_dict['RIVER_GRID_LOCATION'], dtype=int)
 
         river_nc = Dataset(river_nc_file, 'r')
         time_raw = river_nc.variables['Times'][:]
@@ -2260,7 +2266,7 @@ class SubDomainReader(FileReader):
 
         """
         nml_dict = get_river_config(river_nml_file)
-        river_node_raw = np.asarray(nml_dict['RIVER_GRID_LOCATION'], dtype=int) - 1
+        river_node_raw = np.asarray(nml_dict['RIVER_GRID_LOCATION'], dtype=int)
 
         # Get only rivers which feature in the subdomain
         rivers_in_grid = np.isin(river_node_raw, self._dims['node'])

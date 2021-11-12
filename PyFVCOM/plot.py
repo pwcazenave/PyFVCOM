@@ -6,6 +6,7 @@ import copy
 from datetime import datetime
 from pathlib import Path
 from warnings import warn
+import collections
 
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
@@ -16,6 +17,7 @@ from cartopy.mpl.gridliner import LONGITUDE_FORMATTER, LATITUDE_FORMATTER
 from descartes import PolygonPatch
 from matplotlib import pyplot as plt
 from matplotlib import rcParams
+from matplotlib import cm as mplcm
 from matplotlib.animation import FuncAnimation
 from matplotlib.dates import DateFormatter, date2num
 from mpl_toolkits.axes_grid1 import make_axes_locatable
@@ -28,8 +30,10 @@ from PyFVCOM.grid import getcrossectiontriangles, unstructured_grid_depths, Doma
 from PyFVCOM.ocean import depth2pressure, dens_jackett
 from PyFVCOM.read import FileReader
 from PyFVCOM.utilities.general import PassiveStore, warn
+from cmocean import cm
 
 have_basemap = True
+
 try:
     from mpl_toolkits.basemap import Basemap
 except ImportError:
@@ -463,8 +467,9 @@ class Plotter(object):
     """
 
     def __init__(self, dataset, figure=None, axes=None, stations=None, extents=None, vmin=None, vmax=None, mask=None,
-                 res='c', fs=10, title=None, cmap='viridis', figsize=(10., 10.), axis_position=None, tick_inc=None,
-                 cb_label=None, extend='neither', norm=None, m=None, cartesian=False, mapper='basemap', coast=True, **bmargs):
+                 res='c', fs=10, title=None, cmap='viridis', figsize=(10., 10.), axis_position=None, tick_inc=None, bg_color='gray',
+                 cb_label=None, extend='neither', norm=None, m=None, cartesian=False, axis_labels = True,
+                 line_width=None, mapper='basemap', coast=True, **bmargs):
         """
         Parameters
         ----------
@@ -521,12 +526,19 @@ class Plotter(object):
             Set to True to plot coastline. Default to True.
         bmargs : dict, optional
             Additional arguments to pass to Basemap.
+        axis_labels : bool, optional
+            Whether to annotate x and y axis with labels (defaults to Latitude and Longitude)
+        bg_color: str, optional
+            sets the figure background color. Defaults to gray
+        line_width: float, optional
+            sets line width. If missing, uses default in rcParams
 
         Author(s)
         ---------
         James Clark (Plymouth Marine Laboratory)
         Pierre Cazenave (Plymouth Marine Laboratory)
         Mike Bedington (Plymouth Marine Laboratory)
+        Ricardo Torres (Plymouth Marine Laboratory)
 
         """
 
@@ -555,7 +567,12 @@ class Plotter(object):
         self.bmargs = bmargs
         self.mapper = mapper
         self.coast = coast
-
+        self.bg_color = bg_color
+        if not line_width:
+            self.line_width = line_width
+        else:
+            self.line_width = rcParams['lines.linewidth']
+        self.axis_labels = axis_labels
         # Plot instances to hold the plot objects.
         self.quiver_plot = None
         self.quiver_key = None
@@ -582,6 +599,27 @@ class Plotter(object):
 
         # Initialise the figure
         self._init_figure()
+
+    def _add_ticks(self, ax):
+        gl = ax.gridlines(linewidth=0, draw_labels=True, linestyle='--', color='k')
+
+        gl.xlabel_style = {'fontsize': self.fs}
+        gl.ylabel_style = {'fontsize': self.fs}
+
+        gl.xlabels_top=False
+        gl.ylabels_right=False
+        gl.xlabels_bottom=True
+        gl.ylabels_left=True
+
+        gl.xformatter = LONGITUDE_FORMATTER
+        gl.yformatter = LATITUDE_FORMATTER
+        if self.axis_labels:
+            ax.text(-0.12, 0.55, 'Latitude N (deg)', va='bottom', ha='center',
+                           rotation='vertical', rotation_mode='anchor', fontsize=self.fs,
+                           transform=ax.transAxes)
+            ax.text(0.5, -0.2, 'Longitude W (deg)', va='bottom', ha='center',
+                           rotation='horizontal', rotation_mode='anchor', fontsize=self.fs,
+                           transform=ax.transAxes)
 
     def _init_figure(self):
         # Read in required grid variables
@@ -695,12 +733,15 @@ class Plotter(object):
                 #
                 self.axes.add_feature(land, zorder=1000)
             # *Must* call show and draw in order to get the axis boundary used to add ticks:
+                self.axes.background_patch.set_facecolor(self.bg_color)
+            else:
+                self.axes.set_facecolor(self.bg_color)
             self.figure.show()
             self.figure.canvas.draw()
         elif self.mapper == 'basemap' and not self.cartesian and self.coast:
             self.m.drawmapboundary()
-            self.m.drawcoastlines(zorder=1000)
-            self.m.fillcontinents(color='0.6', zorder=1000)
+            #self.m.drawcoastlines(zorder=1000)
+            #self.m.fillcontinents(color='0.6', zorder=1000)
 
         if self.title:
             self.axes.set_title(self.title)
@@ -724,12 +765,14 @@ class Plotter(object):
                 self.m.drawparallels(parallels, labels=[1, 0, 0, 0], fontsize=self.fs, linewidth=0, ax=self.axes)
                 self.m.drawmeridians(meridians, labels=[0, 0, 0, 1], fontsize=self.fs, linewidth=0, ax=self.axes)
             elif self.mapper == 'cartopy':
-                self.axes.gridlines(xlocs=meridians, ylocs=parallels, linewidth=0)
-                # Label the end-points of the gridlines using the custom tick makers.
-                self.axes.xaxis.set_major_formatter(LONGITUDE_FORMATTER)
-                self.axes.yaxis.set_major_formatter(LATITUDE_FORMATTER)
-                self._lambert_xticks(meridians)
-                self._lambert_yticks(parallels)
+                # self.axes.gridlines(xlocs=meridians, ylocs=parallels, linewidth=0)
+                self._add_ticks(self.axes)
+
+                # # Label the end-points of the gridlines using the custom tick makers.
+                # self.axes.xaxis.set_major_formatter(LONGITUDE_FORMATTER)
+                # self.axes.yaxis.set_major_formatter(LATITUDE_FORMATTER)
+                # self._lambert_xticks(meridians)
+                # self._lambert_yticks(parallels)
 
     # Whole bunch of hackery to get cartopy to label Lambert plots. Shamelessly copied from:
     #   https://nbviewer.jupyter.org/gist/ajdawson/dd536f786741e987ae4e
@@ -854,6 +897,43 @@ class Plotter(object):
         self.scatter_plot = None
         self.streamline_plot = None
 
+    def plot_domain(self, mesh=False, depth=False, **kwargs):
+        """
+        Add a domain plot to the given domain (as domain.domain_plot).
+
+        Parameters
+        ----------
+        mesh : bool
+            Set to True to overlay the model mesh. Defaults to False.
+        depth : bool
+            Set to True to plot water depth. Defaults to False. If enabled, a colour bar is added to the figure.
+
+        Remaining keyword arguments are passed to PyFVCOM.plot.Plotter.
+
+        Provides
+        --------
+        domain_plot : PyFVCOM.plot.Plotter
+            The plot object.
+        mesh_plot : matplotlib.axes, optional
+            The mesh axis object, if enabled.
+
+        """
+        cb_label = kwargs.pop('cb_label', None)
+        linewidth = kwargs.pop('linewidth', None)
+        alpha = kwargs.pop('alpha', 1.0)
+        if mesh:
+            mesh_plot = self.axes.triplot(self.mx, self.my,
+                                                        self.triangles, 'k-',
+                                                        linewidth=linewidth, zorder=2000, alpha=alpha, **self._plot_projection, **kwargs)
+            self.mesh_plot = mesh_plot
+
+        if depth:
+            # Make depths negative down.
+            if np.all(self.ds.grid.h < 0):
+                self.plot_field(self.ds.grid.h, cmap=colourmap('h'), cb_label=cb_label, **kwargs)
+            else:
+                self.plot_field(-self.ds.grid.h, cmap=colourmap('h_r'), cb_label=cb_label, **kwargs)
+
     def plot_field(self, field, *args, **kwargs):
         """
         Map the given `field'.
@@ -869,6 +949,13 @@ class Plotter(object):
 
         # We ignore the mask given when initialising the Plotter object and instead use the one given when calling
         # this function. We'll warn in case anything (understandably) gets confused.
+
+        cmap = kwargs.pop('cmap', None)
+        cb_label = kwargs.pop('cb_label', None)
+        var_field = kwargs.pop('variable_name', None)
+        if var_field:
+            cmap = colourmap('h')
+
         if self.mask is not None:
             warn("The mask given when initiliasing this object is ignored for plotting surfaces. Supply a `mask' "
                  "keyword to this function instead")
@@ -906,7 +993,7 @@ class Plotter(object):
                 return
 
         self.tripcolor_plot = self.axes.tripcolor(self.mx, self.my, self.triangles, np.squeeze(field), *args,
-                                                  vmin=self.vmin, vmax=self.vmax, cmap=self.cmap, norm=self.norm,
+                                                  vmin=self.vmin, vmax=self.vmax, norm=self.norm, cmap = cmap,
                                                   **self._plot_projection, **kwargs)
 
         if self.cartesian:
@@ -924,12 +1011,17 @@ class Plotter(object):
                 cax = divider.append_axes("right", size="3%", pad=0.1)
                 self.cbar = self.figure.colorbar(self.tripcolor_plot, cax=cax, extend=extend)
             elif self.mapper == 'cartopy':
-                self.cbar = self.figure.colorbar(self.tripcolor_plot, extend=extend)
+                divider = make_axes_locatable(self.axes)
+                cax = divider.append_axes("right", size="3%", pad=0.05, axes_class=plt.Axes)
+                self.cbar = self.figure.colorbar(self.tripcolor_plot, cax=cax, extend=extend)
+                self.cbar.ax.tick_params(labelsize=self.fs)
             else:
                 self.cbar = self.m.colorbar(self.tripcolor_plot, extend=extend)
             self.cbar.ax.tick_params(labelsize=self.fs)
         if self.cb_label:
-            self.cbar.set_label(self.cb_label)
+            self.cbar.set_label(self.cb_label, size=self.fs)
+        if cb_label: # over-ride plotter label
+            self.cbar.set_label(cb_label, size=self.fs)
 
     def plot_quiver(self, u, v, field=False, dx=None, dy=None, add_key=True, scale=1.0, label=None, mask_land=True, *args, **kwargs):
         """
@@ -1063,14 +1155,25 @@ class Plotter(object):
         Additional `args' and `kwargs' are passed to `matplotlib.pyplot.scatter'.
 
         """
+        # Collection plotting kwargs
 
-        lon, lat = lonlat_from_utm(x, y, zone_number)
-        if self.cartesian:
-            mx, my = lon, lat
+        if self.mapper=='cartopy':
+            self.scatter_plot = self.axes.scatter(x, y, **self._plot_projection, **kwargs)
+            self.axes.set_extent(self.extents, crs=self._plot_projection['transform'])
+
+            if self.coast:
+                self.axes.coastlines(resolution='10m', linewidth=self.line_width)
+
+            if self.tick_inc:
+                self._add_ticks(self.axes)
         else:
-            mx, my = self.m(lon, lat)
+            lon, lat = lonlat_from_utm(x, y, zone_number)
+            if self.cartesian:
+                mx, my = lon, lat
+            else:
+                mx, my = self.m(lon, lat)
 
-        self.scatter_plot = self.axes.scatter(mx, my, *args, **self._plot_projection, **kwargs)
+            self.scatter_plot = self.axes.scatter(mx, my, *args, **self._plot_projection, **kwargs)
 
     def plot_streamlines(self, u, v, dx=1000, dy=None, mask_land=True, **kwargs):
         """
@@ -1424,10 +1527,11 @@ class CrossPlotter(Plotter):
     #  - Error handling for no wet/dry, no land
     #  - Plus a lot of other stuff. And tidy it up.
 
-    def __init__(self):
+    def _init_figure(self):
+        """
+        Initialise a cross-sectional plot object.
 
-        super(Plotter, self).__init__()
-
+        """
         self.cross_plot_x = None
         self.cross_plot_y = None
         self.cross_plot_x_pcolor = None
@@ -1443,12 +1547,6 @@ class CrossPlotter(Plotter):
         self.sel_points = None
         self.xlim_vals = None
         self.ylim_vals = None
-
-    def _init_figure(self):
-        """
-        Initialise a cross-sectional plot object.
-
-        """
 
         if self._FileReader:
             self.nv = self.ds.grid.nv
@@ -1930,8 +2028,11 @@ class MPIWorker(object):
                 self.clims = self.comm.bcast(clims, root=0)
 
         if self.label is None:
-            self.label = f'{getattr(self.fvcom.atts, variable).long_name.title()} ' \
+            try:
+                self.label = f'{getattr(self.fvcom.atts, variable).long_name.title()} ' \
                     f'(${getattr(self.fvcom.atts, variable).units}$)'
+            except:
+                pass
 
         grid_mask = np.ones(self.field[0].shape[0], dtype=bool)
         if 'extents' in kwargs:
@@ -1984,8 +2085,11 @@ class MPIWorker(object):
         Additional args and kwargs are passed to PyFVCOM.plot.Plotter.
 
         """
-
+        self.label = label
         self._figure_prep(fvcom_file, variable, dimensions, time_indices, clims, label, **kwargs)
+        if self._noisy and self.rank == self.root:
+            list2print = kwargs
+            print(f'Creating Plotter object with kwargs. {list2print}', flush=True)
 
         local_plot = Plotter(self.fvcom, cb_label=self.label, *args, **kwargs)
 
@@ -2007,7 +2111,7 @@ class MPIWorker(object):
                 local_mask = getattr(self.fvcom.data, 'wet_cells')[local_time] == 0
             else:
                 local_mask = np.zeros(self.fvcom.dims.nele, dtype=bool)
-            local_plot.plot_field(self.field[local_time], mask=local_mask)
+            local_plot.plot_field(self.field[local_time], mask=local_mask, variable_name = variable)
             local_plot.tripcolor_plot.set_clim(*clims)
             if set_title:
                 title_string = self.fvcom.time.datetime[local_time].strftime('%Y-%m-%d %H:%M:%S')
@@ -2315,3 +2419,125 @@ def cm2inch(value):
 
     """
     return value / 2.54
+def colourmap(variable):
+    """ Use a predefined colour map for a given variable.
+
+    Leverages the cmocean package for perceptually uniform colour maps.
+
+    Parameters
+    ----------
+    variable : str, iterable
+        For the given variable name(s), return the appropriate colour palette from the cmocean/matplotlib colour maps.
+        If the variable is not in the pre-defined variables here, the returned values will be `viridis`.
+
+    Returns
+    -------
+    colourmaps : matplotlib.colours.cmap, dict
+        The colour map(s) for the variable(s) given.
+
+    """
+
+    default_cmap = mplcm.get_cmap('viridis')
+
+    cmaps = {'q2': cm.dense,
+             'l': cm.dense,
+             'q2l': cm.dense,
+             'tke': cm.dense,
+             'viscofh': cm.dense,
+             'kh': cm.dense,
+             'nuh': cm.dense,
+             'teps': cm.dense,
+             'tauc': cm.dense,
+             'temp': cm.thermal,
+             'sst': cm.thermal,
+             'salinity': cm.haline,
+             'zeta': cm.balance,
+             'ww': cm.balance,
+             'omega': cm.balance,
+             'uv': cm.speed,
+             'uava': cm.speed,
+             'speed': cm.speed,
+             'u': cm.delta,
+             'v': cm.delta,
+             'ua': cm.delta,
+             'va': cm.delta,
+             'uvanomaly': cm.delta,
+             'direction': cm.phase,
+             'uvdir': cm.phase,
+             'h_morpho': cm.deep,
+             'h': cm.deep,
+             'h_r': cm.deep_r,
+             'bathymetry': cm.deep,
+             'bathymetry_r': cm.deep_r,
+             'taub_total': cm.thermal,
+             'mud_1': cm.turbid,
+             'mud_2': cm.turbid,
+             'sand_1': cm.turbid,
+             'sand_2': cm.turbid,
+             'todal_ssc': cm.turbid,
+             'total_ssc': cm.turbid,
+             'mud_1_bedfrac': cm.dense,
+             'mud_2_bedfrac': cm.dense,
+             'sand_1_bedfrac': cm.dense,
+             'sand_2_bedfrac': cm.dense,
+             'mud_1_bedload': cm.dense,
+             'mud_2_bedload': cm.dense,
+             'sand_1_bedload': cm.dense,
+             'sand_2_bedload': cm.dense,
+             'bed_thick': cm.deep,
+             'bed_age': cm.tempo,
+             'bed_por': cm.turbid,
+             'bed_diff': cm.haline,
+             'bed_btcr': cm.thermal,
+             'bot_sd50': cm.turbid,
+             'bot_dens': cm.thermal,
+             'bot_wsed': cm.turbid,
+             'bot_nthck': cm.matter,
+             'bot_lthck': cm.matter,
+             'bot_dthck': cm.matter,
+             'bot_morph': cm.deep,
+             'bot_tauc': cm.thermal,
+             'bot_rlen': cm.dense,
+             'bot_rhgt': cm.dense,
+             'bot_bwav': cm.turbid,
+             'bot_zdef': cm.dense,
+             'bot_zapp': cm.dense,
+             'bot_zNik': cm.dense,
+             'bot_zbio': cm.dense,
+             'bot_zbfm': cm.dense,
+             'bot_zbld': cm.dense,
+             'bot_zwbl': cm.dense,
+             'bot_actv': cm.deep,
+             'bot_shgt': cm.deep_r,
+             'bot_maxD': cm.deep,
+             'bot_dnet': cm.matter,
+             'bot_doff': cm.thermal,
+             'bot_dslp': cm.amp,
+             'bot_dtim': cm.haline,
+             'bot_dbmx': cm.dense,
+             'bot_dbmm': cm.dense,
+             'bot_dbzs': cm.dense,
+             'bot_dbzm': cm.dense,
+             'bot_dbzp': cm.dense,
+             'wet_nodes': cm.amp,
+             'tracer1_c': cm.dense,
+             'DYE': cm.dense}
+
+    if isinstance(variable, collections.Iterable) and not isinstance(variable, str):
+        colourmaps = []
+        for var in variable:
+            if var in cmaps:
+                colourmaps.append(cmaps[var])
+            else:
+                colourmaps.append(default_cmap)
+        # If we got a list of a single value, return the value rather than a list.
+        if len(colourmaps) == 1:
+            colourmaps = colourmaps[0]
+    else:
+        if variable in cmaps:
+            colourmaps = cmaps[variable]
+        else:
+            colourmaps = default_cmap
+
+    return colourmaps
+
