@@ -603,8 +603,8 @@ class Plotter(object):
     def _add_ticks(self, ax):
         gl = ax.gridlines(linewidth=0, draw_labels=True, linestyle='--', color='k')
 
-        gl.xlabel_style = {'fontsize': rcParams['axis.labelsize']}
-        gl.ylabel_style = {'fontsize': rcParams['axis.labelsize']}
+        gl.xlabel_style = {'fontsize': rcParams['axes.labelsize']}
+        gl.ylabel_style = {'fontsize': rcParams['axes.labelsize']}
 
         gl.xlabels_top=False
         gl.ylabels_right=False
@@ -615,10 +615,10 @@ class Plotter(object):
         gl.yformatter = LATITUDE_FORMATTER
         if self.axis_labels:
             ax.text(-0.12, 0.55, 'Latitude N (deg)', va='bottom', ha='center',
-                           rotation='vertical', rotation_mode='anchor', fontsize=rcParams['axis.labelsize'],
+                           rotation='vertical', rotation_mode='anchor', fontsize=rcParams['axes.labelsize'],
                            transform=ax.transAxes)
             ax.text(0.5, -0.2, 'Longitude W (deg)', va='bottom', ha='center',
-                           rotation='horizontal', rotation_mode='anchor', fontsize=rcParams['axis.labelsize'],
+                           rotation='horizontal', rotation_mode='anchor', fontsize=rcParams['axes.labelsize'],
                            transform=ax.transAxes)
 
     def _init_figure(self):
@@ -825,8 +825,8 @@ class Plotter(object):
             if not self.cartesian:
                 meridians = np.arange(np.floor(np.min(self.extents[:2])), np.ceil(np.max(self.extents[:2])), self.tick_inc[0])
                 parallels = np.arange(np.floor(np.min(self.extents[2:])), np.ceil(np.max(self.extents[2:])), self.tick_inc[1])
-                self.m.drawparallels(parallels, labels=[1, 0, 0, 0], fontsize=rcParams['axis.labelsize'], linewidth=None, ax=self.axes)
-                self.m.drawmeridians(meridians, labels=[0, 0, 0, 1], fontsize=rcParams['axis.labelsize'], linewidth=None, ax=self.axes)
+                self.m.drawparallels(parallels, labels=[1, 0, 0, 0], fontsize=rcParams['axes.labelsize'], linewidth=None, ax=self.axes)
+                self.m.drawmeridians(meridians, labels=[0, 0, 0, 1], fontsize=rcParams['axes.labelsize'], linewidth=None, ax=self.axes)
 
             if not locs:
                 tick = [None]
