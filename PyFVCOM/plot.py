@@ -603,8 +603,8 @@ class Plotter(object):
     def _add_ticks(self, ax):
         gl = ax.gridlines(linewidth=0, draw_labels=True, linestyle='--', color='k')
 
-        gl.xlabel_style = {'fontsize': self.fs}
-        gl.ylabel_style = {'fontsize': self.fs}
+        gl.xlabel_style = {'fontsize': rcParams['axes.labelsize']}
+        gl.ylabel_style = {'fontsize': rcParams['axes.labelsize']}
 
         gl.xlabels_top=False
         gl.ylabels_right=False
@@ -615,10 +615,10 @@ class Plotter(object):
         gl.yformatter = LATITUDE_FORMATTER
         if self.axis_labels:
             ax.text(-0.12, 0.55, 'Latitude N (deg)', va='bottom', ha='center',
-                           rotation='vertical', rotation_mode='anchor', fontsize=self.fs,
+                           rotation='vertical', rotation_mode='anchor', fontsize=rcParams['axes.labelsize'],
                            transform=ax.transAxes)
             ax.text(0.5, -0.2, 'Longitude W (deg)', va='bottom', ha='center',
-                           rotation='horizontal', rotation_mode='anchor', fontsize=self.fs,
+                           rotation='horizontal', rotation_mode='anchor', fontsize=rcParams['axes.labelsize'],
                            transform=ax.transAxes)
 
     def _init_figure(self):
@@ -702,7 +702,7 @@ class Plotter(object):
                 # Make a coastline depending on whether we've got a GSHHS resolution or a Natural Earth one.
                 if self.res in ('c', 'l', 'i', 'h', 'f'):
                     # Use the GSHHS data as in Basemap (a lot slower than the cartopy data).
-                    land = cfeature.GSHHSFeature(scale=self.res, edgecolor='k', facecolor=0.6)
+                    land = cfeature.GSHHSFeature(scale=self.res, edgecolor='k', facecolor='none')
                 else:
                     # Make a land object which is fairly similar to the Basemap on we use.
                     land = cfeature.NaturalEarthFeature('physical', 'land', self.res, edgecolor='k', facecolor='0.6')
@@ -726,6 +726,11 @@ class Plotter(object):
         if self.mapper == 'cartopy':
             self.axes.set_extent(self.extents, crs=ccrs.PlateCarree())
             if self.coast:
+                # shpfile = cartopy.io.shapereader.gshhs('f')
+                # shp = cartopy.io.shapereader.Reader(shpfile)
+                # self.axes.add_geometries(
+                #     shp.geometries(), ccrs.PlateCarree(), edgecolor='red', facecolor='none')
+                #
                 self.axes.add_feature(land, zorder=1000)
             # *Must* call show and draw in order to get the axis boundary used to add ticks:
                 self.axes.background_patch.set_facecolor(self.bg_color)
@@ -820,8 +825,8 @@ class Plotter(object):
             if not self.cartesian:
                 meridians = np.arange(np.floor(np.min(self.extents[:2])), np.ceil(np.max(self.extents[:2])), self.tick_inc[0])
                 parallels = np.arange(np.floor(np.min(self.extents[2:])), np.ceil(np.max(self.extents[2:])), self.tick_inc[1])
-                self.m.drawparallels(parallels, labels=[1, 0, 0, 0], fontsize=self.fs, linewidth=None, ax=self.axes)
-                self.m.drawmeridians(meridians, labels=[0, 0, 0, 1], fontsize=self.fs, linewidth=None, ax=self.axes)
+                self.m.drawparallels(parallels, labels=[1, 0, 0, 0], fontsize=rcParams['axes.labelsize'], linewidth=None, ax=self.axes)
+                self.m.drawmeridians(meridians, labels=[0, 0, 0, 1], fontsize=rcParams['axes.labelsize'], linewidth=None, ax=self.axes)
 
             if not locs:
                 tick = [None]
