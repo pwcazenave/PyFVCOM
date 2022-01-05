@@ -5357,21 +5357,6 @@ class RegularReader(FileReader):
             if flipud:
                 data = np.flip(data, axis=1)        
 
-            for i, dim_name in enumerate(var_dim):
-                if dim_name == xname:
-                    sub_var = xvar
-                elif dim_name == yname:
-                    sub_var = yvar
-                else:
-                    sub_var = dim_name
-                
-                if sub_var in self._dims:
-                    all_slice = []
-                    for j in np.arange(0, len(var_dim)):
-                        all_slice.append(np.s_[:])
-                    all_slice[i] = np.s_[self._dims[sub_var]]
-                    data = data[all_slice]
-
             setattr(self.data, v, data)
 
     def _get_depth_dim(self):
