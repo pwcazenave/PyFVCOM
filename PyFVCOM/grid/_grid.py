@@ -3011,25 +3011,29 @@ def parse_obc_sections(obc_node_array, triangle):
     boundary_edges = all_edges[np.all(np.isin(all_edges, obc_node_array), axis=1), :]
     u_nodes, bdry_counts = np.unique(boundary_edges, return_counts=True)
     start_end_nodes = list(u_nodes[bdry_counts == 1])
+    if len(start_end_nodes) == 0: # This is the case of all one open boundary i.e. an embedded domain
+        return [obc_node_array]
 
-    nodestrings = []
+    else:
 
-    while len(start_end_nodes) > 0:
-        this_obc_section_nodes = [start_end_nodes[0]]
-        start_end_nodes.remove(start_end_nodes[0])
+        nodestrings = []
 
-        nodes_to_add = True
+        while len(start_end_nodes) > 0:
+            this_obc_section_nodes = [start_end_nodes[0]]
+            start_end_nodes.remove(start_end_nodes[0])
 
-        while nodes_to_add:
-            possible_nodes = np.unique(boundary_edges[np.any(np.isin(boundary_edges, this_obc_section_nodes), axis=1), :])
-            nodes_to_add = list(possible_nodes[~np.isin(possible_nodes, this_obc_section_nodes)])
-            if nodes_to_add:
-                this_obc_section_nodes.append(nodes_to_add[0])
+            nodes_to_add = True
 
-        nodestrings.append(np.asarray(this_obc_section_nodes))
-        start_end_nodes.remove(list(set(start_end_nodes).intersection(this_obc_section_nodes)))
+            while nodes_to_add:
+                possible_nodes = np.unique(boundary_edges[np.any(np.isin(boundary_edges, this_obc_section_nodes), axis=1), :])
+                nodes_to_add = list(possible_nodes[~np.isin(possible_nodes, this_obc_section_nodes)])
+                if nodes_to_add:
+                    this_obc_section_nodes.append(nodes_to_add[0])
 
-    return nodestrings
+            nodestrings.append(np.asarray(this_obc_section_nodes))
+            start_end_nodes.remove(list(set(start_end_nodes).intersection(this_obc_section_nodes)))
+
+        return nodestrings
 
 
 def read_sms_cst(cst):
