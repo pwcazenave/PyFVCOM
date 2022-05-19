@@ -2279,7 +2279,7 @@ class Domain(object):
 
         return nodes2elems(field, self.grid.triangles)
 
-    def in_element(self, x, y, element):
+    def in_element(self, x, y, element, cartesian=False):
         """
         Identify if a point (x, y) is in a given element.
 
@@ -2297,9 +2297,13 @@ class Domain(object):
 
         """
         element_nodes = self.grid.triangles[element,:]
-    
-        tri_x = self.grid.lon[element_nodes]
-        tri_y = self.grid.lat[element_nodes]
+   
+        if cartesian:
+            tri_x = self.grid.x[element_nodes]
+            tri_y = self.grid.y[element_nodes]
+        else:
+            tri_x = self.grid.lon[element_nodes]
+            tri_y = self.grid.lat[element_nodes]
 
         return isintriangle(tri_x, tri_y, x, y)
 
@@ -2366,15 +2370,14 @@ class Domain(object):
         return in_domain_xy
 
 
-
-    def which_element(self, x, y):
+    def which_element(self, x, y, cartesian=False):
         """
         Identify which element a point (x, y) is in.
 
         Parameters
         ----------
         x, y : float
-            The position in spherical coordinates.
+            The position in spherical coordinates (or cartesian if cartesian=True).
 
         Returns
         -------
@@ -2382,8 +2385,7 @@ class Domain(object):
             The element ID the point is in.
 
         """
-
-        return np.where([self.in_element(x, y, this_ele) for this_ele in np.arange(0, len(self.grid.lonc))])[0]
+        return np.where([self.in_element(x, y, this_ele, cartesian=cartesian) for this_ele in np.arange(0, len(self.grid.lonc))])[0]
 
     def exterior(self):
         """
