@@ -266,6 +266,8 @@ class Model(Domain):
                 # Add all the time data.
                 setattr(self.open_boundaries[-1].time, 'start', self.start)
                 setattr(self.open_boundaries[-1].time, 'end', self.end)
+        self.dims.open_boundary = len(self.open_boundaries)
+
 
     def _update_open_boundaries(self):
         """
@@ -1343,7 +1345,7 @@ class Model(Domain):
             elif self.sigma.type.lower() == 'geometric':
                 f.write('SIGMA POWER = {:.1f}\n'.format(self.sigma.power))
 
-    def add_open_boundaries(self, obc_file, reload=False):
+    def add_open_boundaries(self, obc_file, boundary_sects=None, reload=False):
         """
         Add open boundaries from a given FVCOM-formatted open boundary file.
 
@@ -1351,7 +1353,11 @@ class Model(Domain):
         ----------
         obc_file : str, pathlib.Path
             FVCOM open boundary specification file.
-        reload : bool
+        boundary_sects : list of arrays, optional
+            A list with of arrays defining the seperate sections of the open
+            boundary, if omitted then it is assumed the open boundary is a single
+            continuuous boundary.
+        reload : bool, optional
             Set to True to overwrite any automatically or already loaded open boundary nodes. Defaults to False.
 
         """
@@ -1359,12 +1365,25 @@ class Model(Domain):
             open_bds = np.asarray([np.any(this_bd) for this_bd in self.grid.open_boundary_nodes])
         except:
             open_bds = self.grid.open_boundary_nodes
-        if np.any(open_bds) and np.any(self.grid.types) and reload:
+        if np.any(open_bds) and np.any(self.grid.types) and not reload:
             # We've already got some, so warn and return.
             warn('Open boundary nodes already loaded and reload set to False.')
             return
         else:
-            self.grid.open_boundary_nodes, self.grid.types, _ = read_fvcom_obc(str(obc_file))
+            obc_nodes, types, _ = read_fvcom_obc(str(obc_file))
+
+            if boundary_sects == None:
+                obc_nodes_list = [obc_nodes]
+            else:
+                obc_nodes_list = []
+                for this_sect in boundary_sects:
+                    obc_nodes_list.append(obc_nodes[this_sect])
+
+            types_all = np.zeros(len(self.grid.lon))
+            types_all[obc_nodes] = types    
+        
+            self.grid.open_boundary_nodes = obc_nodes_list
+            self.grid.types = types_all
 
     def write_sponge(self, sponge_file):
         """
@@ -5356,21 +5375,6 @@ class RegularReader(FileReader):
             data = self.ds.variables[v][variable_indices]  # data are automatically masked
             if flipud:
                 data = np.flip(data, axis=1)        
-
-            for i, dim_name in enumerate(var_dim):
-                if dim_name == xname:
-                    sub_var = xvar
-                elif dim_name == yname:
-                    sub_var = yvar
-                else:
-                    sub_var = dim_name
-                
-                if sub_var in self._dims:
-                    all_slice = []
-                    for j in np.arange(0, len(var_dim)):
-                        all_slice.append(np.s_[:])
-                    all_slice[i] = np.s_[self._dims[sub_var]]
-                    data = data[all_slice]
 
             setattr(self.data, v, data)
 
