@@ -225,6 +225,62 @@ def pol2cart(rho, phi, degrees=False):
     return(x, y)
 
 
+def make_climate(data, dt_list):
+    """
+    Make an annual climatology of data. Assumes daily data.
+
+    Parameters
+    ----------
+    data : array
+        The data with the first dimension as the time axis
+    dt_list : list like
+        List of datetime objects for the dates of the data
+
+    Returns
+    -------
+    ydays : array
+        The yeardays in the climatology
+    climate : array
+        The climatology for each of the year days
+        
+    """
+    yd_list = [this_dt.timetuple().tm_yday for this_dt in dt_list]
+    climate = []
+    for this_day in np.unique(yd_list):
+        climate.append(np.mean(data[yd_list == this_day, ...], axis=0))
+
+    return np.unique(yd_list), np.asarray(climate)
+
+def expand_climate(dt_list):
+    """
+    Produces the indices and weights to create a timeseries out of a daily (year day) climatology.
+    It gives two indices and weights for each so that daily climatologys can be interpolated to higher resolution
+    output
+
+    Parameters
+    ----------
+    dt_list : n list
+        List of datetime objects to create the indices and weights for
+
+    Returns
+    ------- 
+    climate ind : 2 x n array
+        The 
+    weights : 2 x n array 
+        The climatology for each of the year days
+        
+    """
+
+    yd_list = np.asarray([(this_dt - dt.datetime(this_dt.year,1,1)).total_seconds()/(60*60*24) for this_dt in dt_list])
+
+    climate_ind = np.asarray(np.vstack([np.floor(yd_list), np.ceil(yd_list)]).T, dtype=int)
+    weights = np.vstack([1 - (yd_list - climate_ind[:,0]), yd_list - climate_ind[:,0]]).T
+
+    return climate_ind, weights
+
+
+
+
 def _warn(*args, **kwargs):
     """ Custom warning function which doesn't print the code to screen. """
     # Mainly taken inspiration from https://stackoverflow.com/questions/2187269.
