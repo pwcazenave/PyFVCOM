@@ -463,7 +463,7 @@ class Plotter(object):
     James Clark (Plymouth Marine Laboratory)
     Pierre Cazenave (Plymouth Marine Laboratory)
     Mike Bedington (Plymouth Marine Laboratory)
-
+    Ricardo Torres (Plymouth Marine Laboratory)
     """
 
     def __init__(self, dataset, figure=None, axes=None, stations=None, extents=None, vmin=None, vmax=None, mask=None,
@@ -542,7 +542,7 @@ class Plotter(object):
 
         """
 
-        self._debug = False
+        self._debug = True
 
         self.ds = dataset
         self.figure = figure
@@ -920,12 +920,10 @@ class Plotter(object):
         """
         cb_label = kwargs.pop('cb_label', None)
         linewidth = kwargs.pop('linewidth', None)
-        alpha = kwargs.pop('alpha', 1.0)
-        if mesh:
-            mesh_plot = self.axes.triplot(self.mx, self.my,
-                                                        self.triangles, 'k-',
-                                                        linewidth=linewidth, zorder=2000, alpha=alpha, **self._plot_projection, **kwargs)
-            self.mesh_plot = mesh_plot
+        alpha = kwargs.pop('alpha', 1)
+        print('kwargs ', kwargs)
+        if self._debug:
+            warn(f'alpha value {alpha}')
 
         if depth:
             # Make depths negative down.
@@ -933,6 +931,13 @@ class Plotter(object):
                 self.plot_field(self.ds.grid.h, cmap=colourmap('h'), cb_label=cb_label, **kwargs)
             else:
                 self.plot_field(-self.ds.grid.h, cmap=colourmap('h_r'), cb_label=cb_label, **kwargs)
+
+        if mesh:
+            mesh_plot = self.axes.triplot(self.mx, self.my,
+                                                        self.triangles, 'k-',
+                                                        linewidth=linewidth, zorder=2000, alpha=alpha, **self._plot_projection, **kwargs)
+            self.mesh_plot = mesh_plot
+
 
     def plot_field(self, field, *args, **kwargs):
         """
@@ -1095,8 +1100,23 @@ class Plotter(object):
                                                 *args,
                                                 **self._plot_projection,
                                                 **kwargs)
-            self.cbar = self.m.colorbar(self.quiver_plot)
-            self.cbar.ax.tick_params(labelsize=self.fs)
+            extend = copy.copy(self.extend)
+            if extend is None:
+                extend = self.get_colourbar_extension(field, (self.vmin, self.vmax))
+
+            if self.cbar is None:
+                if self.cartesian:
+                    divider = make_axes_locatable(self.axes)
+                    cax = divider.append_axes("right", size="3%", pad=0.1)
+                    self.cbar = self.figure.colorbar(self.quiver_plot, cax=cax, extend=extend)
+                elif self.mapper == 'cartopy':
+                    divider = make_axes_locatable(self.axes)
+                    cax = divider.append_axes("right", size="3%", pad=0.05, axes_class=plt.Axes)
+                    self.cbar = self.figure.colorbar(self.quiver_plot, cax=cax, extend=extend)
+                    self.cbar.ax.tick_params(labelsize=self.fs)
+                else:
+                    self.cbar = self.m.colorbar(self.quiver_plot, extend=extend)
+                self.cbar.ax.tick_params(labelsize=self.fs)
             if self.cb_label:
                 self.cbar.set_label(self.cb_label)
         else:
