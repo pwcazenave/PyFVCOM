@@ -1018,7 +1018,7 @@ class OpenBoundary(object):
         return results
 
     @staticmethod
-    def _load_harmonics_fvcom(harmonics, constituents, names, complex=False):
+    def _load_harmonics_fvcom(harmonics, constituents, names):
         """
         Load the given variables from the given harmonics file extracted 
         from FVCOM.
@@ -1035,18 +1035,11 @@ class OpenBoundary(object):
             The list of tidal constituents to load.
         names : dict
             Dictionary with the variables names:
-                part1_name - amplitude data or real data
-                part2_name - phase data or imaginary data
+                amplitude_name - amplitude data
+                phase_name - phase data
                 lon_name - longitude data
                 lat_name - latitude data
                 constituent_name - constituent names
-            Part1 is amplitude and part2 is phase unless 'complex' is True. 
-            If 'complex' is True, part1 is Real and part2 is Imaginary.
-        complex : bool
-            Specify if input file is define in terms of tidal amplitude and 
-            phase or as a cartesian complex with Real and Imaginary parts.
-            This should be set to True for TPXO9 and False for earlier versions
-            of TPXO.
 
         Returns
         -------
@@ -1055,76 +1048,32 @@ class OpenBoundary(object):
         phases : np.darray
             The amplitudes for the given constituents.
         fvcom_constituents : list
-            The constituents which have been requested that actually exist 
-            in the harmonics netCDF file.
+            The constituents which have been requested that actually exist in the harmonics netCDF file.
 
         """
 
-        with Dataset(str(harmonics), 'r') as tides:
-            if any(isinstance(i, list) for i in tides.variables[
-                    names['constituent_name']][:].astype(str)):
-                const = ([''.join(i).upper().strip() for i in tides.variables[
-                        names['constituent_name']][:].astype(str)])
-            else:
-                try:
-                    if isinstance(tides.variables[names['constituent_name']][:],
-                            (bytes, bytearray, np.ma.core.MaskedArray)):
-                        const = list([b''.join(i).decode(
-                            'utf-8').upper().strip()
-                            for i in tides.variables[
-                            names['constituent_name']][:]])
-                    else:
-                        # For TPXO9-Atlas
-                        const = ([''.join(tides.variables[
-                                names['constituent_name']][:].astype(str)
-                                ).upper().strip()])
-                except:
-                    # TPXO8-Atlas files have unpopulated con variable
-                    const = harmonics.split('/')[-1].split(
-                            '_')[0].split('.')[-1].upper().strip()
 
-            # If we've been given constituents that aren't in the harmonics 
-            # data, just find the indices we do have.
-            cidx = [constituents.index(i) for i in constituents if i in const]
+        with Dataset(str(harmonics), 'r') as tides:
+            const = [''.join(i).upper().strip() for i in tides.variables[names['constituent_name']][:].astype(str)]
+            # If we've been given constituents that aren't in the harmonics data, just find the indices we do have.
+            cidx = [const.index(i) for i in constituents if i in const]
             # Save the names of the constituents we've actually used.
             available_constituents = [constituents[i] for i in cidx]
-            if len(available_constituents) == 0:
-                return ([], [], [], [], [])
 
             harmonics_lon = tides.variables[names['lon_name']][:]
             harmonics_lat = tides.variables[names['lat_name']][:]
 
-            part1_shape = tides.variables[names['part1_name']][:].shape
-            if complex:
-                if part1_shape[0] == len(const):
-                    real = tides.variables[names['part1_name']][cidx, ...]
-                    imag = tides.variables[names['part2_name']][cidx, ...]
-                elif part1_shape[-1] == len(const):
-                    real = (tides.variables[names['part1_name']]
-                            [..., cidx].T)
-                    imag = (tides.variables[names['part2_name']]
-                            [..., cidx].T)
-                else:
-                    real = tides.variables[names['part1_name']][:]
-                    imag = tides.variables[names['part2_name']][:]
-
-                amplitudes = np.abs(real + 1j * imag)
-                phases = (np.arctan2(-imag, real) / np.pi) * 180
-
-            else:
-                if part1_shape[0] == len(const):
-                    amplitudes = tides.variables[names['part1_name']][cidx, ...]
-                    phases = tides.variables[names['part2_name']][cidx, ...]
-                elif part1_shape[-1] == len(const):
-                    amplitudes = (tides.variables[names['part1_name']]
-                            [..., cidx].T)
-                    phases = tides.variables[names['part2_name']][..., cidx].T
-                else:
-                    amplitudes = tides.variables[names['part1_name']][:]
-                    phases = tides.variables[names['part2_name']][:]
+            amplitude_shape = tides.variables[names['amplitude_name']][:].shape
+            if amplitude_shape[0] == len(const):
+                amplitudes = tides.variables[names['amplitude_name']][cidx, ...]
+                phases = tides.variables[names['phase_name']][cidx, ...]
+            elif amplitude_shape[-1] == len(const):
+                amplitudes = tides.variables[names['amplitude_name']][..., cidx].T
+                phases = tides.variables[names['phase_name']][..., cidx].T
 
         return (harmonics_lon, harmonics_lat, amplitudes,
                 phases, available_constituents)
+
 
     @staticmethod
     def _load_harmonics_tpxo(harmonics, constituents, names, complex=False):
