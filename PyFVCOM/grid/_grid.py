@@ -25,10 +25,10 @@ import scipy.spatial
 import shapefile
 import shapely.geometry
 from dateutil.relativedelta import relativedelta
-from matplotlib.dates import date2num as mtime
 from matplotlib.tri import LinearTriInterpolator
 from matplotlib.tri.triangulation import Triangulation
 from netCDF4 import Dataset, date2num
+from netCDF4 import date2num as mtime
 from scipy.interpolate import RegularGridInterpolator, LinearNDInterpolator, interp1d, Rbf
 from scipy.spatial.qhull import QhullError
 from utide import reconstruct, ut_constants
@@ -932,8 +932,8 @@ class OpenBoundary(object):
             lon_name, lat_name = 'lonc', 'latc'
             x, y = copy.copy(self.grid.lonc), self.grid.latc
 
-        names = {'part1_name': amplitude_name,
-                 'part2_name': phase_name,
+        names = {'amplitude_name': amplitude_name,
+                 'phase_name': phase_name,
                  'lon_name': lon_name,
                  'lat_name': lat_name,
                  'constituent_name': constituent_name}
@@ -941,7 +941,7 @@ class OpenBoundary(object):
                 phases, available_constituents) = self._load_harmonics_fvcom(
                 fvcom_harmonics,
                 constituents,
-                names,complex=False)
+                names)
         if predict in ['zeta', 'ua', 'va']:
             amplitudes = amplitudes[:, np.newaxis, :]
             phases = phases[:, np.newaxis, :]
@@ -999,8 +999,8 @@ class OpenBoundary(object):
                 notrend=True, prefilt=[], nodiagn=True)
 
         # Prepare the time data for predicting the time series. 
-        # UTide needs MATLAB times.
-        times = mtime(self.tide.time)
+        # UTide needs netCDF date2num times.
+        times = mtime(self.tide.time, units='days since 1858-11-17 00:00:00')
         args = [(latitudes[i], times, coef, amplitudes[i], phases[i], noisy)
                 for i in range(len(latitudes))]
         if serial:
