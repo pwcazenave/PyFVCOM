@@ -1,6 +1,11 @@
-NOTE: The official repo for PyFVCOM is at https://github.com/pmlmodelling/pyfvcom
+Official repo
+-------------
 
-NOTE: This version is no longer updated regularly.
+⚠️⚠️⚠️ The official repo for PyFVCOM is at:
+
+https://github.com/pmlmodelling/pyfvcom
+
+⚠️⚠️⚠️ This version is no longer updated regularly.
 
 Welcome to PyFVCOM!
 --------------------
