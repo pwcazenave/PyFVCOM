@@ -1349,6 +1349,46 @@ def cfl(fvcom, timestep, depth_averaged=False, verbose=False, **kwargs):
 
     return cfl, cfl_2, cfl_3
 
+def cfl_external(fvcom, use_zeta=False):
+    """
+    Calculate the static CFL for a given grid, this is the cfl criterion for the external mode as given in the FVCOM 
+    2013 manual pg 210. Since it is dependent on the water depth there is an option to use zeta in this calculation or
+    not.
+    
+    Parameters
+    ----------
+    fvcom : PyFVCOM.read.FileReader
+        A file reader object loaded from a netCDF file.
+
+    Returns
+    -------
+    cfl_external : np.ndarray
+        An array of the static CFL number.
+
+    """
+    from PyFVCOM.grid import element_side_lengths, nodes2elems
+
+    g = 9.81  # acceleration due to gravity
+    
+    # Shortest length of side
+    element_sizes = element_side_lengths(fvcom.grid.triangles, fvcom.grid.x, fvcom.grid.y)
+    minimum_element_size = np.min(element_sizes, axis=1)
+
+    
+    # Depth
+
+    if use_zeta: 
+        if not hasattr(fvcom.data, 'zeta'):
+            fvcom.load_data('zeta', **kwargs)
+        depth = fvcom.grid.h_center + nodes2elems(fvcom.data.zeta, fvcom.grid.triangles)
+        minimum_element_size = minimum_element_size[np.newaxis, :]
+    else:
+        depth = fvcom.grid.h_center
+
+    cfl_external = minimum_element_size/np.sqrt(g*depth)
+
+    return cfl_external
+
 
 def turbulent_kinetic_energy(u, v, w, debug=False):
     """
