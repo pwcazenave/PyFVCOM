@@ -10,6 +10,8 @@ import collections
 
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
+import cartopy.io.shapereader as shpreader
+from shapely.ops import cascaded_union
 import matplotlib.widgets
 import mpl_toolkits.axes_grid1
 import numpy as np
@@ -469,7 +471,7 @@ class Plotter(object):
     def __init__(self, dataset, figure=None, axes=None, stations=None, extents=None, vmin=None, vmax=None, mask=None,
                  res='c', fs=10, title=None, cmap='viridis', figsize=(10., 10.), axis_position=None, tick_inc=None, bg_color='gray',
                  cb_label=None, extend='neither', norm=None, m=None, cartesian=False, axis_labels = True,
-                 line_width=None, mapper='basemap', coast=True, **bmargs):
+                 line_width=None, mapper='basemap', coast=True, add_coast=True, coastfile=None, **bmargs):
         """
         Parameters
         ----------
@@ -524,6 +526,10 @@ class Plotter(object):
             Set to 'basemap' to use Basemap for plotting or 'cartopy' for cartopy.
         coast : bool, optional
             Set to True to plot coastline. Default to True.
+        add_coast : bool, optional
+            Set to True to read a coastfile shapefile to plot
+        coastfile : string, optional
+            Shapefile of coast to plot
         bmargs : dict, optional
             Additional arguments to pass to Basemap.
         axis_labels : bool, optional
@@ -567,6 +573,9 @@ class Plotter(object):
         self.bmargs = bmargs
         self.mapper = mapper
         self.coast = coast
+        self.add_coast = add_coast
+        if add_coast:
+            self.coastfile = coastfile
         self.bg_color = bg_color
         if not line_width:
             self.line_width = line_width
@@ -699,17 +708,25 @@ class Plotter(object):
                                                      #   central_latitude=np.mean(self.extents[2:]),
                                                      #   false_easting=400000, false_northing=400000)
 
-                # Make a coastline depending on whether we've got a GSHHS resolution or a Natural Earth one.
-                if self.res in ('c', 'l', 'i', 'h', 'f'):
+                # Make a coastline depending on whether we've got a GSHHS resolution or a Natural Earth one or a supplied file.
+                if self.add_coast:
+                    # Use the file provided to Plotter class.
+                    print(f'Loading file {self.coastfile} and adding coastline to plot', end=' ', flush=True)
+                    land = shpreader.Reader(self.coastfile)
+                    coastline = cascaded_union(list(land.geometries()))
+                    land = coastline
+                elif self.res in ('c', 'l', 'i', 'h', 'f'):
                     # Use the GSHHS data as in Basemap (a lot slower than the cartopy data).
                     land = cfeature.GSHHSFeature(scale=self.res, edgecolor='k', facecolor='none')
                 else:
                     # Make a land object which is fairly similar to the Basemap on we use.
                     land = cfeature.NaturalEarthFeature('physical', 'land', self.res, edgecolor='k', facecolor='0.6')
-
                 # Make a set of coordinates.
                 self.mx, self.my = self.lon, self.lat
                 self.mxc, self.myc = self.lonc, self.latc
+
+
+
             else:
                 raise ValueError(f"Unrecognised mapper value '{self.mapper}'. Choose 'basemap' (default) or 'cartopy'")
         else:
@@ -734,8 +751,13 @@ class Plotter(object):
                 self.axes.add_feature(land, zorder=1000)
             # *Must* call show and draw in order to get the axis boundary used to add ticks:
                 self.axes.background_patch.set_facecolor(self.bg_color)
+            elif self.add_coast:
+                self.axes.add_geometries(land, self.projection, facecolor='none', edgecolor='black', linewidth=1)
+                # *Must* call show and draw in order to get the axis boundary used to add ticks:
+                self.axes.background_patch.set_facecolor(self.bg_color)
             else:
                 self.axes.set_facecolor(self.bg_color)
+
             self.figure.show()
             self.figure.canvas.draw()
         elif self.mapper == 'basemap' and not self.cartesian and self.coast:
@@ -2112,6 +2134,8 @@ class MPIWorker(object):
             print(f'Creating Plotter object with kwargs. {list2print}', flush=True)
 
         local_plot = Plotter(self.fvcom, cb_label=self.label, *args, **kwargs)
+        if local_plot.add_coast:
+            print('We have coast!')
 
         if norm is not None:
             # Check for zero and negative values if we're LogNorm'ing the data and replace with the colour limit
