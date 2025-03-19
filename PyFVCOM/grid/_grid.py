@@ -26,7 +26,7 @@ import shapefile
 import shapely.geometry
 from dateutil.relativedelta import relativedelta
 from matplotlib.tri import LinearTriInterpolator
-from matplotlib.tri.triangulation import Triangulation
+from matplotlib.tri import Triangulation
 from netCDF4 import Dataset, date2num
 from netCDF4 import date2num as mtime
 from scipy.interpolate import RegularGridInterpolator, LinearNDInterpolator, interp1d, Rbf
@@ -967,10 +967,12 @@ class OpenBoundary(object):
             self.tide.constituents = available_constituents
 
             # Predict the tides
-            results.append(np.asarray(self._prepare_tides(
+            tide_results=np.asarray(self._prepare_tides(
                     interpolated_amplitudes, interpolated_phases,
-                    y, serial, pool_size, noisy)).T)
+                    y, serial, pool_size, noisy)).T
 
+            # Predict the tides
+            results.append(tide_results)
         # The harmonics are calculated -/+ one day 
         # Define the bool of required time
         tbool = ((self.tide.time >= self.time.start)
@@ -1003,7 +1005,7 @@ class OpenBoundary(object):
         times = mtime(self.tide.time, units='days since 1858-11-17 00:00:00')
         args = [(latitudes[i], times, coef, amplitudes[i], phases[i], noisy)
                 for i in range(len(latitudes))]
-        if serial:
+        if serial or pool_size == 1:
             results = []
             for arg in args:
                 results.append(self._predict_tide(arg))
@@ -1114,16 +1116,7 @@ class OpenBoundary(object):
         """
 
         with Dataset(str(harmonics), 'r') as tides:
-            if not np.ma.is_masked(
-                    tides.variables[names['constituent_name']][:]):
-                # For TPXO9-Atlas and TPXO8-Atlas hf
-                const = ([''.join(tides.variables[
-                         names['constituent_name']][:].astype(str)
-                         ).upper().strip()])
-            else:
-                # TPXO8-Atlas uv files have unpopulated con variable
-                const = harmonics.split('/')[-1].split(
-                        '_')[0].split('.')[-1].upper().strip()
+            const = [''.join(i).upper().strip() for i in tides.variables[names['constituent_name']][:].astype(str)]
 
             # If we've been given constituents that aren't in the harmonics 
             # data, just find the indices we do have.
@@ -1390,7 +1383,7 @@ class OpenBoundary(object):
         coef['g'] = phase
         coef['A_ci'] = np.zeros(amplitude.shape)
         coef['g_ci'] = np.zeros(phase.shape)
-        pred = reconstruct(times, coef, verbose=noisy)
+        pred = reconstruct(times, coef, epoch="1858-11-17", verbose=noisy)
         zeta = pred['h']
 
         return zeta
@@ -6220,14 +6213,15 @@ def interpolate_regular(fvcom_obj, fvcom_name, coarse_name, coarse, interval=1,
         # Internal landmasses also need to be dealt with, so test if a 
         # point lies within the mask of the grid and
         # move it to the nearest in grid point if so.
+        land = np.ma.array(getattr(coarse.data, coarse_name))
         if not mode == 'surface':
-            land_mask = getattr(coarse.data, coarse_name
-                    ).mask[0,0,:,:]
+            land_mask = land.mask[0,0,:,:]
         else:
-            land_mask = getattr(coarse.data, coarse_name).mask[0,:,:]
+            land_mask = land.mask[0,:,:]
 
         sea_points = np.ones(land_mask.shape)
-        sea_points[land_mask] = np.nan
+        index_array = np.where(land_mask, 0, 1)
+        sea_points[index_array] = np.nan
 
         ft_sea = RegularGridInterpolator((coarse.grid.lat, coarse.grid.lon),
                 sea_points, method='linear', fill_value=np.nan)

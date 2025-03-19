@@ -7,7 +7,7 @@ functions.
 from __future__ import division
 
 import numpy as np
-from scipy import stats, polyfit, polyval
+from scipy import stats
 from PyFVCOM.utilities.general import fix_range
 
 
@@ -42,19 +42,19 @@ def calculate_regression(x, y, type='lin'):
 
     """
 
-    if type is 'lin0':
+    if type == 'lin0':
         xf = x
         x = x[:, np.newaxis]  # make a singleton extra dimension
         m, _, _, _ = np.linalg.lstsq(x, y)
         c, r, p = 0, np.nan, np.nan
-    elif type is 'lin':
+    elif type == 'lin':
         print('lin')
         m, c, r, p, std_err = stats.linregress(x, y)
         xf = x
-    elif type is 'log':
+    elif type == 'log':
         m, c, r, p, std_err = stats.linregress(np.log10(x), y)
         xf = np.log10(x)
-    elif type is 'exp':
+    elif type == 'exp':
         m, c, r, p, std_err = stats.linregress(x, np.log10(y))
         xf = x
     else:
@@ -84,8 +84,8 @@ def calculate_polyfit(x, y):
     if minY < 2e-7:
         y, yFactor, yFactorFix = fix_range(y)
 
-    (ar, br) = polyfit(x, y, 1)
-    yf = polyval([ar, br], x)
+    (ar, br) = np.polyfit(x, y, 1)
+    yf = np.polyval([ar, br], x)
     xf = x
 
     if xFactorFix:

@@ -58,7 +58,11 @@ def __convert(args):
 
     """
     a, b, zone, ellipsoid, datum, inverse = args
-    projection = pyproj.Proj("+proj=utm +zone={} +ellps={} +datum={} +units=m +no_defs".format(zone, ellipsoid, datum))
+    if re.match(r'[CDEFGHJKLM]', zone[-1]):
+       hemisphere= '+south'
+    else:
+       hemisphere= '+north'
+    projection = pyproj.Proj("+proj=utm +zone={} {} +ellps={} +datum={} +units=m +no_defs".format(zone[:-1], hemisphere, ellipsoid, datum))
     c, d = projection(a, b, inverse=inverse)
 
     return c, d

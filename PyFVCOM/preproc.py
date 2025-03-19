@@ -1452,7 +1452,7 @@ class Model(Domain):
         zeta = np.full((len(time), self.dims.open_boundary_nodes), np.nan)
         start_index = 0
         for boundary in self.open_boundaries:
-            end_index = start_index + len(boundary.nodes) +1
+            end_index = start_index + len(boundary.nodes)
             zeta[:, start_index:end_index] = boundary.tide.zeta
             start_index = end_index
 
@@ -5372,7 +5372,7 @@ class RegularReader(FileReader):
                 setattr(attributes, attribute, getattr(self.ds.variables[v], attribute))
             setattr(self.atts, v, attributes)
 
-            data = self.ds.variables[v][variable_indices]  # data are automatically masked
+            data = self.ds.variables[v][tuple(variable_indices)]  # data are automatically masked
             if flipud:
                 data = np.flip(data, axis=1)        
 
@@ -5992,7 +5992,7 @@ class NEMOReader(RegularReader):
                 setattr(attributes, attribute, getattr(self.ds.variables[v], attribute))
             setattr(self.atts, v, attributes)
 
-            data = self.ds.variables[v][variable_indices]  # data are automatically masked
+            data = self.ds.variables[v][tuple(variable_indices)]  # data are automatically masked
             setattr(self.data, v, data)
 
             # Make sure the bottom layer is masked (only if we haven't been given a tmask argument during __init__).
@@ -6474,7 +6474,7 @@ class HYCOMReader(RegularReader):
                 setattr(attributes, attribute, getattr(self.ds.variables[v], attribute))
             setattr(self.atts, v, attributes)
 
-            data = self.ds.variables[v][variable_indices]  # data are automatically masked
+            data = self.ds.variables[v][tuple(variable_indices)]  # data are automatically masked
             setattr(self.data, v, data)
 
 def read_hycom(regular, variables, noisy=False, **kwargs):

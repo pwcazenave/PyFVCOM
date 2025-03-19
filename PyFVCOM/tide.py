@@ -1492,7 +1492,7 @@ def _analyse_harmonics(comm, times, elevations, domain_lats, constit, predict=Fa
         if noisy and rank == 0:
             print('position {} of {}'.format((size * counter) + 1, npositions * size), flush=True)
 
-        res = utide.solve(t=times, u=timeseries, lat=lat, method='ols', constit=constit, **kwargs)
+        res = utide.solve(t=times, u=timeseries, lat=lat, method='ols', constit=constit, epoch="1858-11-17", **kwargs)
         # Get the order of the harmonic indices as utide returns them in a different order from that specified in
         # constit. Annoying.
         c_order = [res['name'].tolist().index(cc) for cc in constit]
@@ -1506,7 +1506,7 @@ def _analyse_harmonics(comm, times, elevations, domain_lats, constit, predict=Fa
             verbose = kwargs['verbose']
 
         if predict:
-            reconstructed = utide.reconstruct(t=times, coef=res, verbose=verbose)
+            reconstructed = utide.reconstruct(t=times, coef=res,  epoch="1858-11-17", verbose=verbose)
             predicted[counter, ...] = reconstructed['h']
         # Get some estimated time to completion.
         if rank == 0:
